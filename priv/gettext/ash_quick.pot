@@ -1,0 +1,419 @@
+## This file is a PO Template file.
+##
+## "msgid"s here are often extracted from source code.
+## Add new messages manually only if they're dynamic
+## messages that can't be statically extracted.
+##
+## Run "mix gettext.extract" to bring this file up to
+## date. Leave "msgstr"s empty as changing them here has no
+## effect: edit them in PO (.po) files instead.
+#
+msgid ""
+msgstr ""
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "%{count} tab"
+msgid_plural "%{count} tabs"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "AND"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Access Forbidden"
+msgstr ""
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Acting as"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Actions"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Add"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Advanced filters"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Apply Filters"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Are you sure?"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Close"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Contains"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Create"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "Created by %{actor}"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "Created by %{actor} on %{at}"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "Created on %{at}"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Custom Filter"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Data exported successfully!"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Download"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/print_modal.ex
+#, elixir-autogen, elixir-format
+msgid "Download PDF"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/impersonation_banner.ex
+#, elixir-autogen, elixir-format
+msgid "End"
+msgstr ""
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "End session"
+msgstr ""
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Everyone signed in right now, the tabs they have open, and the page each one is on. A tab drops off this list when it is closed, signs out, or loses its connection."
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Export"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Failed to export"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/print_modal.ex
+#, elixir-autogen, elixir-format
+msgid "Failed to generate PDF"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Filter"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Generating Data ..."
+msgstr ""
+
+#: lib/ash_quick/liveview/components/print_modal.ex
+#, elixir-autogen, elixir-format
+msgid "Generating PDF ..."
+msgstr ""
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Go Home"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "Go back home"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Group"
+msgstr ""
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Impersonating"
+msgstr ""
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Impersonations only"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "Last updated by %{actor}"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "Last updated by %{actor} on %{at}"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "Last updated on %{at}"
+msgstr ""
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Live Users"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Loading…"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Next page"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "No actions available"
+msgstr ""
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Nobody is impersonating anyone right now."
+msgstr ""
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Nobody is signed in right now."
+msgstr ""
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Nobody matches that name."
+msgstr ""
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Not on a page"
+msgstr ""
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Now viewing"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "OR"
+msgstr ""
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Open as them"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/print_modal.ex
+#, elixir-autogen, elixir-format
+msgid "PDF generated successfully!"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Previous page"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#: lib/ash_quick/liveview/components/list_view.ex
+#: lib/ash_quick/liveview/components/print_modal.ex
+#, elixir-autogen, elixir-format
+msgid "Print"
+msgstr ""
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Processing"
+msgstr ""
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Rejected"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Reset"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Retry"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Row actions"
+msgstr ""
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Save"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Search"
+msgstr ""
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Search by name"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Select"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Select all rows"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Select filters"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Select row"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Showing %{from}-%{to} of %{count}"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/sidebar.ex
+#, elixir-autogen, elixir-format
+msgid "Sidenav"
+msgstr ""
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Started"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Starts With"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Table navigation"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "The resource you're looking for could not be found."
+msgstr ""
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Themselves"
+msgstr ""
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "This file is still being processed"
+msgstr ""
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "This file was refused"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/sidebar.ex
+#, elixir-autogen, elixir-format
+msgid "Toggle sidebar"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "View details"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "You do not have permission to perform this action. Please contact an administrator if you believe this is an error."
+msgstr ""
+
+#: lib/ash_quick/liveview/components/impersonation_banner.ex
+#, elixir-autogen, elixir-format
+msgid "You're impersonating %{actor}"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "cancel"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#: lib/ash_quick/liveview/components/print_modal.ex
+#, elixir-autogen, elixir-format
+msgid "close"
+msgstr ""
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "from %{ip}"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Go Back"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgctxt "query builder"
+msgid "Filter"
+msgstr ""

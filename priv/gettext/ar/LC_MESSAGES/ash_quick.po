@@ -1,0 +1,423 @@
+## "msgid"s in this file come from POT (.pot) files.
+###
+### Do not add, change, or remove "msgid"s manually here as
+### they're tied to the ones in the corresponding POT file
+### (with the same domain).
+###
+### Use "mix gettext.extract --merge" or "mix gettext.merge"
+### to merge POT files into PO files.
+msgid ""
+msgstr ""
+"Language: ar\n"
+"Plural-Forms: nplurals=6; plural=(n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 && n%100<=10 ? 3 : n%100>=11 ? 4 : 5);\n"
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "%{count} tab"
+msgid_plural "%{count} tabs"
+msgstr[0] "لا تبويبات"
+msgstr[1] "تبويب واحد"
+msgstr[2] "تبويبان"
+msgstr[3] "%{count} تبويبات"
+msgstr[4] "%{count} تبويبًا"
+msgstr[5] "%{count} تبويب"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "AND"
+msgstr "و"
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Access Forbidden"
+msgstr "لا تملك صلاحية الوصول"
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Acting as"
+msgstr "الحساب النشط"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Actions"
+msgstr "إجراءات"
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Add"
+msgstr "إضافة"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Advanced filters"
+msgstr "بحث متقدم"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Apply Filters"
+msgstr "تطبيق البحث"
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Are you sure?"
+msgstr "هل أنت متأكد؟"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Close"
+msgstr "إغلاق"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Contains"
+msgstr "يحتوي على"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Create"
+msgstr "إنشاء"
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "Created by %{actor}"
+msgstr "أنشأه %{actor}"
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "Created by %{actor} on %{at}"
+msgstr "أنشأه %{actor} في %{at}"
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "Created on %{at}"
+msgstr "أنشئ في %{at}"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Custom Filter"
+msgstr "بحث متقدم"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Data exported successfully!"
+msgstr "تم تصدير البيانات بنجاح!"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Download"
+msgstr "تنزيل"
+
+#: lib/ash_quick/liveview/components/print_modal.ex
+#, elixir-autogen, elixir-format
+msgid "Download PDF"
+msgstr "تنزيل ملف PDF"
+
+#: lib/ash_quick/liveview/components/impersonation_banner.ex
+#, elixir-autogen, elixir-format
+msgid "End"
+msgstr "إنهاء"
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "End session"
+msgstr "إنهاء الجلسة"
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Everyone signed in right now, the tabs they have open, and the page each one is on. A tab drops off this list when it is closed, signs out, or loses its connection."
+msgstr "كل من سجّل دخوله الآن، والتبويبات المفتوحة لديه، والصفحة التي يتصفحها كل واحد منهم. يختفي التبويب من هذه القائمة عند إغلاقه أو تسجيل الخروج أو انقطاع الاتصال."
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Export"
+msgstr "تصدير"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Failed to export"
+msgstr "تعذّر التصدير"
+
+#: lib/ash_quick/liveview/components/print_modal.ex
+#, elixir-autogen, elixir-format
+msgid "Failed to generate PDF"
+msgstr "تعذّر إنشاء ملف PDF"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Filter"
+msgstr "فلتر"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Generating Data ..."
+msgstr "جارٍ تجهيز البيانات..."
+
+#: lib/ash_quick/liveview/components/print_modal.ex
+#, elixir-autogen, elixir-format
+msgid "Generating PDF ..."
+msgstr "جارٍ إنشاء ملف PDF ..."
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Go Home"
+msgstr "الصفحة الرئيسية"
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "Go back home"
+msgstr "العودة إلى الصفحة الرئيسية"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Group"
+msgstr "مجموعة"
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Impersonating"
+msgstr "دخول بحساب آخر"
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Impersonations only"
+msgstr "الجلسات بحساب آخر فقط"
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "Last updated by %{actor}"
+msgstr "آخر تحديث بواسطة %{actor}"
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "Last updated by %{actor} on %{at}"
+msgstr "آخر تحديث بواسطة %{actor} في %{at}"
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "Last updated on %{at}"
+msgstr "آخر تحديث في %{at}"
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Live Users"
+msgstr "المستخدمون المتصلون الآن"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Loading…"
+msgstr "جارٍ التحميل…"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Next page"
+msgstr "الصفحة التالية"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "No actions available"
+msgstr "لا توجد إجراءات متاحة"
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Nobody is impersonating anyone right now."
+msgstr "لا أحد يتصفح بحساب مستخدم آخر الآن."
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Nobody is signed in right now."
+msgstr "لا أحد مسجّل دخوله الآن."
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Nobody matches that name."
+msgstr "لا أحد يطابق هذا الاسم."
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Not on a page"
+msgstr "لا يتصفح أي صفحة"
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Now viewing"
+msgstr "الصفحة الحالية"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "OR"
+msgstr "أو"
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Open as them"
+msgstr "الدخول بحسابه"
+
+#: lib/ash_quick/liveview/components/print_modal.ex
+#, elixir-autogen, elixir-format
+msgid "PDF generated successfully!"
+msgstr "تم إنشاء ملف PDF بنجاح!"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Previous page"
+msgstr "الصفحة السابقة"
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#: lib/ash_quick/liveview/components/list_view.ex
+#: lib/ash_quick/liveview/components/print_modal.ex
+#, elixir-autogen, elixir-format
+msgid "Print"
+msgstr "طباعة"
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Processing"
+msgstr "قيد المعالجة"
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Rejected"
+msgstr "مرفوض"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Reset"
+msgstr "إعادة تعيين"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Retry"
+msgstr "إعادة المحاولة"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Row actions"
+msgstr "إجراءات الصف"
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Save"
+msgstr "حفظ"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Search"
+msgstr "بحث"
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Search by name"
+msgstr "البحث بالاسم"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Select"
+msgstr "تحديد"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Select all rows"
+msgstr "تحديد كل الصفوف"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Select filters"
+msgstr "اختيار الفلاتر"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Select row"
+msgstr "تحديد الصف"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Showing %{from}-%{to} of %{count}"
+msgstr "عرض %{from}-%{to} من %{count}"
+
+#: lib/ash_quick/liveview/components/sidebar.ex
+#, elixir-autogen, elixir-format
+msgid "Sidenav"
+msgstr "القائمة الجانبية"
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Started"
+msgstr "وقت البدء"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Starts With"
+msgstr "يبدأ بـ"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Table navigation"
+msgstr "التنقل بين الصفحات"
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "The resource you're looking for could not be found."
+msgstr "لم نعثر على ما تبحث عنه."
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Themselves"
+msgstr "حسابه الشخصي"
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "This file is still being processed"
+msgstr "لا يزال هذا الملف قيد المعالجة"
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "This file was refused"
+msgstr "تم رفض هذا الملف"
+
+#: lib/ash_quick/liveview/components/sidebar.ex
+#, elixir-autogen, elixir-format
+msgid "Toggle sidebar"
+msgstr "إظهار القائمة الجانبية أو إخفاؤها"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "View details"
+msgstr "عرض التفاصيل"
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "You do not have permission to perform this action. Please contact an administrator if you believe this is an error."
+msgstr "ليس لديك صلاحية للقيام بهذا الإجراء. تواصل مع المسؤول إذا كنت تعتقد أن هناك خطأ."
+
+#: lib/ash_quick/liveview/components/impersonation_banner.ex
+#, elixir-autogen, elixir-format
+msgid "You're impersonating %{actor}"
+msgstr "أنت تتصفح بحساب %{actor}"
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "cancel"
+msgstr "إلغاء"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#: lib/ash_quick/liveview/components/print_modal.ex
+#, elixir-autogen, elixir-format
+msgid "close"
+msgstr "إغلاق"
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "from %{ip}"
+msgstr "من %{ip}"
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Go Back"
+msgstr "رجوع"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgctxt "query builder"
+msgid "Filter"
+msgstr "شرط"
