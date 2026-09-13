@@ -413,6 +413,51 @@ Tuning liveness on a resource that publishes nothing **fails to compile** — th
 options would have nothing to act on, and a page that silently never updates has
 no runtime symptom, so it is refused at build time rather than shipped.
 
+## Adding the extension to a resource
+
+```elixir
+use Ash.Resource,
+  domain: MyApp.Catalog,
+  extensions: [AshQuick]
+```
+
+**That one line adds columns, so it needs a migration.** Generate it and read
+it before running it.
+
+| Added | When |
+|---|---|
+| `version` (integer, default `1`) | always, unless versioning is disabled |
+| `created_at`, `updated_at` (`utc_datetime_usec`, `always_select?`) | unless declared `false` |
+| `created_by_id`, `updated_by_id` (FKs to the configured `:actor_resource`) | unless declared `false` |
+| `active` (boolean, default `true`) | only when `activation` is declared |
+
+Every one is **add-if-absent**: a resource that already defines the attribute
+or the relationship keeps exactly what it wrote, and
+`AshQuick.Bookkeeping.Verifier` refuses to compile a declaration that
+disagrees with the fields in either direction. The extension also attaches the
+audit change to every create/update/destroy and wires the resource's PubSub
+publications.
+
+### The sections and their defaults
+
+All eight live under one `ash_quick do` block. **Write only what differs from
+the default** — a resource that says nothing still gets liveness, versioning,
+bookkeeping and auditing.
+
+| Section | Default | Declare it to… |
+|---|---|---|
+| `liveness` | `enabled? true`, `prefix` = the resource's `short_name` | turn publishing off, or rename the topic prefix |
+| `display` | inferred from `:display_name`, else `:name` | name the label field on a resource with neither |
+| `lookup` | nothing generated; `action :index`, `search_argument :search` when written | point search at a different read action |
+| `activation` | `enabled? false` | opt into soft-delete: `:active`, `:activate`/`:deactivate` |
+| `versioning` | `enabled? true`, `attribute :version` | turn the optimistic lock **off** |
+| `bookkeeping` | all four fields on: `:created_at` / `:updated_at` / `:created_by` / `:updated_by` | declare a field `false`, or rename it |
+| `audit` | `enabled? true`, store from the configured `:audit_resource` | write elsewhere, exclude actions, or turn it off |
+| `field_restrictions` | none | restrict a field to actors passing a check |
+
+`AshQuick.Info` reads every one of them back — `display_label/1`,
+`lookup_action/1`, `versioning?/1`, `activation?/1`, `bookkeeping/1`, and so on.
+
 ## Resource conventions
 
 Most of these are compile-time refusals, not degradations — the extension's
@@ -501,7 +546,15 @@ and what to write.
   `ash_quick do versioning do enabled? false end end`. Left alone, the resource gains
   a `:version` integer counter (default `1`), every `:update`/`:destroy` is filtered
   on the version the actor loaded and bumps it, and all of them are forced to
-  `require_atomic? false`. A stale write raises `Ash.Error.Changes.StaleRecord`.
+  `require_atomic? false`. A stale write raises `Ash.Error.Changes.StaleRecord` —
+  in a UI that means "someone else changed this, reload"; it is not a bug to
+  suppress. Do not turn versioning off to escape the forced `require_atomic?
+  false` either; that is the mechanism, not a side effect.
+
+  **`Ash.bulk_update` therefore never takes the atomic path** on a versioned
+  resource. It runs `:stream` — a real changeset, notification and audit row
+  per record. Correct, and not free: size batches accordingly.
+
   Bookkeeping-only changes (timestamps, audit relationships) do not count as changes
   and do not bump — see `AshQuick.Config.versioning_ignored_attributes/1`.
   `attribute` names a different counter when `:version` is taken. A resource that
@@ -511,6 +564,39 @@ and what to write.
 
   **Adding a new AshQuick resource therefore adds a `version` column by default.**
   Opt out for an append-only resource, or one only a single writer ever touches.
+- **Audit** — **On unless the resource turns it off.** Every create, update and
+  destroy writes a row into the store, in `after_batch` **inside the action's
+  transaction**: a store that refuses the batch fails the write. So keep the
+  store dumb — no policies to evaluate, no validations to trip.
+
+  There is no fallback sink, so a resource with no store resolvable (from
+  `audit do store ... end`, else the configured `:audit_resource`) **does not
+  compile**. A write with no actor records nothing — an entry names who made
+  the change, and a system write has nobody to name.
+
+  ```elixir
+  ash_quick do
+    audit do
+      enabled? false                       # keep no record, and say so where a reader sees it
+      exclude_actions [:refresh_cache]     # or drop just the noisy ones
+      record_sensitive [:masked_card_no]   # `sensitive?` values are "**redacted**" otherwise
+    end
+  end
+  ```
+
+  To audit only *some* actions, turn the section off and attach the change by
+  hand: `update :do_something do change AshQuick.Audit.Change end`.
+- **Bookkeeping** — all four of `:created_at`, `:updated_at`, `:created_by`,
+  `:updated_by` are on by default; a resource carrying the full set declares
+  nothing. Declare a field `false` when the resource genuinely has none — and
+  note the verifier checks **both** directions, because a real column left out
+  of the declaration drops off the versioning ignore list and starts bumping
+  the lock on writes that used to be no-ops.
+
+  `:created_by` / `:updated_by` name **relationships**, and only a relationship
+  to the configured `:actor_resource` satisfies one. A resource with its own
+  `belongs_to :created_by, SomethingElse` declares `created_by false` and keeps
+  it.
 
 ## Field restrictions DSL
 
@@ -585,6 +671,69 @@ AshQuick.FieldRestrictions.Info.field_visible?(
 `extensions: [AshQuick]` is the whole of it. Soft-delete and optimistic locking are
 the `activation` and `versioning` sections of the `ash_quick` DSL above, not separate
 extensions to list.
+
+## Configuration
+
+Everything lives under `config :ash_quick` in **`config/config.exs`, not
+`runtime.exs`**:
+
+```elixir
+config :ash_quick,
+  endpoint: MyAppWeb.Endpoint,
+  actor_resource: MyApp.Accounts.User,
+  audit_resource: MyApp.AuditLog,
+  nav: MyAppWeb.Nav,
+  storage: MyApp.Uploads.ObjectStore,
+  error_translator: {MyAppWeb.CoreComponents, :translate_error},
+  timezone: "Etc/UTC"
+```
+
+`:endpoint` and `:actor_resource` are `Application.compile_env/2` reads —
+resources bake them in while they compile, the endpoint becoming each
+resource's PubSub publications and the actor resource its `created_by` /
+`updated_by` relationships. Put either in `runtime.exs` and a release loads it
+long after the resources were built against `nil`, with no runtime symptom: the
+pages are simply dead and the columns empty. `AshQuick.Config` documents every
+key.
+
+## What the host application provides
+
+AshQuick reaches into the host through these and nothing else. `deps/ash_quick/README.md`
+covers wiring them up.
+
+- `AshQuick.Scope` — `use` it on the host's scope struct. Generates
+  `Ash.Scope.ToOpts` plus the provenance audit needs: real actor behind an
+  impersonation, request IP, timezone, locale.
+- **The audit store** — an Ash resource taking `resource_name`, `resource_id`,
+  `action_type`, `action_name`, `attributes`, `arguments`, `context`,
+  `actor_id`, `real_actor_id`, `ip`, `tenant`.
+- `AshQuick.Storage` — object storage; defaults to `AshQuick.Storage.S3`.
+- `AshQuick.AccessControl` — which routes a scope may navigate to. Named on the
+  nav. Deliberately **not** `Ash.can?`: a filter policy allows the action and
+  returns no rows, so `can?` says yes for a page that would be empty.
+- `AshQuick.Nav` — the navigation registry (see Navigation above).
+- `AshQuick.PrintTemplate`, `AshQuick.FieldRestrictions.Check` — print
+  templates and field-level checks.
+- `AshQuick.BrowserSessionPresence` in the supervision tree, and
+  `AshQuick.LiveView.Mount` **first** in the live session's `on_mount`.
+
+## Common mistakes
+
+- Routing a QuickView with `live/3` instead of `quick_view/3`.
+- Reading `:only` / `:except` as resource action names. They are route shapes.
+- Turning versioning off to escape the forced `require_atomic? false`, or
+  rescuing `StaleRecord` instead of surfacing it.
+- Adding the extension without generating a migration for the new columns.
+- Putting `:endpoint` or `:actor_resource` in `runtime.exs`.
+- A bare `Ash.can?/2` in a custom template, so the control ignores
+  surface-scoped policies — or a record-less probe where a record exists.
+- Hiding a control with a policy and stopping there, with no validation behind
+  it.
+- Declaring `:filters` as a map keyed by atoms. It is a **list of string-keyed
+  maps**.
+- Putting the extension on a composite-keyed join resource.
+- Naming a relationship in `display do label ... end`. It holds a struct;
+  compose a calculation instead.
 
 ## Key source files
 
