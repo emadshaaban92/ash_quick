@@ -50,8 +50,11 @@ defmodule AshQuick.LiveView.Components.FieldValueTest do
       value = %Value{key: "public/products/abc.jpg", file_type: :image}
       html = render_component(&FieldValue.attachment_preview/1, value: value)
 
-      bucket = AshQuick.Config.s3_bucket()
-      host = AshQuick.Config.s3_host()
+      # The configured seam's bucket, not `AshQuick.Config.s3_bucket/0`: what is
+      # pinned is that the component resolves through `AshQuick.Storage` rather
+      # than building a URL of its own.
+      bucket = AshQuick.Test.Uploads.ObjectStore.bucket()
+      host = AshQuick.Test.Uploads.ObjectStore.host()
       assert html =~ "https://#{bucket}.#{host}/public/products/abc.jpg"
       refute html =~ "X-Amz-Signature"
     end

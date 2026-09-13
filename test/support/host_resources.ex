@@ -29,7 +29,10 @@ defmodule AshQuick.Test.AuditLog do
   end
 
   attributes do
-    uuid_primary_key :id
+    # Time-ordered, as a host's own audit table is: a trail is read in the order
+    # it was written, and a v4 key would sort the entries for one record
+    # arbitrarily — an update's row ahead of the create that preceded it.
+    uuid_v7_primary_key :id
     attribute :resource_name, :atom, public?: true
     attribute :resource_id, :uuid, public?: true
     attribute :action_type, :atom, public?: true
