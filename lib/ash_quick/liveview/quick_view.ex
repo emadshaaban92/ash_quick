@@ -69,8 +69,21 @@ defmodule AshQuick.LiveView.QuickView do
       * `:subscribe` — A 1-arity function taking the fetched result and
         returning topics. Escape hatch: replaces the derivation entirely.
       * `:pub_sub` — Custom PubSub module (defaults to the endpoint).
-    * `:filters` — A map of named predefined filters. Keys are atoms, values are
-      Ash filter expressions. These appear as toggle buttons in the list view.
+    * `:filters` — Predefined filters, rendered as toggle buttons above the
+      list. A list of maps with string keys `"name"`, `"label"` and
+      `"expression"`, where the expression is anything `Ash.Query.filter/2`
+      takes — a raw `Ash.Expr.expr(...)`, including one over a relationship
+      path, or the map form:
+
+          filters: [
+            %{
+              "name" => "needs_review",
+              "label" => "Needs review",
+              "expression" =>
+                Ash.Expr.expr(state == :pending or latest_request.state == :pending)
+            },
+            %{"name" => "active", "label" => "Active", "expression" => %{"active" => %{"eq" => true}}}
+          ]
     * `:print_templates` — A list of modules implementing `AshQuick.PrintTemplate`.
     * `:export_fields` — Fields to include in Excel/CSV exports. Falls back to
       `:list` fields, then all resource attributes.

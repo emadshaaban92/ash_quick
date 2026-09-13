@@ -81,14 +81,29 @@ defmodule AshQuick.MixProject do
   defp package do
     [
       licenses: ["MIT"],
-      links: %{"GitHub" => @source_url}
+      links: %{"GitHub" => @source_url},
+      # Spelled out, because three of these are not in Hex's default set and
+      # each is load-bearing: `assets` is the client half a host imports into
+      # its `app.js`, and `usage-rules.md` / `usage-rules` are what
+      # `mix usage_rules.sync` delivers to a consuming project's agents.
+      files: [
+        "lib",
+        "priv",
+        "assets",
+        "usage-rules.md",
+        "usage-rules",
+        ".formatter.exs",
+        "mix.exs",
+        "README.md",
+        "LICENSE"
+      ]
     ]
   end
 
   defp docs do
     [
       main: "readme",
-      extras: ["README.md"]
+      extras: ["README.md", "usage-rules.md"]
     ]
   end
 end
