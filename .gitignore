@@ -9,3 +9,6 @@ ash_quick-*.tar
 /tmp/
 .elixir_ls/
 .elixir-tools/
+
+# Stop-hook quality-gate fingerprints (see .claude/hooks/_common.sh).
+/.claude/hooks/.state/
