@@ -1,0 +1,28 @@
+# Sobelow config for the example app (auto-loaded by `mix sobelow`).
+#
+# `exit: :low` fails the scan on any finding that is not ignored below, and
+# `skip: true` honours inline `# sobelow_skip` annotations.
+#
+# Three checks are ignored, each for a reason that is true of *this* app and of
+# no real one:
+#
+#   * Config.CSP / Config.HTTPS — a local demo served over http on
+#     localhost. Production should set both.
+#   * Config.Secrets — the only credential in this repository is the fake ExAws
+#     pair in config/config.exs. Nothing here reaches a bucket: the presigned
+#     URL is the whole artifact, and ExAws refuses to sign without *some*
+#     credentials. A real host keeps them out of config entirely and must not
+#     ignore this check.
+[
+  exit: :low,
+  format: "txt",
+  ignore_files: [],
+  ignore: ["Config.CSP", "Config.HTTPS", "Config.Secrets"],
+  out: nil,
+  private: false,
+  router: nil,
+  skip: true,
+  threshold: :low,
+  verbose: false,
+  version: false
+]

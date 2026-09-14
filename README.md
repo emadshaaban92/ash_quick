@@ -356,6 +356,25 @@ Export and print are feature-detected at runtime —
 print controls simply do not appear. A host that points `:storage` at its own
 object store never loads the ExAws ones.
 
+## The example app
+
+`example/` is a small Phoenix + AshPostgres application that hosts this library
+from the checkout it sits in. It is where the paths that need a host are tested
+— the optimistic lock reaching SQL, the audit row written inside the
+transaction of the write it records, a presign taking custody through the
+storage seam, a QuickView driven end to end behind a session — and it doubles
+as the demo a README cannot be:
+
+```console
+$ cd example
+$ mix setup
+$ mix phx.server   # http://localhost:4000, sign in at /login
+```
+
+Three seeded users, one per role, so the sidebar, the apps grid and every
+button change with who you are. `example/README.md` has the rest, including
+which seam is wired where.
+
 ## Status
 
 Extracted from a production application. An Igniter installer, which will

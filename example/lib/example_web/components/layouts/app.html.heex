@@ -1,0 +1,90 @@
+<div>
+  <nav class={[
+    "print:hidden navbar shadow-sm border-b border-base-300 px-4 sm:px-6 fixed inset-x-0 top-0 z-50 min-h-16",
+    @scope.impersonating_mode && "bg-error",
+    @scope.impersonating_mode || "bg-base-100"
+  ]}>
+    <div class="flex justify-between items-center h-full w-full">
+      <a href={~p"/"} class="font-semibold text-lg">AshQuick</a>
+
+      <.impersonation_banner scope={@scope} class="max-sm:hidden text-error-content" />
+
+      <div class="flex items-center gap-2">
+        <%!-- Everything identity-derived waits for the socket: the tab's
+        impersonation token rides the connect params, so the dead render cannot
+        know who this tab is. Drawing the real user there is what makes a
+        refresh while impersonating flash the wrong person. --%>
+        <div :if={not @connected? and not is_nil(@scope.current_user)} class="skeleton h-8 w-32">
+        </div>
+
+        <%= if @connected? and @scope.current_user do %>
+          <div class="dropdown dropdown-end">
+            <div tabindex="0" role="button" class="btn btn-ghost btn-sm">
+              <.icon name="hero-user-circle" class="w-5 h-5" />
+              <span class="max-sm:hidden">{@scope.current_user.name}</span>
+            </div>
+            <ul
+              tabindex="0"
+              class="dropdown-content z-50 mt-3 menu bg-base-200 rounded-box w-64 shadow-lg border border-base-300 p-0 [&_li>*]:px-4 [&_li>*]:py-2"
+            >
+              <li class="pointer-events-none border-b border-base-300">
+                <div class="flex flex-col gap-0">
+                  <span class="text-sm font-semibold">{@scope.current_user.name}</span>
+                  <span class="text-sm text-base-content/60">
+                    {@scope.current_user.email} · {@scope.current_user.role}
+                  </span>
+                </div>
+              </li>
+
+              <li :if={@scope.impersonating_mode} class="border-b border-base-300">
+                <.link phx-click={Impersonation.end_impersonation()}>
+                  <.icon name="hero-arrow-right-on-rectangle" class="w-4 h-4" /> End impersonation
+                </.link>
+              </li>
+
+              <li>
+                <a href={~p"/sign-out"} phx-click={Impersonation.clear_impersonation()}>
+                  <.icon name="hero-arrow-left-on-rectangle" class="w-4 h-4" /> Sign out
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <div class="dropdown dropdown-end">
+            <div tabindex="0" role="button" class="btn btn-ghost btn-sm btn-circle">
+              <span class="sr-only">Apps</span>
+              <.icon name="hero-squares-2x2" class="w-5 h-5" />
+            </div>
+            <div
+              tabindex="0"
+              class="dropdown-content z-50 mt-3 w-96 bg-base-200 rounded-box shadow-lg border border-base-300 overflow-y-auto max-h-[calc(100vh-7rem)]"
+            >
+              <.nav_grid scope={@scope} />
+            </div>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  </nav>
+
+  <main class="p-0 h-screen pt-16 print:pt-1">
+    <.flash_group flash={@flash} />
+    <%!-- Signed out means nothing here depends on who this tab is, so the login
+    page still renders straight through. --%>
+    <%= if @connected? or is_nil(@scope.current_user) do %>
+      <.sidebar
+        :if={nav?(assigns)}
+        scope={@scope}
+        current_path={assigns[:current_path]}
+        params={assigns[:params]}
+      />
+      <div class={["h-full", nav?(assigns) && "lg:ms-64"]}>
+        {@inner_content}
+      </div>
+    <% else %>
+      <div class="flex flex-col h-full items-center justify-center p-8">
+        <span class="loading loading-spinner loading-xl text-primary"></span>
+      </div>
+    <% end %>
+  </main>
+</div>
