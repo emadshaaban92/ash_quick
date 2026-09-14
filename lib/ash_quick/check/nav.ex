@@ -4,9 +4,13 @@ defmodule AshQuick.Check.Nav do
   #
   # Three artifacts describing one route, and every way they can disagree is
   # silent: a nav path no route serves renders as a link that 404s, a granted
-  # route no entry renders leaves the roles holding it with no way to get
-  # there, a granted route in no group has a sidebar link but no tile in the
-  # apps grid, and an entry no role can reach renders for nobody.
+  # route no entry renders leaves the roles holding it with no way to get there,
+  # and an entry no role can reach renders for nobody.
+  #
+  # Deliberately not here: a granted route that sits in no `group`. That is a
+  # page with a sidebar link and no tile on the apps grid, which is a layout
+  # decision far more often than a mistake — the home page is the grid, so a
+  # tile leading back to it says nothing.
   #
   # The last three are statements about *some role*, and roles are the host's —
   # so they run only against an access control exporting `all_routes/0`, and are
@@ -32,7 +36,7 @@ defmodule AshQuick.Check.Nav do
 
     {granted_findings, skipped} =
       case granted(access_control) do
-        {:ok, granted} -> {granted(granted, routed, entries, grouped, nav, access_control), []}
+        {:ok, granted} -> {granted(granted, routed, entries, nav, access_control), []}
         {:skip, reason} -> {[], [{:nav, reason}]}
       end
 
@@ -40,15 +44,13 @@ defmodule AshQuick.Check.Nav do
   end
 
   # A grant the router does not serve is reported once, as itself: it has no
-  # entry and no group either, and saying so three times buries the one fact
-  # that explains all three.
-  defp granted(granted, routed, entries, grouped, nav, access_control) do
+  # entry either, and saying so twice buries the one fact that explains both.
+  defp granted(granted, routed, entries, nav, access_control) do
     unrouted = unrouted_grants(granted, routed, access_control)
     live = granted -- Enum.map(unrouted, & &1.subject)
 
     unrouted ++
       linkless(live, entries, nav, access_control) ++
-      tileless(live, grouped, nav, access_control) ++
       unreachable(entries, granted, nav, access_control)
   end
 
@@ -109,22 +111,6 @@ defmodule AshQuick.Check.Nav do
     end
   end
 
-  defp tileless(granted, grouped, nav, access_control) do
-    for path <- granted, not Info.allowed?(path, grouped) do
-      %Finding{
-        check: :tileless_route,
-        subject: path,
-        message: """
-        #{inspect(access_control)} grants #{path}, and no `group` in \
-        #{inspect(nav)} names it.
-
-        A tile in the apps grid is a group, so this page has a sidebar link and \
-        nothing on the grid. Name it in the group it belongs to.
-        """
-      }
-    end
-  end
-
   defp unreachable(entries, granted, nav, access_control) do
     for path <- entries, not Info.allowed?(path, granted) do
       %Finding{
@@ -151,9 +137,9 @@ defmodule AshQuick.Check.Nav do
       {:skip,
        """
        #{inspect(access_control)} exports no `all_routes/0`, so the routes it \
-       grants cannot be enumerated. Four checks did not run: a grant the router \
-       does not serve, a granted route with no nav entry, one in no group, and \
-       a nav entry no role can reach. See `AshQuick.AccessControl`.\
+       grants cannot be enumerated. Three checks did not run: a grant the \
+       router does not serve, a granted route with no nav entry, and a nav \
+       entry no role can reach. See `AshQuick.AccessControl`.\
        """}
     end
   end

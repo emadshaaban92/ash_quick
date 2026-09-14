@@ -593,11 +593,6 @@ defmodule AshQuick do
         default: AshQuick.Versioning.Declaration.default_attribute(),
         doc:
           "The integer attribute holding the counter. Added when the resource does not define it; a resource defining it as anything but a lock counter does not compile."
-      ],
-      reason: [
-        type: :string,
-        doc:
-          "Why this resource can afford to lose a concurrent write. Nothing reads it at runtime; `mix ash_quick.check` reports an `enabled? false` that states none."
       ]
     ]
   }
@@ -659,11 +654,6 @@ defmodule AshQuick do
         default: AshQuick.Audit.Declaration.default_record_sensitive(),
         doc:
           "Attributes and arguments recorded in full despite carrying `sensitive?`. Every other sensitive value is replaced with `\"**redacted**\"` before any logger sees it."
-      ],
-      reason: [
-        type: :string,
-        doc:
-          "Why no record of who changed this resource is needed. Nothing reads it at runtime; `mix ash_quick.check` reports an `enabled? false` that states none."
       ]
     ]
   }

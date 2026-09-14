@@ -27,8 +27,10 @@ defmodule AshQuick.LiveView.Router do
       quick_view "/items", MyAppWeb.ItemLive.Quick, except: [:create]
 
   Omitting `:create` is how a resource that exists only through the system —
-  an audit log, a materialised item — is kept out of the "New" flow. Passing
-  both `:only` and `:except` is an error.
+  an audit log, a materialised item — is kept out of the "New" flow: the list
+  page reads the routes back through `served_shapes/2` and renders no New
+  button for a base path with no `/create` route, whatever the create policy
+  says. Passing both `:only` and `:except` is an error.
 
   ## Why the macro is the only supported way to route a QuickView
 
@@ -98,6 +100,28 @@ defmodule AshQuick.LiveView.Router do
     Got path: #{Macro.to_string(path)}
         opts: #{Macro.to_string(opts)}
     """
+  end
+
+  @doc """
+  Which of the four shapes `base_path` is actually served at on `router`.
+
+  The read side of `:only` and `:except`. A QuickView renders controls that lead
+  to routes it may not have been given — the New button is the one that matters,
+  because it is gated on the create policy and nothing else — so the page asks
+  what it is allowed to offer rather than assuming all four.
+
+  Matched on the literal route paths rather than through
+  `Phoenix.Router.route_info/4`, which would resolve `<base>/create` against the
+  `/:id` route and report a create route that is not there.
+  """
+  @spec served_shapes(module(), String.t()) :: MapSet.t(atom())
+  def served_shapes(router, base_path) do
+    paths = MapSet.new(Phoenix.Router.routes(router), & &1.path)
+
+    for {name, {suffix, _live_action}} <- @shapes,
+        MapSet.member?(paths, base_path <> suffix),
+        into: MapSet.new(),
+        do: name
   end
 
   @doc false

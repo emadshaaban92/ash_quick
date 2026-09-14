@@ -17,6 +17,28 @@ defmodule ExampleWeb.QuickViewScenarioTest do
 
   alias Example.Catalog.Product
 
+  # `/audit_logs` is routed `only: [:index, :show]`, and `Example.Accounts.AuditLog`
+  # authorizes `:create` for everyone — AshQuick's own change writes it with
+  # `authorize?: false` from inside the transaction being recorded. So the create
+  # policy alone would put a New button on the page, and it would patch to
+  # `/audit_logs/create`, which the router does not serve. The route is what
+  # decides, which is what `quick_view/3` has always documented.
+  test "a page with no create route offers no New button, whatever the policy says",
+       %{conn: conn, admin: admin} do
+    # Matched on the event the button pushes rather than on its label, which
+    # defaults to a generic "Create" — a refute over the wrong text would pass
+    # whether or not the button is there.
+    new_button = "button[phx-click*=\"new_click\"]"
+
+    {:ok, products, _html} = conn |> log_in(admin) |> live(~p"/products")
+    assert has_element?(products, new_button)
+
+    {:ok, logs, _html} = conn |> log_in(admin) |> live(~p"/audit_logs")
+
+    assert Ash.can?({Example.Accounts.AuditLog, :create}, admin)
+    refute has_element?(logs, new_button)
+  end
+
   test "a catalog record through create, a row action, and a role that may do neither",
        %{conn: conn, admin: admin, editor: editor, viewer: viewer} do
     brand = brand(name: "Northwind #{unique("")}", actor: admin)

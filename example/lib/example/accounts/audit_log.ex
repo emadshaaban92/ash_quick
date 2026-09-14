@@ -77,9 +77,9 @@ defmodule Example.Accounts.AuditLog do
       enabled? false
     end
 
+    # Append-only: no update or destroy action, so there is no write to lose.
     versioning do
       enabled? false
-      reason("Append-only: no update or destroy action, so there is no write to lose.")
     end
 
     bookkeeping do

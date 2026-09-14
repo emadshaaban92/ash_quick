@@ -31,11 +31,11 @@ defmodule Mix.Tasks.AshQuick.CheckTest do
 
     assert output =~ "## hand_routed_quick_view (1)"
     assert output =~ "/hand_routed"
-    assert output =~ "finding(s) across"
+    assert output =~ "defect(s)"
   end
 
   test "--strict reports the same thing and then fails the build" do
-    assert_raise Mix.Error, ~r/ash_quick.check --strict: \d+ finding/, fn ->
+    assert_raise Mix.Error, ~r/ash_quick.check --strict: \d+ defect/, fn ->
       capture_io(fn -> Task.run(["--strict"]) end)
     end
   end
@@ -46,6 +46,21 @@ defmodule Mix.Tasks.AshQuick.CheckTest do
     output = capture_io(fn -> Task.run(["--strict"]) end)
 
     assert output =~ "No findings."
+  end
+
+  # The whole point of the severity split: an un-adopted resource is reported on
+  # every run and blocks nothing, so a project can watch the number go down
+  # without the number being able to stop a deploy.
+  test "--strict reports advisories and still exits cleanly" do
+    Application.put_env(:ash_quick, :nav, nil)
+    Application.put_env(:ash_quick, :ash_domains, [AshQuick.Test.Check.AdvisoryDomain])
+    on_exit(fn -> Application.delete_env(:ash_quick, :ash_domains) end)
+
+    output = capture_io(fn -> Task.run(["--strict"]) end)
+
+    assert output =~ "## missing_extension (1) — advisory, not counted"
+    assert output =~ "AshQuick.Test.Check.Unadopted"
+    assert output =~ "0 defect(s), 1 advisory."
   end
 
   test "refuses an option it does not know rather than ignoring it" do

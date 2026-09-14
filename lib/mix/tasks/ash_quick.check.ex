@@ -11,8 +11,12 @@ defmodule Mix.Tasks.AshQuick.Check do
 
   Without `--strict` it reports and exits 0, so an existing application can
   adopt AshQuick incrementally and watch the number go down. With it, any
-  finding fails the build — for a project that has reached zero and intends to
-  stay there.
+  **defect** fails the build — for a project that has reached zero and intends
+  to stay there.
+
+  Advisory findings never fail, whichever way it is run. They are adoption
+  progress rather than breakage, and a number a project watches go down must not
+  be a number that blocks a deploy.
 
   `AshQuick.Check` documents every check, and how to record a divergence the
   application has decided to keep.
@@ -21,7 +25,6 @@ defmodule Mix.Tasks.AshQuick.Check do
   use Mix.Task
 
   alias AshQuick.Check
-  alias AshQuick.Check.Report
 
   # The resources, the router and the nav are all read by introspection, so the
   # application has to be compiled and its configuration loaded — but not
@@ -37,12 +40,12 @@ defmodule Mix.Tasks.AshQuick.Check do
 
     Mix.shell().info(Check.format(report))
 
-    if opts[:strict], do: fail_on_findings(report)
+    if opts[:strict], do: report |> Check.defects() |> fail_on_defects()
   end
 
-  defp fail_on_findings(%Report{findings: []}), do: :ok
+  defp fail_on_defects([]), do: :ok
 
-  defp fail_on_findings(%Report{findings: findings}) do
-    Mix.raise("mix ash_quick.check --strict: #{length(findings)} finding(s)")
+  defp fail_on_defects(defects) do
+    Mix.raise("mix ash_quick.check --strict: #{length(defects)} defect(s)")
   end
 end

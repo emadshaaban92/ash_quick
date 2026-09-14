@@ -34,11 +34,4 @@ defmodule AshQuick.Versioning.Declaration do
   def attribute(dsl_or_resource) do
     Spark.Dsl.Extension.get_opt(dsl_or_resource, @path, :attribute, @attribute)
   end
-
-  # Why a resource opted out, for the one reader that asks: `mix ash_quick.check`
-  # reports an opt-out stating none, and stops asking once it does. Nothing else
-  # reads it, so an unlocked resource behaves identically either way.
-  def reason(dsl_or_resource) do
-    Spark.Dsl.Extension.get_opt(dsl_or_resource, @path, :reason, nil)
-  end
 end

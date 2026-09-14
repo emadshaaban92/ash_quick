@@ -73,8 +73,8 @@ defmodule Example.Catalog.PriceChange do
     end
 
     versioning do
+      # Nothing updates a row, so there is no concurrent write to lose.
       enabled? false
-      reason("Nothing updates a row, so there is no concurrent write to lose.")
     end
 
     bookkeeping do

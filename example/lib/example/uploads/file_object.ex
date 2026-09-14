@@ -171,9 +171,9 @@ defmodule Example.Uploads.FileObject do
       label :key
     end
 
+    # Operational state a person reads and never writes.
     versioning do
       enabled? false
-      reason("Operational state the upload pipeline advances and a person only reads.")
     end
 
     bookkeeping do

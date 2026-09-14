@@ -23,13 +23,6 @@ defmodule AshQuick.Audit.Declaration do
     Spark.Dsl.Extension.get_opt(dsl_or_resource, @path, :enabled?, @enabled?)
   end
 
-  # Why a resource opted out, for the one reader that asks: `mix ash_quick.check`
-  # reports an opt-out stating none, and stops asking once it does. Nothing else
-  # reads it, so an unaudited resource behaves identically either way.
-  def reason(dsl_or_resource) do
-    Spark.Dsl.Extension.get_opt(dsl_or_resource, @path, :reason, nil)
-  end
-
   @doc false
   # Whether AshQuick attaches `AshQuick.Audit.Change` to a resource's writes,
   # which is `enabled?` minus the two resources that cannot record themselves.

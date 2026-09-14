@@ -1,146 +1,104 @@
 defmodule AshQuick.Check.Resources do
   @moduledoc false
-  # The half of the compliance check that reads resources rather than routes.
+  # The two things about a set of resources that no resource-level verifier can
+  # say.
   #
-  # Everything here is something the compile-time verifiers deliberately cannot
-  # say. A verifier only runs over a resource that took the extension on, so the
-  # resource most likely to be non-compliant — the one that never added it — is
-  # invisible to every one of them. And the three declarations below are
-  # *decisions*: versioning and audit are on by default and turning either off
-  # is allowed, so no verifier may refuse it; a lookup action is only required
-  # once something points at the resource, so `AshQuick.Lookup.Verifier` checks
-  # a declared one and leaves absence alone.
+  # A Spark verifier sees one resource's DSL and nothing else, which rules out
+  # both of these by construction. It cannot notice a resource that never took
+  # the extension on, because it never runs there. And it cannot notice that two
+  # resources chose the same liveness prefix, because it is only ever looking at
+  # one of them.
   #
-  # Each is therefore reported, not raised, and each stops being reported once
-  # the resource says why.
+  # What is deliberately *not* here: whether a resource turned versioning or
+  # auditing off, and whether it has a lookup action. The first two are stated
+  # in the DSL already — `enabled? false` is the decision, and asking for a
+  # sentence beside it catches nothing. The third is not a fact about a resource
+  # at all; `AshQuick.Lookup.Verifier` says why, and checking it here would
+  # contradict it.
 
-  alias AshQuick.Audit.Declaration, as: Audit
   alias AshQuick.Check.Finding
-  alias AshQuick.Lookup.Contract
-  alias AshQuick.Lookup.Declaration, as: Lookup
-  alias AshQuick.Versioning.Declaration, as: Versioning
+  alias AshQuick.Topics
 
   def run([]), do: {[], [{:resources, "no domains were given, so no resource was read"}]}
 
   def run(domains) do
-    findings =
+    resources =
       domains
       |> Enum.flat_map(&Ash.Domain.Info.resources/1)
       |> Enum.uniq()
-      |> Enum.flat_map(&check/1)
+      |> Enum.reject(&Ash.Resource.Info.embedded?/1)
 
-    {findings, []}
+    {missing_extension(resources) ++ colliding_prefixes(resources), []}
   end
 
-  # An embedded resource is a column's shape, not a page: it has no row to name
-  # in an audit entry, no list to search and no lock of its own, so none of the
-  # four below is a question about it.
-  defp check(resource) do
-    cond do
-      Ash.Resource.Info.embedded?(resource) -> []
-      AshQuick not in Spark.extensions(resource) -> [missing_extension(resource)]
-      true -> versioning(resource) ++ audit(resource) ++ lookup(resource)
+  # Advisory: a resource without the extension is not broken, it is un-adopted.
+  # The list is long on the day a project starts and shorter every week after,
+  # which is a number to watch rather than one to block a deploy on.
+  #
+  # An embedded resource is dropped above rather than reported: it is a column's
+  # shape, not a page, so it has no row to name in an audit entry and no list to
+  # search.
+  defp missing_extension(resources) do
+    for resource <- resources, AshQuick not in Spark.extensions(resource) do
+      %Finding{
+        check: :missing_extension,
+        subject: resource,
+        severity: :advisory,
+        message: """
+        #{inspect(resource)} does not carry the AshQuick extension.
+
+        Nothing here is broken — but nothing checks it either: it has no \
+        declared label, no optimistic lock and no audit trail, and no verifier \
+        runs over a resource that never took the extension on. A resource \
+        nothing will ever render is a fine place to leave it.
+
+            use Ash.Resource,
+              extensions: [AshQuick]
+        """
+      }
     end
   end
 
-  defp missing_extension(resource) do
+  # Two resources publishing on one topic is the failure this task exists for:
+  # each one's writes arrive at the other's pages, so a list refetches on a
+  # record it does not hold and a details view reloads for a change to something
+  # else entirely. Nothing raises, and the page that is wrong is not the page
+  # that was edited.
+  #
+  # Only resources that publish are compared. `enabled? false` sends nothing, so
+  # it collides with nothing.
+  defp colliding_prefixes(resources) do
+    resources
+    |> Enum.filter(&Topics.enabled?/1)
+    |> Enum.group_by(&Topics.collection/1)
+    |> Enum.filter(fn {_prefix, sharing} -> length(sharing) > 1 end)
+    |> Enum.sort()
+    |> Enum.map(fn {prefix, sharing} -> collision(prefix, sharing) end)
+  end
+
+  defp collision(prefix, sharing) do
     %Finding{
-      check: :missing_extension,
-      subject: resource,
+      check: :colliding_liveness_prefix,
+      subject: prefix,
       message: """
-      #{inspect(resource)} does not carry the AshQuick extension.
+      #{Enum.map_join(sharing, " and ", &inspect/1)} all publish on \
+      "#{prefix}".
 
-      Nothing else in this report can be held over it: it has no declared \
-      label, no searchable read, no optimistic lock and no audit trail, and \
-      none of AshQuick's verifiers runs over a resource that never took the \
-      extension on. The gap surfaces the day a page is pointed at it.
+      A QuickView subscribes to its resource's prefix, so each of these \
+      resources' writes reach every one of the others' pages: a list refetches \
+      over a record it does not hold, and a details view reloads for a change \
+      to something else. Nothing raises, and the page that behaves oddly is \
+      not the page anyone edited.
 
-          use Ash.Resource,
-            extensions: [AshQuick]
+      The prefix defaults to the resource's `short_name`, so a collision means \
+      two resources share one — or one of them declared the other's:
+
+          ash_quick do
+            liveness do
+              prefix "catalog_products"
+            end
+          end
       """
     }
-  end
-
-  defp versioning(resource) do
-    if Versioning.enabled?(resource) or Versioning.reason(resource) do
-      []
-    else
-      [
-        %Finding{
-          check: :unversioned,
-          subject: resource,
-          message: """
-          #{inspect(resource)} turns versioning off and states no reason.
-
-          Without the optimistic lock, two people editing the same record from \
-          two tabs both save: the second write lands on top of the first, and \
-          neither is told. That is a fine trade for a resource only the system \
-          writes, or one whose fields nobody contends — but it is a decision, \
-          so record it:
-
-              ash_quick do
-                versioning do
-                  enabled? false
-                  reason "Append-only; every row is written once by the system."
-                end
-              end
-          """
-        }
-      ]
-    end
-  end
-
-  defp audit(resource) do
-    if Audit.enabled?(resource) or Audit.reason(resource) do
-      []
-    else
-      [
-        %Finding{
-          check: :unaudited,
-          subject: resource,
-          message: """
-          #{inspect(resource)} turns auditing off and states no reason.
-
-          Nothing records who changed one of its rows, or what it held before. \
-          The absence is discovered by whoever needed the log and did not have \
-          it, which is always after the fact — so if it is the right answer \
-          here, say why:
-
-              ash_quick do
-                audit do
-                  enabled? false
-                  reason "The audit store itself; a row per write would recurse."
-                end
-              end
-          """
-        }
-      ]
-    end
-  end
-
-  # `AshQuick.Lookup.Verifier`'s blind spot, and only that: it checks an action
-  # the resource *declared*, because whether a resource needs one at all depends
-  # on something else pointing at it. This asks the same question of every
-  # resource carrying the extension, so a missing `:index` is reported now
-  # rather than the day a dropdown is pointed here.
-  defp lookup(resource) do
-    case Contract.check(resource) do
-      :ok ->
-        []
-
-      {:error, reason} ->
-        [
-          %Finding{
-            check: :unsearchable,
-            subject: resource,
-            message:
-              Contract.message(resource, Lookup.action(resource), reason, """
-              No list page or dropdown reaches #{inspect(resource)} yet, so \
-              nothing has refused to compile over this — the moment one does, \
-              it will.\
-              """)
-          }
-        ]
-    end
   end
 end

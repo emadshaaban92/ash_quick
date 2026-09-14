@@ -93,7 +93,10 @@ defmodule AshQuick.LiveView.Components.ListView do
             </div>
             <div class="w-full lg:w-auto flex flex-col sm:flex-row space-y-2 sm:space-y-0 items-stretch sm:items-center justify-end sm:space-x-3 shrink-0">
               <.new_button
-                :if={AshQuick.can?({@resource, :create}, @scope, :ash_quick_list)}
+                :if={
+                  :create in @routed_shapes and
+                    AshQuick.can?({@resource, :create}, @scope, :ash_quick_list)
+                }
                 new_click={@new_click}
                 new_action_label={@new_action_label}
               />

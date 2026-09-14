@@ -199,13 +199,9 @@ a row only one writer ever touches:
 ash_quick do
   versioning do
     enabled? false
-    reason "Append-only; every row is written once by the system."
   end
 end
 ```
-
-`reason` is read by nothing at runtime. `mix ash_quick.check` reports an
-opt-out that states none — the same goes for `audit`.
 
 ### What a resource must satisfy
 
@@ -343,45 +339,48 @@ Custom QuickView templates should call `AshQuick.can?/4` rather than a bare
 
 ## Checking a host in CI
 
-The verifiers refuse to compile a resource that would fail at request time, but
-each one runs *over a resource that took the extension on* — so the resource
-most likely to be non-compliant, the one that never added it, is invisible to
-all of them. The same holds for the router: `quick_view/3` cannot see the
-`live/3` written beside it, and nothing holds a nav to an access control it was
-never told about.
-
-`mix ash_quick.check` is the rest, run as a task rather than at compile time
-because none of it is the library's to refuse:
+A Spark verifier sees one resource's DSL and refuses to compile it if something
+would fail at request time. Two kinds of mistake are outside that by
+construction: a fact spanning *two* resources, and anything at all about the
+router. `mix ash_quick.check` is those:
 
 ```console
 $ mix ash_quick.check           # report, exit 0
-$ mix ash_quick.check --strict  # report, exit 1 on any finding
+$ mix ash_quick.check --strict  # report, exit 1 on any defect
 ```
 
-It reports, over the resources in the application's domains: one carrying no
-extension, versioning or auditing turned off with no `reason`, and no usable
-lookup action. Over the router: a QuickView declared with a plain `live/3`, a
-non-QuickView carrying `ash_quick` metadata, a route served outside its base
-path, and an update or destroy taking inputs on a page with no `/:id/:action`
-route — whose button patches to a 404 the moment its policy lets it render.
-And across the nav, the router and the access control: a nav path no route
-serves, a granted route the router does not serve, a granted route with no link
-or no tile, and an entry no role can reach.
+Over the resources in the application's domains: two resources publishing on
+one liveness prefix, so each one's writes land on the other's pages — a
+collision no resource verifier can see, because it is only ever looking at one
+of them. And, as an **advisory**, a resource carrying no extension at all.
 
-The last four need the set of routes *some* role holds, which only the host can
-enumerate: implement the optional `AshQuick.AccessControl.all_routes/0`. Without
-it they are reported as not run, rather than passing for want of anything to
-compare against.
+Over the router: a QuickView declared with a plain `live/3`, a non-QuickView
+carrying `ash_quick` metadata, a route served outside its base path, and a
+control leading to a route `:only` or `:except` left out — rows link to
+`<base>/<id>` and an action taking inputs patches to `<base>/<id>/<action>`,
+neither of which consults the router.
 
-The default is advisory on purpose. An existing application adopts
-incrementally, and a check that demands a big-bang conversion before it says
-anything does not get run; `--strict` is for a project that has reached zero.
-A divergence the application has decided to keep is recorded rather than
-silenced with a flag — a `reason` on the resource, or:
+Across the nav, the router and the access control: a nav path no route serves, a
+granted route the router does not serve, a granted route with no link, and an
+entry no role can reach. These need the set of routes *some* role holds, which
+only the host can enumerate — implement the optional
+`AshQuick.AccessControl.all_routes/0`. Without it they are reported as not run,
+rather than passing for want of anything to compare against.
+
+What it deliberately does **not** report: whether a resource turned versioning
+or auditing off, or whether it has a lookup action. `enabled? false` is already
+the decision, stated where it belongs; and whether a resource needs a lookup
+action is not a fact about the resource — see `AshQuick.Lookup.Verifier`.
+
+`--strict` fails on defects and ignores advisories: a number a project watches
+go down must not be a number that blocks a deploy. The default is advisory
+throughout, because an adoption path that demands a big-bang conversion does not
+get taken. A divergence the application has decided to keep is recorded rather
+than silenced with a flag:
 
 ```elixir
 config :ash_quick,
-  check: [exempt: [tileless_route: ["/"]]]
+  check: [exempt: [unroutable_action: ["/file_objects/:id/reference"]]]
 ```
 
 `AshQuick.Check` documents every check and what it keys an exemption on.

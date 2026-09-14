@@ -9,10 +9,25 @@ defmodule AshQuick.Check.Finding do
 
   `message` is the whole of what a reader gets, so it says what will fail and
   how to fix it rather than restating the check's name.
+
+  `severity` is what `--strict` acts on:
+
+    * `:defect` — something is broken. A control leads to a route that is not
+      there, a page raises on the first link it builds, a resource's updates
+      arrive on another one's topic. This fails the build.
+    * `:advisory` — nothing is broken; the application has not finished adopting
+      something. Reported every run and never counted, because a number you
+      watch go down must not be a number that blocks a deploy.
   """
 
-  @type t :: %__MODULE__{check: atom(), subject: term(), message: String.t()}
+  @type severity :: :defect | :advisory
+  @type t :: %__MODULE__{
+          check: atom(),
+          subject: term(),
+          message: String.t(),
+          severity: severity()
+        }
 
   @enforce_keys [:check, :subject, :message]
-  defstruct [:check, :subject, :message]
+  defstruct [:check, :subject, :message, severity: :defect]
 end

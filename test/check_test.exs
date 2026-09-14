@@ -14,7 +14,6 @@ defmodule AshQuick.CheckTest do
   alias AshQuick.Test.Check.AccessControl
   alias AshQuick.Test.Check.Domain
   alias AshQuick.Test.Check.Nav
-  alias AshQuick.Test.Check.Silent
 
   defp run(opts \\ []) do
     Check.run(Keyword.merge([domains: [Domain], nav: Nav, exempt: []], opts))
@@ -26,33 +25,58 @@ defmodule AshQuick.CheckTest do
     test "every check fires, and names what it is about" do
       assert found(run()) == [
                {:missing_extension, AshQuick.Test.Check.Bare},
-               {:unversioned, Silent},
-               {:unaudited, Silent},
-               {:unsearchable, Silent},
+               {:colliding_liveness_prefix, "signal"},
                {:hand_routed_quick_view, "/hand_routed"},
                {:mislabelled_route, "/plain"},
                {:stray_base_path, "/elsewhere"},
                {:unroutable_action, "/widgets/:id/rename"},
+               {:unroutable_show, "/gizmos/:id"},
                {:unrouted_nav_path, "/missing"},
                {:unrouted_grant, "/gone"},
                {:linkless_route, "/orphan"},
-               {:tileless_route, "/plain"},
-               {:tileless_route, "/orphan"},
-               {:unreachable_entry, "/missing"}
+               {:unreachable_entry, "/missing"},
+               {:unreachable_entry, "/gizmos"}
              ]
     end
 
-    # `AshQuick.Test.Check.Stated` turns both off exactly as `Silent` does, and
-    # differs only in saying why — so its absence above is the whole assertion.
-    test "a stated reason is what separates an opt-out from a finding" do
-      subjects = run() |> found() |> Keyword.values()
+    # The three that were dropped for asking a resource to justify a decision it
+    # had already stated, or to hold a convention the library argues against.
+    test "no check reports a stated opt-out or a missing lookup action" do
+      checks = run() |> found() |> Keyword.keys() |> Enum.uniq()
 
-      refute AshQuick.Test.Check.Stated in subjects
-      assert Silent in subjects
+      refute :unversioned in checks
+      refute :unaudited in checks
+      refute :unsearchable in checks
+      refute :tileless_route in checks
     end
 
-    # A dead grant has no entry and no group either. Reporting all three would
-    # bury the one fact that explains them.
+    # A resource that publishes nothing collides with nothing, so the check has
+    # to turn on `enabled?` rather than on the prefix alone.
+    test "a prefix collision names every resource sharing the topic" do
+      assert [collision] =
+               run().findings |> Enum.filter(&(&1.check == :colliding_liveness_prefix))
+
+      assert collision.message =~ "AshQuick.Test.Check.Echo"
+      assert collision.message =~ "AshQuick.Test.Check.Repeat"
+      refute collision.message =~ "AshQuick.Test.Check.Widget"
+    end
+
+    # `AshQuick.Test.Check.Bare` is the only advisory, and `--strict` reads
+    # `defects/1` rather than the whole list.
+    test "an unadopted resource is advisory, and does not fail a strict run" do
+      report = run()
+
+      assert [%{check: :missing_extension, severity: :advisory}] =
+               Enum.filter(report.findings, &(&1.severity == :advisory))
+
+      refute {:missing_extension, AshQuick.Test.Check.Bare} in Enum.map(
+               Check.defects(report),
+               &{&1.check, &1.subject}
+             )
+    end
+
+    # A dead grant has no entry either. Reporting both would bury the one fact
+    # that explains them.
     test "a grant the router does not serve is reported once, as itself" do
       for {check, subject} <- found(run()), subject == "/gone" do
         assert check == :unrouted_grant
@@ -66,20 +90,17 @@ defmodule AshQuick.CheckTest do
 
   describe "exemptions" do
     test "drop a finding matched on both its check and its subject" do
-      exempt = [tileless_route: ["/orphan"], unversioned: [Silent]]
+      found = found(run(exempt: [linkless_route: ["/orphan"], unrouted_grant: ["/gone"]]))
 
-      found = found(run(exempt: exempt))
+      refute {:linkless_route, "/orphan"} in found
+      refute {:unrouted_grant, "/gone"} in found
 
-      refute {:tileless_route, "/orphan"} in found
-      refute {:unversioned, Silent} in found
-
-      # And only those: the same subject under another check still reports.
-      assert {:linkless_route, "/orphan"} in found
-      assert {:unaudited, Silent} in found
+      # And only those: another subject under the same check still reports.
+      assert {:unreachable_entry, "/missing"} in found
     end
 
     test "naming a subject under the wrong check exempts nothing" do
-      assert {:tileless_route, "/orphan"} in found(run(exempt: [linkless_route: ["/orphan"]]))
+      assert {:linkless_route, "/orphan"} in found(run(exempt: [unroutable_show: ["/orphan"]]))
     end
   end
 
@@ -104,7 +125,7 @@ defmodule AshQuick.CheckTest do
 
       # The checks that do not depend on a role still run.
       assert {:unrouted_nav_path, "/missing"} in found(report)
-      refute {:tileless_route, "/plain"} in found(report)
+      refute {:linkless_route, "/orphan"} in found(report)
     end
 
     test "no domains to read resources from" do
@@ -114,7 +135,7 @@ defmodule AshQuick.CheckTest do
       assert reason =~ "no domains"
       assert found(report) |> Keyword.keys() |> Enum.uniq() == ~w(
                hand_routed_quick_view mislabelled_route stray_base_path unroutable_action
-               unrouted_nav_path unrouted_grant linkless_route tileless_route unreachable_entry
+               unroutable_show unrouted_nav_path unrouted_grant linkless_route unreachable_entry
              )a
     end
 
@@ -127,10 +148,10 @@ defmodule AshQuick.CheckTest do
     test "groups by check, in a stable order, and carries each message whole" do
       text = run() |> Check.format()
 
-      assert text =~ "## missing_extension (1)"
-      assert text =~ "## tileless_route (2)"
+      assert text =~ "## missing_extension (1) — advisory, not counted"
+      assert text =~ "## unreachable_entry (2)"
       assert text =~ "AshQuick.Test.Check.Bare does not carry the AshQuick extension."
-      assert text =~ "14 finding(s) across 13 check(s)."
+      assert text =~ "11 defect(s), 1 advisory."
 
       checks = Regex.scan(~r/^## (\w+)/m, text, capture: :all_but_first) |> List.flatten()
       assert checks == Enum.sort(checks)

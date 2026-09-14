@@ -371,11 +371,16 @@ defmodule AshQuick.LiveView.QuickView do
           params = URLParams.from_url_params(params)
           action_name = QuickView.action_from_params(params, @options, socket.assigns.live_action)
           ash_action = Ash.Resource.Info.action(@options.resource, action_name)
+          base_path = QuickView.base_path!(socket, uri)
 
           socket =
             socket
             |> assign(connected?: true)
-            |> assign(:base_path, QuickView.base_path!(socket, uri))
+            |> assign(:base_path, base_path)
+            |> assign(
+              :routed_shapes,
+              AshQuick.LiveView.Router.served_shapes(socket.router, base_path)
+            )
             |> assign(:path, uri.path)
             |> assign(:params, params)
             |> assign(:resource, @options.resource)

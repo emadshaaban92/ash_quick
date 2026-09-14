@@ -21,117 +21,6 @@ defmodule AshQuick.Test.Check.Bare do
   end
 end
 
-defmodule AshQuick.Test.Check.Silent do
-  @moduledoc """
-  Three decisions taken and none of them stated: no lock, no audit trail, and no
-  action a search can run through.
-  """
-  use Ash.Resource,
-    domain: AshQuick.Test.Check.Domain,
-    data_layer: Ash.DataLayer.Ets,
-    extensions: [AshQuick]
-
-  ets do
-    private? true
-  end
-
-  attributes do
-    uuid_primary_key :id
-    attribute :name, :string, public?: true
-  end
-
-  actions do
-    defaults [:read, :create]
-  end
-
-  ash_quick do
-    display do
-      label :name
-    end
-
-    liveness do
-      enabled? false
-    end
-
-    versioning do
-      enabled? false
-    end
-
-    audit do
-      enabled? false
-    end
-
-    bookkeeping do
-      created_at false
-      updated_at false
-      created_by false
-      updated_by false
-    end
-  end
-end
-
-defmodule AshQuick.Test.Check.Stated do
-  @moduledoc """
-  The same two opt-outs as `AshQuick.Test.Check.Silent`, each with its reason —
-  so the check has nothing to say about it.
-  """
-  use Ash.Resource,
-    domain: AshQuick.Test.Check.Domain,
-    data_layer: Ash.DataLayer.Ets,
-    extensions: [AshQuick]
-
-  ets do
-    private? true
-  end
-
-  attributes do
-    uuid_primary_key :id
-    attribute :name, :string, public?: true
-  end
-
-  actions do
-    defaults [:read, :create]
-
-    read :index do
-      argument :search, :string
-
-      pagination do
-        keyset? true
-        offset? true
-        default_limit 20
-        countable :by_default
-      end
-    end
-  end
-
-  ash_quick do
-    display do
-      label :name
-    end
-
-    liveness do
-      enabled? false
-    end
-
-    versioning do
-      enabled? false
-      reason("Written once, by the system, and never edited.")
-    end
-
-    audit do
-      enabled? false
-      reason("Every row is itself a record of something that happened.")
-    end
-
-    bookkeeping do
-      created_at false
-      updated_at false
-      created_by false
-      updated_by false
-    end
-  end
-end
-
 defmodule AshQuick.Test.Check.Widget do
   @moduledoc """
   The resource behind the fixture QuickView.
@@ -184,12 +73,170 @@ defmodule AshQuick.Test.Check.Widget do
 
     versioning do
       enabled? false
-      reason("The fixture asserts routing, not concurrency.")
     end
 
     audit do
       enabled? false
-      reason("Nothing here is ever written.")
+    end
+
+    bookkeeping do
+      created_at false
+      updated_at false
+      created_by false
+      updated_by false
+    end
+  end
+end
+
+defmodule AshQuick.Test.Check.Gizmo do
+  @moduledoc """
+  Listed and nothing else: its QuickView is routed `only: [:index]`, so every
+  row's details link leads to a route that is not there.
+
+  No `:create` and no input-taking update, so the list's other two controls have
+  nothing to say about it.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.Check.Domain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshQuick]
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true
+  end
+
+  actions do
+    defaults [:read]
+
+    read :index do
+      argument :search, :string
+
+      pagination do
+        keyset? true
+        offset? true
+        default_limit 20
+        countable :by_default
+      end
+    end
+  end
+
+  ash_quick do
+    display do
+      label :name
+    end
+
+    liveness do
+      enabled? false
+    end
+
+    versioning do
+      enabled? false
+    end
+
+    audit do
+      enabled? false
+    end
+
+    bookkeeping do
+      created_at false
+      updated_at false
+      created_by false
+      updated_by false
+    end
+  end
+end
+
+defmodule AshQuick.Test.Check.Echo do
+  @moduledoc """
+  Publishes on "signal", as does `AshQuick.Test.Check.Repeat`.
+
+  Liveness stays *enabled* on both: a resource that publishes nothing collides
+  with nothing, so the collision only exists between two that do.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.Check.Domain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshQuick]
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true
+  end
+
+  actions do
+    defaults [:read]
+  end
+
+  ash_quick do
+    display do
+      label :name
+    end
+
+    liveness do
+      prefix "signal"
+    end
+
+    versioning do
+      enabled? false
+    end
+
+    audit do
+      enabled? false
+    end
+
+    bookkeeping do
+      created_at false
+      updated_at false
+      created_by false
+      updated_by false
+    end
+  end
+end
+
+defmodule AshQuick.Test.Check.Repeat do
+  @moduledoc "The other half of the prefix collision. See `AshQuick.Test.Check.Echo`."
+  use Ash.Resource,
+    domain: AshQuick.Test.Check.Domain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshQuick]
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true
+  end
+
+  actions do
+    defaults [:read]
+  end
+
+  ash_quick do
+    display do
+      label :name
+    end
+
+    liveness do
+      prefix "signal"
+    end
+
+    versioning do
+      enabled? false
+    end
+
+    audit do
+      enabled? false
     end
 
     bookkeeping do
@@ -211,15 +258,21 @@ defmodule AshQuick.Test.Check.Domain do
 
   resources do
     resource AshQuick.Test.Check.Bare
-    resource AshQuick.Test.Check.Silent
-    resource AshQuick.Test.Check.Stated
     resource AshQuick.Test.Check.Widget
+    resource AshQuick.Test.Check.Gizmo
+    resource AshQuick.Test.Check.Echo
+    resource AshQuick.Test.Check.Repeat
   end
 end
 
 defmodule AshQuick.Test.Check.WidgetLive.Quick do
   @moduledoc false
   use AshQuick.LiveView.QuickView, resource: AshQuick.Test.Check.Widget
+end
+
+defmodule AshQuick.Test.Check.GizmoLive.Quick do
+  @moduledoc false
+  use AshQuick.LiveView.QuickView, resource: AshQuick.Test.Check.Gizmo
 end
 
 defmodule AshQuick.Test.Check.PlainLive do
@@ -242,6 +295,9 @@ defmodule AshQuick.Test.Check.Router do
 
   # Right, except that `:rename` has nowhere to patch to.
   quick_view("/widgets", AshQuick.Test.Check.WidgetLive.Quick, only: [:index, :show])
+
+  # A list whose rows link to a details page that is not served.
+  quick_view("/gizmos", AshQuick.Test.Check.GizmoLive.Quick, only: [:index])
 
   # A QuickView with no base path to read.
   live("/hand_routed", AshQuick.Test.Check.WidgetLive.Quick, nil)
@@ -296,5 +352,39 @@ defmodule AshQuick.Test.Check.Nav do
     entry("/missing", label: "Missing")
 
     group("Things", ~w(/widgets))
+  end
+end
+
+defmodule AshQuick.Test.Check.Unadopted do
+  @moduledoc """
+  A second un-adopted resource, in a domain of its own.
+
+  It exists so that a run can produce advisories and nothing else — which is the
+  only way to watch `--strict` decline to fail on them.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.Check.AdvisoryDomain,
+    data_layer: Ash.DataLayer.Ets
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true
+  end
+
+  actions do
+    defaults [:read, :create]
+  end
+end
+
+defmodule AshQuick.Test.Check.AdvisoryDomain do
+  @moduledoc "Holds `AshQuick.Test.Check.Unadopted` and nothing else."
+  use Ash.Domain, validate_config_inclusion?: false
+
+  resources do
+    resource AshQuick.Test.Check.Unadopted
   end
 end

@@ -53,17 +53,15 @@ declares `pagination`.
 
 ## Check the application, do not eyeball it
 
-`mix ash_quick.check` reports every convention the compile-time verifiers
-cannot enforce: a resource carrying no extension at all, versioning or auditing
-turned off with no `reason`, no usable lookup action, a QuickView routed by a
-plain `live/3`, an update taking inputs on a page with no `/:id/:action` route,
-and every way a nav, a router and an access control can disagree about a path.
+`mix ash_quick.check` reports what a resource verifier structurally cannot see:
+two resources sharing a liveness prefix, a QuickView routed by a plain `live/3`,
+a control leading to a route `:only` or `:except` left out, and every way a nav,
+a router and an access control can disagree about a path. A resource carrying no
+extension at all is reported too, as an advisory.
 
-Run it after adding a resource, a route or a nav entry. `--strict` fails the
-build; without it the run is advisory, which is what makes it adoptable
-incrementally. Record a divergence you mean to keep — a `reason` on the
-resource, or `config :ash_quick, check: [exempt: [...]]` — rather than
-remembering it.
+Run it after adding a resource, a route or a nav entry. `--strict` fails on
+defects and never on advisories. Record a divergence you mean to keep with
+`config :ash_quick, check: [exempt: [...]]` rather than remembering it.
 
 ## Reference
 

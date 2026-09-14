@@ -14,8 +14,6 @@ defmodule AshQuick.Check.Routing do
 
   alias AshQuick.Check.Finding
 
-  @action_suffix "/:id/:action"
-
   def run(nil), do: {[], [{:routing, "no router was given, so no route was read"}]}
 
   def run(router) do
@@ -27,7 +25,7 @@ defmodule AshQuick.Check.Routing do
       hand_routed(router, live_routes) ++
         mislabelled(router, live_routes) ++
         stray_base_paths(live_routes) ++
-        unroutable_actions(live_routes, served)
+        route_gaps(live_routes, served)
 
     {findings, []}
   end
@@ -98,18 +96,71 @@ defmodule AshQuick.Check.Routing do
     end
   end
 
-  # A row action and a details action both patch to `<base>/<id>/<action>` the
-  # moment the action takes any input at all — the branch in
-  # `AshQuick.LiveView.ListUtils` and `DetailsUtils` that is not `do_action/4`.
-  # A route set narrowed past the `:action` shape therefore still renders the
-  # button; only clicking it finds out.
-  defp unroutable_actions(routes, served) do
+  # `:only` and `:except` narrow which of the four routes a QuickView answers,
+  # and two controls it renders can outlive the route they lead to.
+  #
+  # The New button is not one of them any more: `ListView` gates it on the
+  # `:create` shape being served, so omitting the route really does keep a
+  # resource out of the New flow, the way `quick_view/3` documents. Hiding a
+  # control is the right answer when the router said unambiguously that the page
+  # does not have it, and `:only`/`:except` name that shape directly.
+  #
+  # Neither of these can be settled that way:
+  #
+  #   * the row's "View details" link is only one of the things that lead to
+  #     `<base>/<id>` — a create redirects there too — so hiding the link would
+  #     leave the gap and remove the evidence of it;
+  #   * `/:id/:action` serves *every* action at once, so leaving it out says
+  #     nothing about any particular one. There is no way to tell a deliberate
+  #     omission from a forgotten route, and silently dropping the button would
+  #     hide an action somebody needs.
+  #
+  # So these are reported rather than guessed at.
+  #
+  # A base path with no resource behind it is skipped: that is a route carrying
+  # metadata it has no business carrying, already reported as
+  # `:mislabelled_route`, and it renders no rows and no buttons either.
+  defp route_gaps(routes, served) do
     routes
     |> quick_views()
-    |> Enum.reject(fn {base, _resource} -> MapSet.member?(served, base <> @action_suffix) end)
-    |> Enum.flat_map(fn {base, resource} ->
-      Enum.map(input_taking_actions(resource), &unroutable_action(base, resource, &1))
+    |> Enum.flat_map(fn
+      {_base, nil} ->
+        []
+
+      {base, resource} ->
+        missing_show(base, resource, served) ++ missing_actions(base, resource, served)
     end)
+  end
+
+  # Guarded on the list being served: with no list there are no rows, and
+  # nothing renders the link.
+  defp missing_show(base, resource, served) do
+    if MapSet.member?(served, base) and not MapSet.member?(served, base <> "/:id") do
+      [
+        %Finding{
+          check: :unroutable_show,
+          subject: base <> "/:id",
+          message: """
+          #{base} lists #{inspect(resource)} and serves no `/:id` route.
+
+          Every row renders a "View details" link to #{base}/<id>, and a \
+          successful create redirects there. Both are 404s.
+
+              quick_view "#{base}", TheLive.Quick, only: [:index, :show]
+          """
+        }
+      ]
+    else
+      []
+    end
+  end
+
+  defp missing_actions(base, resource, served) do
+    if MapSet.member?(served, base <> "/:id/:action") do
+      []
+    else
+      Enum.map(input_taking_actions(resource), &unroutable_action(base, resource, &1))
+    end
   end
 
   defp unroutable_action(base, resource, action) do
@@ -118,7 +169,7 @@ defmodule AshQuick.Check.Routing do
       subject: "#{base}/:id/#{action.name}",
       message: """
       #{inspect(resource)}'s #{inspect(action.name)} takes inputs, and \
-      #{base} serves no `#{@action_suffix}` route.
+      #{base} serves no `/:id/:action` route.
 
       An update or destroy taking inputs needs a form, so its button patches to \
       #{base}/:id/#{action.name} rather than running the action inline. The \
@@ -129,8 +180,8 @@ defmodule AshQuick.Check.Routing do
 
           quick_view "#{base}", TheLive.Quick
 
-      or, if this action is genuinely not meant to be taken from the UI, keep \
-      it out of the resource's update and destroy actions.
+      or, if this action is genuinely not meant to be taken from the UI, forbid \
+      it rather than leaving the router to hide it.
       """
     }
   end

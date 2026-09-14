@@ -70,14 +70,11 @@ config :ash_quick,
   error_translator: {ExampleWeb.CoreComponents, :translate_error},
   timezone: "Etc/UTC"
 
-# The two divergences this app has decided to keep. `mix ash_quick.check` reports
+# The one divergence this app has decided to keep. `mix ash_quick.check` reports
 # everything else it finds, and `ExampleWeb.HostConformanceTest` holds it at zero.
 config :ash_quick,
   check: [
     exempt: [
-      # The apps grid *is* the home page, so a tile leading back to it says
-      # nothing.
-      tileless_route: ["/"],
       # `:reference` is taken by the upload pipeline with `authorize?: false`
       # and is forbidden to everyone else, so the button the check is warning
       # about cannot render. `/file_objects` stays read-only.
