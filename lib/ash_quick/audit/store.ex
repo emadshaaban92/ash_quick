@@ -42,11 +42,21 @@ defmodule AshQuick.Audit.Store do
 
     changes
     |> Enum.map(&Row.build(&1, actor))
+    # `rollback_on_error?: false` so the refusal comes back as a result rather
+    # than as a rollback thrown from inside `Ash.bulk_create`. A host's audit
+    # store shares the transaction of the write it records, so the default would
+    # abort that transaction here and the caller would see the store's bare
+    # error — `AshQuick.Audit.WriteError`, the only thing that names both ends of
+    # the write, would be unreachable on every host with a transactional store.
+    #
+    # Nothing is left half-written by the difference: the raise below propagates
+    # out through the action's own transaction, which rolls back with it.
     |> Ash.bulk_create(store, :create,
       actor: actor,
       authorize?: false,
       return_errors?: true,
-      stop_on_error?: true
+      stop_on_error?: true,
+      rollback_on_error?: false
     )
     |> case do
       %Ash.BulkResult{status: :success} ->
