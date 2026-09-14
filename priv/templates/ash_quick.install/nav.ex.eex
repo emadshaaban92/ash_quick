@@ -1,0 +1,27 @@
+defmodule <%= inspect @module %> do
+  @moduledoc """
+  Where every page appears in navigation.
+
+  The sidebar and the apps grid are two renderings of this, filtered through
+  `<%= inspect @access_control %>` — a group with nothing reachable in it has no
+  tile and no heading, so what a user is offered is what their role actually
+  unlocks.
+<%= if @router do %>
+  Paths are not repeated from the router: `AshQuick.Nav.Info` finds every
+  QuickView by walking `<%= inspect @router %>`, and each one's label comes from
+  its resource's `plural_name`. An `entry` here states only what the router
+  cannot — an icon, a label the resource gets wrong, or a page that is not a
+  QuickView at all. A `group` is what puts a tile in the apps grid.
+<% else %>
+  No router is declared, so the registry is what this module declares alone.
+  Add `router: MyAppWeb.Router` to the `use` below and every QuickView becomes
+  an entry without being listed here.
+<% end %>  """
+<%= if @router do %>
+  use AshQuick.Nav, router: <%= inspect @router %>, access_control: <%= inspect @access_control %>
+<% else %>
+  use AshQuick.Nav, access_control: <%= inspect @access_control %>
+<% end %>
+  nav do
+  end
+end

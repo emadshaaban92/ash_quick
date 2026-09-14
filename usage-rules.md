@@ -51,6 +51,22 @@ from `:display_name` or `:name` and otherwise declared; and, wherever something
 searches the resource, a lookup action that accepts the search argument and
 declares `pagination`.
 
+## Generate rather than hand-write
+
+Three tasks, and each writes every artifact the thing it generates needs to
+work — which is more than the file it is named after.
+
+```console
+$ mix igniter.install ash_quick                      # config, audit store, nav, access control, router
+$ mix ash_quick.gen.resource MyApp.Catalog.Product   # the extension, and the columns that costs
+$ mix ash_quick.gen.quick_view MyApp.Catalog.Product # the view, its route, and the grant for it
+```
+
+Reach for them before writing a QuickView by hand. A route with no grant in the
+`AshQuick.AccessControl` is a page that 403s with nothing to say why, and a
+QuickView routed by a plain `live/3` has no base path at request time — both are
+mistakes the generator does not make.
+
 ## Check the application, do not eyeball it
 
 `mix ash_quick.check` reports what a resource verifier structurally cannot see:
@@ -73,4 +89,5 @@ signature or option:
 - `AshQuick.LiveView.Router` — `quick_view/3` and the four route shapes
 - `AshQuick.Config` — every `config :ash_quick` key
 - `AshQuick.Check` — every check `mix ash_quick.check` runs
+- `Mix.Tasks.AshQuick.Install` — what the installer writes, and what it leaves to you
 - `README.md` — installing and wiring it into a host application

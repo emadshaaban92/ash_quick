@@ -1,0 +1,58 @@
+defmodule <%= inspect @module %> do
+  @moduledoc """
+  Which UI routes a scope may navigate to.
+
+  The single source of truth for route access, and deliberately **not**
+  `Ash.can?`: a filter policy allows the action and returns no rows, so `can?`
+  says yes for a page that would be empty. `<%= inspect @nav %>` names this
+  module, and every rendering of the nav filters through it.
+
+  `mix ash_quick.gen.quick_view` adds each path it routes to `@routes`. That
+  list is a starting point rather than an answer: as written, every scope
+  reaches every route in it. Split it by role before this application has more
+  than one kind of user —
+
+      def routes_for(%MyApp.Scope{current_user: %{role: role}}), do: routes_for_role(role)
+      def routes_for(_scope), do: []
+
+      defp routes_for_role(:admin), do: ~w(/products /users)
+      defp routes_for_role(_role), do: []
+
+  — writing each role's routes out in full. That is what makes adding a route a
+  decision about which roles reach it, and leaves a role nobody opened up
+  fail-closed.
+
+  Matching is strict prefix matching: `/products` covers `/products` and
+  `/products/123`, but not `/products_archive`. Two routes that mean different
+  things must not share a prefix.
+  """
+
+  @behaviour AshQuick.AccessControl
+
+  @routes []
+
+  @impl AshQuick.AccessControl
+  def routes_for(_scope), do: @routes
+
+  @doc """
+  True when `scope` may navigate to `path`.
+
+  Either the path equals an allowed route or it sits directly under one. A
+  mount-time gate calls this on every navigation.
+  """
+  def can_access?(scope, path) when is_binary(path) do
+    scope |> routes_for() |> Enum.any?(&path_matches?(path, &1))
+  end
+
+  defp path_matches?(path, route), do: path == route or String.starts_with?(path, route <> "/")
+
+  @doc """
+  Every route any scope at all can reach, for `mix ash_quick.check`.
+
+  Once `routes_for/1` splits by role, derive this from wherever the roles are
+  declared rather than restating the paths, or it goes stale exactly when a role
+  is added.
+  """
+  @impl AshQuick.AccessControl
+  def all_routes, do: @routes
+end

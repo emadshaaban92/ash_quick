@@ -68,11 +68,16 @@ defmodule AshQuick.MixProject do
       {:merge_pdf, "~> 0.5", optional: true},
       {:tower, "~> 0.8", optional: true},
 
+      # The installer and generators are mix tasks in this package, and a host
+      # runs them in its own environment — so `only: [:dev, :test]` would leave
+      # them uncompilable exactly where they are used. Optional, so a project
+      # that never generates anything does not carry them.
+      {:igniter, "~> 0.8", optional: true},
+      {:sourceror, "~> 1.7", optional: true},
+
       # Tooling.
       {:lazy_html, ">= 0.0.0", only: :test},
       {:simple_sat, "~> 0.1", only: [:test]},
-      {:igniter, "~> 0.8", only: [:dev, :test]},
-      {:sourceror, "~> 1.7", only: [:dev, :test]},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.14", only: [:dev, :test], runtime: false},

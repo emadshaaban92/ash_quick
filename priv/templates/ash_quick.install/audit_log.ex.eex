@@ -1,0 +1,119 @@
+defmodule <%= inspect @module %> do
+  @moduledoc """
+  One row per audited write — the store `:audit_resource` names.
+
+  Deliberately dumb on the write side: no validations, and a `:create` that
+  accepts everything AshQuick hands it. The row is written inside the
+  transaction of the write it describes, so anything able to refuse here would
+  roll that write back — an audit table that can veto a business action is a
+  liability rather than a record.
+
+  Reading it is the other question, and that one wants a policy: an audit trail
+  is exactly the sort of thing not everyone should be able to page through. Add
+  one before routing this resource.
+  """
+
+  use Ash.Resource,
+    domain: <%= inspect @domain %>,<%= if @repo do %>
+    data_layer: AshPostgres.DataLayer,<% end %>
+    extensions: [AshQuick]
+<%= if @repo do %>
+  postgres do
+    table "audit_logs"
+    repo <%= inspect @repo %>
+<%= if @actor_resource do %>
+    references do
+      # An entry's actor must not be deletable out from under it: the row says
+      # who did this, and a row that has forgotten is not a record.
+      reference :actor, on_delete: :restrict, on_update: :restrict
+      reference :real_actor, on_delete: :restrict, on_update: :restrict
+    end
+<% end %>
+    custom_indexes do
+      # The trail for one record, which is what a details page asks for.
+      index [:resource_id, :resource_name]
+      # And the trail for one person, within one tenant.
+      index [:actor_id, :tenant]
+    end
+  end
+<% end %>
+  resource do
+    plural_name :audit_logs
+  end
+
+  actions do
+    default_accept :*
+
+    # Append-only. AshQuick bulk-inserts every entry through `:create`; nothing
+    # updates or destroys one.
+    defaults [:create, :read]
+  end
+
+  ash_quick do
+    liveness do
+      # Append-only, and a refetch only refreshes rows already on screen — a new
+      # row could never appear. Publishing would be traffic no page can act on.
+      enabled? false
+    end
+
+    versioning do
+      # Nothing updates a row, so there is no concurrent write to lose.
+      enabled? false
+    end
+
+    bookkeeping do
+      # The row names the actor of the write it records in `actor_id`. Nothing
+      # creates or updates the row itself — writing it *is* the act.
+      created_by false
+      updated_by false
+    end
+  end
+
+  attributes do
+    # Time-ordered, so the entries for one record read in the order they were
+    # written. A v4 key would sort an update's row ahead of its create.
+    uuid_v7_primary_key :id
+
+    attribute :resource_name, :atom, allow_nil?: false, public?: true
+    attribute :resource_id, :uuid, allow_nil?: false, public?: true
+    attribute :action_type, :atom, allow_nil?: false, public?: true
+    attribute :action_name, :atom, allow_nil?: false, public?: true
+    attribute :attributes, :map, allow_nil?: false, public?: true
+    attribute :arguments, :map, allow_nil?: false, public?: true
+    attribute :context, :map, allow_nil?: false, public?: true
+
+    attribute :ip, :string, allow_nil?: true, public?: true
+
+    # A string rather than a uuid, because schema-based multitenancy names a
+    # schema: the column has to take whichever kind of tenant this app uses.
+    attribute :tenant, :string, allow_nil?: true, public?: true
+<%= if @actor_resource do %><% else %>
+    # No `:actor_resource` is configured, so these are plain columns rather than
+    # relationships to the person they name. Relate them once there is a
+    # resource to relate them to.
+    attribute :actor_id, :uuid, allow_nil?: false, public?: true
+    attribute :real_actor_id, :uuid, allow_nil?: true, public?: true
+<% end %>  end
+<%= if @actor_resource do %>
+  relationships do
+    belongs_to :actor, <%= inspect @actor_resource %> do
+      public? true
+    end
+
+    # Who was actually at the keyboard. Equal to `:actor` unless the write
+    # happened under an impersonation.
+    belongs_to :real_actor, <%= inspect @actor_resource %> do
+      public? true
+      allow_nil? true
+    end
+  end
+<% end %>
+  calculations do
+    # An entry is "what was done to what" — the pair a reader scans for. Both
+    # are atoms on the way out of the column, so they are cast rather than
+    # concatenated as they sit.
+    calculate :display_name,
+              :string,
+              expr(string_join([type(action_name, :string), type(resource_name, :string)], " "))
+  end
+end

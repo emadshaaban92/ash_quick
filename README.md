@@ -18,6 +18,20 @@ The moduledocs are the reference. This is the order to read them in.
 
 ## Installation
 
+```console
+$ mix igniter.install ash_quick
+```
+
+That writes everything the rest of this section describes: the configuration
+block, the audit store with its domain and migration, a starter nav and access
+control, the router import, the formatter entries, the supervised presence, and
+the Tailwind source line. It states the one step it will not guess at — the
+client half of `app.js`, which is a rewrite rather than a line to append — and
+running it again changes only what is missing.
+
+The rest of this section is what it does and why, for reading the diff or wiring
+it by hand.
+
 ```elixir
 def deps do
   [{:ash_quick, github: "emadshaaban92/ash_quick"}]
@@ -292,6 +306,37 @@ flow.
 A `quick_view` inside `scope "/admin"` answers `/admin/products` and builds its
 links from `/admin/products` too.
 
+## Generators
+
+Two, and both write more than the file they are named after — because the thing
+they generate is not reachable until three or four artifacts agree.
+
+```console
+$ mix ash_quick.gen.resource MyApp.Catalog.Product
+```
+
+Adds `extensions: [AshQuick]` to a resource that already exists, and names the
+columns that costs before you run the migration it queues — read off the
+resource as it stands, so a column it already declares is not reported. It also
+says when the resource has no field to name a record by, which the extension
+will otherwise refuse to compile over on the next `mix compile`.
+
+```console
+$ mix ash_quick.gen.quick_view MyApp.Catalog.Product
+```
+
+Writes the QuickView, with a starter field list taken from the resource's own
+public attributes — without the ones AshQuick generated, and without the
+sensitive ones. Routes it with one `quick_view/3` line, placed with the
+QuickViews already there or in the live_session running
+`AshQuick.LiveView.Mount`, named relative to that scope's alias, and with
+`except: [:create]` when the resource has no create action. And grants the path
+in the application's `AshQuick.AccessControl`, without which the route exists
+and every navigation to it is refused.
+
+A tile in the apps grid is a `group` in the nav — a decision about where the
+page belongs, which is left to you.
+
 ## What the host implements
 
 Each is a behaviour or a resource, and each has a moduledoc that is the real
@@ -425,5 +470,4 @@ which seam is wired where.
 
 ## Status
 
-Extracted from a production application. An Igniter installer, which will
-generate the audit store and write the configuration, is not here yet.
+Extracted from a production application.

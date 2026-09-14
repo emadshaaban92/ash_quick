@@ -32,6 +32,30 @@ defmodule MyAppWeb.ProductLive.Quick do
 end
 ```
 
+## Generate rather than hand-write
+
+Three tasks, and each writes every artifact the thing it generates needs in
+order to work — which is more than the file it is named after. Reach for them
+before writing a QuickView, a route or an audit store by hand.
+
+```console
+$ mix igniter.install ash_quick                      # config, audit store, nav, access control, router import
+$ mix ash_quick.gen.resource MyApp.Catalog.Product   # the extension, and the columns that costs
+$ mix ash_quick.gen.quick_view MyApp.Catalog.Product # the view, its route, and the grant for it
+```
+
+`mix ash_quick.gen.quick_view` derives the field list from the resource's own
+public attributes (without the ones AshQuick generated, and without the
+sensitive ones), routes it with one `quick_view/3` line named relative to the
+enclosing `scope` alias, adds `except: [:create]` when the resource has no
+create action, and grants the path in the application's `AshQuick.AccessControl`
+— the last of which is what keeps a new page from 403ing with nothing to say
+why.
+
+`mix ash_quick.gen.resource` takes an existing resource onto the extension
+through `mix ash.extend`, and reports the columns that adds before you run the
+migration it queues.
+
 ## Router setup
 
 Routes are declared with `quick_view/3`, which states the path once and pins
@@ -422,7 +446,8 @@ use Ash.Resource,
 ```
 
 **That one line adds columns, so it needs a migration.** Generate it and read
-it before running it.
+it before running it — `mix ash_quick.gen.resource MyApp.Catalog.Product` adds
+the extension and names the columns it will cost.
 
 | Added | When |
 |---|---|
@@ -693,8 +718,8 @@ resources bake them in while they compile, the endpoint becoming each
 resource's PubSub publications and the actor resource its `created_by` /
 `updated_by` relationships. Put either in `runtime.exs` and a release loads it
 long after the resources were built against `nil`, with no runtime symptom: the
-pages are simply dead and the columns empty. `AshQuick.Config` documents every
-key.
+pages are simply dead and the columns empty. `mix igniter.install ash_quick`
+writes this block in the right file; `AshQuick.Config` documents every key.
 
 ## What the host application provides
 
@@ -783,4 +808,5 @@ config :ash_quick,
 - `deps/ash_quick/lib/ash_quick/config.ex` — every `config :ash_quick` key, documented
 - `deps/ash_quick/lib/ash_quick/check.ex`, `deps/ash_quick/lib/ash_quick/check/` — every check `mix ash_quick.check` runs
 - `deps/ash_quick/lib/ash_quick.ex` — the extension: every `ash_quick do` section, and `AshQuick.can?/4`
+- `deps/ash_quick/lib/mix/tasks/` — the installer and the two generators
 - `deps/ash_quick/README.md` — installing and wiring it into a host application

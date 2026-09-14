@@ -1,0 +1,20 @@
+defmodule <%= inspect @module %> do
+  @moduledoc """
+  The QuickView over `<%= inspect @resource %>`.
+
+  The field lists are the whole declaration. Everything else — filtering,
+  sorting, pagination, the create and update forms, the export menu, the row
+  actions, the live updates — is derived from the resource.
+  `AshQuick.LiveView.QuickView` documents what can be stated here on top of
+  that: a `load` for relationship columns, saved `filters`, print templates,
+  bulk actions, a widget for a field the default rendering gets wrong.
+  """
+  use AshQuick.LiveView.QuickView,
+    resource: <%= inspect @resource %>,
+    list: [
+      fields: <%= @list_fields %>
+    ],
+    details: [
+      fields: <%= @details_fields %>
+    ]
+end
