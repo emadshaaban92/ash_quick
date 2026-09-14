@@ -34,4 +34,32 @@ defmodule AshQuick.AccessControl do
   matches `"/\#{Ash.Resource.Info.plural_name(resource)}"`.
   """
   @callback routes_for(scope :: any()) :: [String.t()]
+
+  @doc """
+  Every path any scope at all could be granted — the union of every list
+  `routes_for/1` can return.
+
+  Optional, and read by nothing at request time. `mix ash_quick.check` is its
+  only caller: the four reconciliations it runs between the router, the nav and
+  this module are all statements about *some role*, and there is no way to
+  enumerate roles from here. A module that does not export it simply has those
+  checks reported as not run, rather than passing for want of anything to
+  compare against.
+
+  Derive it from wherever the roles are declared rather than restating the
+  paths, or the list goes stale exactly when a role is added:
+
+      def all_routes do
+        MyApp.Accounts.User
+        |> Ash.Resource.Info.attribute(:role)
+        |> Map.fetch!(:constraints)
+        |> Keyword.fetch!(:one_of)
+        |> Enum.flat_map(&routes_for_role/1)
+        |> Enum.concat(@common_authed_routes)
+        |> Enum.uniq()
+      end
+  """
+  @callback all_routes() :: [String.t()]
+
+  @optional_callbacks all_routes: 0
 end

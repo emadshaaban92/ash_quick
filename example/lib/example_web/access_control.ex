@@ -56,4 +56,23 @@ defmodule ExampleWeb.AccessControl do
   end
 
   def routes_for_role(_unknown), do: []
+
+  @doc """
+  Every route any role at all can reach, for `mix ash_quick.check`.
+
+  Taken from the role list on `Example.Accounts.User` rather than from a copy of
+  it here, so a role added there and nowhere else has its routes reconciled too
+  — and one added *only* here would grant nothing and be reported as a dead
+  entry rather than quietly widening the union.
+  """
+  @impl AshQuick.AccessControl
+  def all_routes do
+    User
+    |> Ash.Resource.Info.attribute(:role)
+    |> Map.fetch!(:constraints)
+    |> Keyword.fetch!(:one_of)
+    |> Enum.flat_map(&routes_for_role/1)
+    |> Enum.concat(@common_authed_routes)
+    |> Enum.uniq()
+  end
 end

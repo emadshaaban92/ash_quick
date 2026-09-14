@@ -12,6 +12,18 @@ defmodule ExampleWeb.HostConformanceTest do
   """
   use ExUnit.Case, async: true
 
+  # What `ExampleWeb.RouterTest` used to assert by hand, and every resource-level
+  # convention beside it. The whole point of the task is that a host gets these
+  # without writing them, so this app gets them the same way an adopter does —
+  # and `skipped` being empty is what says every check really ran, rather than
+  # passing for want of anything to compare against.
+  test "the application diverges from none of AshQuick's conventions" do
+    report = AshQuick.Check.run(otp_app: :example)
+
+    assert report.skipped == []
+    assert report.findings == [], AshQuick.Check.format(report)
+  end
+
   test "the scope satisfies both halves of the provenance contract" do
     assert AshQuick.Scope.contract_violations(Example.Scope) == []
   end

@@ -17,6 +17,7 @@ spark_locals_without_parens = [
   label: 1,
   on: 1,
   prefix: 1,
+  reason: 1,
   record_sensitive: 1,
   restrict: 2,
   restrict: 3,

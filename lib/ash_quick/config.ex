@@ -16,6 +16,10 @@ defmodule AshQuick.Config do
     filters through are both declared on it. When `nil`, there is no
     navigation to render.
 
+  * `:check` — Options for `mix ash_quick.check`. Only `:exempt` is read:
+    `[exempt: [tileless_route: ["/"]]]` keeps a divergence the application has
+    decided to live with out of the report. See `AshQuick.Check`.
+
   * `:timezone` — The timezone the formatters in this module display dates and
     timestamps in (e.g. `"America/New_York"`). Defaults to `"Etc/UTC"`. A scope
     can name a timezone field of its own, but only `AshQuick.Scope.timezone/1`
@@ -99,6 +103,17 @@ defmodule AshQuick.Config do
   """
   def nav do
     get(:nav)
+  end
+
+  @doc """
+  The divergences `mix ash_quick.check` is told not to report, as
+  `[check_name: [subject]]`.
+
+  See `AshQuick.Check` for what a subject is per check, and why an accepted
+  divergence is recorded here rather than passed as a flag.
+  """
+  def check_exemptions do
+    :check |> get([]) |> Keyword.get(:exempt, [])
   end
 
   @doc """

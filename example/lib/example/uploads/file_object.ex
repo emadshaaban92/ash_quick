@@ -146,6 +146,15 @@ defmodule Example.Uploads.FileObject do
   end
 
   policies do
+    # Stamped by `Example.Uploads.ObjectStore.object_referenced/3` with
+    # `authorize?: false`, and by nothing else. Left authorizable it renders as
+    # a button on the details page, and because it takes inputs that button
+    # patches to `/file_objects/:id/reference` — a route this read-only page
+    # does not serve. `mix ash_quick.check` reports exactly that.
+    policy action(:reference) do
+      forbid_if always()
+    end
+
     # Custody is taken and settled by the pipeline with `authorize?: false`,
     # inside whatever transaction is running at the time.
     policy action_type([:create, :update, :destroy]) do
@@ -162,9 +171,9 @@ defmodule Example.Uploads.FileObject do
       label :key
     end
 
-    # Operational state a person reads and never writes.
     versioning do
       enabled? false
+      reason("Operational state the upload pipeline advances and a person only reads.")
     end
 
     bookkeeping do

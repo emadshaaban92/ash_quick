@@ -450,9 +450,9 @@ bookkeeping and auditing.
 | `display` | inferred from `:display_name`, else `:name` | name the label field on a resource with neither |
 | `lookup` | nothing generated; `action :index`, `search_argument :search` when written | point search at a different read action |
 | `activation` | `enabled? false` | opt into soft-delete: `:active`, `:activate`/`:deactivate` |
-| `versioning` | `enabled? true`, `attribute :version` | turn the optimistic lock **off** |
+| `versioning` | `enabled? true`, `attribute :version` | turn the optimistic lock **off** (with a `reason`) |
 | `bookkeeping` | all four fields on: `:created_at` / `:updated_at` / `:created_by` / `:updated_by` | declare a field `false`, or rename it |
-| `audit` | `enabled? true`, store from the configured `:audit_resource` | write elsewhere, exclude actions, or turn it off |
+| `audit` | `enabled? true`, store from the configured `:audit_resource` | write elsewhere, exclude actions, or turn it off (with a `reason`) |
 | `field_restrictions` | none | restrict a field to actors passing a check |
 
 `AshQuick.Info` reads every one of them back — `display_label/1`,
@@ -717,12 +717,42 @@ covers wiring them up.
 - `AshQuick.BrowserSessionPresence` in the supervision tree, and
   `AshQuick.LiveView.Mount` **first** in the live session's `on_mount`.
 
+## Checking the application
+
+`mix ash_quick.check` reports everything the compile-time verifiers cannot:
+they only run over a resource that took the extension on, so the resource that
+never added it is invisible to all of them — and nothing at compile time can
+hold a router, a nav and an access control to each other.
+
+```console
+$ mix ash_quick.check           # advisory: report, exit 0
+$ mix ash_quick.check --strict  # exit 1 on any finding, for CI
+```
+
+Run it after adding a resource, a route or a nav entry. The nav/access-control
+half needs the optional `AshQuick.AccessControl.all_routes/0` — without it those
+checks are reported as *not run* rather than passing.
+
+A divergence you mean to keep is recorded, not silenced: a `reason` on the
+resource's `versioning` or `audit` section, or
+
+```elixir
+config :ash_quick,
+  check: [exempt: [tileless_route: ["/"], unsearchable: [MyApp.Catalog.ProductTag]]]
+```
+
+`AshQuick.Check` names every check and what it keys an exemption on.
+
 ## Common mistakes
 
 - Routing a QuickView with `live/3` instead of `quick_view/3`.
 - Reading `:only` / `:except` as resource action names. They are route shapes.
 - Turning versioning off to escape the forced `require_atomic? false`, or
   rescuing `StaleRecord` instead of surfacing it.
+- Turning versioning or auditing off with the reason in a code comment. Put it
+  in `reason`, where `mix ash_quick.check` can read it.
+- Narrowing a `quick_view` past `:action` while the resource still has an update
+  or destroy that takes inputs. Its button patches to a route that is not there.
 - Adding the extension without generating a migration for the new columns.
 - Putting `:endpoint` or `:actor_resource` in `runtime.exs`.
 - A bare `Ash.can?/2` in a custom template, so the control ignores
@@ -745,5 +775,6 @@ covers wiring them up.
 - `deps/ash_quick/lib/ash_quick/liveview/components/` — ListView, DetailsView, FormView, Sidebar, NavGrid, FilterForm
 - `deps/ash_quick/lib/ash_quick/nav.ex`, `deps/ash_quick/lib/ash_quick/nav/` — The nav DSL, its verifier, and the resolution the sidebar and grid render
 - `deps/ash_quick/lib/ash_quick/config.ex` — every `config :ash_quick` key, documented
+- `deps/ash_quick/lib/ash_quick/check.ex`, `deps/ash_quick/lib/ash_quick/check/` — every check `mix ash_quick.check` runs
 - `deps/ash_quick/lib/ash_quick.ex` — the extension: every `ash_quick do` section, and `AshQuick.can?/4`
 - `deps/ash_quick/README.md` — installing and wiring it into a host application

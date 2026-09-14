@@ -199,9 +199,13 @@ a row only one writer ever touches:
 ash_quick do
   versioning do
     enabled? false
+    reason "Append-only; every row is written once by the system."
   end
 end
 ```
+
+`reason` is read by nothing at runtime. `mix ash_quick.check` reports an
+opt-out that states none — the same goes for `audit`.
 
 ### What a resource must satisfy
 
@@ -336,6 +340,51 @@ probe.
 
 Custom QuickView templates should call `AshQuick.can?/4` rather than a bare
 `Ash.can?/2`, so their controls participate in the same policies.
+
+## Checking a host in CI
+
+The verifiers refuse to compile a resource that would fail at request time, but
+each one runs *over a resource that took the extension on* — so the resource
+most likely to be non-compliant, the one that never added it, is invisible to
+all of them. The same holds for the router: `quick_view/3` cannot see the
+`live/3` written beside it, and nothing holds a nav to an access control it was
+never told about.
+
+`mix ash_quick.check` is the rest, run as a task rather than at compile time
+because none of it is the library's to refuse:
+
+```console
+$ mix ash_quick.check           # report, exit 0
+$ mix ash_quick.check --strict  # report, exit 1 on any finding
+```
+
+It reports, over the resources in the application's domains: one carrying no
+extension, versioning or auditing turned off with no `reason`, and no usable
+lookup action. Over the router: a QuickView declared with a plain `live/3`, a
+non-QuickView carrying `ash_quick` metadata, a route served outside its base
+path, and an update or destroy taking inputs on a page with no `/:id/:action`
+route — whose button patches to a 404 the moment its policy lets it render.
+And across the nav, the router and the access control: a nav path no route
+serves, a granted route the router does not serve, a granted route with no link
+or no tile, and an entry no role can reach.
+
+The last four need the set of routes *some* role holds, which only the host can
+enumerate: implement the optional `AshQuick.AccessControl.all_routes/0`. Without
+it they are reported as not run, rather than passing for want of anything to
+compare against.
+
+The default is advisory on purpose. An existing application adopts
+incrementally, and a check that demands a big-bang conversion before it says
+anything does not get run; `--strict` is for a project that has reached zero.
+A divergence the application has decided to keep is recorded rather than
+silenced with a flag — a `reason` on the resource, or:
+
+```elixir
+config :ash_quick,
+  check: [exempt: [tileless_route: ["/"]]]
+```
+
+`AshQuick.Check` documents every check and what it keys an exemption on.
 
 ## Optional dependencies
 

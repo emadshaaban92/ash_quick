@@ -209,6 +209,12 @@ jobs:
       - name: Compile (warnings as errors)
         run: mix compile --warnings-as-errors
 
+      # The compliance check the library ships, in the job it exists for: this
+      # app is the worked example of a host that has reached zero and stays
+      # there.
+      - name: AshQuick compliance (strict)
+        run: mix ash_quick.check --strict
+
       - name: Set up the test database
         run: mix ash.setup
 
