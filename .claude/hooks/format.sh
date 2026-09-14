@@ -6,6 +6,11 @@
 # pulls out the target file, and (for Elixir / HEEx sources) formats it from the
 # project root so .formatter.exs applies — its Spark plugin and
 # locals_without_parens are what keep the DSL blocks readable.
+#
+# There are two projects here, each with its own .formatter.exs: a file under
+# example/ is formatted from there, and everything else from the library root.
+# Formatting the app with the library's config would strip the parens off
+# entities the library does not import_deps.
 
 set -euo pipefail
 
@@ -39,5 +44,9 @@ esac
 
 [ -f "$file" ] || exit 0
 
-cd "$REPO_DIR"
+case "$file" in
+  "$REPO_DIR"/example/*) cd "$REPO_DIR/example" ;;
+  *) cd "$REPO_DIR" ;;
+esac
+
 mix format "$file"

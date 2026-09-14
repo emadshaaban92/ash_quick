@@ -150,3 +150,105 @@ jobs:
 
       - name: Check .formatter.exs against the DSL extensions
         run: mix spark.formatter --check --extensions AshQuick,AshQuick.Nav.Dsl
+
+  # The library has no Repo, endpoint or router of its own, so the paths that
+  # only exist inside a real host app are exercised only through example/. Run
+  # its suite (via mix coveralls, which also reports library coverage — see
+  # example/test/test_helper.exs).
+  example-test:
+    name: Test + coverage (example app)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: example
+    services:
+      db:
+        # PG 18+: migrations default primary keys to the built-in uuidv7().
+        image: postgres:18
+        env:
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: admin
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U admin"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Elixir / OTP
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.20"
+          otp-version: "29"
+
+      - name: Cache example deps and _build
+        uses: actions/cache@v6
+        with:
+          path: |
+            example/deps
+            example/_build
+          key: ${{ runner.os }}-mix-example-test-${{ hashFiles('example/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-example-test-
+
+      # config/test.exs connects to host "db"; point it at the service.
+      - name: Map the "db" host to localhost
+        run: echo "127.0.0.1 db" | sudo tee -a /etc/hosts
+
+      - name: Install example dependencies
+        run: mix deps.get
+
+      - name: Check formatting
+        run: mix format --check-formatted
+
+      - name: Compile (warnings as errors)
+        run: mix compile --warnings-as-errors
+
+      - name: Set up the test database
+        run: mix ash.setup
+
+      - name: Run tests + coverage
+        run: mix coveralls
+
+  # Scan the example app's real router and endpoint — coverage the library, with
+  # neither of its own, cannot get. Sobelow is installed as an archive because
+  # the example app does not carry it as a dependency. See example/.sobelow-conf.
+  sobelow-example:
+    name: Sobelow (example app)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: example
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Elixir / OTP
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.20"
+          otp-version: "29"
+
+      - name: Cache example deps and _build
+        uses: actions/cache@v6
+        with:
+          path: |
+            example/deps
+            example/_build
+          key: ${{ runner.os }}-mix-example-${{ hashFiles('example/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-example-
+
+      - name: Install Sobelow (archive)
+        run: mix archive.install hex sobelow 0.14.1 --force
+
+      - name: Install example dependencies
+        run: mix deps.get
+
+      - name: Security analysis (Sobelow, example router/endpoint)
+        run: mix sobelow

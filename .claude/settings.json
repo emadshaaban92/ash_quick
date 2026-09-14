@@ -30,6 +30,14 @@
                         "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/lib-checks.sh"
                     }
                 ]
+            },
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/example-checks.sh"
+                    }
+                ]
             }
         ]
     }

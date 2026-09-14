@@ -3,11 +3,12 @@
 # SessionStart hook for Claude Code on the web.
 #
 # The cloud Setup script installs the mise-managed toolchain (Erlang/OTP,
-# Elixir, hex, rebar). This hook does the per-session work that isn't
-# snapshotted: activate the toolchain and build the library.
+# Elixir, hex, rebar) and provisions the PostgreSQL cluster. This hook does the
+# per-session work that isn't snapshotted: activate the toolchain, start
+# PostgreSQL, and build the library plus the example host app.
 #
-# There is no database step: this package has no Repo and its suite runs Ash
-# resources on the ETS data layer.
+# The library itself needs no database — its suite runs Ash resources on ETS.
+# The example app does: it is where the AshPostgres paths are exercised.
 
 set -euo pipefail
 
@@ -38,12 +39,72 @@ mise install
   echo "export ELIXIR_ERL_OPTIONS=\"$ELIXIR_ERL_OPTIONS\""
 } >> "$CLAUDE_ENV_FILE"
 
-log "Fetching + compiling deps..."
+# Route git dependency fetches (the heroicons git dep in example/) through the
+# MAIN HTTPS proxy.
+#
+# The session normally rewrites github.com to a git-specific proxy (injected
+# into git config as url.<...:port/git/>.insteadOf=https://github.com/), but that
+# proxy's egress policy only allows the in-scope repo and answers 403 for any
+# third-party repo like tailwindlabs/heroicons — so `mix deps.get` fails to
+# fetch the git dep on a fresh clone. The main HTTPS proxy ($HTTPS_PROXY, with
+# the proxy CA at /root/.ccr/ca-bundle.crt) does allow it, so point git at the
+# main proxy for github.com and drop every injected insteadOf rewrite for the
+# duration of the fetch.
+GIT_DEP_CONFIG="$(mktemp)"
+trap 'rm -f "$GIT_DEP_CONFIG"' EXIT
+cat > "$GIT_DEP_CONFIG" <<GITCFG
+[http "https://github.com/"]
+	proxy = ${HTTPS_PROXY:-http://127.0.0.1:36065}
+	sslCAInfo = /root/.ccr/ca-bundle.crt
+GITCFG
+
+# with_git_main_proxy <cmd...> — run <cmd> with git seeing only the clean config
+# above (no system/global file, no GIT_CONFIG_* env injection), so github.com
+# resolves through the main proxy with no competing insteadOf rewrite. Scoped to
+# a subshell so the session's normal git routing is untouched afterwards.
+with_git_main_proxy() {
+  (
+    if [ "${GIT_CONFIG_COUNT:-0}" -gt 0 ]; then
+      for i in $(seq 0 $(( GIT_CONFIG_COUNT - 1 ))); do
+        unset "GIT_CONFIG_KEY_$i" "GIT_CONFIG_VALUE_$i"
+      done
+    fi
+    unset GIT_CONFIG_COUNT
+    export GIT_CONFIG_GLOBAL="$GIT_DEP_CONFIG" GIT_CONFIG_SYSTEM=/dev/null
+    "$@"
+  )
+}
+
+# Run psql as the postgres OS user (cd /tmp so it can getcwd).
+run_as_postgres() { ( cd /tmp && runuser -u postgres -- "$@" ); }
+
+log "Starting PostgreSQL..."
+service postgresql start
+for _ in $(seq 1 30); do
+  run_as_postgres pg_isready -q && break
+  sleep 1
+done
+
+# admin/admin superuser, matching example/config/{dev,test}.exs.
+run_as_postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='admin'" | grep -q 1 || \
+  run_as_postgres psql -c "CREATE ROLE admin WITH LOGIN SUPERUSER CREATEDB PASSWORD 'admin';"
+
+# The app configs use hostname "db"; map it to localhost.
+grep -qE '(^|[[:space:]])db([[:space:]]|$)' /etc/hosts || echo "127.0.0.1 db" >> /etc/hosts
+
+log "Fetching + compiling library deps..."
 mix deps.get
 mix compile
 
 # Compile the :test build too, so the first Stop-hook gate isn't a cold build.
-log "Warming the test build..."
+log "Warming the library's test build..."
 MIX_ENV=test mix compile
 
-log "Done. Run the suite with: mix test"
+log "Setting up the example app (deps, database, assets, seeds)..."
+cd "$REPO_DIR/example"
+# Warm the git deps (heroicons) through the main proxy first; the deps.get
+# inside `mix setup` then sees them cloned and does no further github fetch.
+with_git_main_proxy mix deps.get
+mix setup
+
+log "Done. Library suite: mix test. Example: cd example && mix phx.server (http://localhost:4000)"

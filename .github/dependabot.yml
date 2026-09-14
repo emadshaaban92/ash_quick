@@ -21,3 +21,16 @@ updates:
       github-actions:
         patterns:
           - "*"
+
+  # The example host app's deps, which pin the Phoenix/Ash versions the library
+  # is actually exercised against.
+  - package-ecosystem: mix
+    directory: /example
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      mix-minor-and-patch:
+        update-types:
+          - minor
+          - patch
