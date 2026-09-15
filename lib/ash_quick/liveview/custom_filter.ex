@@ -106,15 +106,36 @@ defmodule AshQuick.LiveView.CustomFilter do
   def to_string!(%__MODULE__{} = filter),
     do: filter |> JSON.encode!() |> :base64.encode()
 
-  def from_string!(filter_string) do
-    filter_string |> :base64.decode() |> JSON.decode!() |> from_map()
+  @doc """
+  Decodes what `to_string!/1` wrote, or `nil` for anything else.
+
+  The encoded form travels in the URL, so this is handed strings somebody
+  truncated or invented, and base64 over JSON over field names is three layers
+  to be wrong at. All three mean one thing to the caller: it has not been told
+  what to filter by.
+
+  Only those three are answered, so a bug in `from_map/1` still surfaces rather
+  than becoming a silent unfiltered list. Which is why base64 is asked rather
+  than rescued: `:base64.decode/1` has no error type to name — malformed input
+  reaches at least four different exceptions — while `Base.decode64/1` answers
+  `:error` for all of them, and still decodes the padding `to_string!/1` writes.
+  """
+  def from_string(filter_string) when is_binary(filter_string) do
+    case Base.decode64(filter_string) do
+      {:ok, json} -> json |> JSON.decode!() |> from_map()
+      :error -> nil
+    end
+  rescue
+    # `String.to_existing_atom/1` on a key naming no field of this struct.
+    ArgumentError -> nil
+    JSON.DecodeError -> nil
   end
 
   defp from_map(%{"children" => children} = filter_map)
        when is_list(children) and children != [] do
     filter_map
     |> Map.put("uuid", Ash.UUID.generate())
-    |> Map.put("children", Enum.map(children, &from_map/1))
+    |> Map.put("children", children |> Enum.map(&from_map/1) |> Enum.reject(&is_nil/1))
     |> Enum.into(%{}, fn {key, val} -> {String.to_existing_atom(key), val} end)
     |> then(&struct(__MODULE__, &1))
   end
@@ -125,4 +146,9 @@ defmodule AshQuick.LiveView.CustomFilter do
     |> Enum.into(%{}, fn {key, val} -> {String.to_existing_atom(key), val} end)
     |> then(&struct(__MODULE__, &1))
   end
+
+  # Valid JSON that is not a filter — a bare list, a number, or one of those
+  # nested under `"children"`. Answered here so that a `FunctionClauseError`
+  # from this module stays distinguishable from a real bug.
+  defp from_map(_), do: nil
 end
