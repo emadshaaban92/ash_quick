@@ -31,6 +31,7 @@ defmodule ExampleWeb.Router do
     live_session :no_user,
       layout: {ExampleWeb.Layouts, :app},
       on_mount: [
+        {ExampleWeb.UserAuth, :assign_current_user},
         AshQuick.LiveView.Mount,
         {ExampleWeb.UserAuth, :assign_scope},
         {ExampleWeb.UserAuth, :require_no_user}
@@ -50,6 +51,7 @@ defmodule ExampleWeb.Router do
     live_session :authenticated,
       layout: {ExampleWeb.Layouts, :app},
       on_mount: [
+        {ExampleWeb.UserAuth, :assign_current_user},
         AshQuick.LiveView.Mount,
         {ExampleWeb.UserAuth, :assign_scope},
         {ExampleWeb.UserAuth, :require_user}

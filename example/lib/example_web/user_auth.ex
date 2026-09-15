@@ -8,18 +8,25 @@ defmodule ExampleWeb.UserAuth do
   the two seams worth seeing here — how a scope is assembled, and where route
   access is enforced.
 
-  The three mount stages run in this order, and the order matters:
+  The four mount stages run in this order, and every step of it matters:
 
       on_mount: [
+        {ExampleWeb.UserAuth, :assign_current_user},
         AshQuick.LiveView.Mount,
         {ExampleWeb.UserAuth, :assign_scope},
         {ExampleWeb.UserAuth, :require_user}
       ]
 
-  `AshQuick.LiveView.Mount` goes first because it resolves the tab's
-  impersonation token and reads the address it connected from; `:assign_scope`
-  consumes both. Doing it the other way round builds a scope that is always the
-  real user, and the impersonation banner never appears.
+  `:assign_current_user` first, because `AshQuick.LiveView.Mount` resolves the
+  tab's impersonation against whoever is really signed in and reads them out of
+  that assign. Then `Mount`, which turns the tab's token into an actor and reads
+  the address it connected from. Then `:assign_scope`, which consumes both.
+
+  Each of the two orderings fails silently rather than loudly. `Mount` ahead of
+  `:assign_current_user` sees nobody signed in, so no tab is registered and no
+  token resolves — `/browser_sessions` is empty and the banner never appears.
+  `:assign_scope` ahead of `Mount` builds a scope that is always the real user,
+  with the same result. Both serve every page perfectly well.
   """
 
   import Plug.Conn
@@ -50,15 +57,31 @@ defmodule ExampleWeb.UserAuth do
     end
   end
 
+  @doc """
+  Puts the signed-in user on the socket, before anything reads it.
+
+  This stage has to run *ahead of* `AshQuick.LiveView.Mount`, which resolves the
+  tab's impersonation token against whoever is really signed in and reads that
+  person out of this assign (`config :ash_quick, actor_assign:`). An app using
+  AshAuthentication gets the stage for free from
+  `ash_authentication_live_session`; one that authenticates by hand, as this one
+  does, has to put it in front itself.
+
+  Leaving it out fails silently and completely: `Mount` sees nobody signed in,
+  so no tab is registered, `/browser_sessions` is permanently empty, and no
+  impersonation token can ever resolve — while every page still serves.
+  """
+  def on_mount(:assign_current_user, _params, session, socket) do
+    {:cont,
+     Phoenix.Component.assign_new(socket, :current_user, fn ->
+       session_user(session["user_id"])
+     end)}
+  end
+
   # Runs after `AshQuick.LiveView.Mount`, which turned this tab's token into an
   # actor and read the address it connected from. Both are read back here rather
   # than worked out again.
-  def on_mount(:assign_scope, _params, session, socket) do
-    socket =
-      Phoenix.Component.assign_new(socket, :current_user, fn ->
-        session_user(session["user_id"])
-      end)
-
+  def on_mount(:assign_scope, _params, _session, socket) do
     scope =
       Scope.new(
         actor: socket.assigns.current_user,

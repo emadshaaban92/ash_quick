@@ -64,12 +64,19 @@ defmodule Example.Accounts.User do
   end
 
   policies do
-    # Impersonation is an admin's, and only from a details page: the list's
-    # generic row action cannot finish the job (only a details page mints the
-    # tab's token), so offering it there would leave an audit entry for an
-    # impersonation that never happened.
+    # Impersonation is an admin's, and only from `/browser_sessions`. Starting
+    # one means minting the tab's token and pushing it to the browser, which
+    # `AshQuick.LiveView.BrowserSessionsLive` does and a QuickView has no hook
+    # to do: `:impersonate` takes no input, so a row action runs it inline and
+    # the page moves on. Offered on a QuickView the button would write an audit
+    # entry for an impersonation that never happened, and then nothing else —
+    # so neither QuickView surface is allowed to reach it.
+    #
+    # Nobody stands in for themselves, which would be an entry for a session
+    # that did not change hands.
     policy action(:impersonate) do
       forbid_if context_equals(:action_source, :ash_quick_list)
+      forbid_if context_equals(:action_source, :ash_quick_details)
       forbid_if expr(id == ^actor(:id))
       authorize_if Example.Checks.ActorIsAdmin
     end
