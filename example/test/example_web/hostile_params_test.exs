@@ -110,6 +110,68 @@ defmodule ExampleWeb.HostileParamsTest do
         assert refute_patched(navigate(view, path)) == :ok
       end
     end
+
+    # Correcting the query is not something only the list page gets: the deeper
+    # shapes keep their path and have the query corrected under it.
+    test "a query is corrected under a details or action path too", %{
+      conn: conn,
+      admin: admin
+    } do
+      product = product(name: "Four-season tent", actor: admin)
+
+      cases = [
+        {"/products/#{product.id}?limit=abc", "/products/#{product.id}"},
+        {"/products/#{product.id}/update?page=-5", "/products/#{product.id}/update"}
+      ]
+
+      for {asked, canonical} <- cases do
+        {:ok, view, _html} = live(conn, ~p"/products")
+
+        assert assert_patch(navigate(view, asked)) == canonical
+      end
+    end
+  end
+
+  describe "a URL naming its action in the query" do
+    # The regression this guard exists for. `quick_view/3` serves four shapes —
+    # `""`, `/create`, `/:id`, `/:id/:action` — and none of them is `/<action>`,
+    # so `?action=` is the only way to reach a second create-type action. It is
+    # also priority 1 of the resolution order the moduledoc documents.
+    #
+    # `full_path/2` writes that action into the *path*, where `/products/quick_add`
+    # matches `/:id` and renders a product that does not exist. Canonicalizing
+    # the path rather than the query turned a documented feature into a 404.
+    test "a second create action is reached, not redirected into a missing record", %{
+      conn: conn
+    } do
+      {:ok, view, html} = live(conn, ~p"/products/create?action=quick_add")
+
+      assert html =~ "Quick Add"
+      assert page_action(view) == :quick_add
+      assert page_id(view) == nil
+    end
+
+    test "and its URL is left exactly as it came in", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/products")
+
+      assert refute_patched(navigate(view, "/products/create?action=quick_add")) == :ok
+    end
+
+    # `?action=` on a details URL names a route that *does* exist, so rewriting
+    # it to `/products/<id>/update` would land somewhere real. It is still left
+    # alone: a path the host linked to deliberately is not this function's to
+    # rewrite, and treating `?action=` the same way everywhere is what makes the
+    # rule statable in one sentence — correct the query, never the path.
+    test "a details URL naming its action in the query is left alone too", %{
+      conn: conn,
+      admin: admin
+    } do
+      product = product(name: "Four-season tent", actor: admin)
+
+      {:ok, view, _html} = live(conn, ~p"/products")
+
+      assert refute_patched(navigate(view, "/products/#{product.id}?action=update")) == :ok
+    end
   end
 
   # Reaches `path` the way a link inside the page does, and hands back a view
@@ -120,6 +182,14 @@ defmodule ExampleWeb.HostileParamsTest do
     render_patch(view, path)
     assert_patch(view, path)
     view
+  end
+
+  defp page_action(view) do
+    :sys.get_state(view.pid).socket.assigns.ash_action.name
+  end
+
+  defp page_id(view) do
+    :sys.get_state(view.pid).socket.assigns.params.id
   end
 
   defp page_limit(view) do

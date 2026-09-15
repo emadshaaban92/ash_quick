@@ -11,7 +11,10 @@ defmodule AshQuick.LiveView.URLParamsTest do
   use ExUnit.Case, async: true
 
   alias AshQuick.LiveView.CustomFilter
+  alias AshQuick.LiveView.QuickView
   alias AshQuick.LiveView.URLParams
+
+  @base "/products"
 
   describe "limit" do
     test "a number is taken as written" do
@@ -219,40 +222,56 @@ defmodule AshQuick.LiveView.URLParamsTest do
     end
 
     # Canonicalizing from `handle_params/3` patches whenever the query it was
-    # given is not the query this writes back. That only terminates if writing
-    # it back a second time changes nothing — otherwise every request patches,
-    # and every patch is a request. One patch is allowed; two is a loop.
-    test "is a fixed point after one pass, so canonicalizing cannot patch forever" do
-      for raw <- [
-            %{},
-            %{"page" => "2"},
-            %{"limit" => "50", "page" => "2"},
-            # The ones that converge only after a pass, rather than at once.
-            %{"limit" => "abc"},
-            %{"limit" => "100000"},
-            %{"page" => "-5"},
-            %{"custom_filter" => "0"},
-            %{"show_custom_filter" => ""},
-            %{"arg__no_such_argument_anywhere" => "1"},
-            %{"foo" => "bar"},
-            # And the path shapes, which `path_no_params/2` rebuilds.
-            %{"id" => "abc-123"},
-            %{"id" => "abc-123", "action" => "update"},
-            %{"action" => "create"}
+    # given is not the query this writes back. Two things have to hold for that
+    # to be safe, and this is the claim they add up to: either the paths agree
+    # and one patch reaches a fixed point, or there is no patch at all.
+    #
+    # A second patch means every request patches, and every patch is a request.
+    # At mount LiveView resolves a patch by re-invoking `handle_params/3` with
+    # no redirect limit, so non-convergence hangs the process rather than
+    # raising.
+    test "one patch settles it, or there is no patch" do
+      for url <- [
+            "/products",
+            "/products?page=2",
+            "/products?limit=50&page=2",
+            # Converge only after a pass, rather than at once.
+            "/products?limit=abc",
+            "/products?limit=100000",
+            "/products?page=-5",
+            "/products?custom_filter=0",
+            "/products?show_custom_filter=",
+            "/products?arg__no_such_argument_anywhere=1",
+            "/products?foo=bar",
+            # The path shapes `path_no_params/2` rebuilds.
+            "/products/create",
+            "/products/abc-123",
+            "/products/abc-123?limit=abc",
+            "/products/abc-123/update",
+            "/products/abc-123/update?limit=abc",
+            # `?action=` names a route shape that does not exist, and an id the
+            # URL percent-encodes comes back raw. Both are paths this may not
+            # rewrite, so both must settle by not patching at all.
+            "/products/create?action=quick_add",
+            "/products/abc-123?action=update",
+            "/products/a%20b",
+            "/products/a%20b?limit=abc"
           ] do
-        assert_converges(raw)
+        assert_settles(url)
       end
     end
 
-    # The table above is thirteen shapes chosen by hand. This is the claim they
-    # are samples of, over the same seeded alphabet the custom-filter sweep
-    # uses — which is what caught the last wrong generalization.
-    test "no query at all patches twice" do
+    # The table above is twenty URLs chosen by hand. This is the claim they are
+    # samples of, over the same seeded alphabet the custom-filter sweep uses —
+    # extended with an `action` key and an id segment that needs escaping,
+    # because both known breakages live there.
+    test "no URL at all patches twice" do
       # Seeded, so a failure names an input that can be pasted back.
       :rand.seed(:exsss, {17, 42, 99})
       alphabet = ~c"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/= -_"
+
       keys = ~w(limit page search selected_filters custom_filter show_custom_filter
-                arg__search arg__no_such_argument_anywhere id action foo)
+                arg__search arg__no_such_argument_anywhere action foo)
 
       junk = fn ->
         1..:rand.uniform(8)
@@ -261,39 +280,78 @@ defmodule AshQuick.LiveView.URLParamsTest do
       end
 
       for _ <- 1..2_000 do
-        raw =
+        query =
           1..:rand.uniform(4)
           |> Enum.into(%{}, fn _ -> {Enum.random(keys), junk.()} end)
+          |> URI.encode_query()
 
-        assert_converges(raw)
+        # The four shapes `quick_view/3` serves. The id is escaped the way a
+        # browser escapes it, which is what `full_path/2` does not undo.
+        path =
+          case :rand.uniform(4) do
+            1 -> @base
+            2 -> "#{@base}/create"
+            3 -> "#{@base}/#{URI.encode_www_form(junk.())}"
+            4 -> "#{@base}/#{URI.encode_www_form(junk.())}/#{URI.encode_www_form(junk.())}"
+          end
+
+        assert_settles("#{path}?#{query}")
       end
     end
   end
 
-  # One pass of what `handle_params/3` does: parse, write the canonical path,
-  # and take the params the *next* pass would be handed — the path segments
-  # Phoenix matches, merged with the canonical query it would arrive under.
-  defp canonicalize(raw) do
-    canonical_path = URLParams.full_path("/products", URLParams.from_url_params(raw))
-
-    next_raw =
-      raw
-      |> Map.take(["id", "action"])
-      |> Map.merge(URI.decode_query(URI.parse(canonical_path).query || ""))
-
-    {canonical_path, next_raw}
+  # The four shapes `AshQuick.LiveView.Router.quick_view/3` serves, matched the
+  # way the router matches them: path segments become params, decoded, and the
+  # query is merged on top. `/products/create` carries no path param — its
+  # action comes from the route's `live_action`, which no query string sets.
+  defp route_params(path) do
+    case path |> String.replace_prefix(@base, "") |> String.split("/", trim: true) do
+      [] -> %{}
+      ["create"] -> %{}
+      [id] -> %{"id" => URI.decode(id)}
+      [id, action] -> %{"id" => URI.decode(id), "action" => URI.decode(action)}
+      other -> flunk("#{@base}/#{Enum.join(other, "/")} is not a shape quick_view/3 serves")
+    end
   end
 
-  defp assert_converges(raw) do
-    {once, next_raw} = canonicalize(raw)
-    {twice, _} = canonicalize(next_raw)
+  # One pass of what `handle_params/3` does, driven by a URL rather than a bare
+  # params map, because the path is half of what is being decided.
+  defp canonicalize(url) do
+    uri = URI.parse(url)
+    raw = Map.merge(route_params(uri.path), URI.decode_query(uri.query || ""))
+    canonical_path = URLParams.full_path(@base, URLParams.from_url_params(raw))
 
-    assert once == twice,
-           """
-           canonicalizing #{inspect(raw)} never settles:
-             pass 1: #{inspect(once)}
-             pass 2: #{inspect(twice)}
-           """
+    if QuickView.correctable_query?(uri, canonical_path) do
+      {:patch, canonical_path}
+    else
+      :no_patch
+    end
+  end
+
+  defp assert_settles(url) do
+    case canonicalize(url) do
+      :no_patch ->
+        :ok
+
+      {:patch, once} ->
+        # Correct the query, never the path. A patch that moves the page is not
+        # a tidier URL, it is a navigation — `?action=` is the case that proves
+        # it, since `full_path/2` writes the action into the path and lands on
+        # `/:id`.
+        assert URI.parse(once).path == URI.parse(url).path,
+               """
+               canonicalizing #{inspect(url)} moved the page:
+                 served at #{inspect(URI.parse(url).path)}
+                 patched to #{inspect(once)}
+               """
+
+        assert canonicalize(once) == :no_patch,
+               """
+               canonicalizing #{inspect(url)} never settles:
+                 pass 1 patches to #{inspect(once)}
+                 pass 2 patches again to #{inspect(canonicalize(once))}
+               """
+    end
   end
 end
 

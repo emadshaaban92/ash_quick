@@ -183,9 +183,15 @@ defmodule AshQuick.LiveView.QuickView do
   it happen at first render rather than at the first click. Keep state you need
   in the session or in assigns rather than in a query param of your own.
 
-  A URL naming an action the resource does not have is left exactly as typed:
-  it renders as not found, and the URL is the evidence of what was asked for.
-  So is a URL a lifecycle hook has already redirected — see below.
+  Only the query is corrected — never the path. A URL whose path the parsed
+  params do not reproduce is left exactly as it came in, because rewriting a
+  path is a navigation rather than a tidy-up. That covers `?action=`, which is
+  priority 1 of the resolution order above and the only way to reach a second
+  create-type action, and any id the URL percent-encodes.
+
+  Left as typed too: a URL naming an action the resource does not have, which
+  renders as not found with the URL as the evidence of what was asked for, and
+  a URL a lifecycle hook has already redirected — see below.
 
   ## Custom action templates
 
@@ -433,6 +439,11 @@ defmodule AshQuick.LiveView.QuickView do
           # dropped it anyway. This only makes the library honest about it at
           # the render the visitor is looking at.
           #
+          # The query is corrected; the path never is. `full_path/2` rebuilds
+          # both, but a path derived from the parsed params is a navigation
+          # rather than a tidy-up when it disagrees with the one being served —
+          # see `correctable_query?/2`, which is what refuses those.
+          #
           # Last, and only over a socket nothing else has redirected, because
           # `push_patch/2` *raises* on a socket already set to redirect rather
           # than overruling it. A host patching from `after_handle_params/2` —
@@ -442,7 +453,7 @@ defmodule AshQuick.LiveView.QuickView do
 
           socket =
             if ash_action && is_nil(socket.redirected) &&
-                 not QuickView.canonical_query?(uri, canonical_path) do
+                 QuickView.correctable_query?(uri, canonical_path) do
               # `replace: true`: Back belongs to wherever the visitor came
               # from, not to the URL they were just moved off.
               push_patch(socket, to: canonical_path, replace: true)
@@ -535,21 +546,36 @@ defmodule AshQuick.LiveView.QuickView do
   end
 
   @doc """
-  Whether `uri` already carries the query `canonical_path` writes back.
+  Whether `canonical_path` corrects `uri`'s query without moving the page.
 
-  Decoded query maps are the only form the two sides agree in, and comparing
-  anything else patches on every request — which is not a cosmetic bug but an
-  endless loop, since each patch is another request. Against the raw params map
-  it never settles: `URLParams` holds `limit` and `page` as integers where a
-  query holds strings. Against the whole path it loops on any id the URL
-  percent-encodes, because `full_path/2` writes that segment raw.
+  Canonicalize the query, never the path. `full_path/2` rebuilds both, but only
+  the query is this function's to correct: the path it writes is derived from
+  the parsed params, and where that disagrees with the path actually being
+  served, rewriting it does not tidy the URL — it navigates.
 
-  So the path is not compared at all. A query that is not canonical is the only
-  thing worth a patch; rebuilding the path is left to the patch itself.
+  Two ways they disagree, both of them real:
+
+    * `?action=` is priority 1 of the action resolution order, and `quick_view/3`
+      serves no `/<action>` route, so it is the only way to reach a second
+      create-type action. `full_path/2` writes that action into the path, where
+      it lands on `/:id` and renders a record that does not exist.
+    * An id the URL percent-encodes comes back raw from `full_path/2`, so the
+      two never agree and the patch repeats forever.
+
+  So the path is compared only to be left alone: when it differs, the URL came
+  in naming something this cannot rewrite, and is returned as typed.
+
+  The query is compared as decoded maps, which is the only form the two sides
+  agree in — and a wrong comparison here is not a cosmetic bug but an endless
+  loop, since each patch is another request. Against the raw params map it never
+  settles: `URLParams` holds `limit` and `page` as integers where a query holds
+  strings.
   """
-  def canonical_query?(%URI{} = uri, canonical_path) when is_binary(canonical_path) do
-    URI.decode_query(uri.query || "") ==
-      URI.decode_query(URI.parse(canonical_path).query || "")
+  def correctable_query?(%URI{} = uri, canonical_path) when is_binary(canonical_path) do
+    canonical = URI.parse(canonical_path)
+
+    canonical.path == uri.path and
+      URI.decode_query(uri.query || "") != URI.decode_query(canonical.query || "")
   end
 
   @doc """
