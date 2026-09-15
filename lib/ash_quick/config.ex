@@ -67,11 +67,8 @@ defmodule AshQuick.Config do
     5 seconds.
 
   * `:max_page_size` — The largest page a QuickView list will read, whatever
-    `?limit=` asks for. Defaults to 250, matching Ash's own `max_page_size`.
-    What it buys is honest pagination, not a cheaper read: Ash bounds the read
-    either way, and the clamp is what keeps the count and the pager describing
-    the rows that actually came back. It cannot raise a page above the read
-    action's own `max_page_size`.
+    `?limit=` asks for. Defaults to 250. Keeps the count and the pager honest
+    rather than bounding the read; see `max_page_size/0`.
 
   * `:actor_resource` — The resource a record's `created_by` / `updated_by`
     relationships point at, and that AshQuick loads an actor through when it
@@ -183,29 +180,13 @@ defmodule AshQuick.Config do
   above it is clamped rather than refused: raising the page size in the URL is
   supported, but how far is the host's answer rather than the visitor's.
 
-  ## What the clamp is for
-
-  It is not what bounds the read. Every list read action declares `pagination`
-  (AshQuick refuses to render one that does not), pagination carries its own
-  `max_page_size` defaulting to 250, and `Ash.Actions.Read` takes the minimum
-  of that, the page size and the query limit. So `?limit=100000` against a
-  250-row action reads 250 rows whether or not this key exists.
-
-  What the clamp fixes is what the page then says about that read. Unclamped,
-  the view counts and pages against the limit it believes it asked for rather
-  than the bound Ash applied — so a 4,166-row table served `?limit=100000`
-  renders 251 rows under a footer reading "Showing 1-4166 of 4166", with no
-  pager, leaving the other 3,915 unreachable and unmentioned. Clamping first
-  means the limit the view reasons about is the limit the read used.
-
-  ## What it does and does not interact with
-
-  Only lowering it below a read action's `max_page_size` changes a read.
-  Raising it above one is inert — Ash's minimum still wins, so a host that
-  wants larger pages has to raise the bound on the action as well as here.
-
-  It bounds one page, not a session: it says nothing about how many requests a
-  visitor makes, nor about work a page does per row once the rows are in hand.
+  It is not what bounds the read — every list action declares `pagination`, and
+  Ash takes the minimum of its `max_page_size`, the page size and the query
+  limit. What the clamp fixes is what the page then *says* about that read:
+  unclamped, the count and the pager reason about the limit the view asked for
+  rather than the one Ash applied, so `?limit=100000` against a 250-row action
+  renders 251 rows under a footer claiming 4,166. Raising this above an
+  action's own `max_page_size` is inert.
   """
   def max_page_size do
     get(:max_page_size, 250)

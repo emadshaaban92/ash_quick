@@ -55,10 +55,8 @@ defmodule AshQuick.LiveView.URLParams do
   # actions menu resolves lazily so it stays cheap), but how far is the host's
   # answer rather than the visitor's.
   #
-  # The clamp is not what bounds the read — Ash already bounds it by the read
-  # action's own `max_page_size`. It is what keeps the rest of the view honest
-  # about that bound: the limit lands in `%URLParams{}`, and the count and the
-  # pager are read back off it. See `AshQuick.Config.max_page_size/0`.
+  # The clamp is not what bounds the read; it is what keeps the count and the
+  # pager honest about it. See `AshQuick.Config.max_page_size/0`.
   defp parse_limit(limit) when is_binary(limit) do
     case Integer.parse(limit) do
       {limit, ""} -> limit |> max(1) |> min(Config.max_page_size())
