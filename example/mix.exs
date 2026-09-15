@@ -101,6 +101,9 @@ defmodule Example.MixProject do
       {:sourceror, "~> 1.7", only: [:dev, :test]},
       {:lazy_html, ">= 0.1.0", only: :test},
       {:phoenix_test, "~> 0.12", only: :test, runtime: false},
+      # What ExAws parses a multipart upload's responses with. Only reached
+      # through `Example.Test.S3Stub`, which is the only bucket this app talks to.
+      {:sweet_xml, "~> 0.7", only: :test},
       {:excoveralls, "~> 0.18", only: :test},
       {:tidewave, "~> 0.1", only: [:dev]}
     ]

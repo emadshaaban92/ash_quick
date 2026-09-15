@@ -55,6 +55,21 @@ defmodule ExampleWeb.QuickViewHelpers do
     end)
   end
 
+  @doc """
+  Toggles the saved filter labelled `label`.
+
+  The binding is on the row rather than on a link, so `click_link/3` has
+  nothing to press — but pushing `"toggle-filter"` by name would skip the
+  binding, which is half of what there is to test.
+  """
+  def toggle_filter(session, label) do
+    PhoenixTest.unwrap(session, fn view ->
+      view
+      |> LiveViewTest.element("li", label)
+      |> LiveViewTest.render_click()
+    end)
+  end
+
   @doc "The CSS selector for one list row, addressed by the record's id."
   def row(record_id), do: ~s(tr[id="#{record_id}"])
 
