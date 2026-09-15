@@ -461,12 +461,30 @@ defmodule AshQuick.LiveView.QuickView do
           # rather than a tidy-up when it disagrees with the one being served —
           # see `correctable_query?/2`, which is what refuses those.
           #
+          # Which is why `/create` needs its base named rather than rebuilt.
+          # It is the only one of the four shapes carrying no path param — its
+          # action comes from the router's `live_action` — so the parsed params
+          # rebuild it as the *index* path, the two never agree, and the query
+          # under it could never be corrected. The route already knows better.
+          #
+          # Only where nothing in the query names an action: `?action=` is
+          # priority 1 of the resolution order and the only way to reach a
+          # second create-type action, so `/products/create?action=quick_add`
+          # still rebuilds as `/products/quick_add`, still disagrees with the
+          # path being served, and is still left exactly as it came in.
+          #
           # Last, and only over a socket nothing else has redirected, because
           # `push_patch/2` *raises* on a socket already set to redirect rather
           # than overruling it. A host patching from `after_handle_params/2` —
           # `/profile` to `/profile/<id>` — would otherwise be taken down by a
           # query string it never looked at.
-          canonical_path = URLParams.full_path(base_path, socket.assigns.params)
+          canonical_base =
+            if socket.assigns.live_action == :create and
+                 is_nil(socket.assigns.params.action),
+               do: uri.path,
+               else: base_path
+
+          canonical_path = URLParams.full_path(canonical_base, socket.assigns.params)
 
           socket =
             if ash_action && is_nil(socket.redirected) &&

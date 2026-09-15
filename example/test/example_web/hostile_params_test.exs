@@ -226,7 +226,8 @@ defmodule ExampleWeb.HostileParamsTest do
   describe "a URL reached at a path the parsed params do not rebuild" do
     # `/create` takes its action from the router's `live_action`, not from a URL
     # param, so `params.action` is `nil` and `full_path/2` writes the bare base
-    # path for it. Patching there would put the visitor on the list.
+    # path for it. Patching to *that* would put the visitor on the list, which
+    # is why the canonical path is asked for by shape instead.
     test "a create URL keeps its form rather than being sent to the list", %{conn: conn} do
       for url <- [
             ~p"/products/create",
@@ -240,10 +241,33 @@ defmodule ExampleWeb.HostileParamsTest do
       end
     end
 
-    test "and its URL is left exactly as it came in", %{conn: conn} do
+    # The gap this describe block used to pin open. A create form renders none
+    # of the list concerns, so a query naming them describes a page that was
+    # never built: `?limit=abc` a page size nothing used, `?custom_filter=` a
+    # filter nothing decoded.
+    test "and its query is corrected under the create path, not away from it", %{conn: conn} do
+      cases = [
+        {"/products/create?limit=abc", "/products/create"},
+        {"/products/create?page=-5", "/products/create"},
+        {"/products/create?custom_filter=0", "/products/create"},
+        {"/products/create?return_to=%2Fdashboard", "/products/create"}
+      ]
+
+      for {asked, canonical} <- cases do
+        {:ok, view, _html} = live(conn, ~p"/products")
+
+        assert assert_patch(navigate(view, asked)) == canonical
+      end
+    end
+
+    # The negative that matters most here: the corrected URL is one the page
+    # will not correct again. Every patch is another request, so a create path
+    # that did not compare equal to itself would not be a cosmetic bug — it
+    # would be a loop.
+    test "and the corrected URL is then left alone", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/products")
 
-      assert refute_patched(navigate(view, "/products/create?limit=abc")) == :ok
+      assert refute_patched(navigate(view, "/products/create")) == :ok
     end
   end
 
@@ -270,6 +294,16 @@ defmodule ExampleWeb.HostileParamsTest do
       {:ok, view, _html} = live(conn, ~p"/products")
 
       assert refute_patched(navigate(view, "/products/create?action=quick_add")) == :ok
+    end
+
+    # And so is anything riding along with it. `?action=` is what makes the
+    # rebuilt path disagree with the one being served, and that disagreement is
+    # the whole refusal — there is no correcting the rest of the query without
+    # also deciding to rewrite the path, which is the one thing this never does.
+    test "including a query alongside it that nothing used", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/products")
+
+      assert refute_patched(navigate(view, "/products/create?action=quick_add&limit=abc")) == :ok
     end
 
     # `?action=` on a details URL names a route that *does* exist, so rewriting
