@@ -38,7 +38,7 @@ defmodule Example.Accounts.User do
   end
 
   actions do
-    default_accept [:name, :email, :role]
+    default_accept [:name, :email, :role, :locale]
     defaults [:create, :read, :update, :destroy]
 
     read :index do
@@ -128,6 +128,15 @@ defmodule Example.Accounts.User do
       public?: true,
       default: :viewer,
       constraints: [one_of: [:admin, :editor, :viewer]]
+
+    # The language this person's pages render in. Unrestricted, unlike `:role`:
+    # choosing your own language is not a privilege, and `/users` is an admin's
+    # page only because everything else on it is.
+    attribute :locale, :atom,
+      allow_nil?: false,
+      public?: true,
+      default: :en,
+      constraints: [one_of: [:en, :ar]]
   end
 
   identities do

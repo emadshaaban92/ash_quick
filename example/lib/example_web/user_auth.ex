@@ -43,9 +43,19 @@ defmodule ExampleWeb.UserAuth do
     assign(conn, :current_user, session_user(get_session(conn, :user_id)))
   end
 
-  @doc "Builds the scope for the dead render and for anything served by a controller."
+  @doc """
+  Builds the scope for the dead render and for anything served by a controller.
+
+  Also puts the actor's language on the process. This is the render the browser
+  gets *first*, so skipping it here means every page flashes English before the
+  socket connects.
+  """
   def assign_scope(conn, _opts) do
-    assign(conn, :scope, Scope.new(actor: conn.assigns[:current_user], ip: peer_ip(conn)))
+    scope = Scope.new(actor: conn.assigns[:current_user], ip: peer_ip(conn))
+
+    put_locale(scope)
+
+    assign(conn, :scope, scope)
   end
 
   @doc "Redirects to the sign-in page when nobody is signed in."
@@ -89,12 +99,15 @@ defmodule ExampleWeb.UserAuth do
         ip: Mount.ip(socket)
       )
 
+    locale = put_locale(scope)
+
     {:cont,
      socket
      |> Phoenix.Component.assign(:scope, scope)
      |> Phoenix.Component.assign(:current_user, scope.current_user)
      |> Phoenix.Component.assign(:real_user, scope.real_user)
-     |> Phoenix.Component.assign(:connected?, Phoenix.LiveView.connected?(socket))}
+     |> Phoenix.Component.assign(:connected?, Phoenix.LiveView.connected?(socket))
+     |> push_document_locale(locale)}
   end
 
   def on_mount(:require_user, _params, _session, socket) do
@@ -149,6 +162,29 @@ defmodule ExampleWeb.UserAuth do
             raise ExampleWeb.NotAllowedError, path: path, user: scope.current_user
         end
     end)
+  end
+
+  # `Gettext.put_locale/1` is process-wide rather than per-backend, so this one
+  # call covers `AshQuick.Gettext` and this application's own.
+  defp put_locale(scope) do
+    locale = AshQuick.Scope.locale(scope)
+    Gettext.put_locale(locale)
+    locale
+  end
+
+  # The dead render already carried `lang` and `dir` — but it was rendered before
+  # the tab said who it is, so an impersonating tab's first paint is the *real*
+  # user's language. The connected mount is the first moment the answer is known,
+  # and `deps/ash_quick/assets/js/locale.js` is what applies it to `<html>`.
+  defp push_document_locale(socket, locale) do
+    if Phoenix.LiveView.connected?(socket) do
+      Phoenix.LiveView.push_event(socket, "locale", %{
+        lang: locale,
+        dir: AshQuick.Locale.direction(locale)
+      })
+    else
+      socket
+    end
   end
 
   defp session_user(nil), do: nil
