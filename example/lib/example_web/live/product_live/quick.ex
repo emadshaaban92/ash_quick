@@ -89,32 +89,54 @@ defmodule ExampleWeb.ProductLive.Quick do
   it through to here — which is the whole contract a custom bulk action relies
   on. The selection is read back off the socket the same way the built-in
   handler reads it.
+
+  Every selected row is attempted rather than stopping at the first refusal. A
+  discount is one write per row and the writes are not in a transaction
+  together, so stopping early does not undo the rows already repriced — it only
+  loses the fact that they were. What the operator needs to know after a partial
+  run is how far it got, and which rows are still waiting.
   """
   @impl true
   def handle_event("discount", _params, socket) do
     selected = Map.keys(socket.assigns.selected_rows)
+    products = Enum.filter(socket.assigns.data.results, &(&1.id in selected))
 
-    socket.assigns.data.results
-    |> Enum.filter(&(&1.id in selected))
-    |> Enum.reduce_while({:ok, 0}, fn product, {:ok, done} ->
-      product
-      |> Product.reprice(Money.mult!(product.price, @discount), scope: socket.assigns.scope)
-      |> case do
-        {:ok, _repriced} -> {:cont, {:ok, done + 1}}
-        {:error, error} -> {:halt, {:error, error}}
-      end
-    end)
-    |> case do
-      {:ok, done} ->
+    {repriced, errors} =
+      Enum.reduce(products, {[], []}, fn product, {repriced, errors} ->
+        product
+        |> Product.reprice(Money.mult!(product.price, @discount), scope: socket.assigns.scope)
+        |> case do
+          {:ok, _repriced} -> {[product.id | repriced], errors}
+          # Not a bang call. The link is rendered only for an actor who may run
+          # the action, so an event arriving without it was forged — and a forged
+          # event is a refusal to show rather than a page to crash.
+          {:error, error} -> {repriced, [error | errors]}
+        end
+      end)
+
+    case Enum.reverse(errors) do
+      [] ->
         {:noreply,
-         socket |> assign(selected_rows: %{}) |> put_flash(:info, "Repriced #{done} products.")}
+         socket
+         |> assign(selected_rows: %{})
+         |> put_flash(:info, "Repriced #{length(repriced)} products.")}
 
-      # Not a bang call. The link is rendered only for an actor who may run the
-      # action, so an event arriving without it was forged — and a forged event
-      # is a refusal to show rather than a page to crash. `ActionErrors` is what
-      # turns the error into a sentence.
-      {:error, error} ->
-        {:noreply, put_flash(socket, :error, ActionErrors.user_facing_message(error))}
+      # The selection keeps exactly the rows that were not repriced, so running
+      # it again discounts each row once instead of compounding the discount on
+      # the rows that already took it. `ActionErrors` is what turns the error
+      # into a sentence.
+      [error | _] ->
+        {:noreply,
+         socket
+         |> assign(selected_rows: Map.drop(socket.assigns.selected_rows, repriced))
+         |> put_flash(:error, discount_error(repriced, products, error))}
     end
+  end
+
+  defp discount_error([], _products, error), do: ActionErrors.user_facing_message(error)
+
+  defp discount_error(repriced, products, error) do
+    "Repriced #{length(repriced)} of #{length(products)} products. " <>
+      ActionErrors.user_facing_message(error)
   end
 end

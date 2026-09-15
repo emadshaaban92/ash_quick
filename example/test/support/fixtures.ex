@@ -24,7 +24,7 @@ defmodule Example.Fixtures do
   end
 
   @doc """
-  A user holding `role`.
+  A user holding `role`, in the store passed as `store:` if any.
 
   `:role` is a restricted field, so an actor who is not an admin has the value
   stripped from their changeset — including no actor at all. The first admin is
@@ -35,7 +35,15 @@ defmodule Example.Fixtures do
 
   def user(:admin, opts) do
     seeded =
-      Ash.create!(User, %{name: name(opts, "Admin"), email: email()}, authorize?: false)
+      Ash.create!(
+        User,
+        %{
+          name: name(opts, "Admin"),
+          email: email(),
+          store_id: opts |> Keyword.get(:store) |> id()
+        },
+        authorize?: false
+      )
 
     Ash.update!(seeded, %{role: :admin}, actor: %{seeded | role: :admin}, authorize?: false)
   end

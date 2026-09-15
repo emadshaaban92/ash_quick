@@ -20,6 +20,13 @@ defmodule ExampleWeb.ListScenarioTest do
 
   alias Example.Test.S3Stub
 
+  # `render_async/1` defaults to 100 ms, which is not a budget an export can be
+  # held to: the suite runs `async: true`, so the task generating the file is
+  # competing for schedulers with every other case. Under load it loses that
+  # race often enough to fail one run in three, and passes every time in
+  # isolation — the shape a timeout that is simply too short shows up in.
+  @export_timeout to_timeout(second: 5)
+
   setup %{admin: admin} do
     brand = brand(name: "Northwind Outfitters", actor: admin)
     category = category(name: "Tents", actor: admin)
@@ -235,7 +242,7 @@ defmodule ExampleWeb.ListScenarioTest do
       {:ok, view, _html} = live(log_in(conn, admin), ~p"/products")
 
       view |> element("a", "CSV") |> render_click()
-      render_async(view)
+      render_async(view, @export_timeout)
 
       csv = exported_csv(admin)
 
@@ -261,7 +268,7 @@ defmodule ExampleWeb.ListScenarioTest do
       {:ok, view, _html} = live(log_in(conn, admin), ~p"/products?search=tent")
 
       view |> element("a", "CSV") |> render_click()
-      render_async(view)
+      render_async(view, @export_timeout)
 
       csv = exported_csv(admin)
 
@@ -314,12 +321,11 @@ defmodule ExampleWeb.ListScenarioTest do
   end
 
   defp find_export(prefix) do
-    Example.Test.S3Stub
-    |> :ets.tab2list()
-    |> Enum.find(fn {key, _parts} -> String.contains?(key, prefix) end)
+    S3Stub.keys()
+    |> Enum.find(&String.contains?(&1, prefix))
     |> case do
       nil -> nil
-      {key, _parts} -> S3Stub.body(key)
+      key -> S3Stub.body(key)
     end
   end
 end

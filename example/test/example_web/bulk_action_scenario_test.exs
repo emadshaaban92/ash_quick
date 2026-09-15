@@ -16,8 +16,6 @@ defmodule ExampleWeb.BulkActionScenarioTest do
   """
   use ExampleWeb.FeatureCase, async: true
 
-  alias Example.Catalog.Product
-
   # The row actions share the menu's labels, so a bulk one is addressed by the
   # event it pushes rather than by its text.
   @bulk "a[phx-click*='bulk_action']"
@@ -137,6 +135,64 @@ defmodule ExampleWeb.BulkActionScenarioTest do
       |> refute_has(@bulk)
 
       assert Money.to_string!(Ash.reload!(first, authorize?: false).price) =~ "90"
+    end
+
+    # A bulk action is a write per row rather than one transaction, so a refusal
+    # partway through does not undo the rows that already went through. Stopping
+    # at it only loses the fact that they did — which is the state an operator
+    # then has to guess at.
+    test "a row the lock refuses does not stop the rows it does not", ctx do
+      %{conn: conn, admin: admin, first: first, second: second} = ctx
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products")
+        |> tick_rows([first.id, second.id])
+
+      # The page is holding both rows as they were at version 1. Moving one of
+      # them out from under it is what the optimistic lock refuses, and it
+      # refuses exactly one of the two rows the click is about to reprice.
+      Ash.update!(second, %{description: "moved by somebody else"},
+        actor: admin,
+        authorize?: false
+      )
+
+      session
+      |> click_link("a", "Discount 10%")
+      |> assert_has("*", text: "Repriced 1 of 2 products.")
+      |> assert_has("*", text: AshQuick.LiveView.ActionErrors.stale_message())
+
+      # The row the lock let through is repriced, and said to be.
+      assert Money.to_string!(Ash.reload!(first, authorize?: false).price) =~ "90"
+      assert Money.to_string!(Ash.reload!(second, authorize?: false).price) =~ "50"
+    end
+
+    test "a second run does not discount a row the first one already did", ctx do
+      %{conn: conn, admin: admin, first: first, second: second} = ctx
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products")
+        |> tick_rows([first.id, second.id])
+
+      Ash.update!(second, %{description: "moved by somebody else"},
+        actor: admin,
+        authorize?: false
+      )
+
+      # The selection that survives a partial run is the rows that did *not* go
+      # through, so running it again is a retry rather than a second discount.
+      # Keeping the whole selection would compound 10% onto the rows that
+      # already took it — and the operator retrying a run that reported an
+      # error has every reason to.
+      session
+      |> click_link("a", "Discount 10%")
+      |> click_link("a", "Discount 10%")
+
+      assert Money.to_string!(Ash.reload!(first, authorize?: false).price) =~ "90"
+      refute Money.to_string!(Ash.reload!(first, authorize?: false).price) =~ "81"
     end
 
     test "an event forged without the button is refused by the policy behind it", ctx do

@@ -56,6 +56,25 @@ defmodule ExampleWeb.TenancyScenarioTest do
       |> refute_has("td", text: ctx.platform_tent.name)
     end
 
+    test "is scoped by the store they belong to, not by what their role may do", ctx do
+      %{conn: conn, north: north, north_tent: north_tent, south_tent: south_tent} = ctx
+
+      # An admin who belongs to a store is that store's admin. `global? true`
+      # widens the read for a reader carrying no tenant at all — it is not a
+      # role exemption, and the platform staff elsewhere in this file see every
+      # shop because they belong to none, not because of what they may write.
+      north_admin = user(:admin, name: "Nadia North", store: north)
+
+      assert north_admin.store_id == north.id
+
+      conn
+      |> log_in(north_admin)
+      |> visit(~p"/products")
+      |> assert_has("td", text: north_tent.name)
+      |> refute_has("td", text: south_tent.name)
+      |> refute_has("td", text: ctx.platform_tent.name)
+    end
+
     test "cannot reach another store's record by its id", ctx do
       %{conn: conn, north_keeper: keeper, south_tent: south_tent} = ctx
 

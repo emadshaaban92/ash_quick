@@ -14,8 +14,11 @@ defmodule Example.Test.S3Stub do
   `Exceed`, the key really built by `ExportUtils`, and the bytes that arrive are
   the bytes a reader would have downloaded. `body/1` hands them back.
 
-  Concurrency-safe by accident of the key: an export's key carries the actor's
-  id, and every test makes its own users.
+  One row per part — keyed `{key, part_number}` rather than a parts list under
+  the key — so an upload is a sequence of independent `insert`s. A list would
+  have to be read, prepended to and written back, and two parts doing that at
+  once lose one of themselves; `ExAws.S3.upload/4` is free to send parts
+  concurrently, and does once a file is larger than one chunk.
   """
 
   @behaviour ExAws.Request.HttpClient
@@ -24,7 +27,7 @@ defmodule Example.Test.S3Stub do
 
   @doc "Starts the table. Called once from `test_helper.exs`."
   def start do
-    :ets.new(@table, [:named_table, :public, :set])
+    :ets.new(@table, [:named_table, :public, :set, write_concurrency: true])
     :ok
   end
 
@@ -34,14 +37,30 @@ defmodule Example.Test.S3Stub do
   Parts are concatenated in order, which is what the object would be.
   """
   def body(key) do
-    case :ets.lookup(@table, key) do
+    case parts(key) do
       [] -> nil
-      [{^key, parts}] -> parts |> Enum.sort_by(&elem(&1, 0)) |> Enum.map_join("", &elem(&1, 1))
+      parts -> parts |> Enum.sort_by(&elem(&1, 0)) |> Enum.map_join("", &elem(&1, 1))
     end
+  end
+
+  @doc """
+  Every key written so far.
+
+  Here rather than in the tests, so how a part is stored stays this module's
+  business.
+  """
+  def keys do
+    @table |> :ets.match({{:"$1", :_}, :_}) |> List.flatten() |> Enum.uniq()
   end
 
   @doc "Forgets everything, for a test that wants to assert nothing was written."
   def clear, do: :ets.delete_all_objects(@table)
+
+  defp parts(key) do
+    @table
+    |> :ets.match({{key, :"$1"}, :"$2"})
+    |> Enum.map(fn [number, body] -> {number, body} end)
+  end
 
   @impl true
   def request(method, url, body, _headers, _http_opts) do
@@ -73,10 +92,7 @@ defmodule Example.Test.S3Stub do
   # One part of the object. `ExAws.S3.Upload` needs the `ETag` header back to
   # name it in the completion request.
   defp respond(:put, key, %{"partNumber" => number}, body) do
-    :ets.insert_new(@table, {key, []})
-
-    [{^key, parts}] = :ets.lookup(@table, key)
-    :ets.insert(@table, {key, [{String.to_integer(number), body} | parts]})
+    :ets.insert(@table, {{key, String.to_integer(number)}, body})
 
     {:ok, %{status_code: 200, headers: [{"ETag", ~s("#{number}")}], body: ""}}
   end
@@ -84,7 +100,8 @@ defmodule Example.Test.S3Stub do
   # A single-shot `PUT`, for anything that does not go through the multipart
   # path.
   defp respond(:put, key, _query, body) do
-    :ets.insert(@table, {key, [{1, body}]})
+    :ets.match_delete(@table, {{key, :_}, :_})
+    :ets.insert(@table, {{key, 1}, body})
     {:ok, %{status_code: 200, headers: [{"ETag", ~s("1")}], body: ""}}
   end
 

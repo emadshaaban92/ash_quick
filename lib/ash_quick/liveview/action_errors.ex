@@ -9,6 +9,11 @@ defmodule AshQuick.LiveView.ActionErrors do
   # helpful text; anything unexpected (framework/unknown errors, raw exceptions)
   # is reported to Tower (which fans out to the configured reporters) and reduced
   # to a generic sentence so internal structs never reach the user.
+  #
+  # `:tower` is an optional dependency. A host without it gets the same
+  # sentences, with the report going to `Logger` instead — see `report_error/1`.
+
+  require Logger
 
   @stale_message "This record changed since you opened it — reload to see the latest, then try again."
   @forbidden_message "You don't have permission to do that."
@@ -69,7 +74,8 @@ defmodule AshQuick.LiveView.ActionErrors do
     friendly copy;
   - `Ash.Error.Invalid` is rendered from its sub-errors, one sentence per thing
     that was wrong with the input;
-  - everything else is reported to Tower and reduced to `generic_message/0`.
+  - everything else is reported (to Tower, or to `Logger` in a host without it)
+    and reduced to `generic_message/0`.
   """
   def user_facing_message(message) when is_binary(message), do: message
 
@@ -129,7 +135,28 @@ defmodule AshQuick.LiveView.ActionErrors do
     |> List.wrap()
     |> Enum.map(&sentence/1)
     |> Enum.reject(&(&1 == ""))
+    |> case do
+      [] -> field_sentences(error)
+      sentences -> sentences
+    end
   end
+
+  # An input error is free to carry no message of its own — `add_error(field:
+  # :price)` is a validation refusing a value and saying nothing about why — and
+  # `to_form_error/1` then renders nothing. Which field was refused is still a
+  # sentence a person can act on, and without one the error contributes no
+  # message at all: `invalid_message/1` finds nothing to show, reports the
+  # refusal as our bug, and answers a bad input with `generic_message/0`.
+  defp field_sentences(%{field: field}) when not is_nil(field),
+    do: [invalid_field_sentence(field)]
+
+  defp field_sentences(%{fields: [_ | _] = fields}),
+    do: Enum.map(fields, &invalid_field_sentence/1)
+
+  defp field_sentences(_), do: []
+
+  defp invalid_field_sentence(field),
+    do: "#{AshQuick.LiveView.Utils.humanize(field)} is invalid."
 
   # `to_form_error/1` yields the fragment a form shows against an input, which
   # has to stand on its own here. Ash's built-in messages are lowercase and
@@ -166,10 +193,36 @@ defmodule AshQuick.LiveView.ActionErrors do
     @generic_message
   end
 
-  defp report_error(error) when is_exception(error),
-    do: Tower.report_exception(error, current_stacktrace())
+  # `:tower` is an optional dependency, and this is the error handler — the code
+  # keeping the page up when an action failed. Calling a module the host never
+  # installed would raise `UndefinedFunctionError` from here and take the
+  # LiveView down with it, turning every unexpected error into a crash. So the
+  # report is best-effort: Tower when the host has it, `Logger` when it does
+  # not, and a sentence either way.
+  #
+  # Resolved per call rather than at compile time: adding `:tower` to a host
+  # does not recompile this library, so a compile-time choice would keep
+  # reporting to `Logger` long after the host wired Tower up.
+  defp report_error(error) do
+    stacktrace = current_stacktrace()
 
-  defp report_error(error), do: Tower.report(:error, error, current_stacktrace())
+    if Code.ensure_loaded?(Tower) do
+      # Through `apply/3` so compiling in a host without `:tower` does not warn
+      # about a module that is deliberately absent.
+      if is_exception(error) do
+        apply(Tower, :report_exception, [error, stacktrace])
+      else
+        apply(Tower, :report, [:error, error, stacktrace])
+      end
+    else
+      Logger.error(
+        "Unexpected action error: #{inspect(error)}\n" <>
+          Exception.format_stacktrace(stacktrace)
+      )
+    end
+
+    :ok
+  end
 
   defp current_stacktrace do
     {:current_stacktrace, trace} = Process.info(self(), :current_stacktrace)

@@ -160,6 +160,50 @@ defmodule AshQuick.LiveView.ActionErrorsTest do
       refute message =~ "%"
     end
 
+    # A validation is free to refuse a value without saying why —
+    # `add_error(field: :price)` is one — and `to_form_error/1` then renders
+    # nothing at all. Which field was refused is the whole of what the error
+    # knows, and it is still something a person can act on; answering a bad
+    # input with "something went wrong on our end" sends them looking in the
+    # wrong place, and reports their typo as our bug.
+    test "names the field when an input error carries no message of its own" do
+      error =
+        Ash.Error.Invalid.exception(
+          errors: [Ash.Error.Changes.InvalidAttribute.exception(field: :price)]
+        )
+
+      message = ActionErrors.user_facing_message(error)
+
+      assert message == "Price is invalid."
+      refute message == ActionErrors.generic_message()
+    end
+
+    # The same for an error that refuses a combination rather than one field —
+    # `InvalidChanges` carries `:fields` where `InvalidAttribute` carries
+    # `:field`.
+    test "names every field when a message-less error refuses a combination" do
+      error =
+        Ash.Error.Invalid.exception(
+          errors: [Ash.Error.Changes.InvalidChanges.exception(fields: [:starts_at, :ends_at])]
+        )
+
+      assert ActionErrors.user_facing_message(error) ==
+               "Starts At is invalid.\nEnds At is invalid."
+    end
+
+    # The fallback above is for errors that describe *input*. It must not reach
+    # a framework failure that happens to carry a field, and it must not take
+    # the not-found path's place — both of those still answer with their own
+    # copy.
+    test "the field fallback does not swallow the not-found message" do
+      error =
+        Ash.Error.Invalid.exception(
+          errors: [Ash.Error.Query.NotFound.exception(resource: SomeResource)]
+        )
+
+      assert ActionErrors.user_facing_message(error) == ActionErrors.not_found_message()
+    end
+
     test "never leaks an unexpected error struct — returns the generic message" do
       # An Unknown-class error (or any raw exception) must not reach the user.
       message = ActionErrors.user_facing_message(%RuntimeError{message: "secret internal detail"})
