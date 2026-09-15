@@ -54,6 +54,11 @@ defmodule AshQuick.LiveView.URLParams do
   # Clamped, not refused: raising the page size by hand is supported (the row
   # actions menu resolves lazily so it stays cheap), but how far is the host's
   # answer rather than the visitor's.
+  #
+  # The clamp is not what bounds the read — Ash already bounds it by the read
+  # action's own `max_page_size`. It is what keeps the rest of the view honest
+  # about that bound: the limit lands in `%URLParams{}`, and the count and the
+  # pager are read back off it. See `AshQuick.Config.max_page_size/0`.
   defp parse_limit(limit) when is_binary(limit) do
     case Integer.parse(limit) do
       {limit, ""} -> limit |> max(1) |> min(Config.max_page_size())
@@ -63,8 +68,8 @@ defmodule AshQuick.LiveView.URLParams do
 
   defp parse_limit(_), do: default_limit()
 
-  # A lowered ceiling caps what one request costs, and the request nobody typed
-  # a limit into is a request like any other.
+  # A lowered ceiling is a smaller page, and the request nobody typed a limit
+  # into is a request like any other.
   defp default_limit, do: min(@default_limit, Config.max_page_size())
 
   # Bounded against the limit rather than on its own, because a page is only
