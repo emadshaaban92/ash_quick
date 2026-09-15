@@ -217,6 +217,83 @@ defmodule AshQuick.LiveView.URLParamsTest do
 
       assert query |> URI.decode_query() |> URLParams.from_url_params() == params
     end
+
+    # Canonicalizing from `handle_params/3` patches whenever the query it was
+    # given is not the query this writes back. That only terminates if writing
+    # it back a second time changes nothing — otherwise every request patches,
+    # and every patch is a request. One patch is allowed; two is a loop.
+    test "is a fixed point after one pass, so canonicalizing cannot patch forever" do
+      for raw <- [
+            %{},
+            %{"page" => "2"},
+            %{"limit" => "50", "page" => "2"},
+            # The ones that converge only after a pass, rather than at once.
+            %{"limit" => "abc"},
+            %{"limit" => "100000"},
+            %{"page" => "-5"},
+            %{"custom_filter" => "0"},
+            %{"show_custom_filter" => ""},
+            %{"arg__no_such_argument_anywhere" => "1"},
+            %{"foo" => "bar"},
+            # And the path shapes, which `path_no_params/2` rebuilds.
+            %{"id" => "abc-123"},
+            %{"id" => "abc-123", "action" => "update"},
+            %{"action" => "create"}
+          ] do
+        assert_converges(raw)
+      end
+    end
+
+    # The table above is thirteen shapes chosen by hand. This is the claim they
+    # are samples of, over the same seeded alphabet the custom-filter sweep
+    # uses — which is what caught the last wrong generalization.
+    test "no query at all patches twice" do
+      # Seeded, so a failure names an input that can be pasted back.
+      :rand.seed(:exsss, {17, 42, 99})
+      alphabet = ~c"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/= -_"
+      keys = ~w(limit page search selected_filters custom_filter show_custom_filter
+                arg__search arg__no_such_argument_anywhere id action foo)
+
+      junk = fn ->
+        1..:rand.uniform(8)
+        |> Enum.map(fn _ -> Enum.random(alphabet) end)
+        |> List.to_string()
+      end
+
+      for _ <- 1..2_000 do
+        raw =
+          1..:rand.uniform(4)
+          |> Enum.into(%{}, fn _ -> {Enum.random(keys), junk.()} end)
+
+        assert_converges(raw)
+      end
+    end
+  end
+
+  # One pass of what `handle_params/3` does: parse, write the canonical path,
+  # and take the params the *next* pass would be handed — the path segments
+  # Phoenix matches, merged with the canonical query it would arrive under.
+  defp canonicalize(raw) do
+    canonical_path = URLParams.full_path("/products", URLParams.from_url_params(raw))
+
+    next_raw =
+      raw
+      |> Map.take(["id", "action"])
+      |> Map.merge(URI.decode_query(URI.parse(canonical_path).query || ""))
+
+    {canonical_path, next_raw}
+  end
+
+  defp assert_converges(raw) do
+    {once, next_raw} = canonicalize(raw)
+    {twice, _} = canonicalize(next_raw)
+
+    assert once == twice,
+           """
+           canonicalizing #{inspect(raw)} never settles:
+             pass 1: #{inspect(once)}
+             pass 2: #{inspect(twice)}
+           """
   end
 end
 

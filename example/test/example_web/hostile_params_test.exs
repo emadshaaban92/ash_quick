@@ -6,6 +6,10 @@ defmodule ExampleWeb.HostileParamsTest do
   the page survives: each of these once took the mount down from
   `handle_params/3`, which needs a router, an endpoint and a live socket to
   see — none of which the package has.
+
+  Nor can the package show the other half: that the address bar is corrected to
+  say what the page actually did with the query, rather than keeping the promise
+  the link made.
   """
   use ExampleWeb.ConnCase, async: true
 
@@ -65,6 +69,57 @@ defmodule ExampleWeb.HostileParamsTest do
 
       assert html =~ "Four-season tent"
     end
+  end
+
+  describe "the URL the visitor is left looking at" do
+    test "a query the parse could not take at face value is corrected", %{conn: conn} do
+      cases = [
+        {"/products?limit=abc", "/products"},
+        {"/products?limit=100000", "/products?limit=250"},
+        {"/products?page=-5", "/products"},
+        {"/products?custom_filter=0", "/products"},
+        {"/products?arg__no_such_argument_anywhere=1", "/products"}
+      ]
+
+      for {asked, canonical} <- cases do
+        {:ok, view, _html} = live(conn, ~p"/products")
+
+        assert assert_patch(navigate(view, asked)) == canonical
+      end
+    end
+
+    # The negative that keeps the library from patching on every render of every
+    # URL its own controls wrote — including the patch it just issued itself,
+    # which is what turns a wrong comparison into an endless loop rather than a
+    # cosmetic bug. `?page=2` is what the pager builds, so it has to be left
+    # exactly as it is.
+    test "a query its own controls would have written is left alone", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/products")
+
+      assert refute_patched(navigate(view, "/products?page=2")) == :ok
+    end
+
+    # `path_no_params/2` rebuilds the `/:id` and `/:action` segments, so these
+    # are the shapes a careless canonical path would patch away from.
+    test "a details or action URL canonicalizes to itself", %{conn: conn, admin: admin} do
+      product = product(name: "Four-season tent", actor: admin)
+
+      for path <- ["/products/#{product.id}", "/products/#{product.id}/update"] do
+        {:ok, view, _html} = live(conn, ~p"/products")
+
+        assert refute_patched(navigate(view, path)) == :ok
+      end
+    end
+  end
+
+  # Reaches `path` the way a link inside the page does, and hands back a view
+  # whose remaining navigation is the page's own answer: `render_patch/2`
+  # announces the navigation the test asked for, which is not the page saying
+  # anything.
+  defp navigate(view, path) do
+    render_patch(view, path)
+    assert_patch(view, path)
+    view
   end
 
   defp page_limit(view) do

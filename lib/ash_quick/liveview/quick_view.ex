@@ -168,6 +168,25 @@ defmodule AshQuick.LiveView.QuickView do
   2. The `live_action` from the router (e.g. `:create`)
   3. The configured default action (`:index` for lists, `:read` for details)
 
+  ## URL canonicalization
+
+  Nothing in a query string is refused — `AshQuick.LiveView.URLParams` falls
+  back to a value the page can render for anything that will not parse. At the
+  first render the URL is then corrected to say what the page actually did, so
+  a visitor holding `?limit=100000` lands on `?limit=250` rather than reading a
+  URL that claims a page size they did not get. The patch uses `replace: true`,
+  so Back still leads where they came from.
+
+  Only the keys `URLParams` models survive it, so a query param of your own is
+  dropped from the URL. This is what every control has always done — they
+  rebuild the path from the parsed params alone — and the correction only makes
+  it happen at first render rather than at the first click. Keep state you need
+  in the session or in assigns rather than in a query param of your own.
+
+  A URL naming an action the resource does not have is left exactly as typed:
+  it renders as not found, and the URL is the evidence of what was asked for.
+  So is a URL a lifecycle hook has already redirected — see below.
+
   ## Custom action templates
 
   You can override the rendering of any action by placing an HEEx template
@@ -198,6 +217,8 @@ defmodule AshQuick.LiveView.QuickView do
       Use it to add custom assigns.
     * `after_handle_params(socket, options)` — Called after params are handled.
       Use it to redirect, add extra assigns, or modify behavior per-action.
+      A redirect from here wins: URL canonicalization is skipped for that pass
+      rather than fighting it.
 
   Example:
 
@@ -398,6 +419,37 @@ defmodule AshQuick.LiveView.QuickView do
               socket
             end
 
+          # The page renders what the query string *parsed* to, so the address
+          # bar is made to say the same thing rather than keep the promise the
+          # link made: a limit past the ceiling, a page before the first, a
+          # filter that will not decode. Corrected at the first render or not
+          # at all — that is the moment the visitor can still tie the link they
+          # followed to the list they got, and by the time a control rebuilds
+          # the path the evidence of what was dropped has gone with it.
+          #
+          # Only what `URLParams` models survives, so an unmodeled `?foo=bar`
+          # is dropped here. That is not a new loss: every control has always
+          # rebuilt the path from the parsed struct alone, so the first click
+          # dropped it anyway. This only makes the library honest about it at
+          # the render the visitor is looking at.
+          #
+          # Last, and only over a socket nothing else has redirected, because
+          # `push_patch/2` *raises* on a socket already set to redirect rather
+          # than overruling it. A host patching from `after_handle_params/2` —
+          # `/profile` to `/profile/<id>` — would otherwise be taken down by a
+          # query string it never looked at.
+          canonical_path = URLParams.full_path(base_path, params)
+
+          socket =
+            if ash_action && is_nil(socket.redirected) &&
+                 not QuickView.canonical_query?(uri, canonical_path) do
+              # `replace: true`: Back belongs to wherever the visitor came
+              # from, not to the URL they were just moved off.
+              push_patch(socket, to: canonical_path, replace: true)
+            else
+              socket
+            end
+
           {:noreply, socket}
         else
           {:noreply, socket |> assign(connected?: false)}
@@ -480,6 +532,24 @@ defmodule AshQuick.LiveView.QuickView do
             quick_view "#{uri.path}", #{inspect(socket.view)}
         """
     end
+  end
+
+  @doc """
+  Whether `uri` already carries the query `canonical_path` writes back.
+
+  Decoded query maps are the only form the two sides agree in, and comparing
+  anything else patches on every request — which is not a cosmetic bug but an
+  endless loop, since each patch is another request. Against the raw params map
+  it never settles: `URLParams` holds `limit` and `page` as integers where a
+  query holds strings. Against the whole path it loops on any id the URL
+  percent-encodes, because `full_path/2` writes that segment raw.
+
+  So the path is not compared at all. A query that is not canonical is the only
+  thing worth a patch; rebuilding the path is left to the patch itself.
+  """
+  def canonical_query?(%URI{} = uri, canonical_path) when is_binary(canonical_path) do
+    URI.decode_query(uri.query || "") ==
+      URI.decode_query(URI.parse(canonical_path).query || "")
   end
 
   @doc """
