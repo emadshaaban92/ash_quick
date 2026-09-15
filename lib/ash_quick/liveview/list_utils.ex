@@ -13,13 +13,22 @@ defmodule AshQuick.LiveView.ListUtils do
   alias AshQuick.LiveView.Utils
   alias AshQuick.LiveView.QuickView.Options
 
+  # Names no field, because the field is not always the part that was wrong —
+  # an unusable value on a perfectly good field lands here too. A visitor who
+  # typed the filter knows which one they typed, and a visitor who was handed
+  # the link cannot act on the name either way.
+  @refused_filter_message "That filter couldn't be applied to this list, so it was ignored."
+
   def do_handle_params(
         socket,
         %URLParams{} = params,
         %Actions.Read{get?: false} = _action,
         %Options{} = options
       ) do
+    {socket, params, page} = initial_read(socket, params, options)
+
     socket
+    |> assign(:params, params)
     |> assign(:selected_rows, %{})
     |> assign(:export_data, nil)
     |> assign(:print_data, nil)
@@ -40,7 +49,7 @@ defmodule AshQuick.LiveView.ListUtils do
     |> AshPhoenix.LiveView.keep_live(
       :data,
       &load_data!(&1, params, options),
-      Liveness.list_options(options)
+      [initial: page] ++ Liveness.list_options(options)
     )
   end
 
@@ -95,6 +104,49 @@ defmodule AshQuick.LiveView.ListUtils do
       nil -> query
       ash_filter -> Ash.Query.filter_input(query, ash_filter)
     end
+  end
+
+  # A custom filter is the one part of this query a visitor authors, and there
+  # is no asking in advance whether it works. It can fail in two places and
+  # nothing before the read sees either:
+  #
+  #   * a `field_name` the resource does not have — `from_string/1` decodes it
+  #     as written, knowing no resource, and `filter_input/2` invalidates the
+  #     query;
+  #   * a real field carrying a value its type cannot cast — which
+  #     `filter_input/2` accepts, and the *data layer* refuses, as an
+  #     `Ecto.Query.CastError`. `equals` on a UUID, a price or a date is a
+  #     free-text box in `FilterForm`, so this one is reachable by typing, not
+  #     only by editing a URL.
+  #
+  # Both arrive the same way: raised by `Ash.read!` from inside
+  # `handle_params/3`, taking the mount down rather than showing on the page.
+  # A validity pre-check answers only the first and would have to keep in step
+  # with everything the data layer will accept, so the filter is not validated
+  # here — it is tried.
+  #
+  # A read that raises with a filter applied is read once more without it. If
+  # that succeeds the filter was the problem: it is dropped from the params the
+  # whole page is built from, with a flash saying so, and the list, the export
+  # query, the filter form and `full_path/2` all follow. If it raises too, the
+  # filter was never the problem and that error stands — `base_filter`,
+  # `filters` and `sort_by` are the host's own, and a bug in one should keep
+  # raising loudly rather than become a flash a visitor can do nothing about.
+  #
+  # The page is handed to `keep_live/4` as `:initial`, so this is the render's
+  # one read rather than a probe in front of another one. Refetches re-run the
+  # closure below, which closes over the corrected params.
+  defp initial_read(socket, %URLParams{custom_filter: nil} = params, %Options{} = options),
+    do: {socket, params, load_data!(socket, params, options)}
+
+  defp initial_read(socket, %URLParams{} = params, %Options{} = options) do
+    {socket, params, load_data!(socket, params, options)}
+  rescue
+    _ ->
+      params = %URLParams{params | custom_filter: nil}
+
+      {put_flash(socket, :error, @refused_filter_message), params,
+       load_data!(socket, params, options)}
   end
 
   defp maybe_apply_sort(query, nil), do: query
