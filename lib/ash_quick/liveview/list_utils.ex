@@ -13,13 +13,21 @@ defmodule AshQuick.LiveView.ListUtils do
   alias AshQuick.LiveView.Utils
   alias AshQuick.LiveView.QuickView.Options
 
+  # Names no field, because the field it named is the part that was wrong: a
+  # visitor who edited a filter URL by hand knows which one, and a visitor who
+  # was handed the link cannot act on the name either way.
+  @refused_filter_message "That filter doesn't apply to this list, so it was ignored."
+
   def do_handle_params(
         socket,
         %URLParams{} = params,
         %Actions.Read{get?: false} = _action,
         %Options{} = options
       ) do
+    {socket, params} = drop_refused_custom_filter(socket, params, options)
+
     socket
+    |> assign(:params, params)
     |> assign(:selected_rows, %{})
     |> assign(:export_data, nil)
     |> assign(:print_data, nil)
@@ -95,6 +103,48 @@ defmodule AshQuick.LiveView.ListUtils do
       nil -> query
       ash_filter -> Ash.Query.filter_input(query, ash_filter)
     end
+  end
+
+  # The one part of this query the URL can be wrong about in a way nothing
+  # before the read can catch. `CustomFilter.from_string/1` decodes
+  # `field_name` as written — it is handed no resource, so it cannot tell a
+  # real field from an invented one, the same reason `parse_action/1` carries
+  # an unknown action name through. The difference is the refusal: an unknown
+  # action renders as not found, while an unknown field reaches
+  # `filter_input/2`, invalidates the query, and is raised by `Ash.read!` from
+  # inside `handle_params/3` — which takes the mount down rather than showing
+  # up on the page.
+  #
+  # So the resource is asked before the read, and a filter it refuses is
+  # dropped from the params the whole page is built from: the list reads
+  # unfiltered, `build_export_query/4` builds the same query, the filter form
+  # opens empty, and `full_path/2` stops writing a filter nothing applied.
+  #
+  # Only the custom filter is treated this way. `base_filter`, `filters` and
+  # `sort_by` are the host's own, and a query error in one of those is a bug
+  # that should keep raising loudly rather than becoming a flash the visitor
+  # can do nothing about.
+  defp drop_refused_custom_filter(socket, %URLParams{custom_filter: nil} = params, _options),
+    do: {socket, params}
+
+  defp drop_refused_custom_filter(socket, %URLParams{} = params, %Options{} = options) do
+    if custom_filter_refused?(options.resource, params.custom_filter) do
+      {put_flash(socket, :error, @refused_filter_message),
+       %URLParams{params | custom_filter: nil}}
+    else
+      {socket, params}
+    end
+  end
+
+  # Asked through `maybe_apply_custom_filter/2` rather than beside it, so what
+  # is validated here cannot drift from what the read applies. Nothing is
+  # fetched: `filter_input/2` resolves the field names against the resource and
+  # records what it cannot resolve, which is the whole question.
+  defp custom_filter_refused?(resource, custom_filter) do
+    resource
+    |> Ash.Query.new()
+    |> maybe_apply_custom_filter(custom_filter)
+    |> then(&(not &1.valid?))
   end
 
   defp maybe_apply_sort(query, nil), do: query
