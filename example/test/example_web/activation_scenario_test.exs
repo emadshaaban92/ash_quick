@@ -15,7 +15,7 @@ defmodule ExampleWeb.ActivationScenarioTest do
 
   alias AshQuick.LiveView.Utils
   alias Example.Catalog.{Brand, PriceChange}
-  alias Example.Test.ColumnOnlyBrand
+  alias Example.Test.PlainBrand
 
   describe "a resource that declares activation" do
     setup %{admin: admin} do
@@ -135,7 +135,7 @@ defmodule ExampleWeb.ActivationScenarioTest do
 
   describe "a resource carrying an :active column it never declared" do
     # No resource in this application disagrees with its own column, so the
-    # disagreement is built. `Example.Test.ColumnOnlyBrand` reads the brands
+    # disagreement is built. `Example.Test.PlainBrand` reads the brands
     # table and carries the same `:active`, and declares no activation — so one
     # row, deactivated once, can be read through both.
     #
@@ -143,10 +143,10 @@ defmodule ExampleWeb.ActivationScenarioTest do
     # it would drop another extension's rows out of every dropdown onto them,
     # silently, with the page otherwise healthy.
     test "keeps a deactivated record that the declaring resource drops", %{admin: admin} do
-      assert Ash.Resource.Info.attribute(ColumnOnlyBrand, :active),
+      assert Ash.Resource.Info.attribute(PlainBrand, :active),
              "the fixture lost its :active column — this test no longer pins anything"
 
-      refute AshQuick.Info.activation?(ColumnOnlyBrand)
+      refute AshQuick.Info.activation?(PlainBrand)
       assert AshQuick.Info.activation?(Brand)
 
       retired = brand(actor: admin)
@@ -154,7 +154,7 @@ defmodule ExampleWeb.ActivationScenarioTest do
 
       # The same row, through the same function every dropdown calls.
       refute retired.id in dropdown_ids(Brand, admin)
-      assert retired.id in dropdown_ids(ColumnOnlyBrand, admin)
+      assert retired.id in dropdown_ids(PlainBrand, admin)
     end
 
     defp dropdown_ids(resource, actor) do

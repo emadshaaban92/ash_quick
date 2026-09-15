@@ -98,6 +98,14 @@ defmodule Example.Catalog.Product do
       authorize_if Example.Checks.ActorCanWrite
     end
 
+    # Blocks are ANDed, so this narrows the one above rather than replacing it:
+    # what a price is set to is an admin's, through either route. Without it the
+    # field restriction below would be a formality — an editor denied the field
+    # on the update form would simply use this action instead.
+    policy action(:reprice) do
+      authorize_if Example.Checks.ActorIsAdmin
+    end
+
     policy action_type(:read) do
       authorize_if actor_present()
     end
@@ -106,6 +114,18 @@ defmodule Example.Catalog.Product do
   ash_quick do
     activation do
       enabled? true
+    end
+
+    field_restrictions do
+      # An editor's update form has no Price input at all — the field is left
+      # out rather than refused on submit — and
+      # `AshQuick.FieldRestrictions.StripRestrictedFields` drops the value from
+      # their changeset even when one arrives anyway, so forging it in the
+      # payload changes nothing.
+      #
+      # `:create` is not restricted: price is `allow_nil? false`, and an editor
+      # who could not state one could not add a product at all.
+      restrict :price, Example.Checks.RoleIsAdminOnly, on: [:update]
     end
   end
 

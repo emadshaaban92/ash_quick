@@ -50,8 +50,7 @@ defmodule ExampleWeb.FeatureCase do
       # comes with it.
       import Phoenix.ConnTest, only: [build_conn: 0, get: 2]
 
-      import Phoenix.LiveViewTest,
-        only: [live: 2, render_click: 2, render_click: 3, render_change: 2, render_change: 3]
+      import Phoenix.LiveViewTest, except: [open_browser: 1, open_browser: 2]
     end
   end
 
