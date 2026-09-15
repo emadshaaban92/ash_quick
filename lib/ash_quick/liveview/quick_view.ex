@@ -439,6 +439,17 @@ defmodule AshQuick.LiveView.QuickView do
           # followed to the list they got, and by the time a control rebuilds
           # the path the evidence of what was dropped has gone with it.
           #
+          # Read back off the socket rather than from `params`, because the
+          # parse is not the last thing that can drop a value: a custom filter
+          # the data layer will not take decodes perfectly well and is refused
+          # at the read, where `ListUtils.do_handle_params/4` drops it.
+          #
+          # `:params` in assigns is the page's record of what it actually
+          # rendered, and every control already rebuilds its path from there
+          # rather than from the query string — `handle_list_events/4` does it
+          # for search, paging and filters. Correcting the query from the same
+          # place is that rule applied to the address bar, not a new contract.
+          #
           # Only what `URLParams` models survives, so an unmodeled `?foo=bar`
           # is dropped here. That is not a new loss: every control has always
           # rebuilt the path from the parsed struct alone, so the first click
@@ -455,7 +466,7 @@ defmodule AshQuick.LiveView.QuickView do
           # than overruling it. A host patching from `after_handle_params/2` —
           # `/profile` to `/profile/<id>` — would otherwise be taken down by a
           # query string it never looked at.
-          canonical_path = URLParams.full_path(base_path, params)
+          canonical_path = URLParams.full_path(base_path, socket.assigns.params)
 
           socket =
             if ash_action && is_nil(socket.redirected) &&

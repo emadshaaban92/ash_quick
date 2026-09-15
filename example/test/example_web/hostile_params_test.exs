@@ -71,6 +71,76 @@ defmodule ExampleWeb.HostileParamsTest do
     end
   end
 
+  describe "a custom filter the resource refuses" do
+    # `from_string/1` decodes this one correctly — it is a structurally valid
+    # filter, and nothing at the parse knows the resource. Only the read can
+    # tell, and it used to tell by raising `Ash.Error.Query.NoSuchField` from
+    # inside `handle_params/3`, which took the mount down.
+    test "lists everything rather than exiting the view", %{conn: conn, admin: admin} do
+      product(name: "Four-season tent", actor: admin)
+
+      {:ok, _view, html} = live(conn, ~p"/products?custom_filter=#{refused_filter()}")
+
+      assert html =~ "Four-season tent"
+    end
+
+    test "says the filter was ignored rather than dropping it silently", %{
+      conn: conn,
+      admin: admin
+    } do
+      product(name: "Four-season tent", actor: admin)
+
+      {:ok, view, _html} = live(conn, ~p"/products?custom_filter=#{refused_filter()}")
+
+      assert render(view) =~ "That filter couldn&#39;t be applied to this list"
+    end
+
+    # The filter is gone from the params the page was built from, so the
+    # address bar is corrected to match — the same treatment `?custom_filter=0`
+    # gets for failing a layer earlier.
+    test "is dropped from the URL the visitor is left looking at", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/products")
+
+      assert assert_patch(navigate(view, "/products?custom_filter=#{refused_filter()}")) ==
+               "/products"
+    end
+
+    # The second way a filter fails, and the one that is not only a hostile-URL
+    # case: `filter_input/2` takes a real field without checking the value, so
+    # an uncastable one is refused by the *data layer* instead. `FilterForm`
+    # renders a free-text value box for UUID, money and date columns, so this
+    # is reachable by typing `abc` into a filter rather than by editing a URL.
+    test "a real field with a value its type cannot cast is dropped too", %{
+      conn: conn,
+      admin: admin
+    } do
+      product(name: "Four-season tent", actor: admin)
+
+      for filter <- [
+            %{"operator" => "equals", "field_name" => "price", "value" => "not-a-number"},
+            %{"operator" => "equals", "field_name" => "id", "value" => "not-a-uuid"}
+          ] do
+        {:ok, view, html} = live(conn, ~p"/products?custom_filter=#{encode_filter(filter)}")
+
+        assert html =~ "Four-season tent"
+        assert render(view) =~ "That filter couldn&#39;t be applied to this list"
+      end
+    end
+
+    # The negative: naming a field the resource *does* have still filters, so
+    # the drop is not reading every custom filter as refused.
+    test "a filter naming a real field still filters", %{conn: conn, admin: admin} do
+      product(name: "Four-season tent", actor: admin)
+      product(name: "Three-season tent", actor: admin)
+
+      {:ok, _view, html} =
+        live(conn, ~p"/products?custom_filter=#{name_filter("Four-season tent")}")
+
+      assert html =~ "Four-season tent"
+      refute html =~ "Three-season tent"
+    end
+  end
+
   describe "the URL the visitor is left looking at" do
     test "a query the parse could not take at face value is corrected", %{conn: conn} do
       cases = [
@@ -228,6 +298,19 @@ defmodule ExampleWeb.HostileParamsTest do
     assert_patch(view, path)
     view
   end
+
+  # Decodes perfectly well; names a field `Example.Catalog.Product` does not
+  # have. Written out rather than built through `CustomFilter`, because what is
+  # under test is a URL nobody's controls wrote.
+  defp refused_filter do
+    encode_filter(%{"operator" => "equals", "field_name" => "no_such_field", "value" => "x"})
+  end
+
+  defp name_filter(name) do
+    encode_filter(%{"operator" => "equals", "field_name" => "name", "value" => name})
+  end
+
+  defp encode_filter(filter), do: filter |> JSON.encode!() |> :base64.encode()
 
   defp page_action(view) do
     :sys.get_state(view.pid).socket.assigns.ash_action.name
