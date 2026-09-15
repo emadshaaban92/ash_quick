@@ -441,10 +441,14 @@ defmodule AshQuick.LiveView.QuickView do
           #
           # Read back off the socket rather than from `params`, because the
           # parse is not the last thing that can drop a value: a custom filter
-          # naming a field the resource does not have decodes perfectly well
-          # and is refused at the read, and `ListUtils.do_handle_params/4`
-          # drops it there. Whatever the page ended up listing by is what the
-          # query is corrected to.
+          # the data layer will not take decodes perfectly well and is refused
+          # at the read, where `ListUtils.do_handle_params/4` drops it.
+          #
+          # `:params` in assigns is the page's record of what it actually
+          # rendered, and every control already rebuilds its path from there
+          # rather than from the query string — `handle_list_events/4` does it
+          # for search, paging and filters. Correcting the query from the same
+          # place is that rule applied to the address bar, not a new contract.
           #
           # Only what `URLParams` models survives, so an unmodeled `?foo=bar`
           # is dropped here. That is not a new loss: every control has always

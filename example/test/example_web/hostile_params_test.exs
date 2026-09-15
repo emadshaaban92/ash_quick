@@ -92,7 +92,7 @@ defmodule ExampleWeb.HostileParamsTest do
 
       {:ok, view, _html} = live(conn, ~p"/products?custom_filter=#{refused_filter()}")
 
-      assert render(view) =~ "That filter doesn&#39;t apply to this list"
+      assert render(view) =~ "That filter couldn&#39;t be applied to this list"
     end
 
     # The filter is gone from the params the page was built from, so the
@@ -103,6 +103,28 @@ defmodule ExampleWeb.HostileParamsTest do
 
       assert assert_patch(navigate(view, "/products?custom_filter=#{refused_filter()}")) ==
                "/products"
+    end
+
+    # The second way a filter fails, and the one that is not only a hostile-URL
+    # case: `filter_input/2` takes a real field without checking the value, so
+    # an uncastable one is refused by the *data layer* instead. `FilterForm`
+    # renders a free-text value box for UUID, money and date columns, so this
+    # is reachable by typing `abc` into a filter rather than by editing a URL.
+    test "a real field with a value its type cannot cast is dropped too", %{
+      conn: conn,
+      admin: admin
+    } do
+      product(name: "Four-season tent", actor: admin)
+
+      for filter <- [
+            %{"operator" => "equals", "field_name" => "price", "value" => "not-a-number"},
+            %{"operator" => "equals", "field_name" => "id", "value" => "not-a-uuid"}
+          ] do
+        {:ok, view, html} = live(conn, ~p"/products?custom_filter=#{encode_filter(filter)}")
+
+        assert html =~ "Four-season tent"
+        assert render(view) =~ "That filter couldn&#39;t be applied to this list"
+      end
     end
 
     # The negative: naming a field the resource *does* have still filters, so
