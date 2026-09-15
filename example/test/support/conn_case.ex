@@ -1,6 +1,12 @@
 defmodule ExampleWeb.ConnCase do
   @moduledoc """
-  Tests that drive a page.
+  Tests that drive a page through `Phoenix.LiveViewTest` directly.
+
+  `ExampleWeb.FeatureCase` is the one to reach for: it drives the same pages
+  through `PhoenixTest`, and its assertions are about what a reader sees. This
+  case is for the tests that need the LiveView itself — a mount asserted to
+  raise, a `render_click/2` for an event no button offers, a socket's assigns
+  read back.
 
   `log_in/2` puts a user in the session the way `ExampleWeb.SessionController`
   does, which is all `ExampleWeb.UserAuth` reads — so a test signs in by naming
@@ -18,8 +24,8 @@ defmodule ExampleWeb.ConnCase do
       import Phoenix.ConnTest
       import Phoenix.LiveViewTest
       import Plug.Conn
-      import ExampleWeb.ConnCase
       import Example.Fixtures
+      import ExampleWeb.Sessions
     end
   end
 
@@ -27,12 +33,5 @@ defmodule ExampleWeb.ConnCase do
     Example.DataCase.setup_sandbox(tags)
 
     {:ok, Map.merge(Example.Fixtures.roles(), %{conn: Phoenix.ConnTest.build_conn()})}
-  end
-
-  @doc "Signs `user` in on `conn`."
-  def log_in(conn, user) do
-    conn
-    |> Phoenix.ConnTest.init_test_session(%{})
-    |> Plug.Conn.put_session(:user_id, user.id)
   end
 end

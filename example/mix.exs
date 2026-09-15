@@ -100,6 +100,7 @@ defmodule Example.MixProject do
       {:igniter, "~> 0.8", only: [:dev, :test]},
       {:sourceror, "~> 1.7", only: [:dev, :test]},
       {:lazy_html, ">= 0.1.0", only: :test},
+      {:phoenix_test, "~> 0.12", only: :test, runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
       {:tidewave, "~> 0.1", only: [:dev]}
     ]

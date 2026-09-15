@@ -100,6 +100,11 @@ defmodule ExampleWeb.UserAuth do
         path = URI.parse(uri).path
         scope = socket.assigns.scope
 
+        # The page a navigation landed on, which the layout reads back:
+        # `ExampleWeb.Layouts.nav?/1` draws no sidebar without it, and the
+        # sidebar marks the current entry by it.
+        socket = Phoenix.Component.assign(socket, :current_path, path)
+
         cond do
           ExampleWeb.AccessControl.can_access?(scope, path) ->
             {:cont, socket}
