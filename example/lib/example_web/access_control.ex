@@ -44,7 +44,8 @@ defmodule ExampleWeb.AccessControl do
   defp path_matches?(path, route), do: path == route or String.starts_with?(path, route <> "/")
 
   def routes_for_role(:admin) do
-    ~w(/brands /categories /products /price_changes /users /audit_logs /file_objects /browser_sessions)
+    ~w(/brands /categories /products /price_changes /stores /users /audit_logs /file_objects
+       /browser_sessions)
   end
 
   def routes_for_role(:editor) do

@@ -28,18 +28,26 @@ $ mix setup          # deps, database, assets, seed data
 $ mix phx.server     # http://localhost:4000
 ```
 
-Sign in at `/login` — there are no passwords, just three seeded users:
+Sign in at `/login` — there are no passwords, just five seeded users:
 
-| User | Role | Sees |
-|---|---|---|
-| `admin@example.test` | `:admin` | everything, including impersonation and the audit log |
-| `editor@example.test` | `:editor` | the catalog and the upload register; no users, no audit log |
-| `viewer@example.test` | `:viewer` | the catalog, read-only |
+| User | Role | Store | Sees |
+|---|---|---|---|
+| `admin@example.test` | `:admin` | — | everything, including impersonation and the audit log |
+| `editor@example.test` | `:editor` | — | the catalog and the upload register; no users, no audit log |
+| `viewer@example.test` | `:viewer` | — | the catalog, read-only |
+| `nora@example.test` | `:editor` | Northwind Online | that shop's products, and no others |
+| `sam@example.test` | `:editor` | Southgate Supply | that shop's products, and no others |
 
 Signing in as each in turn is the quickest way to see what
 `ExampleWeb.AccessControl` and the resources' policies do to a page: the apps
 grid, the sidebar, the "New" button and the row actions all change with the
 role, and none of that is written in a view.
+
+The last two are the multitenancy. Same role, same page, different rows — and
+nothing on `/products` mentions a store. `Example.Scope` carries the reader's
+store as the Ash tenant and `Catalog.Product` declares `multitenancy` over it;
+a reader who belongs to no store sees every shop's products, which is what
+`global? true` on that resource is for.
 
 `mix ash.reset` drops, recreates and re-seeds.
 
@@ -50,15 +58,23 @@ $ mix test
 ```
 
 `test/ash_quick/` holds the library's host-bound tests — versioning, the audit
-transaction, the presign — and `test/example_web/` the application's own: the
-QuickView scenario, the host conformance contracts, and the router/nav/access
-control reconciliation.
+transaction, the presign — and `test/example_web/` the scenarios: a QuickView
+driven the way a person drives it, per role, across nav and access control,
+activation, the details page, forms and the optimistic lock, impersonation,
+liveness, locale, bulk actions, list mechanics and export, uploads, and tenant
+isolation. They are the library's real test suite; there is no router, endpoint
+or session inside the package for any of it to run against.
+
+`ExampleWeb.FeatureCase` is what they are written on — `PhoenixTest` plus the
+few helpers a QuickView needs driving (`ExampleWeb.QuickViewHelpers`) and the
+browser-tab identity impersonation is resolved per
+(`ExampleWeb.Sessions`).
 
 ## What is wired where
 
 | Seam | Here |
 |---|---|
-| `AshQuick.Scope` | `Example.Scope` — actor, real actor, impersonation flag, request IP. Single-tenant, so no `:tenant`. |
+| `AshQuick.Scope` | `Example.Scope` — actor, real actor, impersonation flag, request IP, locale and tenant. |
 | Audit store | `Example.Accounts.AuditLog`, named app-wide as `:audit_resource`. |
 | `AshQuick.Storage` | `Example.Uploads.ObjectStore` — its own bucket, plus all three lifecycle callbacks, holding arriving objects in `Example.Uploads.Quarantine`. |
 | `AshQuick.AccessControl` | `ExampleWeb.AccessControl` — one route list per role. |
@@ -71,7 +87,9 @@ The resources cover the shapes a page has to render: a plain record
 (`Catalog.Category`), a record with relationships, `Money`, long text, an array
 of atoms and an array of embedded attachments (`Catalog.Product`), and an
 append-only log carrying only half the bookkeeping declaration
-(`Catalog.PriceChange`).
+(`Catalog.PriceChange`). `Catalog.Store` is the odd one out: the tenant the
+others are partitioned by rather than a shape to render, and so not multitenant
+itself.
 
 ## Deliberate omissions
 

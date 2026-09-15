@@ -4,6 +4,7 @@ defmodule AshQuick.LiveView.FormUtils do
   require Logger
   import Phoenix.LiveView
   import Phoenix.Component, only: [assign: 2]
+  alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.QuickView.Options
   alias Ash.Resource.Actions.Argument
@@ -461,32 +462,32 @@ defmodule AshQuick.LiveView.FormUtils do
       {:ok, rec} ->
         handle_success(rec, params, socket.assigns.ash_action.name, socket)
 
+      # Every message below comes from `AshQuick.LiveView.ActionErrors`, which
+      # owns what a failed action says to a person. Spelling one out here is how
+      # the same condition ends up worded two ways depending on which surface
+      # hit it — and how `Ash.Error.error_descriptions/1`, a debug dump of the
+      # error class and its bread crumbs, ends up in a toast.
       {:error, %{source: %{errors: [%Ash.Error.Changes.StaleRecord{} = error]}}} ->
         Logger.warning("Stale record error: #{inspect(error)}")
 
-        {:halt,
-         socket
-         |> put_flash(
-           :error,
-           "The record has been modified by another user. Please refresh the page."
-         )}
+        {:halt, put_flash(socket, :error, ActionErrors.user_facing_message(error))}
 
       {:error, %{source: %{errors: [%Ash.Error.Changes.InvalidAttribute{} = error]}} = form} ->
         Logger.warning("Invalid attribute error: #{inspect(error)}")
 
-        {:halt,
-         socket
-         |> assign(form: form)
-         |> put_flash(
-           :error,
-           Ash.Error.error_descriptions([error])
-         )}
+        # Wrapped in the class Ash would have raised it under, which is the
+        # shape `user_facing_message/1` renders sub-errors out of.
+        message = ActionErrors.user_facing_message(Ash.Error.to_error_class([error]))
+
+        {:halt, socket |> assign(form: form) |> put_flash(:error, message)}
 
       {:error, form} ->
         Logger.warning("Error while saving form: \n #{form |> inspect()}")
 
         case AshPhoenix.Form.errors(form) do
-          [] -> {:halt, socket |> put_flash(:error, "Authorization Error")}
+          # A submit that failed with nothing to say about any input is the
+          # policy refusing it.
+          [] -> {:halt, put_flash(socket, :error, ActionErrors.forbidden_message())}
           errors -> {:halt, socket |> assign(form: form) |> flash_form_errors(errors)}
         end
     end
