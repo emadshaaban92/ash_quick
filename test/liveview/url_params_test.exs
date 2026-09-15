@@ -106,6 +106,19 @@ defmodule AshQuick.LiveView.URLParamsTest do
                %{}
     end
 
+    # `?arg__x[a]=1` and `?arg__x[]=1` arrive as a map and a list, and
+    # `URI.encode_query/1` takes neither — no `String.Chars` for a map, and an
+    # outright refusal for a list. Carrying either through would leave a struct
+    # that cannot be written back to a path.
+    test "a shape the query cannot express is as much a missing argument as none" do
+      for value <- [%{"a" => "1"}, ["1"], ["1", "2"], 1] do
+        params = URLParams.from_url_params(%{"arg__search" => value})
+
+        assert params.read_args == %{}
+        assert URLParams.full_path("/products", params) == "/products"
+      end
+    end
+
     test "only the prefixed keys are arguments" do
       params = %{"search" => "widget", "arg__search" => "widget"}
 
@@ -245,6 +258,11 @@ defmodule AshQuick.LiveView.URLParamsTest do
             "/products?foo=bar",
             # The path shapes `path_no_params/2` rebuilds.
             "/products/create",
+            # `/create` takes its action from the router's `live_action`, so it
+            # is the one shape carrying no path param — `full_path/2` writes the
+            # bare base path for it, which is a different page.
+            "/products/create?limit=abc",
+            "/products/create?return_to=%2Fdashboard",
             "/products/abc-123",
             "/products/abc-123?limit=abc",
             "/products/abc-123/update",

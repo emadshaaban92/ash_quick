@@ -106,11 +106,21 @@ defmodule AshQuick.LiveView.URLParams do
   # resource resolves and refuses by name, while an argument is passed *by*
   # name — and a name no atom was ever made for is not one the resource
   # declared, so there is nothing for it to be passed to.
-  defp read_arg(key, value) do
+  #
+  # Only a string is kept. `?arg__x[a]=1` and `?arg__x[]=1` arrive as a map and
+  # a list, and `URI.encode_query/1` takes neither — it has no `String.Chars`
+  # for a map and refuses a list outright — so carrying one through would leave
+  # a struct that cannot be written back to a path, which is a raise from
+  # wherever that is next attempted rather than a page. Same answer
+  # `parse_action/1` already gives `?action[]=x`: a shape the query cannot
+  # express is as much a missing argument as none at all.
+  defp read_arg(key, value) when is_binary(value) do
     [{String.to_existing_atom(key), value}]
   rescue
     ArgumentError -> []
   end
+
+  defp read_arg(_key, _value), do: []
 
   def path_for_page(base_path, params, page), do: full_path(base_path, %{params | page: page})
 

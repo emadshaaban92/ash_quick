@@ -132,6 +132,51 @@ defmodule ExampleWeb.HostileParamsTest do
     end
   end
 
+  # `URI.encode_query/1` has no `String.Chars` for a map and refuses a list
+  # outright, and `full_path/2` now runs on every pass rather than only where a
+  # list page built its pager links — so a read argument that is not a string
+  # would take down every shape rather than one.
+  test "a read argument the query cannot express does not take the page down", %{
+    conn: conn,
+    admin: admin
+  } do
+    product = product(name: "Four-season tent", actor: admin)
+
+    for url <- [
+          ~p"/products?arg__search[a]=1",
+          ~p"/products?arg__search[]=1",
+          ~p"/products/#{product.id}?arg__search[a]=1",
+          ~p"/products/#{product.id}?arg__search[]=1"
+        ] do
+      assert {:ok, _view, html} = live(conn, url)
+      assert html =~ "Four-season tent"
+    end
+  end
+
+  describe "a URL reached at a path the parsed params do not rebuild" do
+    # `/create` takes its action from the router's `live_action`, not from a URL
+    # param, so `params.action` is `nil` and `full_path/2` writes the bare base
+    # path for it. Patching there would put the visitor on the list.
+    test "a create URL keeps its form rather than being sent to the list", %{conn: conn} do
+      for url <- [
+            ~p"/products/create",
+            ~p"/products/create?limit=abc",
+            ~p"/products/create?return_to=%2Fdashboard"
+          ] do
+        {:ok, view, html} = live(conn, url)
+
+        assert page_action(view) == :create
+        assert html =~ "phx-submit"
+      end
+    end
+
+    test "and its URL is left exactly as it came in", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/products")
+
+      assert refute_patched(navigate(view, "/products/create?limit=abc")) == :ok
+    end
+  end
+
   describe "a URL naming its action in the query" do
     # The regression this guard exists for. `quick_view/3` serves four shapes —
     # `""`, `/create`, `/:id`, `/:id/:action` — and none of them is `/<action>`,
