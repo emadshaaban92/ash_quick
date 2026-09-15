@@ -18,6 +18,7 @@ defmodule Example.Catalog.Product do
     repo Example.Repo
 
     references do
+      reference :store, on_delete: :restrict, on_update: :restrict
       reference :brand, on_delete: :restrict, on_update: :restrict
       reference :category, on_delete: :restrict, on_update: :restrict
       reference :created_by, on_delete: :restrict, on_update: :restrict
@@ -37,7 +38,18 @@ defmodule Example.Catalog.Product do
   end
 
   actions do
-    default_accept [:sku, :name, :description, :price, :tags, :images, :brand_id, :category_id]
+    default_accept [
+      :sku,
+      :name,
+      :description,
+      :price,
+      :tags,
+      :images,
+      :brand_id,
+      :category_id,
+      :store_id
+    ]
+
     defaults [:create, :read, :update, :destroy]
 
     read :index do
@@ -129,6 +141,17 @@ defmodule Example.Catalog.Product do
     end
   end
 
+  # Attribute strategy, and `global? true`. A reader carrying a store sees that
+  # store's products and no others; a reader carrying none — the platform staff
+  # who administer this place — sees every store's. That second case is what
+  # `global?` buys, and it is why a tenant is optional on `Example.Scope`
+  # rather than required.
+  multitenancy do
+    strategy :attribute
+    attribute :store_id
+    global? true
+  end
+
   attributes do
     uuid_v7_primary_key :id
 
@@ -168,6 +191,13 @@ defmodule Example.Catalog.Product do
       allow_nil? false
     end
 
+    # Nullable: a product nobody's store owns is the platform's own, and is what
+    # every page in this app rendered before there were stores at all.
+    belongs_to :store, Example.Catalog.Store do
+      public? true
+      allow_nil? true
+    end
+
     has_many :price_changes, Example.Catalog.PriceChange do
       public? true
       sort id: :desc
@@ -175,6 +205,14 @@ defmodule Example.Catalog.Product do
   end
 
   identities do
-    identity :sku, [:sku]
+    # Multitenancy widens this to `(store_id, sku)`, so two shops may each stock
+    # an `SKU-1`. `nils_distinct? false` is what keeps the platform's own
+    # catalogue — every row whose `store_id` is null — one namespace rather than
+    # an unbounded pile of duplicates: Postgres treats NULLs as distinct by
+    # default, so without it a unique index over a nullable column enforces
+    # nothing at all there.
+    identity :sku, [:sku] do
+      nils_distinct? false
+    end
   end
 end

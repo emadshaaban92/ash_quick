@@ -58,6 +58,7 @@ defmodule ExampleWeb.Router do
       ] do
       live "/", HomeLive, :index
 
+      quick_view "/stores", StoreLive.Quick
       quick_view "/brands", BrandLive.Quick
       quick_view "/categories", CategoryLive.Quick
       quick_view "/products", ProductLive.Quick

@@ -31,6 +31,10 @@ defmodule Example.Accounts.User do
   postgres do
     table "users"
     repo Example.Repo
+
+    references do
+      reference :store, on_delete: :nilify, on_update: :update
+    end
   end
 
   resource do
@@ -38,7 +42,7 @@ defmodule Example.Accounts.User do
   end
 
   actions do
-    default_accept [:name, :email, :role, :locale]
+    default_accept [:name, :email, :role, :locale, :store_id]
     defaults [:create, :read, :update, :destroy]
 
     read :index do
@@ -137,6 +141,15 @@ defmodule Example.Accounts.User do
       public?: true,
       default: :en,
       constraints: [one_of: [:en, :ar]]
+  end
+
+  relationships do
+    # The tenant every action this person takes runs under. Nullable: platform
+    # staff belong to no store and see every store's catalogue.
+    belongs_to :store, Example.Catalog.Store do
+      public? true
+      allow_nil? true
+    end
   end
 
   identities do

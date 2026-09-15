@@ -24,7 +24,7 @@ defmodule ExampleWeb.ProductLive.Quick do
 
   use AshQuick.LiveView.QuickView,
     resource: Example.Catalog.Product,
-    load: [brand: [:name], category: [:name]],
+    load: [brand: [:name], category: [:name], store: [:name]],
     filters: [
       %{
         "name" => "on_sale",
@@ -42,6 +42,7 @@ defmodule ExampleWeb.ProductLive.Quick do
         :price,
         :tags,
         {:images, widget: &ExampleWeb.ImageWidgets.image/1},
+        :store,
         :active
       ],
       new_action_label: "Add Product"
@@ -56,6 +57,7 @@ defmodule ExampleWeb.ProductLive.Quick do
         :price,
         :tags,
         {:images, widget: &ExampleWeb.ImageWidgets.image/1},
+        :store,
         :active,
         :created_at,
         :updated_at

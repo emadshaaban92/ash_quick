@@ -6,7 +6,7 @@
 # It assumes an empty database — there is no find-or-create anywhere below.
 
 alias Example.Accounts.User
-alias Example.Catalog.{Brand, Category, PriceChange, Product}
+alias Example.Catalog.{Brand, Category, PriceChange, Product, Store}
 
 # `:role` is a restricted field (see `Example.Checks.RoleIsAdminOnly`), and
 # `AshQuick.FieldRestrictions.StripRestrictedFields` drops it from the changeset
@@ -27,12 +27,25 @@ admin =
     authorize?: false
   )
 
-create_user = fn name, email, role ->
-  Ash.create!(User, %{name: name, email: email, role: role}, actor: admin, authorize?: false)
+create_user = fn name, email, role, store_id ->
+  Ash.create!(User, %{name: name, email: email, role: role, store_id: store_id},
+    actor: admin,
+    authorize?: false
+  )
 end
 
-editor = create_user.("Ed Editor", "editor@example.test", :editor)
-_viewer = create_user.("Vera Viewer", "viewer@example.test", :viewer)
+# Two shops, so the multitenancy on `Product` has something to partition. Ada,
+# Ed and Vera belong to no store and see every shop's catalogue; Nora and Sam
+# each see one. Sign in as each in turn and `/products` is a different page.
+north = Store.create!(%{code: "NW", name: "Northwind Online"}, actor: admin, authorize?: false)
+
+south =
+  Store.create!(%{code: "SG", name: "Southgate Supply"}, actor: admin, authorize?: false)
+
+editor = create_user.("Ed Editor", "editor@example.test", :editor, nil)
+_viewer = create_user.("Vera Viewer", "viewer@example.test", :viewer, nil)
+_north_keeper = create_user.("Nora North", "nora@example.test", :editor, north.id)
+_south_keeper = create_user.("Sam South", "sam@example.test", :editor, south.id)
 
 brands =
   for {code, name} <- [{"ACM", "Acme"}, {"GLB", "Globex"}, {"INI", "Initech"}] do
@@ -50,12 +63,13 @@ categories =
   end
 
 products =
-  for {sku, name, price, tags} <- [
-        {"TNT-2P", "Two-person tent", Money.new(:USD, "249.00"), [:new]},
-        {"TNT-4P", "Four-person tent", Money.new(:USD, "389.00"), []},
-        {"BAG-40", "40L backpack", Money.new(:USD, "129.50"), [:sale]},
-        {"BAG-70", "70L backpack", Money.new(:USD, "189.00"), [:staff_pick]},
-        {"LGT-HL", "Headlamp", Money.new(:USD, "39.00"), [:clearance, :sale]}
+  for {sku, name, price, tags, store_id} <- [
+        {"TNT-2P", "Two-person tent", Money.new(:USD, "249.00"), [:new], north.id},
+        {"TNT-4P", "Four-person tent", Money.new(:USD, "389.00"), [], north.id},
+        {"BAG-40", "40L backpack", Money.new(:USD, "129.50"), [:sale], south.id},
+        {"BAG-70", "70L backpack", Money.new(:USD, "189.00"), [:staff_pick], south.id},
+        # Belongs to no shop, so only a reader without one ever sees it.
+        {"LGT-HL", "Headlamp", Money.new(:USD, "39.00"), [:clearance, :sale], nil}
       ] do
     Product.create!(
       %{
@@ -65,7 +79,8 @@ products =
         price: price,
         tags: tags,
         brand_id: Enum.random(brands).id,
-        category_id: Enum.random(categories).id
+        category_id: Enum.random(categories).id,
+        store_id: store_id
       },
       actor: editor,
       authorize?: false
@@ -80,7 +95,7 @@ products
 
 IO.puts("""
 
-Seeded #{length(brands)} brands, #{length(categories) + 1} categories, \
+Seeded 2 stores, #{length(brands)} brands, #{length(categories) + 1} categories, \
 #{length(products)} products and #{Ash.count!(PriceChange, authorize?: false)} price change(s).
 
 Sign in at http://localhost:4000/login as any of:
@@ -88,4 +103,11 @@ Sign in at http://localhost:4000/login as any of:
   admin@example.test   (admin)  — everything, including impersonation
   editor@example.test  (editor) — the catalog, but no users or audit log
   viewer@example.test  (viewer) — the catalog, read-only
+
+  nora@example.test    (editor) — Northwind Online's catalogue, and only it
+  sam@example.test     (editor) — Southgate Supply's, and only it
+
+The last two are the multitenancy: same page, same role, different rows. The
+first three belong to no store and see every shop's products, including the
+one that belongs to none.
 """)

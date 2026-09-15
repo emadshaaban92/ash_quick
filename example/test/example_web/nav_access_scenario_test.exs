@@ -33,7 +33,13 @@ defmodule ExampleWeb.NavAccessScenarioTest do
 
     reprice(product, to: Money.new(:USD, "149.00"), actor: admin)
 
-    %{brand: brand, category: category, product: product, object: file_object(actor: admin)}
+    %{
+      brand: brand,
+      category: category,
+      product: product,
+      store: store(name: "Northwind Online", actor: admin),
+      object: file_object(actor: admin)
+    }
   end
 
   describe "an admin" do
@@ -47,6 +53,7 @@ defmodule ExampleWeb.NavAccessScenarioTest do
                {"/brands", "Brands"},
                {"/price_changes", "Price Changes"},
                {"/users", "Users"},
+               {"/stores", "Stores"},
                {"/browser_sessions", "Live Users"},
                {"/audit_logs", "Audit Logs"},
                {"/file_objects", "File Objects"}
@@ -68,6 +75,8 @@ defmodule ExampleWeb.NavAccessScenarioTest do
       |> assert_has("td", text: product.name)
       |> visit(~p"/users")
       |> assert_has("td", text: admin.name)
+      |> visit(~p"/stores")
+      |> assert_has("td", text: ctx.store.name)
       |> visit(~p"/file_objects")
       |> assert_has("td", text: ctx.object.key)
       |> visit(~p"/audit_logs")
@@ -101,7 +110,7 @@ defmodule ExampleWeb.NavAccessScenarioTest do
       |> visit(~p"/file_objects")
       |> assert_has("td", text: ctx.object.key)
 
-      for denied <- ~w(/users /audit_logs /browser_sessions) do
+      for denied <- ~w(/users /stores /audit_logs /browser_sessions) do
         assert_raise ExampleWeb.NotAllowedError, fn ->
           live(log_in(conn, editor), denied)
         end
@@ -136,7 +145,7 @@ defmodule ExampleWeb.NavAccessScenarioTest do
       |> visit(~p"/price_changes")
       |> assert_has("td", text: product.name)
 
-      for denied <- ~w(/users /audit_logs /file_objects /browser_sessions) do
+      for denied <- ~w(/users /stores /audit_logs /file_objects /browser_sessions) do
         assert_raise ExampleWeb.NotAllowedError, fn ->
           live(log_in(conn, viewer), denied)
         end
@@ -217,8 +226,8 @@ defmodule ExampleWeb.NavAccessScenarioTest do
       # means a route added to a role but to no test above fails, rather than
       # being granted and never opened by anyone.
       driven =
-        ~w(/ /brands /categories /products /price_changes /users /audit_logs /file_objects
-           /browser_sessions)
+        ~w(/ /brands /categories /products /price_changes /stores /users /audit_logs
+           /file_objects /browser_sessions)
 
       assert Enum.sort(ExampleWeb.AccessControl.all_routes()) == Enum.sort(driven)
     end

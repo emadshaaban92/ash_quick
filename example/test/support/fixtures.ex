@@ -9,7 +9,7 @@ defmodule Example.Fixtures do
   """
 
   alias Example.Accounts.User
-  alias Example.Catalog.{Brand, Category, Product}
+  alias Example.Catalog.{Brand, Category, Product, Store}
   alias Example.Uploads.FileObject
 
   @doc "One user per role, as `%{admin: ..., editor: ..., viewer: ...}`."
@@ -43,8 +43,26 @@ defmodule Example.Fixtures do
   def user(role, opts) do
     actor = Keyword.get_lazy(opts, :actor, fn -> user(:admin) end)
 
-    Ash.create!(User, %{name: name(opts, "User"), email: email(), role: role},
+    Ash.create!(
+      User,
+      %{
+        name: name(opts, "User"),
+        email: email(),
+        role: role,
+        store_id: opts |> Keyword.get(:store) |> id()
+      },
       actor: actor,
+      authorize?: false
+    )
+  end
+
+  @doc """
+  A tenant. Pass it as `store:` to `user/2` and `product/1` to put either
+  inside it.
+  """
+  def store(opts \\ []) do
+    Store.create!(%{code: unique("S"), name: name(opts, "Store")},
+      actor: Keyword.get(opts, :actor),
       authorize?: false
     )
   end
@@ -79,7 +97,9 @@ defmodule Example.Fixtures do
         price: Keyword.get(opts, :price, Money.new(:USD, "10.00")),
         tags: Keyword.get(opts, :tags, []),
         brand_id: opts |> Keyword.get_lazy(:brand, fn -> brand(actor: actor) end) |> id(),
-        category_id: opts |> Keyword.get_lazy(:category, fn -> category(actor: actor) end) |> id()
+        category_id:
+          opts |> Keyword.get_lazy(:category, fn -> category(actor: actor) end) |> id(),
+        store_id: opts |> Keyword.get(:store) |> id()
       },
       actor: actor,
       authorize?: false
