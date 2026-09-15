@@ -54,6 +54,14 @@ defmodule Example.Catalog.Product do
       end
     end
 
+    # A second create action beside the generic one. `quick_view/3` serves no
+    # `/<action>` route, so `?action=quick_add` on the create path is the only
+    # way to reach it — which is why a canonical URL may correct the query but
+    # never the path.
+    create :quick_add do
+      accept [:sku, :name, :price, :brand_id, :category_id]
+    end
+
     # A named update beside the generic one, so a QuickView has a row action to
     # offer and the audit trail records *repricing* rather than "update".
     update :reprice do

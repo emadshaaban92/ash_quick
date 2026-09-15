@@ -6,6 +6,10 @@ defmodule ExampleWeb.HostileParamsTest do
   the page survives: each of these once took the mount down from
   `handle_params/3`, which needs a router, an endpoint and a live socket to
   see — none of which the package has.
+
+  Nor can the package show the other half: that the address bar is corrected to
+  say what the page actually did with the query, rather than keeping the promise
+  the link made.
   """
   use ExampleWeb.ConnCase, async: true
 
@@ -65,6 +69,172 @@ defmodule ExampleWeb.HostileParamsTest do
 
       assert html =~ "Four-season tent"
     end
+  end
+
+  describe "the URL the visitor is left looking at" do
+    test "a query the parse could not take at face value is corrected", %{conn: conn} do
+      cases = [
+        {"/products?limit=abc", "/products"},
+        {"/products?limit=100000", "/products?limit=250"},
+        {"/products?page=-5", "/products"},
+        {"/products?custom_filter=0", "/products"},
+        {"/products?arg__no_such_argument_anywhere=1", "/products"}
+      ]
+
+      for {asked, canonical} <- cases do
+        {:ok, view, _html} = live(conn, ~p"/products")
+
+        assert assert_patch(navigate(view, asked)) == canonical
+      end
+    end
+
+    # The negative that keeps the library from patching on every render of every
+    # URL its own controls wrote — including the patch it just issued itself,
+    # which is what turns a wrong comparison into an endless loop rather than a
+    # cosmetic bug. `?page=2` is what the pager builds, so it has to be left
+    # exactly as it is.
+    test "a query its own controls would have written is left alone", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/products")
+
+      assert refute_patched(navigate(view, "/products?page=2")) == :ok
+    end
+
+    # `path_no_params/2` rebuilds the `/:id` and `/:action` segments, so these
+    # are the shapes a careless canonical path would patch away from.
+    test "a details or action URL canonicalizes to itself", %{conn: conn, admin: admin} do
+      product = product(name: "Four-season tent", actor: admin)
+
+      for path <- ["/products/#{product.id}", "/products/#{product.id}/update"] do
+        {:ok, view, _html} = live(conn, ~p"/products")
+
+        assert refute_patched(navigate(view, path)) == :ok
+      end
+    end
+
+    # Correcting the query is not something only the list page gets: the deeper
+    # shapes keep their path and have the query corrected under it.
+    test "a query is corrected under a details or action path too", %{
+      conn: conn,
+      admin: admin
+    } do
+      product = product(name: "Four-season tent", actor: admin)
+
+      cases = [
+        {"/products/#{product.id}?limit=abc", "/products/#{product.id}"},
+        {"/products/#{product.id}/update?page=-5", "/products/#{product.id}/update"}
+      ]
+
+      for {asked, canonical} <- cases do
+        {:ok, view, _html} = live(conn, ~p"/products")
+
+        assert assert_patch(navigate(view, asked)) == canonical
+      end
+    end
+  end
+
+  # `URI.encode_query/1` has no `String.Chars` for a map and refuses a list
+  # outright, and `full_path/2` now runs on every pass rather than only where a
+  # list page built its pager links — so a read argument that is not a string
+  # would take down every shape rather than one.
+  test "a read argument the query cannot express does not take the page down", %{
+    conn: conn,
+    admin: admin
+  } do
+    product = product(name: "Four-season tent", actor: admin)
+
+    for url <- [
+          ~p"/products?arg__search[a]=1",
+          ~p"/products?arg__search[]=1",
+          ~p"/products/#{product.id}?arg__search[a]=1",
+          ~p"/products/#{product.id}?arg__search[]=1"
+        ] do
+      assert {:ok, _view, html} = live(conn, url)
+      assert html =~ "Four-season tent"
+    end
+  end
+
+  describe "a URL reached at a path the parsed params do not rebuild" do
+    # `/create` takes its action from the router's `live_action`, not from a URL
+    # param, so `params.action` is `nil` and `full_path/2` writes the bare base
+    # path for it. Patching there would put the visitor on the list.
+    test "a create URL keeps its form rather than being sent to the list", %{conn: conn} do
+      for url <- [
+            ~p"/products/create",
+            ~p"/products/create?limit=abc",
+            ~p"/products/create?return_to=%2Fdashboard"
+          ] do
+        {:ok, view, html} = live(conn, url)
+
+        assert page_action(view) == :create
+        assert html =~ "phx-submit"
+      end
+    end
+
+    test "and its URL is left exactly as it came in", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/products")
+
+      assert refute_patched(navigate(view, "/products/create?limit=abc")) == :ok
+    end
+  end
+
+  describe "a URL naming its action in the query" do
+    # The regression this guard exists for. `quick_view/3` serves four shapes —
+    # `""`, `/create`, `/:id`, `/:id/:action` — and none of them is `/<action>`,
+    # so `?action=` is the only way to reach a second create-type action. It is
+    # also priority 1 of the resolution order the moduledoc documents.
+    #
+    # `full_path/2` writes that action into the *path*, where `/products/quick_add`
+    # matches `/:id` and renders a product that does not exist. Canonicalizing
+    # the path rather than the query turned a documented feature into a 404.
+    test "a second create action is reached, not redirected into a missing record", %{
+      conn: conn
+    } do
+      {:ok, view, html} = live(conn, ~p"/products/create?action=quick_add")
+
+      assert html =~ "Quick Add"
+      assert page_action(view) == :quick_add
+      assert page_id(view) == nil
+    end
+
+    test "and its URL is left exactly as it came in", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/products")
+
+      assert refute_patched(navigate(view, "/products/create?action=quick_add")) == :ok
+    end
+
+    # `?action=` on a details URL names a route that *does* exist, so rewriting
+    # it to `/products/<id>/update` would land somewhere real. It is still left
+    # alone: a path the host linked to deliberately is not this function's to
+    # rewrite, and treating `?action=` the same way everywhere is what makes the
+    # rule statable in one sentence — correct the query, never the path.
+    test "a details URL naming its action in the query is left alone too", %{
+      conn: conn,
+      admin: admin
+    } do
+      product = product(name: "Four-season tent", actor: admin)
+
+      {:ok, view, _html} = live(conn, ~p"/products")
+
+      assert refute_patched(navigate(view, "/products/#{product.id}?action=update")) == :ok
+    end
+  end
+
+  # Reaches `path` the way a link inside the page does, and hands back a view
+  # whose remaining navigation is the page's own answer: `render_patch/2`
+  # announces the navigation the test asked for, which is not the page saying
+  # anything.
+  defp navigate(view, path) do
+    render_patch(view, path)
+    assert_patch(view, path)
+    view
+  end
+
+  defp page_action(view) do
+    :sys.get_state(view.pid).socket.assigns.ash_action.name
+  end
+
+  defp page_id(view) do
+    :sys.get_state(view.pid).socket.assigns.params.id
   end
 
   defp page_limit(view) do
