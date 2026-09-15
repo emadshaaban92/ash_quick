@@ -80,6 +80,37 @@ defmodule AshQuick.LiveView.RouterTest do
     end
   end
 
+  describe "where a shape is served under a base path" do
+    test "each shape answers with the suffix the macro declares it at" do
+      assert Router.shape_path("/products", :index) == "/products"
+      assert Router.shape_path("/products", :create) == "/products/create"
+      assert Router.shape_path("/products", :show) == "/products/:id"
+      assert Router.shape_path("/products", :action) == "/products/:id/:action"
+    end
+
+    # The pairing that makes it worth having: the suffix a route is declared at
+    # and the suffix something else names it by are the same literal, so a
+    # caller cannot write out a path the macro would not have produced.
+    test "agrees with the routes the macro declares" do
+      for {path, _live_action} <- Router.__routes__("/products", []) do
+        assert path in Enum.map(
+                 [:index, :create, :show, :action],
+                 &Router.shape_path("/products", &1)
+               )
+      end
+    end
+
+    # It says where the route would be, not that it is there — `served_shapes/2`
+    # is what answers the second question.
+    test "answers for a shape this base path does not serve" do
+      assert Router.shape_path("/audit_logs", :create) == "/audit_logs/create"
+    end
+
+    test "a name that is not one of the four shapes is refused" do
+      assert_raise FunctionClauseError, fn -> Router.shape_path("/products", :publish) end
+    end
+  end
+
   describe "a quick_view declared inside a scope" do
     setup do
       %{routes: Phoenix.Router.routes(ScopedRouter)}

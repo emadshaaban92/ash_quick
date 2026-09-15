@@ -450,12 +450,18 @@ defmodule AshQuick.LiveView.QuickView do
           # rather than a tidy-up when it disagrees with the one being served —
           # see `correctable_query?/2`, which is what refuses those.
           #
+          # Which is why the canonical path is asked for by shape rather than
+          # taken from the params alone: `/create` has no path param to rebuild
+          # from, and a path the params get wrong is one the query under it can
+          # never be corrected at. See `canonical_path/3`.
+          #
           # Last, and only over a socket nothing else has redirected, because
           # `push_patch/2` *raises* on a socket already set to redirect rather
           # than overruling it. A host patching from `after_handle_params/2` —
           # `/profile` to `/profile/<id>` — would otherwise be taken down by a
           # query string it never looked at.
-          canonical_path = URLParams.full_path(base_path, params)
+          canonical_path =
+            QuickView.canonical_path(base_path, params, socket.assigns.live_action)
 
           socket =
             if ash_action && is_nil(socket.redirected) &&
@@ -550,6 +556,37 @@ defmodule AshQuick.LiveView.QuickView do
         """
     end
   end
+
+  @doc false
+  # The path `params` canonicalize to under the route shape being served.
+  #
+  # Public only because the generated `handle_params/3` calls it; it is an
+  # internal detail of that callback rather than surface a host may rely on.
+  #
+  # `full_path/2` derives the path from `{id, action}` alone, which is the whole
+  # answer for three of the four shapes `quick_view/3` declares. `/create` is
+  # the one that carries no path param: its action comes from the router's
+  # `live_action`, so the parsed params rebuild it as the *index* path, the two
+  # never agree, and `correctable_query?/2` — which takes the patch only when
+  # they do — could never correct a query under it.
+  #
+  # The route knows what the params cannot. `/create` is the only shape declared
+  # with a `live_action`, so `:create` here means exactly "the create route is
+  # the one being served", and its own path is the canonical one.
+  #
+  # Only where nothing in the query names an action. `?action=` is priority 1 of
+  # the resolution order and the only way to reach a second create-type action,
+  # so `/products/create?action=quick_add` still rebuilds as `/products/quick_add`,
+  # still disagrees with the path being served, and is still left exactly as it
+  # came in.
+  def canonical_path(base_path, %URLParams{action: nil} = params, :create) do
+    base_path
+    |> AshQuick.LiveView.Router.shape_path(:create)
+    |> URLParams.full_path(params)
+  end
+
+  def canonical_path(base_path, %URLParams{} = params, _live_action),
+    do: URLParams.full_path(base_path, params)
 
   @doc false
   # Whether `canonical_path` corrects `uri`'s query without moving the page.

@@ -124,6 +124,23 @@ defmodule AshQuick.LiveView.Router do
         do: name
   end
 
+  @doc """
+  The path the `shape` route is served at under `base_path`.
+
+  The other read side of `@shapes`, next to `served_shapes/2`: a shape's suffix
+  is stated once, where the routes are declared, so nothing that has to name one
+  writes it out a second time.
+
+  Answers for any of `#{inspect(@names)}` whether or not that shape is routed —
+  it says where the route would be, not that it is there. `served_shapes/2` is
+  what answers the second question.
+  """
+  @spec shape_path(String.t(), atom()) :: String.t()
+  def shape_path(base_path, shape) when is_binary(base_path) and shape in @names do
+    {suffix, _live_action} = Keyword.fetch!(@shapes, shape)
+    base_path <> suffix
+  end
+
   @doc false
   def __routes__(path, opts) do
     selected = selected_shapes(opts)
