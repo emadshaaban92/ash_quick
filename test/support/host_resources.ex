@@ -40,6 +40,9 @@ defmodule AshQuick.Test.AuditLog do
     attribute :attributes, :map, public?: true
     attribute :arguments, :map, public?: true
     attribute :context, :map, public?: true
+    # Optional on a store, and present here: the before and after of everything
+    # the write changed.
+    attribute :changes, :map, public?: true
     attribute :actor_id, :uuid, public?: true
     attribute :real_actor_id, :uuid, public?: true
     attribute :ip, :string, public?: true

@@ -37,7 +37,7 @@ defmodule AshQuick.Test.Credential do
 
   actions do
     default_accept [:name, :api_key, :masked_card_number]
-    defaults [:read, :create]
+    defaults [:read, :create, :update, :destroy]
 
     update :rotate do
       require_atomic? false
@@ -289,5 +289,152 @@ defmodule AshQuick.Test.ArgumentAuditStore do
       argument :actor_id, :uuid
       argument :real_actor_id, :uuid
     end
+  end
+end
+
+defmodule AshQuick.Test.LegacyAuditStore do
+  @moduledoc """
+  A store one migration behind: every required column and no `changes`.
+
+  `changes` is optional, so this has to keep taking rows — `Ash.bulk_create`
+  refuses an input the action does not have, so the key must be absent from the
+  row rather than nil. `AshQuick.Test.LegacyCredential` names it, which is what
+  keeps the assertion off the suite-wide `:audit_resource` and the test async.
+  """
+  use Ash.Resource, domain: AshQuick.Test.AuditDomain, data_layer: Ash.DataLayer.Ets
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_v7_primary_key :id
+    attribute :resource_name, :atom, public?: true
+    attribute :resource_id, :uuid, public?: true
+    attribute :action_type, :atom, public?: true
+    attribute :action_name, :atom, public?: true
+    attribute :attributes, :map, public?: true
+    attribute :arguments, :map, public?: true
+    attribute :context, :map, public?: true
+    attribute :actor_id, :uuid, public?: true
+    attribute :real_actor_id, :uuid, public?: true
+    attribute :ip, :string, public?: true
+    attribute :tenant, :uuid, public?: true
+  end
+
+  actions do
+    default_accept :*
+    defaults [:create, :read]
+  end
+end
+
+defmodule AshQuick.Test.LegacyCredential do
+  @moduledoc """
+  An audited resource recording into a store that predates `changes`.
+
+  Nothing about it says so — the resource is written exactly as one on a
+  current store would be. Whether the column is there is the store's question,
+  and the row is built either way.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.AuditDomain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshQuick]
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true
+  end
+
+  actions do
+    default_accept [:name]
+    defaults [:read, :create, :update]
+  end
+
+  ash_quick do
+    audit do
+      store AshQuick.Test.LegacyAuditStore
+    end
+
+    display do
+      label :name
+    end
+
+    liveness do
+      enabled? false
+    end
+
+    versioning do
+      enabled? false
+    end
+
+    bookkeeping do
+      created_at false
+      updated_at false
+      created_by false
+      updated_by false
+    end
+  end
+end
+
+defmodule AshQuick.Test.MistypedChangesStore do
+  @moduledoc """
+  A store whose `changes` column is a string. Every write would refuse it, so
+  `AshQuick.Audit.Verifier` says so while the audited resource compiles.
+  """
+  use Ash.Resource, domain: AshQuick.Test.AuditDomain, data_layer: Ash.DataLayer.Ets
+
+  attributes do
+    uuid_primary_key :id
+    attribute :resource_name, :atom, public?: true
+    attribute :resource_id, :uuid, public?: true
+    attribute :action_type, :atom, public?: true
+    attribute :action_name, :atom, public?: true
+    attribute :attributes, :map, public?: true
+    attribute :arguments, :map, public?: true
+    attribute :context, :map, public?: true
+    attribute :changes, :string, public?: true
+    attribute :actor_id, :uuid, public?: true
+    attribute :real_actor_id, :uuid, public?: true
+    attribute :ip, :string, public?: true
+    attribute :tenant, :uuid, public?: true
+  end
+
+  actions do
+    default_accept :*
+    defaults [:create, :read]
+  end
+end
+
+defmodule AshQuick.Test.UnacceptedChangesStore do
+  @moduledoc """
+  A `changes` column of the right type that the `:create` action will not take —
+  private, so `accept :*` skips it. The same `NoSuchInput` one write later.
+  """
+  use Ash.Resource, domain: AshQuick.Test.AuditDomain, data_layer: Ash.DataLayer.Ets
+
+  attributes do
+    uuid_primary_key :id
+    attribute :resource_name, :atom, public?: true
+    attribute :resource_id, :uuid, public?: true
+    attribute :action_type, :atom, public?: true
+    attribute :action_name, :atom, public?: true
+    attribute :attributes, :map, public?: true
+    attribute :arguments, :map, public?: true
+    attribute :context, :map, public?: true
+    attribute :changes, :map
+    attribute :actor_id, :uuid, public?: true
+    attribute :real_actor_id, :uuid, public?: true
+    attribute :ip, :string, public?: true
+    attribute :tenant, :uuid, public?: true
+  end
+
+  actions do
+    default_accept :*
+    defaults [:create, :read]
   end
 end

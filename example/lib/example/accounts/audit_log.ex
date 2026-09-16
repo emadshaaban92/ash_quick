@@ -103,6 +103,10 @@ defmodule Example.Accounts.AuditLog do
     attribute :arguments, :map, allow_nil?: false, public?: true
     attribute :context, :map, allow_nil?: false, public?: true
 
+    # The before and after of every attribute the write changed. Optional: drop
+    # it and entries record what the action was given but not what it replaced.
+    attribute :changes, :map, allow_nil?: false, default: %{}, public?: true
+
     attribute :ip, :string, allow_nil?: true, public?: true
     attribute :tenant, :uuid, allow_nil?: true, public?: true
   end

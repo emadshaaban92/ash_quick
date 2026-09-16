@@ -19,6 +19,26 @@ defmodule AshQuick.Audit.Store do
   A host adding columns of its own fills them from the store resource's own
   `:create` action, which is the whole row — nothing here reads them.
 
+  ## `changes`
+
+  One more column, and the only optional one: `changes`, a `:map` holding what
+  the write changed — `from` and `to` per attribute, and a `from` snapshot of
+  the record for a destroy. `AshQuick.Audit.Change` documents what goes in it,
+  including what `from` can and cannot be trusted to say.
+
+  A store without the attribute is written exactly as it always was: the key is
+  left out of the row entirely rather than sent as nil, because
+  `Ash.bulk_create` refuses an input the action does not have. So a host one
+  migration behind keeps working, and opts in when it wants to — add the
+  attribute to the store resource and generate the migration:
+
+      attribute :changes, :map, allow_nil?: false, default: %{}, public?: true
+
+      $ mix ash.codegen add_audit_log_changes
+
+  A store that *has* the column is held to it by `AshQuick.Audit.Verifier` like
+  any other: it must be a `:map`, and its `:create` action must accept it.
+
   ## Failure
 
   The write happens in `after_batch`, inside the action's transaction, so a
@@ -33,10 +53,14 @@ defmodule AshQuick.Audit.Store do
   alias AshQuick.Audit.Row
 
   @doc """
-  Writes a row per `{changeset, record}` pair, and raises naming the resource
-  and the store if the batch does not land.
+  Writes a row per `{changeset, record, changes}` triple, and raises naming the
+  resource and the store if the batch does not land.
+
+  The third element is what the write changed, worked out by
+  `AshQuick.Audit.Change` before it redacts the changeset — see
+  `AshQuick.Audit.Row.changes/2`.
   """
-  def write([{changeset, _record} | _] = changes, actor) do
+  def write([{changeset, _record, _changes} | _] = changes, actor) do
     resource = changeset.resource
     store = Declaration.store(resource)
 

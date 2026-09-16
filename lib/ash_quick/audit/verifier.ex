@@ -83,9 +83,32 @@ defmodule AshQuick.Audit.Verifier do
     refused = Row.fields() -- (missing ++ accepted(action))
 
     if missing == [] and refused == [] do
-      :ok
+      check_changes(store, action, dsl_state)
     else
       {:error, error(dsl_state, unwritable(store, missing, refused))}
+    end
+  end
+
+  # `changes` is the one column a store is allowed not to have: it was added
+  # after the rest, and a host still on the older store has to keep writing rows
+  # rather than stop dead on the next `mix deps.update`. So its absence is
+  # nothing to report — AshQuick leaves the key out of the row entirely. A store
+  # that *has* it is held to the same standard as every other column, because a
+  # column of the wrong type or one the `:create` action will not take fails
+  # every write exactly as those do.
+  defp check_changes(store, action, dsl_state) do
+    case Ash.Resource.Info.attribute(store, :changes) do
+      nil -> :ok
+      %{type: Ash.Type.Map} -> check_changes_accepted(store, action, dsl_state)
+      %{type: type} -> {:error, error(dsl_state, mistyped_changes(store, type))}
+    end
+  end
+
+  defp check_changes_accepted(store, action, dsl_state) do
+    if :changes in accepted(action) do
+      :ok
+    else
+      {:error, error(dsl_state, unaccepted_changes(store))}
     end
   end
 
@@ -219,6 +242,40 @@ defmodule AshQuick.Audit.Verifier do
      or regenerate it:
 
          mix igniter.install ash_quick
+     """}
+  end
+
+  defp mistyped_changes(store, type) do
+    {"""
+     the store #{inspect(store)} has a `changes` attribute typed \
+     #{inspect(type)} rather than `:map`.
+     """,
+     """
+     AshQuick fills `changes` with a map keyed by attribute name — `from` and \
+     `to` for everything the write changed — so a column that cannot take a map \
+     refuses the whole batch. Declare it as one:
+
+         attribute :changes, :map, allow_nil?: false, default: %{}, public?: true
+
+     Or drop the attribute: `changes` is optional, and a store without it \
+     records what the action was given and not what the values were before.
+     """}
+  end
+
+  defp unaccepted_changes(store) do
+    {"""
+     the store #{inspect(store)} has a `changes` attribute its `:create` action \
+     does not accept.
+     """,
+     """
+     AshQuick fills `changes` on every entry of a store that has the column, so \
+     one that will not take it refuses the whole batch — the same `NoSuchInput` \
+     a private attribute `accept :*` skips. Accept it, or regenerate the store:
+
+         mix igniter.install ash_quick
+
+     Or drop the attribute: `changes` is optional, and a store without it \
+     records what the action was given and not what the values were before.
      """}
   end
 

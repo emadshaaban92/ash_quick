@@ -217,6 +217,58 @@ ash_quick do
 end
 ```
 
+### Auditing records what changed, not only what was submitted
+
+Every audited write lands one row per record in the store. `attributes` and
+`arguments` say what the action was *given*; `changes` says what the values
+*were* — a map keyed by attribute name:
+
+```elixir
+%{
+  "name" => %{"from" => "Northwind", "to" => "Northwind Online"},
+  "price" => %{"from" => %{"amount" => "10.00", "currency" => "USD"},
+               "to" => %{"amount" => "12.50", "currency" => "USD"}}
+}
+```
+
+A create records `to` alone, a destroy a `from` snapshot of every attribute, and
+an attribute set to the value it already held is left out — an edit form posts
+every field, and the entry is about what moved.
+
+**`changes` is optional.** A store without the attribute keeps writing rows
+exactly as it did before, with no `changes` key at all. An existing host opts in
+by adding the column and generating the migration:
+
+```elixir
+# in the store resource, beside `attributes`
+attribute :changes, :map, allow_nil?: false, default: %{}, public?: true
+```
+
+```console
+$ mix ash.codegen add_audit_log_changes
+```
+
+Four things to know about what it holds:
+
+* **`from` is the record the actor loaded**, never a fresh read — the entry is
+  written inside the transaction of the write it describes. On an unversioned
+  resource that value may already be stale. On a versioned one the optimistic
+  lock rules that out, except for the attributes named in
+  `versioning_ignored_attributes`, which are allowed to move underneath a held
+  record by definition.
+* **An unknown previous value is `from_unknown: true`, never `from: nil`.**
+  `nil` is a value a column can hold, so "was blank" and "was never read" must
+  not read alike. Both an attribute a `select` left out and a record that was
+  never read — a hand-built `%Brand{id: id}` — reach it.
+* **`has_many` and `many_to_many` changes are not in `changes`.** They are
+  writes to the other resource: they show up in `arguments` as the input this
+  action was given, and in that resource's own audit rows. An embedded resource
+  is an attribute and is recorded whole on both sides.
+* **A sensitive attribute is `"**redacted**"` on both sides**, unless it is named
+  in `record_sensitive`. Whether it changed is still decided on the real values,
+  so one that did not change is left out rather than shown as a change between
+  two redactions.
+
 ### What a resource must satisfy
 
 Three things, each checked while the resource compiles.
@@ -345,7 +397,7 @@ reference.
 | Seam | What it is |
 |---|---|
 | `AshQuick.Scope` | `use` it on the host's scope struct. Generates `Ash.Scope.ToOpts` and the provenance AshQuick needs on top of it: the real actor behind an impersonation, the request IP, the actor's timezone and locale. Fails the compile if a named field is not on the struct. |
-| The audit store | An Ash resource in the host app, named app-wide as `:audit_resource` or per resource under `audit do store ... end`. It must accept `resource_name`, `resource_id`, `action_type`, `action_name`, `attributes`, `arguments`, `context`, `actor_id`, `real_actor_id`, `ip`, `tenant`. Keep it dumb — no policies, no validations: it is written inside the transaction of every audited write. |
+| The audit store | An Ash resource in the host app, named app-wide as `:audit_resource` or per resource under `audit do store ... end`. It must accept `resource_name`, `resource_id`, `action_type`, `action_name`, `attributes`, `arguments`, `context`, `actor_id`, `real_actor_id`, `ip`, `tenant`, and may also accept a `:map` `changes` — the only optional column. Keep it dumb — no policies, no validations: it is written inside the transaction of every audited write. |
 | `AshQuick.Storage` | Resolves attachment values to fetchable URLs, plus optional lifecycle callbacks for routing an arriving upload and withholding objects that are not servable yet. Defaults to `AshQuick.Storage.S3`, which serves straight from the key and implements no lifecycle. |
 | `AshQuick.AccessControl` | Answers which routes a scope may navigate to. Named on the nav, and what every rendering of it filters through. Not `Ash.can?`: a filter policy allows the action and returns no rows, so `can?` says yes for a page that would be empty. |
 | `AshQuick.Nav` | The host's navigation registry — one declaration the sidebar and the apps grid are both rendered from. QuickViews are discovered from the declared router; the declaration adds only what the router cannot say: a better label, an icon, a group, a non-QuickView path. |
