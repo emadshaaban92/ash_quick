@@ -95,9 +95,16 @@ defmodule ExampleWeb.ProductLive.Quick do
   together, so stopping early does not undo the rows already repriced — it only
   loses the fact that they were. What the operator needs to know after a partial
   run is how far it got, and which rows are still waiting.
+
+  Matched on the assigns a list carries rather than on the name alone. One
+  module serves both routes, and the details hook passes an unhandled name
+  through the same way the list's does — so `"discount"` pushed at
+  `/products/:id` reaches here too, where there is no `:selected_rows` and no
+  `:data` to read. That is a forged event, and the clause below answers it the
+  way the reduce already answers a forged one: by declining, not by raising.
   """
   @impl true
-  def handle_event("discount", _params, socket) do
+  def handle_event("discount", _params, %{assigns: %{data: _, selected_rows: _}} = socket) do
     selected = Map.keys(socket.assigns.selected_rows)
     products = Enum.filter(socket.assigns.data.results, &(&1.id in selected))
 
@@ -132,6 +139,10 @@ defmodule ExampleWeb.ProductLive.Quick do
          |> put_flash(:error, discount_error(repriced, products, error))}
     end
   end
+
+  # A page with no selection to reprice — the details view. Nothing drew the
+  # control there, so there is nothing to tell the reader about it either.
+  def handle_event("discount", _params, socket), do: {:noreply, socket}
 
   defp discount_error([], _products, error), do: ActionErrors.user_facing_message(error)
 

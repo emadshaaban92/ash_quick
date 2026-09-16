@@ -74,13 +74,21 @@ defmodule Example.Accounts.User do
     # to do: `:impersonate` takes no input, so a row action runs it inline and
     # the page moves on. Offered on a QuickView the button would write an audit
     # entry for an impersonation that never happened, and then nothing else —
-    # so neither QuickView surface is allowed to reach it.
+    # so no QuickView surface is allowed to reach it.
+    #
+    # All three of them, not just the two a button is drawn on. `:impersonate`
+    # takes no input, which is exactly what `ListUtils.resource_bulk_actions/3`
+    # derives a bulk action from, so the list's bulk menu offers it over a
+    # selection as well. That menu runs under `:ash_quick_list_bulk`, and
+    # without the clause for it the audit entry this policy exists to prevent
+    # is written once per selected row.
     #
     # Nobody stands in for themselves, which would be an entry for a session
     # that did not change hands.
     policy action(:impersonate) do
       forbid_if context_equals(:action_source, :ash_quick_list)
       forbid_if context_equals(:action_source, :ash_quick_details)
+      forbid_if context_equals(:action_source, :ash_quick_list_bulk)
       forbid_if expr(id == ^actor(:id))
       authorize_if Example.Checks.ActorIsAdmin
     end

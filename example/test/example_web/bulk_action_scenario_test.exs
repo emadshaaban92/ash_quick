@@ -124,6 +124,29 @@ defmodule ExampleWeb.BulkActionScenarioTest do
       assert repriced_ids() == MapSet.new([first.id, second.id])
     end
 
+    test "a declared action forged on the details page declines instead of crashing", ctx do
+      %{conn: conn, admin: admin, first: first} = ctx
+
+      # `quick_view/3` serves both routes from one module, and the details hook
+      # passes a name it does not handle through exactly as the list's does. So
+      # `"discount"` pushed at `/products/:id` reaches the same clause — on a
+      # page that has neither a selection nor a list of results to read.
+      conn
+      |> log_in(admin)
+      |> visit(~p"/products/#{first.id}")
+      |> PhoenixTest.unwrap(fn view ->
+        render_click(view, "discount", %{})
+        render(view)
+      end)
+      # Still mounted and still showing the record, rather than an exit the
+      # caller has to trap.
+      |> assert_has("h1", text: first.name)
+
+      # Nothing was repriced on the way past.
+      assert Money.to_string!(Ash.reload!(first, authorize?: false).price) =~ "100"
+      assert repriced_ids() == MapSet.new([])
+    end
+
     test "the selection is cleared afterwards, so it cannot be run twice by accident", ctx do
       %{conn: conn, admin: admin, first: first} = ctx
 
@@ -219,14 +242,6 @@ defmodule ExampleWeb.BulkActionScenarioTest do
 
   # Ticking a row is a change on the list's own form, which is what the
   # checkboxes live in.
-  defp tick_rows(session, ids) do
-    params = Map.new(ids, &{&1, "on"})
-
-    PhoenixTest.unwrap(session, fn view ->
-      render_change(view, "table-form-change", params)
-    end)
-  end
-
   defp repriced_ids do
     Example.Catalog.PriceChange
     |> Ash.read!(authorize?: false)

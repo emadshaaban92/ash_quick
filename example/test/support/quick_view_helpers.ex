@@ -56,6 +56,34 @@ defmodule ExampleWeb.QuickViewHelpers do
   end
 
   @doc """
+  Ticks the selection checkbox on each of `ids`.
+
+  The bulk menu is drawn from the selection, so most of what there is to say
+  about a bulk action needs rows ticked first.
+  """
+  def tick_rows(session, ids) do
+    params = Map.new(ids, &{&1, "on"})
+
+    PhoenixTest.unwrap(session, fn view ->
+      LiveViewTest.render_change(view, "table-form-change", params)
+    end)
+  end
+
+  @doc """
+  Pushes a bulk action's event without opening the menu.
+
+  `force_row_action/3` for the other menu. The distinction matters for an
+  action the resource declares without the page naming it: a bulk action is
+  *derived* from every input-less update, so hiding one and forbidding one are
+  separate questions, and only this asks the second.
+  """
+  def force_bulk_action(session, action_name) do
+    PhoenixTest.unwrap(session, fn view ->
+      LiveViewTest.render_click(view, "bulk_action", %{"action_name" => to_string(action_name)})
+    end)
+  end
+
+  @doc """
   Toggles the saved filter labelled `label`.
 
   The binding is on the row rather than on a link, so `click_link/3` has

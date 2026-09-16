@@ -323,6 +323,28 @@ defmodule ExampleWeb.ImpersonationScenarioTest do
 
       assert impersonations_of(editor.id) == []
     end
+
+    test "nor the bulk menu, which derives it without the page naming it", ctx do
+      %{conn: conn, admin: admin, editor: editor} = ctx
+
+      # The third surface, and the one no button had to be drawn for.
+      # `ListUtils.resource_bulk_actions/3` takes every input-less update the
+      # actor may run and offers it over a selection — and `:impersonate` takes
+      # no input, so it arrives in that menu derived from the resource. It runs
+      # under its own `action_source`, which is why forbidding the two the row
+      # and details menus use is not enough.
+      conn
+      |> log_in(admin)
+      |> visit(~p"/users")
+      |> tick_rows([editor.id])
+      |> force_bulk_action(:impersonate)
+
+      assert impersonations_of(editor.id) == []
+
+      # And the run that was refused is the whole of it: no half of a bulk
+      # update landed on the row either.
+      assert Ash.reload!(editor, authorize?: false).version == editor.version
+    end
   end
 
   # Runs exactly what the console runs when its button is clicked, and hands
