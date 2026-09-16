@@ -16,6 +16,12 @@ defmodule AshQuick.AuditTest do
   that half is not asserted here; it is what keeps the batch safe for anything
   else handed it.
 
+  `changes` is the other half of the entry and the newer one: `attributes` says
+  what the action was given, `changes` says what the values were before it. It
+  is optional on the store — `AshQuick.Test.LegacyCredential` records into one
+  that predates the column and must still get its rows — so the assertions cover
+  both shapes.
+
   What a store *refusing* the batch does to the write is not here: the contract
   is that the record goes back with the entry, and only a data layer with
   transactions can show that. The ETS fixtures have none, so that assertion
@@ -25,9 +31,12 @@ defmodule AshQuick.AuditTest do
 
   require Ash.Query
 
+  alias AshQuick.Audit.Row
   alias AshQuick.Test.Actor
   alias AshQuick.Test.AuditLog
   alias AshQuick.Test.Credential
+  alias AshQuick.Test.LegacyAuditStore
+  alias AshQuick.Test.LegacyCredential
 
   setup do
     actor =
@@ -135,5 +144,154 @@ defmodule AshQuick.AuditTest do
     assert message =~ "the audit entry cannot name the actor it was written by"
     assert message =~ inspect(Credential)
     assert message =~ "role: :importer"
+  end
+
+  describe "changes" do
+    setup %{actor: actor} do
+      record =
+        Credential
+        |> Ash.Changeset.for_create(
+          :create,
+          %{name: "Gateway", api_key: "sk-1", masked_card_number: "**** 4242"},
+          actor: actor
+        )
+        |> Ash.create!()
+
+      %{record: record}
+    end
+
+    test "a create records every attribute it set, and no `from`",
+         %{record: record} do
+      assert [entry] = entries(record)
+
+      assert entry.changes[:name] == %{to: "Gateway"}
+      assert entry.changes[:masked_card_number] == %{to: "**** 4242"}
+      # The default the changeset filled is an attribute the action set like any
+      # other, and is what the row's `resource_id` points at.
+      assert entry.changes[:id] == %{to: record.id}
+
+      refute Enum.any?(entry.changes, fn {_name, change} -> Map.has_key?(change, :from) end)
+    end
+
+    test "an update records `from` and `to`, and says nothing about a key that did not change",
+         %{actor: actor, record: record} do
+      record
+      |> Ash.Changeset.for_update(
+        :update,
+        # The second is the value it already holds, which is what an edit form
+        # submits for every field the person did not touch.
+        %{name: "Gateway 2", masked_card_number: "**** 4242"},
+        actor: actor
+      )
+      |> Ash.update!()
+
+      assert [_created, entry] = entries(record)
+
+      assert entry.changes == %{name: %{from: "Gateway", to: "Gateway 2"}}
+    end
+
+    test "a destroy records the record as it stood", %{actor: actor, record: record} do
+      Ash.destroy!(record, actor: actor)
+
+      assert [_created, entry] = entries(record)
+
+      # Every attribute rather than the ones some action named — a destroy sets
+      # nothing, so there is no changeset to read the keys off.
+      assert entry.changes == %{
+               id: %{from: record.id},
+               name: %{from: "Gateway"},
+               api_key: %{from: "**redacted**"},
+               masked_card_number: %{from: "**** 4242"}
+             }
+    end
+
+    test "an attribute the read did not select is unknown rather than nil",
+         %{actor: actor, record: record} do
+      [selected] =
+        Credential
+        |> Ash.Query.filter(id == ^record.id)
+        |> Ash.Query.select([:id, :masked_card_number])
+        |> Ash.read!(actor: actor)
+
+      assert %Ash.NotLoaded{} = selected.name
+
+      selected
+      |> Ash.Changeset.for_update(:update, %{name: "Gateway 2"}, actor: actor)
+      |> Ash.update!()
+
+      assert [_created, entry] = entries(record)
+
+      # `from: nil` would say the name had been blank, which is a different
+      # claim from not knowing what it was.
+      assert entry.changes == %{name: %{from_unknown: true, to: "Gateway 2"}}
+    end
+
+    test "a record that was never read is unknown in every key", %{actor: actor, record: record} do
+      # In Ash 3 a hand-built struct holds defaults rather than `Ash.NotLoaded`,
+      # so a `nil` here is evidence of nothing and only `__meta__` says so.
+      built = %Credential{id: record.id}
+
+      assert built.name == nil
+      assert built.__meta__.state == :built
+
+      changeset =
+        Ash.Changeset.for_update(
+          built,
+          :update,
+          %{name: "Gateway 2", masked_card_number: "**** 1111"},
+          actor: actor
+        )
+
+      assert Row.changes(changeset, []) == %{
+               name: %{from_unknown: true, to: "Gateway 2"},
+               masked_card_number: %{from_unknown: true, to: "**** 1111"}
+             }
+    end
+
+    test "a sensitive attribute is redacted on both sides, and left out when it did not change",
+         %{actor: actor, record: record} do
+      rotated =
+        record
+        |> Ash.Changeset.for_update(:rotate, %{password: "sk-2"}, actor: actor)
+        |> Ash.update!()
+
+      assert [_created, entry] = entries(record)
+
+      # The comparison ran on the real values — they differ — and only what is
+      # recorded is redacted.
+      assert entry.changes == %{api_key: %{from: "**redacted**", to: "**redacted**"}}
+      refute inspect(entry) =~ "sk-1"
+      refute inspect(entry) =~ "sk-2"
+
+      # Rotated to what it already held: redacting before the comparison would
+      # have reported a change between two identical redactions.
+      rotated
+      |> Ash.Changeset.for_update(:rotate, %{password: "sk-2"}, actor: actor)
+      |> Ash.update!()
+
+      assert [_created, _rotated, unchanged] = entries(record)
+
+      # Still a row, as an empty changeset is: an action that wrote nothing is
+      # not an action that did nothing.
+      assert unchanged.changes == %{}
+    end
+
+    test "a store that predates the column is written without it", %{actor: actor} do
+      record =
+        LegacyCredential
+        |> Ash.Changeset.for_create(:create, %{name: "Gateway"}, actor: actor)
+        |> Ash.create!()
+
+      assert [entry] =
+               LegacyAuditStore
+               |> Ash.Query.filter(resource_id == ^record.id)
+               |> Ash.read!()
+
+      # `Ash.bulk_create` refuses an input the action does not have, so the key
+      # has to be absent from the row rather than nil — the row lands, and says
+      # what it always said.
+      refute Map.has_key?(entry, :changes)
+      assert entry.attributes[:name] == "Gateway"
+    end
   end
 end

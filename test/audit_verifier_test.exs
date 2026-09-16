@@ -39,9 +39,11 @@ defmodule AshQuick.AuditVerifierTest do
   import ExUnit.CaptureIO
 
   alias AshQuick.Test.ArgumentAuditStore
+  alias AshQuick.Test.MistypedChangesStore
   alias AshQuick.Test.PartialAuditStore
   alias AshQuick.Test.PrivateAuditStore
   alias AshQuick.Test.ReadOnlyAuditStore
+  alias AshQuick.Test.UnacceptedChangesStore
 
   defmodule NotAStore do
     @moduledoc false
@@ -270,6 +272,34 @@ defmodule AshQuick.AuditVerifierTest do
     # write would fail with `NoSuchInput` one save later.
     assert message =~ inspect(PrivateAuditStore)
     assert message =~ "its `:create` action does not accept `context`, `ip`"
+  end
+
+  test "a store with no `changes` column at all is not refused for it" do
+    # `changes` was added after the rest of the row, and a host one migration
+    # behind still has to compile and still has to get its rows — AshQuick
+    # leaves the key out instead. `ArgumentAuditStore` carries every required
+    # column and no `changes`.
+    refute Ash.Resource.Info.attribute(ArgumentAuditStore, :changes)
+    assert with_audit_resource(ArgumentAuditStore, fn -> verifier_errors(@default) end) == []
+  end
+
+  test "a `changes` column that is not a map refuses to compile, naming the type" do
+    message = with_audit_resource(MistypedChangesStore, fn -> message(@default) end)
+
+    assert message =~ inspect(MistypedChangesStore)
+    assert message =~ "has a `changes` attribute typed Ash.Type.String rather than `:map`"
+
+    # Optional does not mean unchecked: having the column and not being able to
+    # take the value is the same failed write as any other column.
+    assert message =~ "attribute :changes, :map"
+  end
+
+  test "a `changes` column the :create will not take refuses to compile, saying so" do
+    message = with_audit_resource(UnacceptedChangesStore, fn -> message(@default) end)
+
+    assert message =~ inspect(UnacceptedChangesStore)
+    assert message =~ "has a `changes` attribute its `:create` action does not accept"
+    assert message =~ "NoSuchInput"
   end
 
   test "a resource naming its own store is held to that one, not the app's" do
