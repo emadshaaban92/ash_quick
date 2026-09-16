@@ -78,5 +78,29 @@ defmodule AshQuick.VersioningTest do
 
       assert result.version == 1
     end
+
+    test "rejects a stale destroy", %{admin: admin} do
+      brand = brand(actor: admin)
+      stale = brand
+
+      bumped = Brand.update!(brand, %{name: unique("Moved on ")}, actor: admin, authorize?: false)
+      assert bumped.version == 2
+
+      # A destroy changeset changes no attribute, so a lock that only looks at
+      # what changed would let this through and delete the row somebody else
+      # has since written to. Destroys are locked unconditionally.
+      assert {:error, %Ash.Error.Invalid{} = error} =
+               Ash.destroy(stale, actor: admin, authorize?: false)
+
+      assert Enum.any?(error.errors, &match?(%Ash.Error.Changes.StaleRecord{}, &1))
+      assert {:ok, %Brand{version: 2}} = Ash.get(Brand, brand.id, actor: admin, authorize?: false)
+    end
+
+    test "destroys the record when the copy is current", %{admin: admin} do
+      brand = brand(actor: admin)
+
+      assert :ok = Ash.destroy(brand, actor: admin, authorize?: false)
+      assert {:error, _} = Ash.get(Brand, brand.id, actor: admin, authorize?: false)
+    end
   end
 end
