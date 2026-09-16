@@ -78,10 +78,11 @@ defmodule Example.Accounts.User do
     #
     # All three of them, not just the two a button is drawn on. `:impersonate`
     # takes no input, which is exactly what `ListUtils.resource_bulk_actions/3`
-    # derives a bulk action from, so the list's bulk menu offers it over a
-    # selection as well. That menu runs under `:ash_quick_list_bulk`, and
-    # without the clause for it the audit entry this policy exists to prevent
-    # is written once per selected row.
+    # derives a bulk action from, so the list's bulk menu would offer it over a
+    # selection as well. That menu is probed under `:ash_quick_list_bulk`, so
+    # the clause for it keeps the entry out of the menu — and refuses the event
+    # if it is pushed anyway, which is what stops the audit entry this policy
+    # exists to prevent from being written once per selected row.
     #
     # Nobody stands in for themselves, which would be an entry for a session
     # that did not change hands.

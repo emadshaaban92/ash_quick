@@ -63,6 +63,30 @@ defmodule ExampleWeb.BulkActionScenarioTest do
       |> assert_has("a", text: "Discount 10%")
     end
 
+    test "leaves out an action a policy forbids on the bulk surface alone", ctx do
+      %{conn: conn, admin: admin, editor: editor} = ctx
+
+      # `:impersonate` is an input-less update on the actor resource, so it is
+      # derived into this menu without `ExampleWeb.UserLive.Quick` naming it.
+      # `Example.Accounts.User` forbids it under `:ash_quick_list_bulk`, and
+      # that clause has to be what the menu is probed with — a bare `Ash.can?`
+      # never carries the surface, so the policy would answer about a caller
+      # that is not this one and the item would be offered.
+      conn
+      |> log_in(admin)
+      |> visit(~p"/users")
+      # A different user, so the refusal under test is the surface clause rather
+      # than `forbid_if expr(id == ^actor(:id))`.
+      |> tick_rows([editor.id])
+      |> refute_has(@bulk, text: "Impersonate")
+      # The menu is there and holding this resource's other derived actions, so
+      # the refutal above is about the one action rather than about an empty
+      # menu.
+      |> assert_has(@bulk, text: "Deactivate")
+      |> assert_has(@bulk, text: "Activate")
+      |> assert_has(@bulk, text: "Delete")
+    end
+
     test "a role the policy refuses is offered nothing over a selection", ctx do
       %{conn: conn, viewer: viewer, editor: editor, first: first} = ctx
 

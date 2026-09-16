@@ -514,7 +514,7 @@ defmodule AshQuick.LiveView.ListUtils do
       |> Stream.filter(&(&1.type == :update))
       |> Stream.filter(&(Ash.Resource.Info.action_inputs(resource, &1.name) |> Enum.empty?()))
       |> Enum.concat(Ash.Resource.Info.actions(resource) |> Enum.filter(&(&1.type == :destroy)))
-      |> Enum.filter(&Ash.can?({resource, &1.name}, scope, log_policy_breakdown?: false))
+      |> Enum.filter(&AshQuick.can?({resource, &1.name}, scope, :ash_quick_list_bulk))
       |> Enum.map(
         &%{
           title: &1.name |> Utils.humanize(),
