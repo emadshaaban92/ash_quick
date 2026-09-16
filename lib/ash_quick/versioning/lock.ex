@@ -42,16 +42,29 @@ defmodule AshQuick.Versioning.Lock do
      "AshQuick versioning decides the optimistic lock on the final changeset in a before_action"}
   end
 
+  # A destroy is always meaningful. Its changeset carries no attribute changes,
+  # so the emptiness test below would pass it through unlocked — and a destroy
+  # against a copy somebody else has since updated is exactly the lost write
+  # versioning exists to refuse. The bump is harmless on a hard destroy and
+  # right on a soft one, which is an update underneath.
+  defp apply_lock_if_meaningful(%{action_type: :destroy} = changeset, attribute) do
+    apply_lock(changeset, attribute)
+  end
+
   defp apply_lock_if_meaningful(changeset, attribute) do
     if meaningful?(changeset, attribute) do
-      current = Map.get(changeset.data, attribute)
-
-      changeset
-      |> Ash.Changeset.filter(Ash.Expr.expr(^Ash.Expr.ref(attribute) == ^current))
-      |> Ash.Changeset.force_change_attribute(attribute, current + 1)
+      apply_lock(changeset, attribute)
     else
       changeset
     end
+  end
+
+  defp apply_lock(changeset, attribute) do
+    current = Map.get(changeset.data, attribute)
+
+    changeset
+    |> Ash.Changeset.filter(Ash.Expr.expr(^Ash.Expr.ref(attribute) == ^current))
+    |> Ash.Changeset.force_change_attribute(attribute, current + 1)
   end
 
   defp meaningful?(%{resource: resource} = changeset, attribute) do
