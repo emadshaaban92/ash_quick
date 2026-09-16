@@ -21,3 +21,10 @@ config :phoenix, :plug_init_mode, :runtime
 config :phoenix, :sort_verified_routes_query_params, true
 
 config :phoenix_live_view, enable_expensive_runtime_checks: true
+
+config :phoenix_test, :endpoint, ExampleWeb.Endpoint
+
+# Presigning is offline arithmetic, but an export really uploads the file it
+# generated. `Example.Test.S3Stub` is a bucket in ETS, so the bytes a reader
+# would have downloaded are readable from a test.
+config :ex_aws, :http_client, Example.Test.S3Stub

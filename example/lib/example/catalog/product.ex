@@ -18,6 +18,7 @@ defmodule Example.Catalog.Product do
     repo Example.Repo
 
     references do
+      reference :store, on_delete: :restrict, on_update: :restrict
       reference :brand, on_delete: :restrict, on_update: :restrict
       reference :category, on_delete: :restrict, on_update: :restrict
       reference :created_by, on_delete: :restrict, on_update: :restrict
@@ -37,7 +38,18 @@ defmodule Example.Catalog.Product do
   end
 
   actions do
-    default_accept [:sku, :name, :description, :price, :tags, :images, :brand_id, :category_id]
+    default_accept [
+      :sku,
+      :name,
+      :description,
+      :price,
+      :tags,
+      :images,
+      :brand_id,
+      :category_id,
+      :store_id
+    ]
+
     defaults [:create, :read, :update, :destroy]
 
     read :index do
@@ -98,6 +110,14 @@ defmodule Example.Catalog.Product do
       authorize_if Example.Checks.ActorCanWrite
     end
 
+    # Blocks are ANDed, so this narrows the one above rather than replacing it:
+    # what a price is set to is an admin's, through either route. Without it the
+    # field restriction below would be a formality — an editor denied the field
+    # on the update form would simply use this action instead.
+    policy action(:reprice) do
+      authorize_if Example.Checks.ActorIsAdmin
+    end
+
     policy action_type(:read) do
       authorize_if actor_present()
     end
@@ -107,6 +127,29 @@ defmodule Example.Catalog.Product do
     activation do
       enabled? true
     end
+
+    field_restrictions do
+      # An editor's update form has no Price input at all — the field is left
+      # out rather than refused on submit — and
+      # `AshQuick.FieldRestrictions.StripRestrictedFields` drops the value from
+      # their changeset even when one arrives anyway, so forging it in the
+      # payload changes nothing.
+      #
+      # `:create` is not restricted: price is `allow_nil? false`, and an editor
+      # who could not state one could not add a product at all.
+      restrict :price, Example.Checks.RoleIsAdminOnly, on: [:update]
+    end
+  end
+
+  # Attribute strategy, and `global? true`. A reader carrying a store sees that
+  # store's products and no others; a reader carrying none — the platform staff
+  # who administer this place — sees every store's. That second case is what
+  # `global?` buys, and it is why a tenant is optional on `Example.Scope`
+  # rather than required.
+  multitenancy do
+    strategy :attribute
+    attribute :store_id
+    global? true
   end
 
   attributes do
@@ -148,6 +191,13 @@ defmodule Example.Catalog.Product do
       allow_nil? false
     end
 
+    # Nullable: a product nobody's store owns is the platform's own, and is what
+    # every page in this app rendered before there were stores at all.
+    belongs_to :store, Example.Catalog.Store do
+      public? true
+      allow_nil? true
+    end
+
     has_many :price_changes, Example.Catalog.PriceChange do
       public? true
       sort id: :desc
@@ -155,6 +205,14 @@ defmodule Example.Catalog.Product do
   end
 
   identities do
-    identity :sku, [:sku]
+    # Multitenancy widens this to `(store_id, sku)`, so two shops may each stock
+    # an `SKU-1`. `nils_distinct? false` is what keeps the platform's own
+    # catalogue — every row whose `store_id` is null — one namespace rather than
+    # an unbounded pile of duplicates: Postgres treats NULLs as distinct by
+    # default, so without it a unique index over a nullable column enforces
+    # nothing at all there.
+    identity :sku, [:sku] do
+      nils_distinct? false
+    end
   end
 end

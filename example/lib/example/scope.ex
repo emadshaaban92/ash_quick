@@ -9,17 +9,26 @@ defmodule Example.Scope do
   back with `AshQuick.Scope.real_actor/1` and friends, off a scope or off a
   changeset.
 
-  `:tenant` is deliberately absent: this application is single-tenant, and the
-  option exists to be omitted in exactly that case.
+  `:tenant` is the actor's own store. `Ash.Scope.ToOpts` puts it on every action
+  the scope is passed to, so `Example.Catalog.Product`'s `multitenancy` block
+  filters without any page mentioning a store. It is nullable, and nullable is
+  meaningful: platform staff belong to no store and read every store's
+  catalogue, which is what `global? true` on that resource is for.
+
+  `:locale` is the actor's own, read back by `AshQuick.Scope.locale/1` with
+  `AshQuick.Config.locale/0` behind it. `ExampleWeb.UserAuth` is what puts it on
+  the process and tells the browser about it; nothing in a resource has to know.
   """
 
   use AshQuick.Scope,
     actor: :current_user,
     real_actor: :real_user,
     impersonating?: :impersonating_mode,
-    ip: :ip
+    ip: :ip,
+    locale: :locale,
+    tenant: :tenant
 
-  defstruct [:current_user, :real_user, :ip, impersonating_mode: false]
+  defstruct [:current_user, :real_user, :ip, :locale, :tenant, impersonating_mode: false]
 
   @doc """
   Builds the scope an action runs under.
@@ -37,9 +46,20 @@ defmodule Example.Scope do
       current_user: current_user,
       real_user: real_user,
       impersonating_mode: impersonating_mode,
-      ip: Keyword.get(opts, :ip)
+      ip: Keyword.get(opts, :ip),
+      # Both read off whoever the tab is *acting as*, not whoever is at it. An
+      # admin standing in for a shopkeeper sees that shop's catalogue in that
+      # shopkeeper's language, which is the point of standing in for them.
+      locale: locale(current_user),
+      tenant: tenant(current_user)
     }
   end
+
+  defp locale(%{locale: locale}), do: to_string(locale)
+  defp locale(_no_actor), do: nil
+
+  defp tenant(%{store_id: store_id}), do: store_id
+  defp tenant(_no_actor), do: nil
 
   defp resolve_actor(nil, _impersonating), do: {nil, nil, false}
   defp resolve_actor(user, nil), do: {user, user, false}

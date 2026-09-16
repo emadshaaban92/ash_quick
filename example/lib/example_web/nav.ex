@@ -19,6 +19,7 @@ defmodule ExampleWeb.Nav do
   nav do
     entry "/", label: "Home", icon: "hero-home-solid"
 
+    entry "/stores", icon: "hero-building-storefront-solid"
     entry "/brands", icon: "hero-rectangle-group-solid"
     entry "/categories", icon: "hero-rectangle-stack-solid"
     entry "/products", icon: "hero-cube-solid"
@@ -36,7 +37,7 @@ defmodule ExampleWeb.Nav do
     group "Catalog", ~w(/products /categories /brands /price_changes),
       icon: "hero-archive-box-solid"
 
-    group "Settings", ~w(/users /browser_sessions), icon: "hero-cog-8-tooth-solid"
+    group "Settings", ~w(/users /stores /browser_sessions), icon: "hero-cog-8-tooth-solid"
     group "Audit", ~w(/audit_logs), icon: "hero-eye-solid"
     group "Uploads", ~w(/file_objects), icon: "hero-photo-solid"
   end
