@@ -215,14 +215,14 @@ defmodule AshQuick.LiveView.Liveness do
   would leave the socket listening to it and deaf to whichever row took its
   place.
 
-  A bulk action is the case with no other repair: it sends no notifications at
-  all. The rest only defer one, and the deferral is the reason to re-scope here
-  anyway: an action writes its own record, so the notification it publishes does
-  eventually reach a topic this socket holds — but `refetch_window` coalesces
-  it, so for that window the page is scoped to the graph as it was *before* the
-  action. Approving a product from its details page fills `reviewed_by`, a user
-  the page was not holding a moment earlier and would not hear from until the
-  refetch lands.
+  All three publish — a bulk action announces each row it writes exactly as a
+  row action announces its one — so none of them is deaf; each only defers the
+  repair, and the deferral is the reason to re-scope here. An action writes its
+  own record, so the notification it publishes does eventually reach a topic
+  this socket holds — but `refetch_window` coalesces it, so for that window the
+  page is scoped to the graph as it was *before* the action. Approving a product
+  from its details page fills `reviewed_by`, a user the page was not holding a
+  moment earlier and would not hear from until the refetch lands.
 
   This covers the actions AshQuick itself runs. A host QuickView that assigns
   the record from a handler of its own has to call this after it.

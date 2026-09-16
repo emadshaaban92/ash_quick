@@ -23,8 +23,15 @@ defmodule ExampleWeb.LivenessScenarioTest do
   """
   use ExampleWeb.FeatureCase, async: false
 
+  import ExUnit.CaptureLog
+
   alias Example.Accounts.AuditLog
   alias Example.Catalog.{Brand, PriceChange, Product}
+  alias Phoenix.Socket.Broadcast
+
+  # The bulk menu shares its labels with the row menu, so a bulk action is
+  # addressed by the event it pushes rather than by its text.
+  @bulk "a[phx-click*='bulk_action']"
 
   setup do
     # Deleted rather than restored as `nil` on the way out: the key is not in
@@ -105,6 +112,189 @@ defmodule ExampleWeb.LivenessScenarioTest do
       |> log_in(admin)
       |> visit(~p"/products")
       |> assert_has("td", text: later.name)
+    end
+  end
+
+  describe "a bulk action" do
+    test "publishes for every row it wrote, so another page holding them follows", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      first = product(name: "First", actor: admin)
+      second = product(name: "Second", actor: admin)
+
+      # A second page on the same two rows, opened before the action. Nothing
+      # on it is ever clicked, so anything it ends up showing arrived over a
+      # topic.
+      watching =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products")
+        |> assert_has("td", text: "First")
+
+      first_topic = watch(first)
+      second_topic = watch(second)
+
+      conn
+      |> log_in(admin)
+      |> visit(~p"/products")
+      |> tick_rows([first.id, second.id])
+      |> click_link(@bulk, "Deactivate")
+      |> assert_has("tr[id='#{first.id}'].opacity-50")
+
+      # One publication per row written, the same as a row action's — a bulk
+      # write is a write, and a page holding the row has no way to tell which
+      # menu it came from.
+      assert_receive %Broadcast{topic: ^first_topic, payload: %Ash.Notifier.Notification{}}
+      assert_receive %Broadcast{topic: ^second_topic, payload: %Ash.Notifier.Notification{}}
+
+      watching
+      |> assert_has("tr[id='#{first.id}'].opacity-50")
+      |> assert_has("tr[id='#{second.id}'].opacity-50")
+    end
+
+    test "publishes for a destroy too", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      first = product(name: "First", actor: admin)
+      second = product(name: "Second", actor: admin)
+
+      first_topic = watch(first)
+      second_topic = watch(second)
+
+      conn
+      |> log_in(admin)
+      |> visit(~p"/products")
+      |> tick_rows([first.id, second.id])
+      |> click_link(@bulk, "Delete")
+      |> refute_has("td", text: "First")
+
+      assert_receive %Broadcast{topic: ^first_topic, payload: %Ash.Notifier.Notification{}}
+      assert_receive %Broadcast{topic: ^second_topic, payload: %Ash.Notifier.Notification{}}
+    end
+
+    # The failure below is a forged `:reprice` rather than the optimistic lock,
+    # and that is a finding rather than a convenience. A selected row that moved
+    # behind the page does not fail a bulk update at all — see the test after
+    # these two. So the only way to watch this clause *fail* is an action that
+    # cannot be built: `:reprice` needs a price, and the bulk endpoint takes
+    # `%{}`. It fails before any row is written, which is the shape every
+    # failure of a derived bulk action has here — a derived action is input-less
+    # and its policy is actor-wide, so nothing refuses row two after row one
+    # went through.
+    test "that fails writes nothing and tells nobody", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      first = product(name: "First", actor: admin)
+      second = product(name: "Second", actor: admin)
+
+      first_topic = watch(first)
+      second_topic = watch(second)
+
+      log =
+        capture_log(fn ->
+          conn
+          |> log_in(admin)
+          |> visit(~p"/products")
+          |> tick_rows([first.id, second.id])
+          |> force_bulk_action(:reprice)
+          # "Unknown Error" is what this clause's existing error handling puts
+          # in the flash — `run_bulk_action/3` passes no `return_errors?`, so
+          # the result carries no errors to describe. Untouched here; the
+          # assertion is that an error flash is shown at all.
+          |> assert_has("#flash-error", text: "Unknown Error")
+        end)
+
+      # `:reprice` writes a `PriceChange` beside the product, so "nothing was
+      # written" covers the action's own trail and not just the column.
+      assert Money.to_string!(Ash.reload!(first, authorize?: false).price) =~ "10"
+      assert Money.to_string!(Ash.reload!(second, authorize?: false).price) =~ "10"
+      assert PriceChange |> Ash.read!(authorize?: false) == []
+
+      # And nothing was announced about either row. A notification for a write
+      # that did not happen is worse than none: every page holding the row
+      # re-reads it to find it unchanged.
+      refute_receive %Broadcast{topic: ^first_topic}
+      refute_receive %Broadcast{topic: ^second_topic}
+
+      refute log =~ "Missed"
+    end
+
+    test "that fails leaves nothing queued for the next action to send", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      first = product(name: "First", actor: admin)
+      second = product(name: "Second", actor: admin)
+      unrelated = product(name: "Unrelated", actor: admin)
+
+      first_topic = watch(first)
+      second_topic = watch(second)
+      unrelated_topic = watch(unrelated)
+
+      log =
+        capture_log(fn ->
+          conn
+          |> log_in(admin)
+          |> visit(~p"/products")
+          |> tick_rows([first.id, second.id])
+          |> force_bulk_action(:reprice)
+          |> assert_has("#flash-error", text: "Unknown Error")
+          # A notification held back rather than dropped sits in the LiveView's
+          # own state, and the next thing that process sends carries it out. So
+          # the page goes on to do something that does publish.
+          |> force_row_action(unrelated.id, :deactivate)
+        end)
+
+      assert_receive %Broadcast{topic: ^unrelated_topic, payload: %Ash.Notifier.Notification{}}
+
+      refute_receive %Broadcast{topic: ^first_topic}
+      refute_receive %Broadcast{topic: ^second_topic}
+
+      refute log =~ "Missed"
+
+      refute Ash.reload!(unrelated, authorize?: false).active
+    end
+
+    # Recording what `transaction: :all` does and does not cover, because the
+    # obvious way to fail a bulk Deactivate turns out not to fail it.
+    #
+    # `Product` is versioned, so a selected row moved behind the page is one the
+    # optimistic lock's filter no longer matches. A single-row update raises
+    # `StaleRecord` on that; a bulk update writes zero rows and calls it a
+    # success, so the batch comes back `:success`, the other row is committed,
+    # and the moved row is silently left alone. Nothing rolls back because
+    # nothing errored.
+    #
+    # This is not what this test file is about and not what the notification
+    # change alters — it is here so the next reader does not spend the afternoon
+    # I did looking for the failure. What liveness has to get right either way
+    # is the last assertion: the row that was written publishes, and the row
+    # that was not stays quiet.
+    test "over a row that moved behind the page skips it rather than failing", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      first = product(name: "First", actor: admin)
+      second = product(name: "Second", actor: admin)
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products")
+        |> tick_rows([first.id, second.id])
+
+      move_behind_the_view(second)
+
+      first_topic = watch(first)
+      second_topic = watch(second)
+
+      session
+      |> click_link(@bulk, "Deactivate")
+      |> refute_has("#flash-error")
+
+      refute Ash.reload!(first, authorize?: false).active
+      assert Ash.reload!(second, authorize?: false).active
+
+      assert_receive %Broadcast{topic: ^first_topic, payload: %Ash.Notifier.Notification{}}
+      refute_receive %Broadcast{topic: ^second_topic}
     end
   end
 
@@ -228,6 +418,27 @@ defmodule ExampleWeb.LivenessScenarioTest do
 
       assert shared == []
     end
+  end
+
+  # Bumps the version column and tells nobody, which leaves the row the page is
+  # holding a copy the optimistic lock no longer matches.
+  #
+  # A real `Ash.update!` would move the row too, but not past this page: the
+  # file zeroes `:refetch_window`, so the notification that write publishes
+  # reaches the page before the next click does and the page refetches itself
+  # back into step. `Ash.Seed` runs no action, so it fires no notification — the
+  # same reason `rename_behind_the_view/1` uses it.
+  defp move_behind_the_view(record) do
+    Ash.Seed.update!(record, %{version: record.version + 1})
+  end
+
+  # Subscribes the test process to one record's topic — the same topic a page
+  # holding that row listens on, derived through `AshQuick.Topics` rather than
+  # spelled out, for the reason that module exists.
+  defp watch(%resource{id: id}) do
+    topic = AshQuick.Topics.record(resource, id)
+    :ok = ExampleWeb.Endpoint.subscribe(topic)
+    topic
   end
 
   # Writes the column and tells nobody. Ash's notifications come from the

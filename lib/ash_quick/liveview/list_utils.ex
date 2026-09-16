@@ -455,9 +455,12 @@ defmodule AshQuick.LiveView.ListUtils do
       authorize?: true,
       strategy: :stream,
       transaction: :all,
-      stop_on_error?: true
-      # For now notify seems to cause issues when the action fails
-      # notify?: true
+      stop_on_error?: true,
+      # One publication per row written, so a page holding a row hears about a
+      # bulk write as it does a row action's. A batch that errors is rolled back
+      # whole by `transaction: :all` and publishes nothing, so nothing is
+      # announced that was then undone.
+      notify?: true
     )
   end
 
