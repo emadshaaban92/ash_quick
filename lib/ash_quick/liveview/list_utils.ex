@@ -455,9 +455,12 @@ defmodule AshQuick.LiveView.ListUtils do
       authorize?: true,
       strategy: :stream,
       transaction: :all,
-      stop_on_error?: true
-      # For now notify seems to cause issues when the action fails
-      # notify?: true
+      stop_on_error?: true,
+      # One publication per row written, so a page holding a row hears about a
+      # bulk write as it does a row action's. A batch that errors is rolled back
+      # whole by `transaction: :all` and publishes nothing, so nothing is
+      # announced that was then undone.
+      notify?: true
     )
   end
 
@@ -514,7 +517,7 @@ defmodule AshQuick.LiveView.ListUtils do
       |> Stream.filter(&(&1.type == :update))
       |> Stream.filter(&(Ash.Resource.Info.action_inputs(resource, &1.name) |> Enum.empty?()))
       |> Enum.concat(Ash.Resource.Info.actions(resource) |> Enum.filter(&(&1.type == :destroy)))
-      |> Enum.filter(&Ash.can?({resource, &1.name}, scope, log_policy_breakdown?: false))
+      |> Enum.filter(&AshQuick.can?({resource, &1.name}, scope, :ash_quick_list_bulk))
       |> Enum.map(
         &%{
           title: &1.name |> Utils.humanize(),
