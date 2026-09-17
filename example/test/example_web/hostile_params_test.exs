@@ -376,6 +376,42 @@ defmodule ExampleWeb.HostileParamsTest do
       assert html =~ "Four-season tent"
     end
 
+    # A write action named on a shape that does not serve it. Each of these
+    # reached `do_handle_params/4` with no clause — except the last, which
+    # matched the update clause on a nil id and blamed the visitor's
+    # permissions for the record it then could not read.
+    test "an action the shape does not serve is not found either", %{conn: conn, admin: admin} do
+      product = product(name: "Four-season tent", actor: admin)
+
+      for url <- [
+            ~p"/products/#{product.id}?action=create",
+            ~p"/products/#{product.id}?action=quick_add",
+            ~p"/products?action=destroy",
+            ~p"/products/create?action=update"
+          ] do
+        {:ok, view, _html} = live(conn, url)
+
+        assert render(view) =~ "404"
+        assert page_action(view) == nil
+      end
+    end
+
+    # The negatives for the same clauses: each shape still serves what it is for.
+    test "while each shape still serves the action it is for", %{conn: conn, admin: admin} do
+      product = product(name: "Four-season tent", actor: admin)
+
+      for {url, action} <- [
+            {~p"/products", :index},
+            {~p"/products/create", :create},
+            {~p"/products/#{product.id}", :read},
+            {~p"/products/#{product.id}/update", :update}
+          ] do
+        {:ok, view, _html} = live(conn, url)
+
+        assert page_action(view) == action
+      end
+    end
+
     # `?action=` on a details URL names a route that *does* exist, so rewriting
     # it to `/products/<id>/update` would land somewhere real. It is still left
     # alone: a path the host linked to deliberately is not this function's to

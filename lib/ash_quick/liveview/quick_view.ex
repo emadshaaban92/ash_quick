@@ -791,20 +791,26 @@ defmodule AshQuick.LiveView.QuickView do
   defp params_for_shape(%URLParams{} = params, _live_action),
     do: %URLParams{params | id: nil}
 
-  # `?action=` can name any read the resource has, including one never shaped to
-  # be listed through. `Lookup.Contract` is what a list needs of a read, and
-  # what `Options` already holds a declared `default_action` to; asking it of
-  # the action a URL named is the same check at the only moment the name is
-  # known. Details and form shapes neither page nor search, so neither is asked.
+  # The four combinations `do_handle_params/4` serves, mirrored: a URL naming
+  # any other pairing of shape and action resolves to no action rather than
+  # reaching a clause that is not there. The list's read is held to
+  # `Lookup.Contract` on top — what a list needs of a read, and what `Options`
+  # already holds a declared `default_action` to while the page compiles.
   defp resolved_action(resource, action_name, %URLParams{id: nil}) do
     case Ash.Resource.Info.action(resource, action_name) do
-      %Actions.Read{} = action -> if listable?(resource, action), do: action
-      action -> action
+      %Actions.Read{get?: false} = action -> if listable?(resource, action), do: action
+      %Actions.Create{} = action -> action
+      _ -> nil
     end
   end
 
-  defp resolved_action(resource, action_name, %URLParams{}),
-    do: Ash.Resource.Info.action(resource, action_name)
+  defp resolved_action(resource, action_name, %URLParams{}) do
+    case Ash.Resource.Info.action(resource, action_name) do
+      %Actions.Read{} = action -> action
+      %Actions.Update{} = action -> action
+      _ -> nil
+    end
+  end
 
   defp listable?(resource, %Actions.Read{} = action) do
     AshQuick.Lookup.Contract.check(
