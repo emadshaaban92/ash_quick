@@ -76,11 +76,14 @@ defmodule ExampleWeb.DetailsScenarioTest do
       # And `AuditLog` composes two of its own columns into one. The calculation
       # runs in SQL, so it joins the stored atoms as they sit — the list page's
       # humanized "Create" is a render-time nicety the title does not share.
+      #
+      # Named by its action rather than taken off the front of the trail: the
+      # reprice above left a second entry, and an unsorted read returns the two
+      # of them in whatever order Postgres finds them.
       entry =
         AuditLog
-        |> Ash.Query.filter(resource_id == ^product.id)
-        |> Ash.read!(authorize?: false)
-        |> hd()
+        |> Ash.Query.filter(resource_id == ^product.id and action_name == :create)
+        |> Ash.read_one!(authorize?: false)
 
       conn
       |> log_in(admin)

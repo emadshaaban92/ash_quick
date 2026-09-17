@@ -269,9 +269,13 @@ defmodule ExampleWeb.FormScenarioTest do
     |> Ash.read_one!(authorize?: false)
   end
 
+  # Sorted: the caller asserts this as a list, and a read that names no sort is
+  # returned in whatever order Postgres finds the rows. `AuditLog` has a
+  # `uuid_v7` primary key, so `id: :asc` is the order the writes happened in.
   defp audited_actions(record_id) do
     Example.Accounts.AuditLog
     |> Ash.Query.filter(resource_id == ^record_id)
+    |> Ash.Query.sort(id: :asc)
     |> Ash.read!(authorize?: false)
     |> Enum.map(& &1.action_name)
   end
