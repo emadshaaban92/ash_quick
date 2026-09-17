@@ -225,11 +225,13 @@ defmodule ExampleWeb.TenancyScenarioTest do
       assert entry.tenant == north.id
 
       # And a write with no store behind it records none rather than guessing.
+      # Read as the one entry it is rather than the first of an unsorted read:
+      # the platform's tent is only ever created, so a second entry here is a
+      # setup that changed under the test rather than a row to pick between.
       platform_entry =
         AuditLog
         |> Ash.Query.filter(resource_id == ^ctx.platform_tent.id)
-        |> Ash.read!(authorize?: false)
-        |> hd()
+        |> Ash.read_one!(authorize?: false)
 
       assert is_nil(platform_entry.tenant)
     end

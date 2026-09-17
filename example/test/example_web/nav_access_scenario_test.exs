@@ -237,9 +237,16 @@ defmodule ExampleWeb.NavAccessScenarioTest do
 
       # Every write in `setup` ran as the admin through a real action, so the
       # trail is the other rendering of the same permission story.
+      #
+      # Sorted because the assertion below is about the order the writes
+      # happened in, and a read that names no sort is returned in whatever
+      # order Postgres finds the rows. `AuditLog` has a `uuid_v7` primary key,
+      # so `id: :asc` *is* write order — the same sort `AshQuick.AuditTest`
+      # reads its trail under.
       trail =
         AuditLog
         |> Ash.Query.filter(resource_id == ^product.id)
+        |> Ash.Query.sort(id: :asc)
         |> Ash.read!(authorize?: false, load: [:actor])
 
       assert Enum.map(trail, & &1.action_name) == [:create, :reprice]
