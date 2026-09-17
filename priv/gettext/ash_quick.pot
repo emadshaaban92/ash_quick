@@ -417,3 +417,8 @@ msgstr ""
 msgctxt "query builder"
 msgid "Filter"
 msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "No results on this page, of %{count} in total"
+msgstr ""
