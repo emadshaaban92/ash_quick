@@ -137,6 +137,25 @@ defmodule ExampleWeb.ListScenarioTest do
       |> refute_has("td", text: "Tent 5")
     end
 
+    # The pager builds every one of its links off the current page, so it has to
+    # be clamped too — otherwise two of the four lead to another page past the
+    # end, and `98` is drawn as though it were one.
+    test "and its pager offers only pages that exist", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products?limit=2&page=99")
+        |> refute_has(".join a", text: "98")
+
+      # The last page is where a visitor sent past the end actually is.
+      session
+      |> assert_has(".join a[aria-current='page']", text: "3")
+      |> click_link(".join a", "1")
+      |> assert_has("td", text: "Tent 1")
+    end
+
     # The boundary of that condition: no rows and no count is not a page past the
     # end, it is an empty result set, and the arithmetic was never wrong there.
     test "a result set with nothing in it is not treated as a page past the end", ctx do

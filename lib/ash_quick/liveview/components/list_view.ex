@@ -187,10 +187,13 @@ defmodule AshQuick.LiveView.Components.ListView do
             </div>
           </.form>
 
+          <%!-- Clamped here rather than in the query: the pager's links are all
+          built off it, so a page past the last would otherwise offer two more
+          of them and draw `98` as though it were a page. --%>
           <.footer
             meta={@meta}
             path_for_page={@path_for_page}
-            current_page={@current_page}
+            current_page={min(@current_page, @pages_count)}
             pages_count={@pages_count}
           />
         </div>
