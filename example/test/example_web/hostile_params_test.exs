@@ -260,6 +260,39 @@ defmodule ExampleWeb.HostileParamsTest do
       end
     end
 
+    # `/create` carries no `:id` segment, and `action_from_params/3` had no
+    # clause for the combination — a stray param on a link exited the mount.
+    test "and an id it has nowhere to put is ignored rather than fatal", %{
+      conn: conn,
+      admin: admin
+    } do
+      product = product(name: "Four-season tent", actor: admin)
+
+      for url <- [
+            ~p"/products/create?id=#{product.id}",
+            ~p"/products/create?action=quick_add&id=#{product.id}"
+          ] do
+        {:ok, view, html} = live(conn, url)
+
+        assert html =~ "phx-submit"
+        # Dropped, not merely unused: a create form has no record to name.
+        assert page_id(view) == nil
+      end
+    end
+
+    # And dropping it is what carries it out of the address bar too.
+    test "and that id is gone from the URL the visitor is left looking at", %{
+      conn: conn,
+      admin: admin
+    } do
+      product = product(name: "Four-season tent", actor: admin)
+
+      {:ok, view, _html} = live(conn, ~p"/products")
+
+      assert assert_patch(navigate(view, "/products/create?id=#{product.id}")) ==
+               "/products/create"
+    end
+
     # The negative that matters most here: the corrected URL is one the page
     # will not correct again. Every patch is another request, so a create path
     # that did not compare equal to itself would not be a cosmetic bug — it
@@ -306,6 +339,43 @@ defmodule ExampleWeb.HostileParamsTest do
       assert refute_patched(navigate(view, "/products/create?action=quick_add&limit=abc")) == :ok
     end
 
+    # `?action=` can name any read the resource has. A stock `read` takes no
+    # search argument, and used to raise from inside `handle_params/3`.
+    test "a read the list cannot be driven through is not found, not a crash", %{
+      conn: conn,
+      admin: admin
+    } do
+      product(name: "Four-season tent", actor: admin)
+
+      {:ok, view, _html} = live(conn, ~p"/products?action=read")
+
+      assert render(view) =~ "404"
+      # The same answer a name the resource does not define gets.
+      assert page_action(view) == nil
+    end
+
+    # The negative that matters: the guard is the lookup contract, not "a read
+    # named in the query".
+    test "and the list's own read still lists when the query names it", %{
+      conn: conn,
+      admin: admin
+    } do
+      product(name: "Four-season tent", actor: admin)
+
+      {:ok, _view, html} = live(conn, ~p"/products?action=index")
+
+      assert html =~ "Four-season tent"
+    end
+
+    # Nor is the contract asked of a shape that neither pages nor searches.
+    test "while the same read still serves a details URL", %{conn: conn, admin: admin} do
+      product = product(name: "Four-season tent", actor: admin)
+
+      {:ok, _view, html} = live(conn, ~p"/products/#{product.id}?action=read")
+
+      assert html =~ "Four-season tent"
+    end
+
     # `?action=` on a details URL names a route that *does* exist, so rewriting
     # it to `/products/<id>/update` would land somewhere real. It is still left
     # alone: a path the host linked to deliberately is not this function's to
@@ -346,8 +416,13 @@ defmodule ExampleWeb.HostileParamsTest do
 
   defp encode_filter(filter), do: filter |> JSON.encode!() |> :base64.encode()
 
+  # `nil` where the URL named an action this page cannot serve, which is the
+  # assign the not-found render matches on.
   defp page_action(view) do
-    :sys.get_state(view.pid).socket.assigns.ash_action.name
+    case :sys.get_state(view.pid).socket.assigns.ash_action do
+      nil -> nil
+      action -> action.name
+    end
   end
 
   defp page_id(view) do

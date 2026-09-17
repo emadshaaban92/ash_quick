@@ -401,9 +401,9 @@ defmodule AshQuick.LiveView.QuickView do
 
         if connected?(socket) do
           uri = URI.parse(url)
-          params = URLParams.from_url_params(params)
-          action_name = QuickView.action_from_params(params, @options, socket.assigns.live_action)
-          ash_action = Ash.Resource.Info.action(@options.resource, action_name)
+
+          {params, ash_action} = QuickView.resolve(params, @options, socket.assigns.live_action)
+
           base_path = QuickView.base_path!(socket, uri)
 
           socket =
@@ -419,9 +419,9 @@ defmodule AshQuick.LiveView.QuickView do
             |> assign(:resource, @options.resource)
             |> assign(:ash_action, ash_action)
 
-          # A URL naming an action the resource does not have resolves to no
-          # action at all; it renders as not found rather than being handed to
-          # callbacks that all expect one.
+          # A URL naming an action this page cannot serve — a name the resource
+          # lacks, or a read it cannot list through — resolves to none at all,
+          # and renders as not found rather than reaching the callbacks.
           socket =
             if ash_action do
               socket
@@ -762,6 +762,56 @@ defmodule AshQuick.LiveView.QuickView do
   def do_render(assigns, _, _) do
     assigns
     |> AshQuick.LiveView.Components.FormView.form_view()
+  end
+
+  @doc """
+  What this page will serve for a URL: the params it renders from, and the
+  action it renders them through.
+
+  The action is `nil` where the URL named one this page cannot serve, which is
+  what the generated `render/1` renders not found for.
+  """
+  def resolve(url_params, %Options{} = options, live_action) do
+    params =
+      url_params
+      |> URLParams.from_url_params()
+      |> params_for_shape(live_action)
+
+    action_name = action_from_params(params, options, live_action)
+
+    {params, resolved_action(options.resource, action_name, params)}
+  end
+
+  # `/create` is the only shape `quick_view/3` declares with a `live_action`,
+  # and the only one whose path holds no `:id` — so an `?id=` there names
+  # nothing. Dropped rather than refused, and dropping it is also what carries
+  # it out of the canonicalized URL.
+  defp params_for_shape(%URLParams{} = params, nil), do: params
+
+  defp params_for_shape(%URLParams{} = params, _live_action),
+    do: %URLParams{params | id: nil}
+
+  # `?action=` can name any read the resource has, including one never shaped to
+  # be listed through. `Lookup.Contract` is what a list needs of a read, and
+  # what `Options` already holds a declared `default_action` to; asking it of
+  # the action a URL named is the same check at the only moment the name is
+  # known. Details and form shapes neither page nor search, so neither is asked.
+  defp resolved_action(resource, action_name, %URLParams{id: nil}) do
+    case Ash.Resource.Info.action(resource, action_name) do
+      %Actions.Read{} = action -> if listable?(resource, action), do: action
+      action -> action
+    end
+  end
+
+  defp resolved_action(resource, action_name, %URLParams{}),
+    do: Ash.Resource.Info.action(resource, action_name)
+
+  defp listable?(resource, %Actions.Read{} = action) do
+    AshQuick.Lookup.Contract.check(
+      resource,
+      action.name,
+      AshQuick.Info.lookup_search_argument(resource)
+    ) == :ok
   end
 
   def action_from_params(%URLParams{action: action}, _config, _live_action)
