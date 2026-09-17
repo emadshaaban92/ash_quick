@@ -13,6 +13,8 @@ defmodule ExampleWeb.HostileParamsTest do
   """
   use ExampleWeb.ConnCase, async: true
 
+  import ExUnit.CaptureLog
+
   setup %{conn: conn, admin: admin} do
     {:ok, conn: log_in(conn, admin)}
   end
@@ -103,6 +105,21 @@ defmodule ExampleWeb.HostileParamsTest do
 
       assert assert_patch(navigate(view, "/products?custom_filter=#{refused_filter()}")) ==
                "/products"
+    end
+
+    # The flash names the filter whatever actually raised, so without this a
+    # read that merely failed once leaves no trace but a wrong explanation.
+    test "and the error behind it is logged rather than discarded", %{conn: conn, admin: admin} do
+      product(name: "Four-season tent", actor: admin)
+
+      log =
+        capture_log(fn ->
+          {:ok, _view, _html} = live(conn, ~p"/products?custom_filter=#{refused_filter()}")
+        end)
+
+      assert log =~ "No such field no_such_field"
+      # And the filter it fired on, which the flash deliberately does not name.
+      assert log =~ ~s(field_name: "no_such_field")
     end
 
     # The second way a filter fails, and the one that is not only a hostile-URL
