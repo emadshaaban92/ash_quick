@@ -1,6 +1,7 @@
 defmodule AshQuick.LiveView.ListUtils do
   @moduledoc false
   require Ash.Query
+  require Logger
   import Phoenix.LiveView
   import Phoenix.Component, only: [assign: 2, assign: 3]
   alias Phoenix.LiveView.JS
@@ -133,6 +134,17 @@ defmodule AshQuick.LiveView.ListUtils do
   # `filters` and `sort_by` are the host's own, and a bug in one should keep
   # raising loudly rather than become a flash a visitor can do nothing about.
   #
+  # Only the first of those two is recognisable. An uncastable value reaches us
+  # as an `Ash.Error.Unknown` whose `:error` is the data layer's
+  # `Ecto.Query.CastError` already rendered to a string — the same struct a bug
+  # in the read produces, so there is nothing to tell them apart. What the
+  # rescue can say is that the error came from the read at all:
+  # `ash_error?/1` lets a raise out of `load_data!/3`'s own pipeline keep
+  # raising instead of being reported as the visitor's filter.
+  #
+  # Rescued either way means the flash can be wrong — a read that fails once and
+  # succeeds on the retry gets it too — so the error is logged before the retry.
+  #
   # The page is handed to `keep_live/4` as `:initial`, so this is the render's
   # one read rather than a probe in front of another one. Refetches re-run the
   # closure below, which closes over the corrected params.
@@ -142,11 +154,29 @@ defmodule AshQuick.LiveView.ListUtils do
   defp initial_read(socket, %URLParams{} = params, %Options{} = options) do
     {socket, params, load_data!(socket, params, options)}
   rescue
-    _ ->
-      params = %URLParams{params | custom_filter: nil}
+    error ->
+      if Ash.Error.ash_error?(error) do
+        retry_without_filter(socket, params, options, error)
+      else
+        reraise error, __STACKTRACE__
+      end
+  end
 
-      {put_flash(socket, :error, @refused_filter_message), params,
-       load_data!(socket, params, options)}
+  defp retry_without_filter(socket, %URLParams{} = params, %Options{} = options, error) do
+    Logger.warning("""
+    AshQuick is re-reading #{inspect(options.resource)} without the custom \
+    filter the URL carried, which raised. The visitor will be told the filter \
+    was refused, whether or not that is what this error means.
+
+    Filter: #{inspect(params.custom_filter)}
+
+    #{Exception.format(:error, error)}\
+    """)
+
+    params = %URLParams{params | custom_filter: nil}
+
+    {put_flash(socket, :error, @refused_filter_message), params,
+     load_data!(socket, params, options)}
   end
 
   defp maybe_apply_sort(query, nil), do: query
