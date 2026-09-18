@@ -187,10 +187,13 @@ defmodule AshQuick.LiveView.Components.ListView do
             </div>
           </.form>
 
+          <%!-- Clamped here rather than in the query: the pager's links are all
+          built off it, so a page past the last would otherwise offer two more
+          of them and draw `98` as though it were a page. --%>
           <.footer
             meta={@meta}
             path_for_page={@path_for_page}
-            current_page={@current_page}
+            current_page={min(@current_page, @pages_count)}
             pages_count={@pages_count}
           />
         </div>
@@ -574,12 +577,18 @@ defmodule AshQuick.LiveView.Components.ListView do
       <%!-- One message rather than text wrapped around two emphasised spans:
       a translator needs the whole sentence to order it, and the emphasis cannot
       survive being cut into fragments that no longer sit in that order. --%>
+      <%!-- `min/2` clamps the arithmetic but nothing clamps the query, so a page
+      past the last read "Showing 5-5 of 5" over an empty table. --%>
       <span class="text-sm text-base-content/70">
-        {gettext("Showing %{from}-%{to} of %{count}",
-          from: min(@meta.offset + 1, @meta.count),
-          to: min(@meta.offset + @meta.limit, @meta.count),
-          count: @meta.count
-        )}
+        {if @meta.results == [] and @meta.count > 0 do
+          gettext("No results on this page, of %{count} in total", count: @meta.count)
+        else
+          gettext("Showing %{from}-%{to} of %{count}",
+            from: min(@meta.offset + 1, @meta.count),
+            to: min(@meta.offset + @meta.limit, @meta.count),
+            count: @meta.count
+          )
+        end}
       </span>
       <div :if={@meta.count > @meta.limit} class="join">
         <.link

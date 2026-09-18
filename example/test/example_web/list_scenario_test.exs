@@ -122,27 +122,49 @@ defmodule ExampleWeb.ListScenarioTest do
       |> assert_has("td", text: "Tent 1")
     end
 
-    # KNOWN ISSUE — a page past the last renders an empty table under a footer
-    # that claims a row. With five records at `limit=2` the last page is 3;
-    # `page=4` and beyond produce no rows at all, while the footer still reads
-    # "Showing 5-5 of 5" because `min(offset + 1, count)` clamps the arithmetic
-    # and nothing clamps the query.
-    #
-    # `AshQuick.LiveView.URLParams` clamps a page against a row ceiling, which
-    # it can do at decode time, but not against the count — which is only known
-    # after the read. So the fix belongs in the list read, not in the decoder.
-    # The assertion below is what a QuickView already promises: "nothing in a
-    # query string is refused, and the URL is then corrected to say what the
-    # page actually did".
-    @tag :skip
-    test "a page past the end is the last one there is, not an empty table", ctx do
+    # `min(offset + 1, count)` clamps the footer's arithmetic and nothing clamps
+    # the query, so this page once read "Showing 5-5 of 5" over no rows at all.
+    # Only reachable by typing a URL — the pager never offers a page past the
+    # last, which the test below is the other half of.
+    test "a page past the end says it is empty rather than claiming a row", ctx do
       %{conn: conn, admin: admin} = ctx
 
       conn
       |> log_in(admin)
       |> visit(~p"/products?limit=2&page=99")
-      |> assert_has("*", text: "Showing 5-5 of 5")
-      |> assert_has("td", text: "Tent 5")
+      |> assert_has("*", text: "No results on this page, of 5 in total")
+      |> refute_has("*", text: "Showing 5-5 of 5")
+      |> refute_has("td", text: "Tent 5")
+    end
+
+    # The pager builds every one of its links off the current page, so it has to
+    # be clamped too — otherwise two of the four lead to another page past the
+    # end, and `98` is drawn as though it were one.
+    test "and its pager offers only pages that exist", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products?limit=2&page=99")
+        |> refute_has(".join a", text: "98")
+
+      # The last page is where a visitor sent past the end actually is.
+      session
+      |> assert_has(".join a[aria-current='page']", text: "3")
+      |> click_link(".join a", "1")
+      |> assert_has("td", text: "Tent 1")
+    end
+
+    # The boundary of that condition: no rows and no count is not a page past the
+    # end, it is an empty result set, and the arithmetic was never wrong there.
+    test "a result set with nothing in it is not treated as a page past the end", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      conn
+      |> log_in(admin)
+      |> visit(~p"/products?search=nothing-matches-this")
+      |> assert_has("*", text: "Showing 0-0 of 0")
     end
 
     test "every page the pager itself offers has the rows its footer claims", ctx do
