@@ -102,6 +102,7 @@ defmodule AshQuick.MixProject do
         ".formatter.exs",
         "mix.exs",
         "README.md",
+        "CHANGELOG.md",
         "LICENSE"
       ]
     ]
@@ -110,7 +111,7 @@ defmodule AshQuick.MixProject do
   defp docs do
     [
       main: "readme",
-      extras: ["README.md", "usage-rules.md"]
+      extras: ["README.md", "CHANGELOG.md", "usage-rules.md"]
     ]
   end
 end

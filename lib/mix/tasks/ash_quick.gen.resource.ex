@@ -120,7 +120,7 @@ if Code.ensure_loaded?(Igniter) do
     # listed for a resource that has already asked for it.
     defp activation_column(resource) do
       if AshQuick.Info.activation?(resource) do
-        [{:active, "boolean, default true — from the declared `activation`"}]
+        [{:active, "boolean, not null, default true — from the declared `activation`"}]
       else
         []
       end
