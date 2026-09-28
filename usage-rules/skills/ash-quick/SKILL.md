@@ -454,7 +454,7 @@ the extension and names the columns it will cost.
 | `version` (integer, default `1`) | always, unless versioning is disabled |
 | `created_at`, `updated_at` (`utc_datetime_usec`, `always_select?`) | unless declared `false` |
 | `created_by_id`, `updated_by_id` (FKs to the configured `:actor_resource`) | unless declared `false` |
-| `active` (boolean, default `true`) | only when `activation` is declared |
+| `active` (boolean, NOT NULL, default `true`) | only when `activation` is declared |
 
 Every one is **add-if-absent**: a resource that already defines the attribute
 or the relationship keeps exactly what it wrote, and

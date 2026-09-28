@@ -38,8 +38,10 @@ defmodule AshQuick.Activation.Transformer do
     Transformer.get_option(dsl_state, [:ash_quick, :activation], option, default)
   end
 
-  # `allow_nil?` is left at its default: the column these resources already
-  # carry is nullable, and narrowing it here would be a migration.
+  # NOT NULL, because nothing in AshQuick means a third state: the dropdowns
+  # would hide a `nil` row as inactive while the row actions offered it both
+  # `:activate` and `:deactivate`. A resource defining its own attribute is
+  # skipped, so its own `allow_nil?` stands.
   defp add_attribute_if_not_exists(dsl_state, name) do
     if Info.attribute(dsl_state, name) do
       dsl_state
@@ -49,6 +51,7 @@ defmodule AshQuick.Activation.Transformer do
           name: name,
           type: :boolean,
           default: true,
+          allow_nil?: false,
           public?: true,
           always_select?: true
         )

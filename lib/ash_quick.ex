@@ -145,10 +145,17 @@ defmodule AshQuick do
         end
       end
 
-  Declaring it adds an `:active` boolean attribute defaulting to `true`, and
-  the `:activate` / `:deactivate` update actions that set it — each only when
-  the resource does not define one itself, so a hand-written `:deactivate` with
-  its own changes and publications stays as written.
+  Declaring it adds an `:active` boolean attribute — NOT NULL, defaulting to
+  `true` — and the `:activate` / `:deactivate` update actions that set it —
+  each only when the resource does not define one itself, so a hand-written
+  `:deactivate` with its own changes and publications stays as written, and a
+  resource's own `:active` keeps its own `allow_nil?`.
+
+  The attribute is NOT NULL because a record is either active or not: the
+  dropdowns withhold anything but `active == true`, while the row actions
+  would offer a `nil` record both `:activate` and `:deactivate`. A host whose
+  existing `:active` column is nullable gets a migration setting it NOT NULL,
+  which fails while any row holds `NULL` — backfill those first.
 
   Four things follow from the declaration. An inactive row is dimmed in the
   list view; it is filtered out of BelongsTo and HasMany dropdowns, so it can

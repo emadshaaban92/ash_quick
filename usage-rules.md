@@ -34,9 +34,9 @@ Three things bite hardest, and each is cheapest to know before you write the
 resource rather than after.
 
 **`extensions: [AshQuick]` adds columns, so it needs a migration.** `version`,
-`created_at`, `updated_at`, `created_by_id`, `updated_by_id` — and `active` if
-activation is declared. All add-if-absent: a resource that already defines one
-keeps what it wrote.
+`created_at`, `updated_at`, `created_by_id`, `updated_by_id` — and `active`, NOT
+NULL, if activation is declared. All add-if-absent: a resource that already
+defines one keeps what it wrote.
 
 **Versioning is on by default.** Every `:update` and `:destroy` is filtered on
 the `version` the actor loaded and bumps it, which forces `require_atomic?
