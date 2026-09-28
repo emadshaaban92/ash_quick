@@ -15,6 +15,6 @@ defmodule AshQuick.Test.Gen.Named do
   attributes do
     uuid_primary_key :id
     attribute :name, :string, public?: true
-    attribute :created_at, :utc_datetime_usec, public?: true
+    attribute :inserted_at, :utc_datetime_usec, public?: true
   end
 end

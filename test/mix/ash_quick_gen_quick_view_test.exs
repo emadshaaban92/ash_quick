@@ -96,7 +96,7 @@ defmodule Mix.Tasks.AshQuick.Gen.QuickViewTest do
       source = created(widget(), @quick)
 
       assert source =~ "fields: [:sku, :name]"
-      assert source =~ "fields: [:sku, :name, :created_at, :updated_at]"
+      assert source =~ "fields: [:sku, :name, :inserted_at, :updated_at]"
 
       refute source =~ ":version"
       refute source =~ ":created_by_id"

@@ -62,7 +62,7 @@ defmodule AshQuick.VersioningVerifierTest do
         # A probe is attributes only, so it carries none of the four bookkeeping
         # fields and has to say so — see `AshQuick.BookkeepingVerifierTest`.
         bookkeeping do
-          created_at false
+          inserted_at false
           updated_at false
           created_by false
           updated_by false

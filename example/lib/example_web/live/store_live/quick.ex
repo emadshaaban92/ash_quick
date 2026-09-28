@@ -13,6 +13,6 @@ defmodule ExampleWeb.StoreLive.Quick do
       new_action_label: "Open a Store"
     ],
     details: [
-      fields: [:code, :name, :active, :created_at, :updated_at]
+      fields: [:code, :name, :active, :inserted_at, :updated_at]
     ]
 end

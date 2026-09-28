@@ -34,7 +34,7 @@ defmodule AshQuick.Bookkeeping.Transformer do
   def transform(dsl_state) do
     {:ok,
      dsl_state
-     |> add_timestamp(:created_at, :create_timestamp)
+     |> add_timestamp(:inserted_at, :create_timestamp)
      |> add_timestamp(:updated_at, :update_timestamp)
      |> add_actor(:created_by)
      |> add_actor(:updated_by)

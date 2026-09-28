@@ -27,7 +27,7 @@ defmodule MyAppWeb.ProductLive.Quick do
       new_action_label: "Add Product"
     ],
     details: [
-      fields: [:code, :name, :description, :price, :quantity, :created_at]
+      fields: [:code, :name, :description, :price, :quantity, :inserted_at]
     ]
 end
 ```
@@ -452,7 +452,7 @@ the extension and names the columns it will cost.
 | Added | When |
 |---|---|
 | `version` (integer, default `1`) | always, unless versioning is disabled |
-| `created_at`, `updated_at` (`utc_datetime_usec`, `always_select?`) | unless declared `false` |
+| `inserted_at`, `updated_at` (`utc_datetime_usec`, `always_select?`) | unless declared `false` |
 | `created_by_id`, `updated_by_id` (FKs to the configured `:actor_resource`) | unless declared `false` |
 | `active` (boolean, NOT NULL, default `true`) | only when `activation` is declared |
 
@@ -476,7 +476,7 @@ bookkeeping and auditing.
 | `lookup` | nothing generated; `action :index`, `search_argument :search` when written | point search at a different read action |
 | `activation` | `enabled? false` | opt into soft-delete: `:active`, `:activate`/`:deactivate` |
 | `versioning` | `enabled? true`, `attribute :version` | turn the optimistic lock **off** |
-| `bookkeeping` | all four fields on: `:created_at` / `:updated_at` / `:created_by` / `:updated_by` | declare a field `false`, or rename it |
+| `bookkeeping` | all four fields on: `:inserted_at` / `:updated_at` / `:created_by` / `:updated_by` | declare a field `false`, or rename it |
 | `audit` | `enabled? true`, store from the configured `:audit_resource` | write elsewhere, exclude actions, or turn it off |
 | `field_restrictions` | none | restrict a field to actors passing a check |
 
@@ -611,7 +611,7 @@ and what to write.
 
   To audit only *some* actions, turn the section off and attach the change by
   hand: `update :do_something do change AshQuick.Audit.Change end`.
-- **Bookkeeping** — all four of `:created_at`, `:updated_at`, `:created_by`,
+- **Bookkeeping** — all four of `:inserted_at`, `:updated_at`, `:created_by`,
   `:updated_by` are on by default; a resource carrying the full set declares
   nothing. Declare a field `false` when the resource genuinely has none — and
   note the verifier checks **both** directions, because a real column left out

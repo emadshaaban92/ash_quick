@@ -225,9 +225,9 @@ defmodule AshQuick do
 
       ash_quick do
         bookkeeping do
-          created_at :created_at   # the default
-          updated_at false         # this resource has no last-write time
-          created_by :created_by   # the default; a relationship, not a column
+          inserted_at :inserted_at   # the default
+          updated_at false           # this resource has no last-write time
+          created_by :created_by     # the default; a relationship, not a column
           updated_by false
         end
       end
@@ -291,15 +291,19 @@ defmodule AshQuick do
   generated form would not reproduce exactly is still written by hand, and the
   verifier will not let the declaration lie about it.
 
-  `:created_at` and `:updated_at` name attributes. `:created_by` and
+  `:inserted_at` and `:updated_at` name attributes. `:created_by` and
   `:updated_by` name **relationships** — the ignore list and any actor lookup
   need the destination, and the source attribute is read off the relationship
   rather than assumed to be `<name>_id`, which is what makes a `belongs_to`
   declared `define_attribute? false` resolve correctly.
 
-  The convention is AshQuick's `:created_at`/`:updated_at`, not Ash's default
-  `:inserted_at`. Declaring it makes that an owned decision rather than an
-  accident of whichever timestamp macro a resource reached for.
+  The timestamps follow Ash's own names — `:inserted_at` and `:updated_at`, what
+  `timestamps()` defines — and the options are named after them, so a resource
+  that already calls `timestamps()` is not given a second pair. Like any
+  hand-written timestamp they still have to be `always_select?`, which
+  `timestamps(always_select?: true)` passes through to both. A resource naming
+  its timestamps otherwise declares the name it uses (`inserted_at
+  :created_at`).
 
   What reads it: `AshQuick.Config.versioning_ignored_attributes/1` and
   `versioning_ignored_relationships/1` are derived per-resource from
@@ -608,9 +612,9 @@ defmodule AshQuick do
     name: :bookkeeping,
     describe: "Declare which bookkeeping fields this resource carries.",
     schema: [
-      created_at: [
+      inserted_at: [
         type: :atom,
-        default: AshQuick.Bookkeeping.Declaration.default(:created_at),
+        default: AshQuick.Bookkeeping.Declaration.default(:inserted_at),
         doc:
           "The attribute holding the creation time, or `false` when the resource has none. Added when the resource does not define it."
       ],

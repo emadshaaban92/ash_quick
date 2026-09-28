@@ -171,7 +171,7 @@ migration:
 |---|---|
 | `version` (integer, default `1`) | always, unless versioning is disabled |
 | `active` (boolean, default `true`) | only when `activation` is declared |
-| `created_at`, `updated_at` (`utc_datetime_usec`, `always_select?`) | unless declared `false` |
+| `inserted_at`, `updated_at` (`utc_datetime_usec`, `always_select?`) | unless declared `false` |
 | `created_by_id`, `updated_by_id` (FKs to `:actor_resource`) | unless declared `false` |
 
 Every one of them is add-if-absent: a resource that already defines the

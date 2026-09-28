@@ -4,7 +4,7 @@ defmodule ExampleWeb.PriceChangeLive.Quick do
   hand, so there is no "New" flow to offer.
 
   Its details page is also the half-bookkeeping case: the resource declares
-  `created_at` / `created_by` and neither of the other two, so the header reads
+  `inserted_at` / `created_by` and neither of the other two, so the header reads
   "Created by X on Y" with no second half.
 
   `:product` is written bare rather than as `{[product: :name], label: ...}`.
@@ -21,7 +21,7 @@ defmodule ExampleWeb.PriceChangeLive.Quick do
         :product,
         :from_price,
         :to_price,
-        :created_at
+        :inserted_at
       ]
     ],
     details: [
@@ -29,7 +29,7 @@ defmodule ExampleWeb.PriceChangeLive.Quick do
         :product,
         :from_price,
         :to_price,
-        :created_at
+        :inserted_at
       ]
     ]
 end

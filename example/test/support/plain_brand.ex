@@ -88,7 +88,7 @@ defmodule Example.Test.PlainBrand do
     end
 
     bookkeeping do
-      created_at false
+      inserted_at false
       created_by false
       updated_at false
       updated_by false

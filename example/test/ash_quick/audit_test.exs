@@ -104,7 +104,7 @@ defmodule AshQuick.AuditTest do
       assert entry.changes["code"] == %{"from" => brand.code}
       assert entry.changes["name"] == %{"from" => brand.name}
       assert entry.changes["id"] == %{"from" => brand.id}
-      assert entry.changes["created_at"]["from"]
+      assert entry.changes["inserted_at"]["from"]
     end
 
     test "an attribute the read did not select is unknown rather than nil", %{admin: admin} do

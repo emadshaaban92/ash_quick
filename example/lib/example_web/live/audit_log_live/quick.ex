@@ -18,7 +18,7 @@ defmodule ExampleWeb.AuditLogLive.Quick do
         {[actor: :name], label: "Actor"},
         {[real_actor: :name], label: "Real actor"},
         :ip,
-        :created_at
+        :inserted_at
       ]
     ],
     details: [
@@ -33,7 +33,7 @@ defmodule ExampleWeb.AuditLogLive.Quick do
         {[actor: :name], label: "Actor"},
         {[real_actor: :name], label: "Real actor"},
         :ip,
-        :created_at
+        :inserted_at
       ]
     ]
 end

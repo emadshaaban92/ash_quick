@@ -68,7 +68,7 @@ defmodule AshQuick.LookupVerifierTest do
 
       ash_quick do
         bookkeeping do
-          created_at false
+          inserted_at false
           updated_at false
           created_by false
           updated_by false

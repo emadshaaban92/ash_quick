@@ -15,17 +15,17 @@ defmodule AshQuick.Bookkeeping.Declaration do
 
   @path [:ash_quick, :bookkeeping]
   @defaults [
-    created_at: :created_at,
+    inserted_at: :inserted_at,
     updated_at: :updated_at,
     created_by: :created_by,
     updated_by: :updated_by
   ]
 
-  # `:created_at` and `:updated_at` name attributes; `:created_by` and
+  # `:inserted_at` and `:updated_at` name attributes; `:created_by` and
   # `:updated_by` name relationships. Split because the verifier looks each
   # one up in a different place, and because the versioning ignore list needs
   # a relationship's *source attribute*, not its name.
-  @timestamps [:created_at, :updated_at]
+  @timestamps [:inserted_at, :updated_at]
   @actors [:created_by, :updated_by]
 
   def defaults, do: @defaults

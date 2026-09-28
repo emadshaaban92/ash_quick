@@ -125,13 +125,13 @@ defmodule AshQuick.BookkeepingVerifierTest do
       assert verifier_errors(body) == []
       module = probe(body)
 
-      created_at = Info.attribute(module, :created_at)
+      inserted_at = Info.attribute(module, :inserted_at)
       updated_at = Info.attribute(module, :updated_at)
 
       # `always_select?` is the point of generating them rather than leaving the
       # convention to each resource: a details header reads these off a record
       # whose select list came from a QuickView's `fields:` option.
-      assert {created_at.public?, created_at.always_select?} == {true, true}
+      assert {inserted_at.public?, inserted_at.always_select?} == {true, true}
       assert {updated_at.public?, updated_at.always_select?} == {true, true}
 
       for field <- [:created_by, :updated_by] do
@@ -193,7 +193,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
         end
         """)
 
-      assert Info.attribute(module, :created_at)
+      assert Info.attribute(module, :inserted_at)
       assert Info.relationship(module, :created_by)
       refute Info.attribute(module, :updated_at)
       refute Info.relationship(module, :updated_by)
@@ -238,7 +238,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
         probe("""
         ash_quick do
           bookkeeping do
-            created_at false
+            inserted_at false
             updated_at false
             updated_by false
           end
@@ -283,7 +283,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
       """
       ash_quick do
         bookkeeping do
-          created_at false
+          inserted_at false
           updated_at false
           updated_by false
           #{declaration}
@@ -348,7 +348,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
         message("""
         ash_quick do
           bookkeeping do
-            created_at false
+            inserted_at false
             created_by false
             updated_by false
           end
@@ -356,16 +356,16 @@ defmodule AshQuick.BookkeepingVerifierTest do
 
         attributes do
           uuid_primary_key :id
-          create_timestamp :created_at, always_select?: true
+          create_timestamp :inserted_at, always_select?: true
         end
         """)
 
       assert message =~
-               "created_at defaults to :created_at, which this resource defines but declares absent"
+               "inserted_at defaults to :inserted_at, which this resource defines but declares absent"
 
       # The suggestion for this direction is to declare it, not to opt out.
-      assert message =~ "created_at :created_at"
-      refute message =~ "created_at false"
+      assert message =~ "inserted_at :inserted_at"
+      refute message =~ "inserted_at false"
     end
 
     test "a hand-written timestamp that is not always_select?" do
@@ -381,11 +381,11 @@ defmodule AshQuick.BookkeepingVerifierTest do
 
         attributes do
           uuid_primary_key :id
-          create_timestamp :created_at
+          create_timestamp :inserted_at
         end
         """)
 
-      assert message =~ "created_at names :created_at, which is not `always_select?: true`"
+      assert message =~ "inserted_at names :inserted_at, which is not `always_select?: true`"
       assert message =~ "add that option to the attribute itself"
     end
 
@@ -395,7 +395,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
           message("""
           ash_quick do
             bookkeeping do
-              created_at false
+              inserted_at false
               updated_at false
               updated_by false
             end
@@ -421,7 +421,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
           message("""
           ash_quick do
             bookkeeping do
-              created_at false
+              inserted_at false
               updated_at false
               updated_by false
             end
@@ -449,7 +449,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
           message("""
           ash_quick do
             bookkeeping do
-              created_at false
+              inserted_at false
               updated_at false
             end
           end
@@ -472,7 +472,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
         assert verifier_errors("""
                ash_quick do
                  bookkeeping do
-                   created_at false
+                   inserted_at false
                    updated_at false
                    created_by false
                    updated_by false
@@ -487,13 +487,37 @@ defmodule AshQuick.BookkeepingVerifierTest do
     end
   end
 
+  describe "Ash's own timestamps()" do
+    test "satisfies the default names, and gets no second pair" do
+      module =
+        probe("""
+        ash_quick do
+          bookkeeping do
+            created_by false
+            updated_by false
+          end
+        end
+
+        attributes do
+          uuid_primary_key :id
+          timestamps(always_select?: true)
+        end
+        """)
+
+      timestamps =
+        for %{type: Ash.Type.UtcDatetimeUsec, name: name} <- Info.attributes(module), do: name
+
+      assert timestamps == [:inserted_at, :updated_at]
+    end
+  end
+
   describe "a renamed field" do
     test "is taken at its word, and generated under the name given" do
       module =
         probe("""
         ash_quick do
           bookkeeping do
-            created_at :inserted_at
+            inserted_at :created_at
             updated_at false
             created_by false
             updated_by false
@@ -505,8 +529,8 @@ defmodule AshQuick.BookkeepingVerifierTest do
         end
         """)
 
-      assert Info.attribute(module, :inserted_at).always_select?
-      refute Info.attribute(module, :created_at)
+      assert Info.attribute(module, :created_at).always_select?
+      refute Info.attribute(module, :inserted_at)
     end
 
     test "does not satisfy itself with the conventionally-named one" do
@@ -514,7 +538,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
         message("""
         ash_quick do
           bookkeeping do
-            created_at :inserted_at
+            inserted_at :created_at
             updated_at false
             created_by false
             updated_by false
@@ -523,14 +547,14 @@ defmodule AshQuick.BookkeepingVerifierTest do
 
         attributes do
           uuid_primary_key :id
-          create_timestamp :inserted_at
-          create_timestamp :created_at, always_select?: true
+          create_timestamp :created_at
+          create_timestamp :inserted_at, always_select?: true
         end
         """)
 
-      # `:created_at` being present is beside the point; the declaration named
-      # `:inserted_at`, and that is the field every reader will go to.
-      assert message =~ "created_at names :inserted_at, which is not `always_select?: true`"
+      # `:inserted_at` being present is beside the point; the declaration named
+      # `:created_at`, and that is the field every reader will go to.
+      assert message =~ "inserted_at names :created_at, which is not `always_select?: true`"
     end
   end
 end

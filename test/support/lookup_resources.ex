@@ -32,7 +32,7 @@ defmodule AshQuick.Test.Lookup.Unlisted do
     # None of these is ever written, so none carries a bookkeeping field, and
     # none has a page to publish to.
     bookkeeping do
-      created_at false
+      inserted_at false
       updated_at false
       created_by false
       updated_by false
@@ -84,7 +84,7 @@ defmodule AshQuick.Test.Lookup.Searchable do
     # None of these is ever written, so none carries a bookkeeping field, and
     # none has a page to publish to.
     bookkeeping do
-      created_at false
+      inserted_at false
       updated_at false
       created_by false
       updated_by false
@@ -125,7 +125,7 @@ defmodule AshQuick.Test.Lookup.OtherName do
     # None of these is ever written, so none carries a bookkeeping field, and
     # none has a page to publish to.
     bookkeeping do
-      created_at false
+      inserted_at false
       updated_at false
       created_by false
       updated_by false
@@ -202,7 +202,7 @@ defmodule AshQuick.Test.Lookup.PointsAtNoExtension do
     # None of these is ever written, so none carries a bookkeeping field, and
     # none has a page to publish to.
     bookkeeping do
-      created_at false
+      inserted_at false
       updated_at false
       created_by false
       updated_by false
@@ -256,7 +256,7 @@ defmodule AshQuick.Test.Lookup.PointsAtOtherName do
     # None of these is ever written, so none carries a bookkeeping field, and
     # none has a page to publish to.
     bookkeeping do
-      created_at false
+      inserted_at false
       updated_at false
       created_by false
       updated_by false

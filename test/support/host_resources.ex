@@ -105,7 +105,7 @@ defmodule AshQuick.Test.Actor do
 
     # Nothing writes an actor here, so it carries none of the four and says so.
     bookkeeping do
-      created_at false
+      inserted_at false
       updated_at false
       created_by false
       updated_by false
@@ -154,7 +154,7 @@ defmodule AshQuick.Test.Tenant do
     end
 
     bookkeeping do
-      created_at false
+      inserted_at false
       updated_at false
       created_by false
       updated_by false
@@ -178,7 +178,7 @@ defmodule AshQuick.Test.PlainRecord do
 
   attributes do
     uuid_primary_key :id
-    create_timestamp :created_at
+    create_timestamp :inserted_at
   end
 
   actions do

@@ -17,7 +17,7 @@ defmodule ExampleWeb.FileObjectLive.Quick do
         :resource_name,
         :referenced_at,
         {[actor: :name], label: "Uploaded by"},
-        :created_at
+        :inserted_at
       ]
     ],
     details: [
@@ -34,7 +34,7 @@ defmodule ExampleWeb.FileObjectLive.Quick do
         :resource_id,
         :referenced_at,
         {[actor: :name], label: "Uploaded by"},
-        :created_at,
+        :inserted_at,
         :updated_at
       ]
     ]

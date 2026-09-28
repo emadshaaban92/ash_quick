@@ -49,7 +49,7 @@ defmodule AshQuick.Test.Activation.Activated do
     end
 
     bookkeeping do
-      created_at false
+      inserted_at false
       updated_at false
       created_by false
       updated_by false
@@ -102,7 +102,7 @@ defmodule AshQuick.Test.Activation.OwnActive do
     end
 
     bookkeeping do
-      created_at false
+      inserted_at false
       updated_at false
       created_by false
       updated_by false

@@ -16,7 +16,7 @@ defmodule AshQuick.LiveView.QuickView do
             new_action_label: "Add Product"
           ],
           details: [
-            fields: [:code, :name, :description, :price, :quantity, :created_at]
+            fields: [:code, :name, :description, :price, :quantity, :inserted_at]
           ]
       end
 

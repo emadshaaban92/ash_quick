@@ -95,7 +95,7 @@ if Code.ensure_loaded?(Igniter) do
     defp columns(resource) do
       [
         {:version, "integer, default 1 — the optimistic lock every update filters on"},
-        {:created_at, "utc_datetime_usec, always selected"},
+        {:inserted_at, "utc_datetime_usec, always selected"},
         {:updated_at, "utc_datetime_usec, always selected"}
       ] ++ actor_columns() ++ activation_column(resource)
     end

@@ -73,7 +73,7 @@ defmodule AshQuick.Test.Credential do
     end
 
     bookkeeping do
-      created_at false
+      inserted_at false
       updated_at false
       created_by false
       updated_by false
@@ -153,7 +153,7 @@ defmodule AshQuick.Test.RefusingStore do
     end
 
     bookkeeping do
-      created_at false
+      inserted_at false
       updated_at false
       created_by false
       updated_by false
@@ -373,7 +373,7 @@ defmodule AshQuick.Test.LegacyCredential do
     end
 
     bookkeeping do
-      created_at false
+      inserted_at false
       updated_at false
       created_by false
       updated_by false

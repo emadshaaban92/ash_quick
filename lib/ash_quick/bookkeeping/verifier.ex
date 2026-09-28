@@ -148,7 +148,7 @@ defmodule AshQuick.Bookkeeping.Verifier do
     end
   end
 
-  defp status(dsl_state, :created_at, name), do: attribute_status(dsl_state, name)
+  defp status(dsl_state, :inserted_at, name), do: attribute_status(dsl_state, name)
   defp status(dsl_state, :updated_at, name), do: attribute_status(dsl_state, name)
   defp status(dsl_state, :created_by, name), do: actor_status(dsl_state, name)
   defp status(dsl_state, :updated_by, name), do: actor_status(dsl_state, name)
