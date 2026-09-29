@@ -134,7 +134,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
       assert {inserted_at.public?, inserted_at.always_select?} == {true, true}
       assert {updated_at.public?, updated_at.always_select?} == {true, true}
 
-      for field <- [:created_by, :updated_by] do
+      for field <- [:inserted_by, :updated_by] do
         relationship = Info.relationship(module, field)
 
         assert relationship.destination == AshQuick.Config.actor_resource()
@@ -151,10 +151,10 @@ defmodule AshQuick.BookkeepingVerifierTest do
         assert Info.attribute(module, relationship.source_attribute)
       end
 
-      assert AshQuick.Info.actor_attributes(module) == [:created_by_id, :updated_by_id]
+      assert AshQuick.Info.actor_attributes(module) == [:inserted_by_id, :updated_by_id]
     end
 
-    test "the actor is stamped, on create for created_by and on every write for updated_by" do
+    test "the actor is stamped, on create for inserted_by and on every write for updated_by" do
       module =
         probe("""
         attributes do
@@ -170,9 +170,9 @@ defmodule AshQuick.BookkeepingVerifierTest do
 
       # `allow_nil?: false` comes from `relate_actor/1` itself — the generated
       # change is built through the builtin so it cannot drift from what a
-      # hand-written `change relate_actor(:created_by)` produces.
+      # hand-written `change relate_actor(:inserted_by)` produces.
       assert Enum.sort(stamped) == [
-               {:create, :created_by, false},
+               {:create, :inserted_by, false},
                {:create, :updated_by, false},
                {:update, :updated_by, false}
              ]
@@ -194,7 +194,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
         """)
 
       assert Info.attribute(module, :inserted_at)
-      assert Info.relationship(module, :created_by)
+      assert Info.relationship(module, :inserted_by)
       refute Info.attribute(module, :updated_at)
       refute Info.relationship(module, :updated_by)
       refute Info.attribute(module, :updated_by_id)
@@ -217,7 +217,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
         end
 
         relationships do
-          belongs_to :created_by, AshQuick.Test.Actor do
+          belongs_to :inserted_by, AshQuick.Test.Actor do
             domain AshQuick.Test.Accounts
             public? false
             allow_nil? true
@@ -225,7 +225,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
         end
         """)
 
-      relationship = Info.relationship(module, :created_by)
+      relationship = Info.relationship(module, :inserted_by)
 
       # A host keeping a `public? false` or `allow_nil? true` actor
       # relationship means it: generating over one would change what the API
@@ -249,7 +249,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
         end
 
         relationships do
-          belongs_to :created_by, AshQuick.Test.Actor do
+          belongs_to :inserted_by, AshQuick.Test.Actor do
             domain AshQuick.Test.Accounts
           end
         end
@@ -258,12 +258,12 @@ defmodule AshQuick.BookkeepingVerifierTest do
           defaults [:read]
 
           create :file do
-            change relate_actor(:created_by)
+            change relate_actor(:inserted_by)
           end
         end
         """)
 
-      # A resource stamping `:created_by` inside a single action means that one
+      # A resource stamping `:inserted_by` inside a single action means that one
       # action. A global change added alongside would both double-stamp and
       # widen the stamping to every create the resource has. Auditing is on by
       # default, so the change a probe does carry is the audit one — anything
@@ -276,7 +276,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
   end
 
   describe "an actor relationship pointing at something other than the actor" do
-    # `:created_by` naming a relationship to something other than the
+    # `:inserted_by` naming a relationship to something other than the
     # configured `:actor_resource`. Only the name suggests it is about the
     # actor, and the name is the one thing that must not decide.
     defp foreign_actor(declaration) do
@@ -295,7 +295,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
       end
 
       relationships do
-        belongs_to :created_by, AshQuick.Test.Tenant do
+        belongs_to :inserted_by, AshQuick.Test.Tenant do
           domain AshQuick.Test.Accounts
         end
       end
@@ -303,18 +303,18 @@ defmodule AshQuick.BookkeepingVerifierTest do
     end
 
     test "does not compile while it is declared" do
-      message = message(foreign_actor("created_by :created_by"))
+      message = message(foreign_actor("inserted_by :inserted_by"))
 
       assert message =~
-               "created_by names :created_by, which is a relationship to " <>
+               "inserted_by names :inserted_by, which is a relationship to " <>
                  "AshQuick.Test.Tenant rather than to AshQuick.Test.Actor"
 
       # The fix is to disclaim it — the relationship is real and keeps its name.
-      assert message =~ "created_by false"
+      assert message =~ "inserted_by false"
     end
 
     test "is not stamped with the actor" do
-      module = probe(foreign_actor("created_by :created_by"))
+      module = probe(foreign_actor("inserted_by :inserted_by"))
 
       # The verifier refuses this resource, so nothing here reaches production
       # through the transformer. It is guarded anyway because the two have to
@@ -327,7 +327,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
     end
 
     test "declared absent, it compiles and its column stays under the lock" do
-      body = foreign_actor("created_by false")
+      body = foreign_actor("inserted_by false")
 
       assert verifier_errors(body) == []
       module = probe(body)
@@ -335,10 +335,10 @@ defmodule AshQuick.BookkeepingVerifierTest do
       # Kept whole, and no longer claimed as bookkeeping — so a write changing
       # which seller a record points at bumps the optimistic lock, which is
       # right: that is a change to the record, not a stamp on it.
-      assert Info.relationship(module, :created_by).destination == AshQuick.Test.Tenant
+      assert Info.relationship(module, :inserted_by).destination == AshQuick.Test.Tenant
       assert AshQuick.Info.actor_fields(module) == []
-      refute :created_by_id in AshQuick.Config.versioning_ignored_attributes(module)
-      refute :created_by in AshQuick.Config.versioning_ignored_relationships(module)
+      refute :inserted_by_id in AshQuick.Config.versioning_ignored_attributes(module)
+      refute :inserted_by in AshQuick.Config.versioning_ignored_relationships(module)
     end
   end
 
@@ -349,7 +349,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
         ash_quick do
           bookkeeping do
             inserted_at false
-            created_by false
+            inserted_by false
             updated_by false
           end
         end
@@ -374,7 +374,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
         ash_quick do
           bookkeeping do
             updated_at false
-            created_by false
+            inserted_by false
             updated_by false
           end
         end
@@ -407,15 +407,15 @@ defmodule AshQuick.BookkeepingVerifierTest do
           """)
 
         assert message =~
-                 "created_by is declared as :created_by, which this resource does not define"
+                 "inserted_by is declared as :inserted_by, which this resource does not define"
 
-        assert message =~ "created_by false"
+        assert message =~ "inserted_by false"
       end)
     end
 
     test "an actor column is not an actor relationship" do
       with_actor_resource(nil, fn ->
-        # `:created_by` names the relationship, and the ignore list reads the
+        # `:inserted_by` names the relationship, and the ignore list reads the
         # source attribute off it — the column alone is not the declaration.
         message =
           message("""
@@ -429,12 +429,12 @@ defmodule AshQuick.BookkeepingVerifierTest do
 
           attributes do
             uuid_primary_key :id
-            attribute :created_by_id, :uuid
+            attribute :inserted_by_id, :uuid
           end
           """)
 
         assert message =~
-                 "created_by is declared as :created_by, which this resource does not define"
+                 "inserted_by is declared as :inserted_by, which this resource does not define"
       end)
     end
 
@@ -474,7 +474,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
                  bookkeeping do
                    inserted_at false
                    updated_at false
-                   created_by false
+                   inserted_by false
                    updated_by false
                  end
                end
@@ -493,7 +493,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
         probe("""
         ash_quick do
           bookkeeping do
-            created_by false
+            inserted_by false
             updated_by false
           end
         end
@@ -519,7 +519,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
           bookkeeping do
             inserted_at :created_at
             updated_at false
-            created_by false
+            inserted_by false
             updated_by false
           end
         end
@@ -540,7 +540,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
           bookkeeping do
             inserted_at :created_at
             updated_at false
-            created_by false
+            inserted_by false
             updated_by false
           end
         end

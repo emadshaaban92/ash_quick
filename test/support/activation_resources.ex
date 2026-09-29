@@ -51,7 +51,7 @@ defmodule AshQuick.Test.Activation.Activated do
     bookkeeping do
       inserted_at false
       updated_at false
-      created_by false
+      inserted_by false
       updated_by false
     end
 
@@ -104,7 +104,7 @@ defmodule AshQuick.Test.Activation.OwnActive do
     bookkeeping do
       inserted_at false
       updated_at false
-      created_by false
+      inserted_by false
       updated_by false
     end
 

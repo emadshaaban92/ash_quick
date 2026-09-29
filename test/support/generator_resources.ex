@@ -83,7 +83,7 @@ defmodule AshQuick.Test.Gen.Ledger do
     end
 
     bookkeeping do
-      created_by false
+      inserted_by false
       updated_by false
     end
   end

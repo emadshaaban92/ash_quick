@@ -85,7 +85,7 @@ defmodule Example.Accounts.AuditLog do
     bookkeeping do
       # The row names the actor of the write it records in `actor_id`. Nothing
       # creates or updates the row itself — writing it *is* the act.
-      created_by false
+      inserted_by false
       updated_by false
     end
   end

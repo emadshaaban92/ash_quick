@@ -20,7 +20,7 @@ defmodule AshQuick.Bookkeeping.Verifier do
   #
   # An actor field satisfies its declaration only if it is a relationship to the
   # configured actor resource. The name alone means nothing — `belongs_to
-  # :created_by, Seller` is a relationship to a seller — and the transformer
+  # :inserted_by, Seller` is a relationship to a seller — and the transformer
   # stamps the actor into whatever the declaration names, so one pointing
   # elsewhere would take a user's id into a foreign key against another table.
   # A resource that has such a relationship declares the field absent and keeps
@@ -124,7 +124,7 @@ defmodule AshQuick.Bookkeeping.Verifier do
         default = Declaration.default(key)
 
         # Only a field that would have *satisfied* the declaration counts as
-        # undeclared. A foreign `:created_by` disclaimed is the escape hatch for
+        # undeclared. A foreign `:inserted_by` disclaimed is the escape hatch for
         # a resource that has one, so it cannot also be an error.
         if status(dsl_state, key, default) == :ok, do: [{:undeclared, key, default}], else: []
 
@@ -150,7 +150,7 @@ defmodule AshQuick.Bookkeeping.Verifier do
 
   defp status(dsl_state, :inserted_at, name), do: attribute_status(dsl_state, name)
   defp status(dsl_state, :updated_at, name), do: attribute_status(dsl_state, name)
-  defp status(dsl_state, :created_by, name), do: actor_status(dsl_state, name)
+  defp status(dsl_state, :inserted_by, name), do: actor_status(dsl_state, name)
   defp status(dsl_state, :updated_by, name), do: actor_status(dsl_state, name)
 
   defp attribute_status(dsl_state, name) do

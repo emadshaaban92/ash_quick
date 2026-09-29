@@ -180,7 +180,7 @@ defmodule Example.Uploads.FileObject do
       # `:actor` above already records who handed the object over, and custody
       # is frequently taken with nobody behind it — a second pair of actor
       # columns would only be a `allow_nil? false` the seam cannot satisfy.
-      created_by false
+      inserted_by false
       updated_by false
     end
   end

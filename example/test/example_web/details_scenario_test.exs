@@ -153,7 +153,7 @@ defmodule ExampleWeb.DetailsScenarioTest do
         |> Ash.read!(authorize?: false)
         |> hd()
 
-      # `AuditLog` declares `created_by false` / `updated_by false`: writing the
+      # `AuditLog` declares `inserted_by false` / `updated_by false`: writing the
       # row *is* the act, and the actor of the write it records is a column of
       # its own. Both timestamps remain, so both sentences render actorless.
       conn
@@ -232,7 +232,7 @@ defmodule ExampleWeb.DetailsScenarioTest do
 
       # And the actor is the one at the keyboard rather than the record's
       # creator, who is still named by the bookkeeping column.
-      assert Ash.reload!(product, authorize?: false).created_by_id == ctx.admin.id
+      assert Ash.reload!(product, authorize?: false).inserted_by_id == ctx.admin.id
     end
   end
 end

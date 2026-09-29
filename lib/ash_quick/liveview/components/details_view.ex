@@ -112,7 +112,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
           assigns.record,
           :created,
           AshQuick.Info.inserted_at_field(resource),
-          AshQuick.Info.created_by_field(resource)
+          AshQuick.Info.inserted_by_field(resource)
         ),
         half(
           assigns.record,

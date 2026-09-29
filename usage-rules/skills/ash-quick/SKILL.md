@@ -453,7 +453,7 @@ the extension and names the columns it will cost.
 |---|---|
 | `version` (integer, default `1`) | always, unless versioning is disabled |
 | `inserted_at`, `updated_at` (`utc_datetime_usec`, `always_select?`) | unless declared `false` |
-| `created_by_id`, `updated_by_id` (FKs to the configured `:actor_resource`) | unless declared `false` |
+| `inserted_by_id`, `updated_by_id` (FKs to the configured `:actor_resource`) | unless declared `false` |
 | `active` (boolean, NOT NULL, default `true`) | only when `activation` is declared |
 
 Every one is **add-if-absent**: a resource that already defines the attribute
@@ -476,7 +476,7 @@ bookkeeping and auditing.
 | `lookup` | nothing generated; `action :index`, `search_argument :search` when written | point search at a different read action |
 | `activation` | `enabled? false` | opt into soft-delete: `:active`, `:activate`/`:deactivate` |
 | `versioning` | `enabled? true`, `attribute :version` | turn the optimistic lock **off** |
-| `bookkeeping` | all four fields on: `:inserted_at` / `:updated_at` / `:created_by` / `:updated_by` | declare a field `false`, or rename it |
+| `bookkeeping` | all four fields on: `:inserted_at` / `:updated_at` / `:inserted_by` / `:updated_by` | declare a field `false`, or rename it |
 | `audit` | `enabled? true`, store from the configured `:audit_resource` | write elsewhere, exclude actions, or turn it off |
 | `field_restrictions` | none | restrict a field to actors passing a check |
 
@@ -611,16 +611,16 @@ and what to write.
 
   To audit only *some* actions, turn the section off and attach the change by
   hand: `update :do_something do change AshQuick.Audit.Change end`.
-- **Bookkeeping** — all four of `:inserted_at`, `:updated_at`, `:created_by`,
+- **Bookkeeping** — all four of `:inserted_at`, `:updated_at`, `:inserted_by`,
   `:updated_by` are on by default; a resource carrying the full set declares
   nothing. Declare a field `false` when the resource genuinely has none — and
   note the verifier checks **both** directions, because a real column left out
   of the declaration drops off the versioning ignore list and starts bumping
   the lock on writes that used to be no-ops.
 
-  `:created_by` / `:updated_by` name **relationships**, and only a relationship
+  `:inserted_by` / `:updated_by` name **relationships**, and only a relationship
   to the configured `:actor_resource` satisfies one. A resource with its own
-  `belongs_to :created_by, SomethingElse` declares `created_by false` and keeps
+  `belongs_to :inserted_by, SomethingElse` declares `inserted_by false` and keeps
   it.
 
 ## Field restrictions DSL
@@ -715,7 +715,7 @@ config :ash_quick,
 
 `:endpoint` and `:actor_resource` are `Application.compile_env/2` reads —
 resources bake them in while they compile, the endpoint becoming each
-resource's PubSub publications and the actor resource its `created_by` /
+resource's PubSub publications and the actor resource its `inserted_by` /
 `updated_by` relationships. Put either in `runtime.exs` and a release loads it
 long after the resources were built against `nil`, with no runtime symptom: the
 pages are simply dead and the columns empty. `mix igniter.install ash_quick`

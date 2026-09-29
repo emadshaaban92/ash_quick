@@ -34,7 +34,7 @@ Three things bite hardest, and each is cheapest to know before you write the
 resource rather than after.
 
 **`extensions: [AshQuick]` adds columns, so it needs a migration.** `version`,
-`inserted_at`, `updated_at`, `created_by_id`, `updated_by_id` — and `active`, NOT
+`inserted_at`, `updated_at`, `inserted_by_id`, `updated_by_id` — and `active`, NOT
 NULL, if activation is declared. All add-if-absent: a resource that already
 defines one keeps what it wrote.
 

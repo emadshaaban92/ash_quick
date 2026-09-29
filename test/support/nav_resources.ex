@@ -69,7 +69,7 @@ defmodule AshQuick.Test.Nav.Brand do
     bookkeeping do
       inserted_at false
       updated_at false
-      created_by false
+      inserted_by false
       updated_by false
     end
   end

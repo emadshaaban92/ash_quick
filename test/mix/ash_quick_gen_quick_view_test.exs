@@ -99,7 +99,7 @@ defmodule Mix.Tasks.AshQuick.Gen.QuickViewTest do
       assert source =~ "fields: [:sku, :name, :inserted_at, :updated_at]"
 
       refute source =~ ":version"
-      refute source =~ ":created_by_id"
+      refute source =~ ":inserted_by_id"
     end
 
     test "a sensitive attribute is not put on a page by a generator" do

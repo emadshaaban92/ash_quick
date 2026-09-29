@@ -136,7 +136,7 @@ defmodule AshQuick.Test.Bookkeeping.TimestampsOnly do
     end
 
     bookkeeping do
-      created_by false
+      inserted_by false
       updated_by false
     end
   end

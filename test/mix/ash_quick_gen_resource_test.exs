@@ -51,7 +51,7 @@ defmodule Mix.Tasks.AshQuick.Gen.ResourceTest do
 
       assert notice =~ "adds 5 column(s)"
 
-      for column <- ~w(version inserted_at updated_at created_by_id updated_by_id) do
+      for column <- ~w(version inserted_at updated_at inserted_by_id updated_by_id) do
         assert notice =~ "`#{column}`"
       end
     end

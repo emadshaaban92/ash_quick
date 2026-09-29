@@ -107,7 +107,7 @@ defmodule AshQuick.Test.Actor do
     bookkeeping do
       inserted_at false
       updated_at false
-      created_by false
+      inserted_by false
       updated_by false
     end
   end
@@ -117,7 +117,7 @@ defmodule AshQuick.Test.Tenant do
   @moduledoc """
   A second resource an actor relationship could point at by mistake.
 
-  `belongs_to :created_by, AshQuick.Test.Tenant` reads like bookkeeping and is
+  `belongs_to :inserted_by, AshQuick.Test.Tenant` reads like bookkeeping and is
   not — only the name suggests it is about the actor, and the name is the one
   thing that must not decide. `AshQuick.BookkeepingVerifierTest` probes with it.
   """
@@ -156,7 +156,7 @@ defmodule AshQuick.Test.Tenant do
     bookkeeping do
       inserted_at false
       updated_at false
-      created_by false
+      inserted_by false
       updated_by false
     end
   end

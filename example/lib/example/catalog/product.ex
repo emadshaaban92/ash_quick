@@ -21,7 +21,7 @@ defmodule Example.Catalog.Product do
       reference :store, on_delete: :restrict, on_update: :restrict
       reference :brand, on_delete: :restrict, on_update: :restrict
       reference :category, on_delete: :restrict, on_update: :restrict
-      reference :created_by, on_delete: :restrict, on_update: :restrict
+      reference :inserted_by, on_delete: :restrict, on_update: :restrict
       reference :updated_by, on_delete: :restrict, on_update: :restrict
     end
   end

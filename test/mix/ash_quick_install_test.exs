@@ -246,7 +246,7 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
 
       # Its own writes are the entries; recording them would recurse.
       assert source =~ ~r/liveness do\n.*\n.*\n\s*enabled\?[ (]false/
-      assert source =~ ~r/created_by[ (]false/
+      assert source =~ ~r/inserted_by[ (]false/
       assert source =~ ~r/updated_by[ (]false/
     end
 

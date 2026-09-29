@@ -5,7 +5,7 @@ defmodule Example.Accounts.User do
   Being named in `config :ash_quick, actor_resource:` has three consequences
   worth seeing in one place.
 
-    * Every other resource's `created_by` / `updated_by` relationships point
+    * Every other resource's `inserted_by` / `updated_by` relationships point
       here, so this is what a details page's "Created by X" header resolves
       through.
     * AshQuick generates an `:impersonate` action on it — one actor browsing as
@@ -119,7 +119,7 @@ defmodule Example.Accounts.User do
     bookkeeping do
       # Seeded and administered; there is no "who created this user" to record
       # that the audit trail does not already hold.
-      created_by false
+      inserted_by false
       updated_by false
     end
 

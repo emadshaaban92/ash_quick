@@ -36,7 +36,7 @@ defmodule AshQuick.IdentityVerifierTest do
   end
 
   # A resource built from `body`. Bookkeeping is disclaimed wholesale so that a
-  # probe about identity reports on identity — the generated `created_by` would
+  # probe about identity reports on identity — the generated `inserted_by` would
   # otherwise be the only thing a reader saw.
   defp probe(body) do
     name = "IdentityProbe#{:erlang.unique_integer([:positive])}"
@@ -51,7 +51,7 @@ defmodule AshQuick.IdentityVerifierTest do
         bookkeeping do
           inserted_at false
           updated_at false
-          created_by false
+          inserted_by false
           updated_by false
         end
 

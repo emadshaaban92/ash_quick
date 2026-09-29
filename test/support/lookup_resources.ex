@@ -34,7 +34,7 @@ defmodule AshQuick.Test.Lookup.Unlisted do
     bookkeeping do
       inserted_at false
       updated_at false
-      created_by false
+      inserted_by false
       updated_by false
     end
 
@@ -86,7 +86,7 @@ defmodule AshQuick.Test.Lookup.Searchable do
     bookkeeping do
       inserted_at false
       updated_at false
-      created_by false
+      inserted_by false
       updated_by false
     end
 
@@ -127,7 +127,7 @@ defmodule AshQuick.Test.Lookup.OtherName do
     bookkeeping do
       inserted_at false
       updated_at false
-      created_by false
+      inserted_by false
       updated_by false
     end
 
@@ -204,7 +204,7 @@ defmodule AshQuick.Test.Lookup.PointsAtNoExtension do
     bookkeeping do
       inserted_at false
       updated_at false
-      created_by false
+      inserted_by false
       updated_by false
     end
 
@@ -258,7 +258,7 @@ defmodule AshQuick.Test.Lookup.PointsAtOtherName do
     bookkeeping do
       inserted_at false
       updated_at false
-      created_by false
+      inserted_by false
       updated_by false
     end
 

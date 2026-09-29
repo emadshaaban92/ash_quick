@@ -70,7 +70,7 @@ defmodule AshQuick.Config do
     `?limit=` asks for. Defaults to 250. Keeps the count and the pager honest
     rather than bounding the read; see `max_page_size/0`.
 
-  * `:actor_resource` — The resource a record's `created_by` / `updated_by`
+  * `:actor_resource` — The resource a record's `inserted_by` / `updated_by`
     relationships point at, and that AshQuick loads an actor through when it
     has to name who wrote a record. `nil` when the host stamps no actor. Its
     domain is read off the resource, so it is not configured separately. Read
@@ -304,7 +304,7 @@ defmodule AshQuick.Config do
   end
 
   @doc """
-  The actor resource `belongs_to :created_by` and `belongs_to :updated_by`
+  The actor resource `belongs_to :inserted_by` and `belongs_to :updated_by`
   point at, or `nil` when the host configures none.
 
   What AshQuick loads and renders an actor through when it has to name who
@@ -314,7 +314,7 @@ defmodule AshQuick.Config do
   domain the resource does not belong to.
 
   Compile time and runtime both read this, and they have to agree.
-  `AshQuick.Bookkeeping.Transformer` bakes each resource's `created_by` /
+  `AshQuick.Bookkeeping.Transformer` bakes each resource's `inserted_by` /
   `updated_by` relationships — destination and domain — from what it sees while
   the resource compiles, and `AshQuick.LiveView.DetailsUtils` builds its strict
   load from what it sees on the request. A value that only reaches the
