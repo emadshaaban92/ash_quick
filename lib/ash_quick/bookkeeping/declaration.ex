@@ -15,18 +15,18 @@ defmodule AshQuick.Bookkeeping.Declaration do
 
   @path [:ash_quick, :bookkeeping]
   @defaults [
-    created_at: :created_at,
+    inserted_at: :inserted_at,
     updated_at: :updated_at,
-    created_by: :created_by,
+    inserted_by: :inserted_by,
     updated_by: :updated_by
   ]
 
-  # `:created_at` and `:updated_at` name attributes; `:created_by` and
+  # `:inserted_at` and `:updated_at` name attributes; `:inserted_by` and
   # `:updated_by` name relationships. Split because the verifier looks each
   # one up in a different place, and because the versioning ignore list needs
   # a relationship's *source attribute*, not its name.
-  @timestamps [:created_at, :updated_at]
-  @actors [:created_by, :updated_by]
+  @timestamps [:inserted_at, :updated_at]
+  @actors [:inserted_by, :updated_by]
 
   def defaults, do: @defaults
   def timestamps, do: @timestamps
@@ -48,7 +48,7 @@ defmodule AshQuick.Bookkeeping.Declaration do
   @doc false
   # Whether a relationship pointing at `destination` is one to the actor.
   #
-  # The name is not what decides: `belongs_to :created_by, Seller` is a
+  # The name is not what decides: `belongs_to :inserted_by, Seller` is a
   # relationship to a seller, and stamping it with `relate_actor` would write a
   # user's id into a foreign key against another table. Held here because the
   # transformer and the verifier both have to answer it the same way — one to

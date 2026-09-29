@@ -55,7 +55,7 @@ end
 defmodule AshQuick.Test.Bookkeeping.CreateOnly do
   @moduledoc """
   A resource that is written once and never updated, so it carries only the
-  create half: `created_at` and an actor column, and nothing about updating.
+  create half: `inserted_at` and an actor column, and nothing about updating.
   """
   use Ash.Resource,
     domain: AshQuick.Test.Bookkeeping.Domain,
@@ -136,7 +136,7 @@ defmodule AshQuick.Test.Bookkeeping.TimestampsOnly do
     end
 
     bookkeeping do
-      created_by false
+      inserted_by false
       updated_by false
     end
   end

@@ -19,6 +19,6 @@ defmodule ExampleWeb.UserLive.Quick do
       new_action_label: "Add User"
     ],
     details: [
-      fields: [:name, :email, :role, :active, :created_at, :updated_at]
+      fields: [:name, :email, :role, :active, :inserted_at, :updated_at]
     ]
 end

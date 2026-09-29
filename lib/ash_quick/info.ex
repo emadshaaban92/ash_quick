@@ -107,10 +107,10 @@ defmodule AshQuick.Info do
 
   ## Bookkeeping
 
-  `bookkeeping/1` answers which of `created_at`, `updated_at`, `created_by` and
+  `bookkeeping/1` answers which of `inserted_at`, `updated_at`, `inserted_by` and
   `updated_by` a resource carries, and `timestamp_fields/1`, `actor_fields/1`
   and `actor_attributes/1` are the list forms a caller iterates.
-  `created_at_field/1` and its three siblings read one key at a time, for a
+  `inserted_at_field/1` and its three siblings read one key at a time, for a
   caller whose two sides go missing independently — the details header renders
   "created" and "last updated" as separate halves, and an append-only resource
   has only the first.
@@ -283,7 +283,7 @@ defmodule AshQuick.Info do
   What `resource` declared under `ash_quick do bookkeeping do ... end end`, or
   `nil` when it does not carry the extension.
 
-  A map of all four keys — `:created_at`, `:updated_at`, `:created_by`,
+  A map of all four keys — `:inserted_at`, `:updated_at`, `:inserted_by`,
   `:updated_by` — each holding the field's name or `nil` where the resource
   declared it absent. Every key is always present, so a caller matches on the
   value rather than on the shape.
@@ -317,7 +317,7 @@ defmodule AshQuick.Info do
   def actor_fields(resource), do: fields(resource, Declaration.actors())
 
   @doc """
-  The source attributes behind `actor_fields/1` — the `:created_by_id` /
+  The source attributes behind `actor_fields/1` — the `:inserted_by_id` /
   `:updated_by_id` end of each relationship.
 
   Read off the relationship rather than built from its name, so a `belongs_to`
@@ -337,7 +337,7 @@ defmodule AshQuick.Info do
   @doc """
   The attribute holding when a record was created, or `nil`.
   """
-  def created_at_field(resource), do: bookkeeping_field(resource, :created_at)
+  def inserted_at_field(resource), do: bookkeeping_field(resource, :inserted_at)
 
   @doc """
   The attribute holding when a record was last written, or `nil`.
@@ -347,7 +347,7 @@ defmodule AshQuick.Info do
   @doc """
   The relationship to the actor that created a record, or `nil`.
   """
-  def created_by_field(resource), do: bookkeeping_field(resource, :created_by)
+  def inserted_by_field(resource), do: bookkeeping_field(resource, :inserted_by)
 
   @doc """
   The relationship to the actor that last wrote a record, or `nil`.

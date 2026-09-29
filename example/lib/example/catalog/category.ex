@@ -22,7 +22,7 @@ defmodule Example.Catalog.Category do
 
     references do
       reference :parent, on_delete: :restrict, on_update: :restrict
-      reference :created_by, on_delete: :restrict, on_update: :restrict
+      reference :inserted_by, on_delete: :restrict, on_update: :restrict
       reference :updated_by, on_delete: :restrict, on_update: :restrict
     end
   end

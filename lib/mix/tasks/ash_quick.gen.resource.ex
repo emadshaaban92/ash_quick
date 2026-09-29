@@ -85,7 +85,7 @@ if Code.ensure_loaded?(Igniter) do
 
           Where one of these is not wanted, the `ash_quick` section is where it \
           is turned off — `versioning do enabled? false end` for a row only one \
-          writer touches, `bookkeeping do created_by false end` for a resource \
+          writer touches, `bookkeeping do inserted_by false end` for a resource \
           nobody creates. Turning one off after the migration means another \
           migration.
           """
@@ -95,7 +95,7 @@ if Code.ensure_loaded?(Igniter) do
     defp columns(resource) do
       [
         {:version, "integer, default 1 — the optimistic lock every update filters on"},
-        {:created_at, "utc_datetime_usec, always selected"},
+        {:inserted_at, "utc_datetime_usec, always selected"},
         {:updated_at, "utc_datetime_usec, always selected"}
       ] ++ actor_columns() ++ activation_column(resource)
     end
@@ -110,7 +110,7 @@ if Code.ensure_loaded?(Igniter) do
 
         actor ->
           [
-            {:created_by_id, "a reference to #{inspect(actor)}"},
+            {:inserted_by_id, "a reference to #{inspect(actor)}"},
             {:updated_by_id, "a reference to #{inspect(actor)}"}
           ]
       end

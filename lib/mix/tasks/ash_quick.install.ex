@@ -36,7 +36,7 @@ if Code.ensure_loaded?(Igniter) do
 
     ## Options
 
-      * `--actor-resource` - The resource a record's `created_by` / `updated_by`
+      * `--actor-resource` - The resource a record's `inserted_by` / `updated_by`
         point at, and that an audit entry names. Detected when the application
         has exactly one `User`-shaped resource.
       * `--audit-resource` - Where to generate the audit store. Defaults to
@@ -369,7 +369,7 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     # A guess, offered for confirmation rather than taken: the resource behind
-    # `created_by` has to be the one an authenticated request already carries,
+    # `inserted_by` has to be the one an authenticated request already carries,
     # and only the application knows that. Read off the project's files rather
     # than its compiled domains, so a resource that has not been registered in
     # one yet is still offered.

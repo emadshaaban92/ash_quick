@@ -12,7 +12,12 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
   resolve the package's own `.formatter.exs` through a project that only exists
   in memory, and a real host formats them away.
   """
-  use ExUnit.Case, async: true
+  # Not async: while it runs a task, Igniter evaluates the project's generated
+  # `config.exs` into the live application env (`Application.put_all_env`,
+  # restored afterwards). Here that config sets `:ash_quick, :audit_resource`
+  # to the generated `Test.AuditLogs.AuditLog`, so an async test auditing a
+  # write in that window reads a module that does not exist.
+  use ExUnit.Case, async: false
 
   import Igniter.Test
 
@@ -246,7 +251,7 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
 
       # Its own writes are the entries; recording them would recurse.
       assert source =~ ~r/liveness do\n.*\n.*\n\s*enabled\?[ (]false/
-      assert source =~ ~r/created_by[ (]false/
+      assert source =~ ~r/inserted_by[ (]false/
       assert source =~ ~r/updated_by[ (]false/
     end
 

@@ -225,9 +225,9 @@ defmodule AshQuick do
 
       ash_quick do
         bookkeeping do
-          created_at :created_at   # the default
-          updated_at false         # this resource has no last-write time
-          created_by :created_by   # the default; a relationship, not a column
+          inserted_at :inserted_at   # the default
+          updated_at false           # this resource has no last-write time
+          inserted_by :inserted_by   # the default; a relationship, not a column
           updated_by false
         end
       end
@@ -237,7 +237,7 @@ defmodule AshQuick do
 
   Declaring a field adds it: the two timestamps, the two `belongs_to`
   relationships to the configured `:actor_resource`, and the `relate_actor`
-  changes that stamp them — `:created_by` on create, `:updated_by` on every
+  changes that stamp them — `:inserted_by` on create, `:updated_by` on every
   write, which is why a create stamps both. The changes are built through
   `relate_actor/1` itself rather than as a literal, so a generated stamp cannot
   drift from a hand-written one.
@@ -268,9 +268,9 @@ defmodule AshQuick do
 
   An actor field is satisfied only by a relationship to the configured
   `:actor_resource`. The name decides nothing on its own — `belongs_to
-  :created_by, Seller` is a relationship to a seller, and stamping it would
+  :inserted_by, Seller` is a relationship to a seller, and stamping it would
   write a user's id into a foreign key against another table. A resource with
-  one declares `created_by false` and keeps it; that drops its column from the
+  one declares `inserted_by false` and keeps it; that drops its column from the
   ignore list too, which is right, since a change to it is a change to the
   record.
 
@@ -291,15 +291,21 @@ defmodule AshQuick do
   generated form would not reproduce exactly is still written by hand, and the
   verifier will not let the declaration lie about it.
 
-  `:created_at` and `:updated_at` name attributes. `:created_by` and
+  `:inserted_at` and `:updated_at` name attributes. `:inserted_by` and
   `:updated_by` name **relationships** — the ignore list and any actor lookup
   need the destination, and the source attribute is read off the relationship
   rather than assumed to be `<name>_id`, which is what makes a `belongs_to`
   declared `define_attribute? false` resolve correctly.
 
-  The convention is AshQuick's `:created_at`/`:updated_at`, not Ash's default
-  `:inserted_at`. Declaring it makes that an owned decision rather than an
-  accident of whichever timestamp macro a resource reached for.
+  The timestamps follow Ash's own names — `:inserted_at` and `:updated_at`, what
+  `timestamps()` defines — and the options are named after them, so a resource
+  that already calls `timestamps()` is not given a second pair. Like any
+  hand-written timestamp they still have to be `always_select?`, which
+  `timestamps(always_select?: true)` passes through to both. A resource naming
+  its timestamps otherwise declares the name it uses (`inserted_at
+  :created_at`). Ash has no standard name for the actor fields, so they follow
+  the timestamps: `:inserted_by` beside `:inserted_at`, `:updated_by` beside
+  `:updated_at`.
 
   What reads it: `AshQuick.Config.versioning_ignored_attributes/1` and
   `versioning_ignored_relationships/1` are derived per-resource from
@@ -608,9 +614,9 @@ defmodule AshQuick do
     name: :bookkeeping,
     describe: "Declare which bookkeeping fields this resource carries.",
     schema: [
-      created_at: [
+      inserted_at: [
         type: :atom,
-        default: AshQuick.Bookkeeping.Declaration.default(:created_at),
+        default: AshQuick.Bookkeeping.Declaration.default(:inserted_at),
         doc:
           "The attribute holding the creation time, or `false` when the resource has none. Added when the resource does not define it."
       ],
@@ -620,9 +626,9 @@ defmodule AshQuick do
         doc:
           "The attribute holding the last-write time, or `false` when the resource has none. Added when the resource does not define it."
       ],
-      created_by: [
+      inserted_by: [
         type: :atom,
-        default: AshQuick.Bookkeeping.Declaration.default(:created_by),
+        default: AshQuick.Bookkeeping.Declaration.default(:inserted_by),
         doc:
           "The relationship to the actor that created the record, or `false` when the resource stamps none. Added, pointed at the configured `:actor_resource`, when the resource does not define it; a relationship of that name pointing anywhere else does not compile."
       ],

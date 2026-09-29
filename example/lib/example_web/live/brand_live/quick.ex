@@ -13,6 +13,6 @@ defmodule ExampleWeb.BrandLive.Quick do
       new_action_label: "Add Brand"
     ],
     details: [
-      fields: [:code, :name, :active, :created_at, :updated_at]
+      fields: [:code, :name, :active, :inserted_at, :updated_at]
     ]
 end

@@ -4,7 +4,7 @@ defmodule Example.Catalog.PriceChange do
   `Example.Catalog.Product`'s `:reprice` action and never by a person.
 
   It is here for the half-declared bookkeeping case. Nothing updates a row, so
-  it carries `created_at` / `created_by` and neither of the other two, and a
+  it carries `inserted_at` / `inserted_by` and neither of the other two, and a
   details page over it therefore renders "Created by X on Y" with no second
   half. `AshQuick.LiveView.DetailsUtils.actor_load/1` is built from the same
   declaration, which is why it asks for one relationship here and two on a
@@ -23,7 +23,7 @@ defmodule Example.Catalog.PriceChange do
 
     references do
       reference :product, on_delete: :delete, on_update: :restrict
-      reference :created_by, on_delete: :restrict, on_update: :restrict
+      reference :inserted_by, on_delete: :restrict, on_update: :restrict
     end
   end
 

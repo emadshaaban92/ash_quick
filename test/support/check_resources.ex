@@ -80,9 +80,9 @@ defmodule AshQuick.Test.Check.Widget do
     end
 
     bookkeeping do
-      created_at false
+      inserted_at false
       updated_at false
-      created_by false
+      inserted_by false
       updated_by false
     end
   end
@@ -143,9 +143,9 @@ defmodule AshQuick.Test.Check.Gizmo do
     end
 
     bookkeeping do
-      created_at false
+      inserted_at false
       updated_at false
-      created_by false
+      inserted_by false
       updated_by false
     end
   end
@@ -194,9 +194,9 @@ defmodule AshQuick.Test.Check.Echo do
     end
 
     bookkeeping do
-      created_at false
+      inserted_at false
       updated_at false
-      created_by false
+      inserted_by false
       updated_by false
     end
   end
@@ -240,9 +240,9 @@ defmodule AshQuick.Test.Check.Repeat do
     end
 
     bookkeeping do
-      created_at false
+      inserted_at false
       updated_at false
-      created_by false
+      inserted_by false
       updated_by false
     end
   end

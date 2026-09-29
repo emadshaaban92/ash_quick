@@ -23,7 +23,7 @@ defmodule Example.Catalog.Store do
     repo Example.Repo
 
     references do
-      reference :created_by, on_delete: :restrict, on_update: :restrict
+      reference :inserted_by, on_delete: :restrict, on_update: :restrict
       reference :updated_by, on_delete: :restrict, on_update: :restrict
     end
   end

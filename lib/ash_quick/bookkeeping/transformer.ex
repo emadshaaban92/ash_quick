@@ -34,15 +34,15 @@ defmodule AshQuick.Bookkeeping.Transformer do
   def transform(dsl_state) do
     {:ok,
      dsl_state
-     |> add_timestamp(:created_at, :create_timestamp)
+     |> add_timestamp(:inserted_at, :create_timestamp)
      |> add_timestamp(:updated_at, :update_timestamp)
-     |> add_actor(:created_by)
+     |> add_actor(:inserted_by)
      |> add_actor(:updated_by)
-     # `:created_by` on create only; `:updated_by` on every write, which is why
+     # `:inserted_by` on create only; `:updated_by` on every write, which is why
      # a create stamps both. `:updated_by` passes no `on:` at all rather than a
      # list of its own — the option has a default, and naming the types here
      # would fix them at whatever they are today.
-     |> add_relate_actor(:created_by, on: [:create])
+     |> add_relate_actor(:inserted_by, on: [:create])
      |> add_relate_actor(:updated_by, [])}
   end
 
@@ -73,7 +73,7 @@ defmodule AshQuick.Bookkeeping.Transformer do
   end
 
   # Nothing is added when the host configures no actor resource — a resource
-  # then declares `created_by false` and carries none, which the verifier checks.
+  # then declares `inserted_by false` and carries none, which the verifier checks.
   #
   # The relationship crosses domains, so it needs the destination's. Read off
   # the actor resource rather than configured beside it: a second key could name
@@ -107,7 +107,7 @@ defmodule AshQuick.Bookkeeping.Transformer do
   # them to every create the resource has.
   #
   # Also skipped when the relationship points somewhere other than the actor
-  # resource. Nothing but the name says a `belongs_to :created_by` is about the
+  # resource. Nothing but the name says a `belongs_to :inserted_by` is about the
   # actor, and stamping one that points elsewhere would write the actor's id
   # into a foreign key against another table. `AshQuick.Bookkeeping.Verifier`
   # refuses that resource outright, so this is what keeps the two consistent
@@ -118,7 +118,7 @@ defmodule AshQuick.Bookkeeping.Transformer do
          true <- actor_relationship?(dsl_state, name) do
       # Built through the builtin rather than as a literal tuple, so the
       # generated change carries exactly what the hand-written
-      # `change relate_actor(:created_by)` carried — `allow_nil?: false`
+      # `change relate_actor(:inserted_by)` carried — `allow_nil?: false`
       # included, which a literal would have quietly dropped.
       {:ok, change} =
         Transformer.build_entity(

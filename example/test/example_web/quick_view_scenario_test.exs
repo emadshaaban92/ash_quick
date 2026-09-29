@@ -76,7 +76,7 @@ defmodule ExampleWeb.QuickViewScenarioTest do
     assert created.version == 1
     assert Money.to_string!(created.price) =~ "199"
     # Stamped by the extension's bookkeeping, not by anything the form sent.
-    assert created.created_by_id == editor.id
+    assert created.inserted_by_id == editor.id
 
     # The list shows it, with both relationships rendered by name rather than
     # by uuid.

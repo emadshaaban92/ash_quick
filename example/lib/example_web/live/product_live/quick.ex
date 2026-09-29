@@ -59,7 +59,7 @@ defmodule ExampleWeb.ProductLive.Quick do
         {:images, widget: &ExampleWeb.ImageWidgets.image/1},
         :store,
         :active,
-        :created_at,
+        :inserted_at,
         :updated_at
       ]
     ]

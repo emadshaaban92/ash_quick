@@ -4,7 +4,7 @@ defmodule AshQuick.BookkeepingTest do
   update may make without bumping the optimistic lock.
 
   That list used to be a single global one — `[:updated_at, :created_at,
-  :updated_by_id, :created_by_id]` — applied to every resource whether or not it
+  :updated_by_id, :inserted_by_id]` — applied to every resource whether or not it
   had those columns. Deriving it per resource is strictly more precise, but
   precision is the risk: a column the old list ignored blindly and the new one
   fails to derive starts counting as a meaningful change, and the resource
@@ -33,18 +33,18 @@ defmodule AshQuick.BookkeepingTest do
       # separately, so an actor has to appear in both lists — as its column in
       # one and its relationship in the other.
       assert Config.versioning_ignored_attributes(AllFour) ==
-               [:created_at, :updated_at, :created_by_id, :updated_by_id]
+               [:inserted_at, :updated_at, :inserted_by_id, :updated_by_id]
 
-      assert Config.versioning_ignored_relationships(AllFour) == [:created_by, :updated_by]
+      assert Config.versioning_ignored_relationships(AllFour) == [:inserted_by, :updated_by]
     end
 
     test "is narrower than the global list where a resource carries less" do
       # Without this the assertion above would pass just as well against a
       # derivation that had quietly kept the global list.
-      assert Config.versioning_ignored_attributes(CreateOnly) == [:created_at, :created_by_id]
-      assert Config.versioning_ignored_relationships(CreateOnly) == [:created_by]
+      assert Config.versioning_ignored_attributes(CreateOnly) == [:inserted_at, :inserted_by_id]
+      assert Config.versioning_ignored_relationships(CreateOnly) == [:inserted_by]
 
-      assert Config.versioning_ignored_attributes(TimestampsOnly) == [:created_at, :updated_at]
+      assert Config.versioning_ignored_attributes(TimestampsOnly) == [:inserted_at, :updated_at]
       assert Config.versioning_ignored_relationships(TimestampsOnly) == []
     end
   end
@@ -62,7 +62,7 @@ defmodule AshQuick.BookkeepingTest do
       assert Ash.Resource.Info.attribute(HandWrittenActorColumn, :updated_by_id).always_select?
 
       assert AshQuick.Info.actor_attributes(HandWrittenActorColumn) ==
-               [:created_by_id, :updated_by_id]
+               [:inserted_by_id, :updated_by_id]
     end
   end
 
@@ -71,7 +71,7 @@ defmodule AshQuick.BookkeepingTest do
       # Spark hands a section's defaults back for any module at all, so without
       # the extension check every module in the app would claim all four.
       refute AshQuick in Spark.extensions(PlainRecord)
-      assert Ash.Resource.Info.attribute(PlainRecord, :created_at)
+      assert Ash.Resource.Info.attribute(PlainRecord, :inserted_at)
 
       assert AshQuick.Info.bookkeeping(PlainRecord) == nil
       assert AshQuick.Info.timestamp_fields(PlainRecord) == []

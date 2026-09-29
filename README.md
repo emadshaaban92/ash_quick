@@ -56,7 +56,7 @@ config :ash_quick,
 
 `:endpoint` and `:actor_resource` are read with `Application.compile_env/2`,
 because resources bake them in while they compile: the endpoint becomes each
-resource's PubSub publications, the actor resource becomes its `created_by` /
+resource's PubSub publications, the actor resource becomes its `inserted_by` /
 `updated_by` relationships. Declared in `runtime.exs`, a release would load
 them long after the resources were built against `nil`, and nothing would say
 so — the pages would simply be dead and the columns empty. `compile_env` turns
@@ -171,8 +171,8 @@ migration:
 |---|---|
 | `version` (integer, default `1`) | always, unless versioning is disabled |
 | `active` (boolean, default `true`) | only when `activation` is declared |
-| `created_at`, `updated_at` (`utc_datetime_usec`, `always_select?`) | unless declared `false` |
-| `created_by_id`, `updated_by_id` (FKs to `:actor_resource`) | unless declared `false` |
+| `inserted_at`, `updated_at` (`utc_datetime_usec`, `always_select?`) | unless declared `false` |
+| `inserted_by_id`, `updated_by_id` (FKs to `:actor_resource`) | unless declared `false` |
 
 Every one of them is add-if-absent: a resource that already defines the
 attribute or the relationship keeps exactly what it wrote, and
