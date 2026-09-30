@@ -480,9 +480,9 @@ defmodule AshQuick.Components do
     end
   end
 
-  defp default_translate_error({msg, opts}) do
-    Enum.reduce(opts, msg, fn {key, value}, acc ->
-      String.replace(acc, "%{#{key}}", fn _ -> to_string(value) end)
-    end)
-  end
+  # Shared with the flash path, so a var with no `String.Chars` (the `%Regex{}`
+  # every `validate match/2` error carries) renders the same way in both places
+  # rather than crashing one of them.
+  defp default_translate_error({msg, opts}),
+    do: AshQuick.LiveView.ActionErrors.interpolate(msg, opts)
 end

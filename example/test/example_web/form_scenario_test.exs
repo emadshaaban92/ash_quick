@@ -69,6 +69,72 @@ defmodule ExampleWeb.FormScenarioTest do
     end
   end
 
+  describe "a value refused by a match/2 validation" do
+    # Every error `match/2` raises carries its `%Regex{}` as a var, named by the
+    # message or not, and a Regex has no `String.Chars`. Rendering the error
+    # used to stringify every var, so the refusal crashed the LiveView and the
+    # person never saw the message the validation was written to show.
+    test "is shown, and the page is still there to correct it", %{conn: conn, admin: admin} do
+      code = Integer.to_string(System.unique_integer([:positive]))
+
+      conn
+      |> log_in(admin)
+      |> visit(~p"/test/digits_only/create")
+      |> fill_in("Code", with: "12ab")
+      |> fill_in("Name", with: "Digits")
+      |> click_button("Save")
+      |> assert_has("#flash-error", text: "Code must be digits")
+      |> assert_has(".text-error", text: "must be digits")
+      |> unwrap(fn view ->
+        assert Process.alive?(view.pid)
+        render(view)
+      end)
+      # The same page takes the corrected value, which a dead one could not.
+      |> fill_in("Code", with: code)
+      |> click_button("Save")
+      |> refute_has("#flash-error")
+
+      assert Example.Test.DigitsOnly
+             |> Ash.read!(authorize?: false)
+             |> Enum.any?(&(&1.code == code))
+    end
+
+    test "renders a regex the message names as the regex, not a crash", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      conn
+      |> log_in(admin)
+      |> visit(~p"/test/digits_only/create")
+      |> fill_in("Code", with: "123")
+      |> fill_in("Name", with: "Digits")
+      |> fill_in("Ref", with: "abc")
+      |> click_button("Save")
+      |> assert_has("#flash-error", text: "Ref must match ~r/^[A-Z]+$/")
+      |> unwrap(fn view ->
+        assert Process.alive?(view.pid)
+        render(view)
+      end)
+    end
+
+    # Refused twice in one submit, the errors take the form's own path rather
+    # than the single-attribute one: rendered beside their inputs, from vars
+    # AshPhoenix has already stripped of anything it cannot stringify.
+    test "is shown beside another refusal in the same submit", %{conn: conn, admin: admin} do
+      conn
+      |> log_in(admin)
+      |> visit(~p"/test/digits_only/create")
+      |> fill_in("Code", with: "12ab")
+      |> click_button("Save")
+      |> assert_has(".text-error", text: "must be digits")
+      |> assert_has(".text-error", text: "is required")
+      |> unwrap(fn view ->
+        assert Process.alive?(view.pid)
+        render(view)
+      end)
+      |> assert_has("button", text: "Save")
+    end
+  end
+
   describe "a second create action on the same resource" do
     test "is reached by ?action=, and its form offers only what it accepts", ctx do
       %{conn: conn, admin: admin, brand: brand, category: category} = ctx

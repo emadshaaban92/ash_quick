@@ -81,6 +81,27 @@ defmodule ExampleWeb.Router do
     end
   end
 
+  # Pages over resources that exist only in the test build (`test/support`),
+  # for the cases no resource in this application can show. Behind the same
+  # session and sign-in as every other page, but no role is granted them: the
+  # access gate would refuse each one, so they skip it — and nobody's nav or
+  # grid offers them.
+  if Application.compile_env(:example, :test_routes) do
+    scope "/test", alias: false do
+      pipe_through [:browser, :user_required]
+
+      live_session :test_only,
+        layout: {ExampleWeb.Layouts, :app},
+        on_mount: [
+          {ExampleWeb.UserAuth, :assign_current_user},
+          AshQuick.LiveView.Mount,
+          {ExampleWeb.UserAuth, :assign_scope}
+        ] do
+        quick_view "/digits_only", Example.Test.DigitsOnlyLive.Quick
+      end
+    end
+  end
+
   if Application.compile_env(:example, :dev_routes) do
     import Phoenix.LiveDashboard.Router
 
