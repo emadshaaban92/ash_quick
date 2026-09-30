@@ -28,3 +28,12 @@ config :phoenix_test, :endpoint, ExampleWeb.Endpoint
 # generated. `Example.Test.S3Stub` is a bucket in ETS, so the bytes a reader
 # would have downloaded are readable from a test.
 config :ex_aws, :http_client, Example.Test.S3Stub
+
+# `ExampleWeb.Router` serves pages over `test/support` resources only when
+# this is set, the way `:dev_routes` gates the dashboard.
+config :example, test_routes: true
+
+# No role is granted those pages, which is what keeps them out of every nav —
+# and exactly what the check reports about a page the router serves.
+config :ash_quick,
+  check: [exempt: [unreachable_entry: ["/test/digits_only"]]]

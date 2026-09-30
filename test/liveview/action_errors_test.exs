@@ -144,6 +144,42 @@ defmodule AshQuick.LiveView.ActionErrorsTest do
                "Quantity 10 is the most you can order"
     end
 
+    # What `validate match(:code, ~r/^\d+$/), message: "must be digits"` raises:
+    # the Regex rides along as a var whatever the message says, and has no
+    # `String.Chars`. Stringifying every var took the LiveView down with it, so
+    # the person never saw the message the validation was written to show.
+    test "renders a match/2 message without touching the regex it never names" do
+      error =
+        Ash.Error.Invalid.exception(
+          errors: [
+            Ash.Error.Changes.InvalidAttribute.exception(
+              field: :code,
+              message: "must be digits",
+              vars: [field: :code, match: ~r/^\d+$/]
+            )
+          ]
+        )
+
+      assert ActionErrors.user_facing_message(error) == "Code must be digits"
+    end
+
+    # And when the message does name it, it is shown the way Ash itself would
+    # show it rather than raising.
+    test "renders a var with no String.Chars through inspect when the message names it" do
+      error =
+        Ash.Error.Invalid.exception(
+          errors: [
+            Ash.Error.Changes.InvalidAttribute.exception(
+              field: :code,
+              message: "must match %{match}",
+              vars: [field: :code, match: ~r/^\d+$/]
+            )
+          ]
+        )
+
+      assert ActionErrors.user_facing_message(error) == ~S"Code must match ~r/^\d+$/"
+    end
+
     test "reduces a stale-record conflict to the friendly reload message" do
       error = Ash.Error.Invalid.exception(errors: [%Ash.Error.Changes.StaleRecord{}])
 
@@ -211,6 +247,35 @@ defmodule AshQuick.LiveView.ActionErrorsTest do
       assert message == ActionErrors.generic_message()
       refute message =~ "secret internal detail"
       refute message =~ "RuntimeError"
+    end
+  end
+
+  describe "interpolate/2" do
+    test "leaves a var the message never names alone, whatever it is" do
+      assert ActionErrors.interpolate("must be digits", match: ~r/x/, pid: self()) ==
+               "must be digits"
+    end
+
+    test "renders a named var with String.Chars through to_string" do
+      assert ActionErrors.interpolate("between %{min} and %{max}", min: 5, max: :fifteen) ==
+               "between 5 and fifteen"
+    end
+
+    test "renders a named var with no String.Chars through inspect" do
+      assert ActionErrors.interpolate("must match %{match}", match: ~r/^\d+$/) ==
+               ~S"must match ~r/^\d+$/"
+
+      assert ActionErrors.interpolate("got %{value}", value: %{a: 1}) == "got %{a: 1}"
+    end
+
+    # A list has `String.Chars`, but only converts when it is chardata.
+    test "renders a named list that is not chardata through inspect" do
+      assert ActionErrors.interpolate("one of %{one_of}", one_of: [:a, :b]) == "one of [:a, :b]"
+      assert ActionErrors.interpolate("like %{example}", example: ~c"abc") == "like abc"
+    end
+
+    test "takes nil vars as none" do
+      assert ActionErrors.interpolate("is required", nil) == "is required"
     end
   end
 end

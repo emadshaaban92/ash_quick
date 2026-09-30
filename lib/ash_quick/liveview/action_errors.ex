@@ -165,7 +165,7 @@ defmodule AshQuick.LiveView.ActionErrors do
   # ("Transfer not found for tracking number: TN123") and prefixing it would
   # only garble it.
   defp sentence({field, message, vars}) when is_binary(message) do
-    message = replace_vars(message, vars)
+    message = interpolate(message, vars)
 
     cond do
       message == "" -> ""
@@ -182,10 +182,37 @@ defmodule AshQuick.LiveView.ActionErrors do
   # field name off a message that needed it.
   defp standalone_sentence?(message), do: message =~ ~r/^\p{Lu}/u
 
-  defp replace_vars(message, vars) do
+  @doc """
+  Substitutes an error's `vars` into the `%{key}` placeholders of its message.
+
+  The vars an error carries are not all meant for its message. `validate
+  match/2` always carries the `%Regex{}` it tested against, whatever the message
+  says, and a Regex has no `String.Chars` — so stringifying every var turns a
+  refused input into a crashed LiveView, and the person never sees why. Only the
+  vars the message names are rendered, and one with no `String.Chars` is
+  rendered through `inspect/1` rather than raising.
+  """
+  def interpolate(message, vars) when is_binary(message) do
     Enum.reduce(vars || [], message, fn {key, value}, acc ->
-      String.replace(acc, "%{#{key}}", to_string(value))
+      placeholder = "%{#{key}}"
+
+      if String.contains?(acc, placeholder),
+        do: String.replace(acc, placeholder, var_to_string(value)),
+        else: acc
     end)
+  end
+
+  # A list implements `String.Chars` but only converts when it is chardata, so
+  # a list of atoms (`one_of: [:a, :b]`) raises through `to_string/1` all the
+  # same.
+  defp var_to_string(value) when is_list(value) do
+    List.to_string(value)
+  rescue
+    ArgumentError -> inspect(value)
+  end
+
+  defp var_to_string(value) do
+    if String.Chars.impl_for(value), do: to_string(value), else: inspect(value)
   end
 
   defp report_unexpected(error) do

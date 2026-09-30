@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Bug fixes
+
+- **A `validate match/2` refusal no longer crashes a QuickView form.** Its
+  error always carries the `%Regex{}` as a var, and rendering the error called
+  `to_string/1` on every var, so the LiveView died with
+  `Protocol.UndefinedError` and the person never saw the message. Error
+  messages now substitute only the vars they name, and render a var with no
+  `String.Chars` through `inspect/1`. `AshQuick.Components.translate_error/1`'s
+  default interpolation gets the same treatment.
+
 ### Breaking changes
 
 - **The `:active` attribute activation adds is now NOT NULL** (`allow_nil?:
