@@ -535,10 +535,6 @@ defmodule AshQuick.LiveView.QuickView do
 
         # sobelow_skip ["DOS.StringToAtom"]
         def render(assigns) do
-          assigns =
-            assigns
-            |> QuickView.prepare_assigns(assigns.params, assigns.ash_action, @options)
-
           template_function_name = "action_#{assigns.ash_action.name}_html" |> String.to_atom()
 
           if function_exported?(__MODULE__, template_function_name, 1) and
@@ -642,46 +638,73 @@ defmodule AshQuick.LiveView.QuickView do
     |> assign(:action_running, false)
   end
 
-  def do_handle_params(
-        socket,
-        %{id: nil} = params,
-        %Actions.Read{get?: false} = action,
-        %Options{} = options
-      ) do
+  def do_handle_params(socket, params, ash_action, %Options{} = options) do
+    socket
+    |> load_params(params, ash_action, options)
+    |> prepare_assigns(ash_action, options)
+  end
+
+  defp load_params(
+         socket,
+         %{id: nil} = params,
+         %Actions.Read{get?: false} = action,
+         %Options{} = options
+       ) do
     ListUtils.do_handle_params(socket, params, action, options)
   end
 
-  def do_handle_params(socket, %{id: _} = params, %Actions.Read{} = action, %Options{} = options) do
+  defp load_params(socket, %{id: _} = params, %Actions.Read{} = action, %Options{} = options) do
     DetailsUtils.do_handle_params(socket, params, action, options)
   end
 
-  def do_handle_params(
-        socket,
-        %{id: nil} = params,
-        %Actions.Create{} = action,
-        %Options{} = options
-      ) do
+  defp load_params(
+         socket,
+         %{id: nil} = params,
+         %Actions.Create{} = action,
+         %Options{} = options
+       ) do
     FormUtils.do_handle_params(socket, params, action, options)
   end
 
-  def do_handle_params(
-        socket,
-        %{id: _} = params,
-        %Actions.Update{} = action,
-        %Options{} = options
-      ) do
+  defp load_params(
+         socket,
+         %{id: _} = params,
+         %Actions.Update{} = action,
+         %Options{} = options
+       ) do
     FormUtils.do_handle_params(socket, params, action, options)
   end
 
-  def prepare_assigns(assigns, %{id: nil}, %Actions.Read{get?: false}, %Options{} = options) do
+  # Assigns what the generic templates render from, beyond what
+  # `load_params/4` loaded: the component id, the field list, the print and bulk
+  # action menus, and the pagination path builder. After the load because the
+  # list read can still drop a refused filter from `:params`, and
+  # `path_for_page` has to build from what the page rendered; before
+  # `after_handle_params/2` so a host can still override any of these.
+  #
+  # It runs against the socket rather than inside `render/1`. A key assigned
+  # during a render is never stored on the socket, so the next render finds it
+  # absent again and change tracking marks it changed every time, re-rendering
+  # every part of the template that reads it — every row, through `@fields` —
+  # on every event. Assigned here, a key is only marked changed when its value
+  # actually differs, which is when the URL moved.
+  #
+  # Public only so a test can drive it without a data layer to read through.
+  @doc false
+  def prepare_assigns(socket, ash_action, %Options{} = options) do
+    do_prepare_assigns(socket, socket.assigns.params, ash_action, options)
+  end
+
+  defp do_prepare_assigns(socket, %{id: nil}, %Actions.Read{get?: false}, %Options{} = options) do
     # Computed once at mount (do_mount) — record-less Ash.can? is scope-dependent
-    # only, so it must not be re-filtered on every render.
-    resource_actions = assigns[:resource_bulk_actions] || []
-    custom_actions = assigns[:bulk_actions] || []
+    # only, so it must not be re-filtered on every navigation.
+    resource_actions = socket.assigns[:resource_bulk_actions] || []
+    custom_actions = socket.assigns[:bulk_actions] || []
 
     print_actions = build_print_actions(options.print_templates)
+    %{path: path, params: params} = socket.assigns
 
-    assigns
+    socket
     |> assign(:id, "#{Ash.Resource.Info.trace_name(options.resource)}-list")
     |> assign(:fields, options.list_fields)
     |> assign(:new_action_label, options.new_action_label)
@@ -689,26 +712,26 @@ defmodule AshQuick.LiveView.QuickView do
     |> assign(:actions, custom_actions ++ resource_actions)
     |> assign(:print_actions, print_actions)
     |> assign(:print_templates, options.print_templates)
-    |> assign(:path_for_page, &URLParams.path_for_page(assigns.path, assigns.params, &1))
+    |> assign(:path_for_page, &URLParams.path_for_page(path, params, &1))
   end
 
-  def prepare_assigns(assigns, %{id: id}, %Actions.Read{}, %Options{} = options) do
+  defp do_prepare_assigns(socket, %{id: id}, %Actions.Read{}, %Options{} = options) do
     print_actions = build_print_actions(options.print_templates)
 
-    assigns
+    socket
     |> assign(:id, "#{id}-details")
     |> assign(:fields, options.details_fields)
     |> assign(:print_actions, print_actions)
     |> assign(:print_templates, options.print_templates)
   end
 
-  def prepare_assigns(assigns, %{id: nil}, %Actions.Create{}, %Options{} = options) do
-    assigns
+  defp do_prepare_assigns(socket, %{id: nil}, %Actions.Create{}, %Options{} = options) do
+    socket
     |> assign(:id, "#{Ash.Resource.Info.trace_name(options.resource)}-create")
   end
 
-  def prepare_assigns(assigns, %{id: id}, %Actions.Update{}, %Options{}) do
-    assigns
+  defp do_prepare_assigns(socket, %{id: id}, %Actions.Update{}, %Options{}) do
+    socket
     |> assign(:id, "#{id}-form")
   end
 
