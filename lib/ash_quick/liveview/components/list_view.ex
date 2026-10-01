@@ -17,8 +17,11 @@ defmodule AshQuick.LiveView.Components.ListView do
   attr(:new_action_label, :string, default: nil)
   attr(:new_click, :any, default: nil, doc: "the function for handling phx-click on new button")
   attr(:fields, :list, required: true)
-  attr(:rows, :list, required: true)
-  attr(:row_id, :any, default: nil, doc: "the function for generating the row id")
+
+  attr(:data, :map,
+    required: true,
+    doc: "the page `keep_live/4` read: its `results`, `count`, `limit` and `offset`"
+  )
 
   attr(:row_css_class, :any,
     default: nil,
@@ -32,7 +35,6 @@ defmodule AshQuick.LiveView.Components.ListView do
 
   attr(:scope, :map, required: true)
   attr(:params, :map, default: nil)
-  attr(:meta, :map, default: nil)
 
   attr(:path_for_page, :any, default: nil, doc: "the function for generating pagination paths")
 
@@ -47,24 +49,14 @@ defmodule AshQuick.LiveView.Components.ListView do
     doc: "`%{id: record_id, actions: [action]}` for the row whose menu was last opened"
   )
 
+  # Called with the LiveView's own assigns, so `__changed__` here is the
+  # socket's. A key assigned in this function is one the socket never holds:
+  # the next render finds it absent again and change tracking marks it changed
+  # every time, re-rendering everything that reads it — the rows, the pager and
+  # the actions menu — on every event. So nothing is assigned here. What the
+  # template derives from `@data`, `@params` and `@actions` it derives inline,
+  # where it is tracked through them and re-rendered only when one changes.
   def list_view(assigns) do
-    assigns =
-      with %{rows: %Phoenix.LiveView.LiveStream{}} <- assigns do
-        assign(assigns, row_id: assigns.row_id || fn {id, _item} -> id end)
-      end
-
-    params = assigns[:params]
-    meta = assigns[:data]
-    actions = assigns[:actions]
-
-    assigns =
-      assigns
-      |> assign(:current_page, params.page)
-      |> assign(:pages_count, Float.ceil(meta.count / meta.limit) |> trunc())
-      |> assign(:filtered_actions, actions && actions |> Enum.filter(& &1))
-      |> assign(:meta, meta)
-      |> assign(:rows, assigns.data.results)
-
     ~H"""
     <section class="bg-base-200 p-3 sm:p-5">
       <div class="mx-auto max-w-full">
@@ -108,7 +100,7 @@ defmodule AshQuick.LiveView.Components.ListView do
                   selected_rows={@selected_rows}
                 />
                 <.actions_menu
-                  filtered_actions={@filtered_actions}
+                  filtered_actions={present_actions(@actions)}
                   action_running={@action_running}
                   selected_rows={@selected_rows}
                 />
@@ -142,7 +134,7 @@ defmodule AshQuick.LiveView.Components.ListView do
                 </thead>
                 <tbody id={@id}>
                   <tr
-                    :for={row <- @rows}
+                    :for={row <- @data.results}
                     id={row.id}
                     :key={row.id}
                     class={[
@@ -191,10 +183,10 @@ defmodule AshQuick.LiveView.Components.ListView do
           built off it, so a page past the last would otherwise offer two more
           of them and draw `98` as though it were a page. --%>
           <.footer
-            meta={@meta}
+            meta={@data}
             path_for_page={@path_for_page}
-            current_page={min(@current_page, @pages_count)}
-            pages_count={@pages_count}
+            current_page={min(@params.page, pages_count(@data))}
+            pages_count={pages_count(@data)}
           />
         </div>
       </div>
@@ -567,6 +559,11 @@ defmodule AshQuick.LiveView.Components.ListView do
     </div>
     """
   end
+
+  defp present_actions(nil), do: nil
+  defp present_actions(actions), do: Enum.filter(actions, & &1)
+
+  defp pages_count(%{count: count, limit: limit}), do: ceil(count / limit)
 
   defp footer(assigns) do
     ~H"""
