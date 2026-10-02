@@ -43,6 +43,10 @@ defmodule AshQuick.AuditVerifierTest do
   alias AshQuick.Test.PartialAuditStore
   alias AshQuick.Test.PrivateAuditStore
   alias AshQuick.Test.ReadOnlyAuditStore
+  alias AshQuick.Test.RequiredActorArgumentAuditStore
+  alias AshQuick.Test.RequiredActorAuditStore
+  alias AshQuick.Test.RequiredActorRelationshipAuditStore
+  alias AshQuick.Test.RequiredRealActorAuditStore
   alias AshQuick.Test.UnacceptedChangesStore
 
   defmodule NotAStore do
@@ -300,6 +304,59 @@ defmodule AshQuick.AuditVerifierTest do
     assert message =~ inspect(UnacceptedChangesStore)
     assert message =~ "has a `changes` attribute its `:create` action does not accept"
     assert message =~ "NoSuchInput"
+  end
+
+  describe "an `actor_id` or `real_actor_id` that refuses nil" do
+    # A write with no actor is recorded with `actor_id: nil`, so a store that
+    # cannot take one fails every background job that writes an audited
+    # resource — at runtime, unless it is refused here.
+    test "as an attribute refuses to compile, naming the store and the fix" do
+      message = with_audit_resource(RequiredActorAuditStore, fn -> message(@default) end)
+
+      assert message =~ inspect(RequiredActorAuditStore)
+      assert message =~ "refuses `nil` for `actor_id`"
+      assert message =~ "its `actor_id` attribute has `allow_nil?: false`"
+      assert message =~ "recorded with `actor_id: nil`"
+      assert message =~ "allow_nil? true"
+      assert message =~ "mix ash.codegen"
+    end
+
+    test "through a `belongs_to :actor` is read off its source attribute" do
+      message =
+        with_audit_resource(RequiredActorRelationshipAuditStore, fn -> message(@default) end)
+
+      assert message =~ inspect(RequiredActorRelationshipAuditStore)
+      assert message =~ "its `actor_id` attribute has `allow_nil?: false`"
+      refute message =~ "refuses `nil` for `real_actor_id`"
+    end
+
+    test "as an argument of the :create refuses to compile, saying so" do
+      message =
+        with_audit_resource(RequiredActorArgumentAuditStore, fn -> message(@default) end)
+
+      assert message =~ inspect(RequiredActorArgumentAuditStore)
+      assert message =~ "the `actor_id` argument of its `:create` action has `allow_nil?: false`"
+      assert message =~ "mix ash.codegen"
+    end
+
+    # Recorded `nil` beside it, so the same refusal there fails the same writes.
+    test "as `real_actor_id` refuses to compile too, naming that one" do
+      message = with_audit_resource(RequiredRealActorAuditStore, fn -> message(@default) end)
+
+      assert message =~ inspect(RequiredRealActorAuditStore)
+      assert message =~ "refuses `nil` for `real_actor_id`"
+      assert message =~ "its `real_actor_id` attribute has `allow_nil?: false`"
+      assert message =~ "belongs_to :real_actor"
+      assert message =~ "mix ash.codegen"
+    end
+
+    test "is not something the fixtures do" do
+      for store <- [AshQuick.Config.audit_resource(), ArgumentAuditStore] do
+        assert Ash.Resource.Info.attribute(store, :actor_id).allow_nil?
+        assert Ash.Resource.Info.attribute(store, :real_actor_id).allow_nil?
+        assert with_audit_resource(store, fn -> verifier_errors(@default) end) == []
+      end
+    end
   end
 
   test "a resource naming its own store is held to that one, not the app's" do

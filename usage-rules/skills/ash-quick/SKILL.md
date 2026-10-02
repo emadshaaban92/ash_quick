@@ -596,8 +596,14 @@ and what to write.
 
   There is no fallback sink, so a resource with no store resolvable (from
   `audit do store ... end`, else the configured `:audit_resource`) **does not
-  compile**. A write with no actor records nothing — an entry names who made
-  the change, and a system write has nobody to name.
+  compile**. A write with no actor (a background job, an integration) is
+  recorded too, with `actor_id: nil` and `real_actor_id: nil`, so the store
+  must allow `nil` in both. Say what made a write under `action_source` in
+  the action's context — `context: %{action_source: "nightly_sync"}` — on any
+  write a person did not make through a form, with an actor or without. It is a
+  convention, not enforced; other top-level string or atom values are kept too,
+  nested ones are not. To keep a write out of the log, use `exclude_actions` or
+  turn audit off — passing no actor no longer does it.
 
   ```elixir
   ash_quick do

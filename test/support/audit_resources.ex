@@ -53,11 +53,18 @@ defmodule AshQuick.Test.Credential do
         )
       end
     end
+
+    # Excluded below, so the tests have an action that records nothing whoever
+    # runs it.
+    update :touch do
+      require_atomic? false
+    end
   end
 
   ash_quick do
     audit do
       record_sensitive [:masked_card_number]
+      exclude_actions [:touch]
     end
 
     display do
@@ -429,6 +436,149 @@ defmodule AshQuick.Test.UnacceptedChangesStore do
     attribute :changes, :map
     attribute :actor_id, :uuid, public?: true
     attribute :real_actor_id, :uuid, public?: true
+    attribute :ip, :string, public?: true
+    attribute :tenant, :uuid, public?: true
+  end
+
+  actions do
+    default_accept :*
+    defaults [:create, :read]
+  end
+end
+
+defmodule AshQuick.Test.RequiredActorAuditStore do
+  @moduledoc """
+  Every column AshQuick fills, with an `actor_id` that refuses `nil` — a store
+  written when a write with no actor recorded nothing. Every such write is now
+  recorded with `actor_id: nil`, so this one would fail each of them.
+  """
+  use Ash.Resource, domain: AshQuick.Test.AuditDomain, data_layer: Ash.DataLayer.Ets
+
+  attributes do
+    uuid_primary_key :id
+    attribute :resource_name, :atom, public?: true
+    attribute :resource_id, :uuid, public?: true
+    attribute :action_type, :atom, public?: true
+    attribute :action_name, :atom, public?: true
+    attribute :attributes, :map, public?: true
+    attribute :arguments, :map, public?: true
+    attribute :context, :map, public?: true
+    attribute :actor_id, :uuid, allow_nil?: false, public?: true
+    attribute :real_actor_id, :uuid, public?: true
+    attribute :ip, :string, public?: true
+    attribute :tenant, :uuid, public?: true
+  end
+
+  actions do
+    default_accept :*
+    defaults [:create, :read]
+  end
+end
+
+defmodule AshQuick.Test.RequiredActorRelationshipAuditStore do
+  @moduledoc """
+  The same refusal, made through a `belongs_to :actor` rather than a plain
+  attribute — which is where the generated store declares it. The real actor is
+  related too, as there, and takes `nil`, so the refusal is the actor's alone.
+  """
+  use Ash.Resource, domain: AshQuick.Test.AuditDomain, data_layer: Ash.DataLayer.Ets
+
+  attributes do
+    uuid_primary_key :id
+    attribute :resource_name, :atom, public?: true
+    attribute :resource_id, :uuid, public?: true
+    attribute :action_type, :atom, public?: true
+    attribute :action_name, :atom, public?: true
+    attribute :attributes, :map, public?: true
+    attribute :arguments, :map, public?: true
+    attribute :context, :map, public?: true
+    attribute :ip, :string, public?: true
+    attribute :tenant, :uuid, public?: true
+  end
+
+  relationships do
+    belongs_to :actor, AshQuick.Test.Actor do
+      public? true
+      allow_nil? false
+      attribute_writable? true
+    end
+
+    belongs_to :real_actor, AshQuick.Test.Actor do
+      public? true
+      allow_nil? true
+      attribute_writable? true
+    end
+  end
+
+  actions do
+    default_accept :*
+    defaults [:create, :read]
+  end
+end
+
+defmodule AshQuick.Test.RequiredActorArgumentAuditStore do
+  @moduledoc """
+  A nullable `actor_id` column the `:create` action takes through an argument
+  that refuses `nil` — the refusal moved from the table to the way in.
+  """
+  use Ash.Resource, domain: AshQuick.Test.AuditDomain, data_layer: Ash.DataLayer.Ets
+
+  attributes do
+    uuid_primary_key :id
+    attribute :resource_name, :atom, public?: true
+    attribute :resource_id, :uuid, public?: true
+    attribute :action_type, :atom, public?: true
+    attribute :action_name, :atom, public?: true
+    attribute :attributes, :map, public?: true
+    attribute :arguments, :map, public?: true
+    attribute :context, :map, public?: true
+    attribute :actor_id, :uuid, public?: true
+    attribute :real_actor_id, :uuid, public?: true
+    attribute :ip, :string, public?: true
+    attribute :tenant, :uuid, public?: true
+  end
+
+  actions do
+    defaults [:read]
+
+    create :create do
+      accept [
+        :resource_name,
+        :resource_id,
+        :action_type,
+        :action_name,
+        :attributes,
+        :arguments,
+        :context,
+        :real_actor_id,
+        :ip,
+        :tenant
+      ]
+
+      argument :actor_id, :uuid, allow_nil?: false
+    end
+  end
+end
+
+defmodule AshQuick.Test.RequiredRealActorAuditStore do
+  @moduledoc """
+  A nullable `actor_id` beside a `real_actor_id` that refuses `nil` — a store
+  written when the real actor was never `nil` while there was an actor, and
+  there was no row without one.
+  """
+  use Ash.Resource, domain: AshQuick.Test.AuditDomain, data_layer: Ash.DataLayer.Ets
+
+  attributes do
+    uuid_primary_key :id
+    attribute :resource_name, :atom, public?: true
+    attribute :resource_id, :uuid, public?: true
+    attribute :action_type, :atom, public?: true
+    attribute :action_name, :atom, public?: true
+    attribute :attributes, :map, public?: true
+    attribute :arguments, :map, public?: true
+    attribute :context, :map, public?: true
+    attribute :actor_id, :uuid, public?: true
+    attribute :real_actor_id, :uuid, allow_nil?: false, public?: true
     attribute :ip, :string, public?: true
     attribute :tenant, :uuid, public?: true
   end

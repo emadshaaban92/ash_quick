@@ -114,6 +114,8 @@ defmodule Example.Accounts.AuditLog do
   relationships do
     belongs_to :actor, Example.Accounts.User do
       public? true
+      # A write with no actor — a background job, an integration — is recorded too.
+      allow_nil? true
     end
 
     belongs_to :real_actor, Example.Accounts.User do

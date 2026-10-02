@@ -10,7 +10,9 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
   The generated resources are asserted as source rather than compiled, so the
   DSL calls are matched with their parentheses optional: the harness cannot
   resolve the package's own `.formatter.exs` through a project that only exists
-  in memory, and a real host formats them away.
+  in memory, and a real host formats them away. The audit store is the one
+  exception: whether it takes a nil actor is a question about the compiled
+  resource, so it is compiled too.
   """
   # Not async: while it runs a task, Igniter evaluates the project's generated
   # `config.exs` into the live application env (`Application.put_all_env`,
@@ -19,6 +21,7 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
   # write in that window reads a module that does not exist.
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureIO
   import Igniter.Test
 
   @store "lib/test/audit_logs/audit_log.ex"
@@ -280,6 +283,46 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
       assert source =~ ~r/attribute[ (]:real_actor_id, :uuid/
     end
 
+    # A write with no actor is recorded with `actor_id: nil`, so a store that
+    # refuses it would fail every background job's write. Compiled rather than
+    # matched, in both branches: `allow_nil?` on a `belongs_to` is read off its
+    # source attribute, which only the compiled resource has.
+    test "the store compiles and takes a nil actor, related or not" do
+      for {label, igniter} <- [
+            related: install(),
+            plain: install(%{"lib/test/accounts/user.ex" => "defmodule Test.Unrelated do\nend\n"})
+          ] do
+        store = compile_store(igniter, label == :related)
+
+        assert Ash.Resource.Info.attribute(store, :actor_id).allow_nil?, "#{label}"
+        assert Ash.Resource.Info.attribute(store, :real_actor_id).allow_nil?, "#{label}"
+
+        # The verifier a host's resources run against this store, which is what
+        # refuses to compile one that cannot take a nil actor.
+        with_audit_resource(store, fn ->
+          assert AshQuick.Audit.Verifier.verify(AshQuick.Test.Credential.spark_dsl_config()) ==
+                   :ok
+        end)
+
+        assert {:ok, row} =
+                 store
+                 |> Ash.Changeset.for_create(:create, %{
+                   resource_name: :credential,
+                   resource_id: Ash.UUID.generate(),
+                   action_type: :update,
+                   action_name: :update,
+                   attributes: %{},
+                   arguments: %{},
+                   context: %{action_source: "nightly_sync"},
+                   actor_id: nil,
+                   real_actor_id: nil
+                 })
+                 |> Ash.create(authorize?: false)
+
+        assert row.actor_id == nil
+      end
+    end
+
     test "leaves a store that is already there alone" do
       igniter =
         install(%{
@@ -399,6 +442,62 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
     # stated rather than guessed at.
     test "states the client half instead of patching it" do
       assert_has_notice(install(), &(&1 =~ "initBrowserSession"))
+    end
+  end
+
+  # The generated store and its domain — with the user resource and a domain
+  # for it, when the store relates one — compiled under a namespace of their
+  # own, so the two branches do not redefine each other. Compiled as the
+  # configured store, as a host's is, so it is not audited into itself.
+  defp compile_store(igniter, related?) do
+    namespace = "InstallProbe#{:erlang.unique_integer([:positive])}"
+
+    accounts =
+      if related? do
+        [
+          """
+          defmodule Test.Accounts do
+            use Ash.Domain, validate_config_inclusion?: false
+
+            resources do
+              resource Test.Accounts.User
+            end
+          end
+          """,
+          @user
+        ]
+      else
+        []
+      end
+
+    source =
+      (accounts ++ [created(igniter, "lib/test/audit_logs.ex"), created(igniter, @store)])
+      |> Enum.join("\n")
+      |> String.replace(~r/\bTest\./, namespace <> ".")
+
+    store = Module.concat([namespace, "AuditLogs", "AuditLog"])
+
+    # A verifier reports on stderr rather than raising out of
+    # `Code.compile_string/1`. The domain is not in this app's `ash_domains`,
+    # which Ash warns about there too — that one is not the store's.
+    output =
+      with_audit_resource(store, fn ->
+        capture_io(:stderr, fn -> Code.compile_string(source) end)
+      end)
+
+    refute output =~ "Error", output
+
+    store
+  end
+
+  defp with_audit_resource(store, fun) do
+    original = Application.get_env(:ash_quick, :audit_resource)
+    Application.put_env(:ash_quick, :audit_resource, store)
+
+    try do
+      fun.()
+    after
+      Application.put_env(:ash_quick, :audit_resource, original)
     end
   end
 
