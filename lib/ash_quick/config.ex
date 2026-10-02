@@ -91,6 +91,23 @@ defmodule AshQuick.Config do
     by `AshQuick.LiveView.Impersonation` before the host's scope exists.
     Defaults to `:current_user`.
 
+  * `:client_ip` — Where `AshQuick.ClientIp` reads the address an audit row and
+    a browser session record, for a LiveView and a controller alike. Read on
+    every request, so it may be set in `runtime.exs`. One of:
+
+      * `:peer` — the address of whatever opened the connection. The default.
+      * `{:header, name}` — the last entry of the last `name` header, falling
+        back to the peer address when it is missing or not an IP. `name` must
+        start with `x-`: Phoenix passes a LiveView no other headers.
+      * `{module, function, args}` — `apply(module, function, [info | args])`,
+        where `info` is `%{peer_data: ..., x_headers: ...}`. It returns an IP
+        address string or `nil`.
+
+    **Name a header only when nothing but your proxy can reach the app**:
+    whoever can reach it can set the header to any address they like. See
+    `client_ip/0`, and assert `AshQuick.ClientIp.config_violations/1` is empty
+    in a test.
+
   * `:versioning_ignored_attributes` / `:versioning_ignored_relationships` —
     **Additions** to what an update may change without bumping the optimistic
     lock, for a host carrying bookkeeping of its own beyond the four AshQuick
@@ -190,6 +207,52 @@ defmodule AshQuick.Config do
   """
   def max_page_size do
     get(:max_page_size, 250)
+  end
+
+  @doc """
+  Where the client's IP address is read from. Defaults to `:peer`.
+
+  What `AshQuick.ClientIp` resolves on every request, through
+  `AshQuick.LiveView.Mount.connect_ip/1` for a LiveView and
+  `AshQuick.ClientIp.from_conn/1` for a controller, and so the address audit
+  rows and browser sessions record. Read then rather than at compile time, so
+  `runtime.exs` may set it. It accepts exactly three forms:
+
+    * `:peer` — the `:peer_data` address, or `nil` when there is none.
+
+    * `{:header, name}` — the header `name`, matched lowercased. When it appears
+      more than once the last occurrence is read, and of a comma-separated value
+      the last entry. A header that is missing, empty or not an IP falls back to
+      the peer address. `name` must start with `x-`, since Phoenix's
+      `:x_headers` connect info holds nothing else; any other name raises
+      `ArgumentError`, because it could never be read.
+
+    * `{module, function, args}` — called as
+      `apply(module, function, [info | args])`, where `info` is
+      `%{peer_data: ..., x_headers: ...}`, shaped as
+      `Phoenix.LiveView.get_connect_info/2` returns them. It runs on the
+      disconnected render too, where both are read from the request, and either
+      is `nil` only when the endpoint does not offer it. It returns
+      `nil` or a string `:inet.parse_address/1` accepts, formatted the same way
+      as the other forms; anything else raises `ArgumentError`. `nil` means no
+      address, and is not replaced by the peer's.
+
+  Any other value raises `ArgumentError` on connect. That happens only once
+  something connects, so check the value in a test with
+  `AshQuick.ClientIp.config_violations/1`.
+
+  **Name a header only when nothing but your proxy can reach the app.** Whoever
+  can reach the app can set the header to any address they like, and that is
+  what their audit rows then record. Resolving the client behind whatever sits
+  in front of the proxy (a WAF, a CDN) is the proxy's job:
+
+      config :ash_quick, client_ip: {:header, "x-real-ip"}
+
+  with the proxy overwriting `X-Real-IP` with the client it resolved. See
+  `AshQuick.LiveView.Mount`.
+  """
+  def client_ip do
+    get(:client_ip, :peer)
   end
 
   @doc """

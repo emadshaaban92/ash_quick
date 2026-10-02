@@ -10,8 +10,11 @@ defmodule AshQuick.LiveView.MountTest do
   address, and a blank IP column is indistinguishable from a request that
   genuinely had none. The assertion has to be made against the endpoint's
   declaration, which is what `connect_info_violations/1` is for.
+
+  Where the address comes from is the other: `connect_ip/1` reads global
+  config, so this module runs alone.
   """
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias AshQuick.LiveView.Mount
 
@@ -57,6 +60,190 @@ defmodule AshQuick.LiveView.MountTest do
 
   defmodule NotAnEndpoint do
     @moduledoc false
+  end
+
+  defmodule IpSource do
+    @moduledoc false
+    def echo(info, test_pid, answer) do
+      send(test_pid, {:client_ip_info, info})
+      answer
+    end
+  end
+
+  # Shaped the way `Phoenix.LiveView.get_connect_info/2` reads a connected
+  # socket: a map under `private.connect_info`, missing keys reading as `nil`.
+  defp socket(connect_info) do
+    %Phoenix.LiveView.Socket{private: %{connect_info: connect_info}}
+  end
+
+  defp connected(x_headers, peer \\ {10, 0, 0, 1}) do
+    socket(%{peer_data: %{address: peer, port: 4000, ssl_cert: nil}, x_headers: x_headers})
+  end
+
+  setup do
+    original = Application.fetch_env(:ash_quick, :client_ip)
+
+    on_exit(fn ->
+      case original do
+        {:ok, value} -> Application.put_env(:ash_quick, :client_ip, value)
+        :error -> Application.delete_env(:ash_quick, :client_ip)
+      end
+    end)
+  end
+
+  defp put_client_ip(value), do: Application.put_env(:ash_quick, :client_ip, value)
+
+  @spoofing [{"x-forwarded-for", "6.6.6.6"}, {"x-real-ip", "6.6.6.6"}]
+
+  describe "connect_ip/1 with :peer" do
+    # The client wrote both headers, so neither may decide its address.
+    test "is the default, and ignores forwarded headers" do
+      Application.delete_env(:ash_quick, :client_ip)
+
+      assert Mount.connect_ip(connected(@spoofing)) == "10.0.0.1"
+    end
+
+    test "configured, ignores forwarded headers" do
+      put_client_ip(:peer)
+      assert Mount.connect_ip(connected(@spoofing)) == "10.0.0.1"
+    end
+
+    test "is nil with no peer data" do
+      put_client_ip(:peer)
+      assert Mount.connect_ip(socket(%{x_headers: @spoofing})) == nil
+    end
+  end
+
+  describe "connect_ip/1 with {:header, name}" do
+    test "reads a single value" do
+      put_client_ip({:header, "x-real-ip"})
+      assert Mount.connect_ip(connected([{"x-real-ip", "203.0.113.7"}])) == "203.0.113.7"
+    end
+
+    test "matches a configured name in any case" do
+      put_client_ip({:header, "X-Real-IP"})
+      assert Mount.connect_ip(connected([{"x-real-ip", "203.0.113.7"}])) == "203.0.113.7"
+    end
+
+    # The proxy appends; whatever comes before its entry is the client's to write.
+    test "takes the last entry of a list" do
+      put_client_ip({:header, "x-forwarded-for"})
+
+      assert Mount.connect_ip(connected([{"x-forwarded-for", "6.6.6.6, 203.0.113.7"}])) ==
+               "203.0.113.7"
+    end
+
+    test "takes the last occurrence of a repeated header" do
+      put_client_ip({:header, "x-real-ip"})
+
+      headers = [{"x-real-ip", "6.6.6.6"}, {"x-real-ip", "203.0.113.7"}]
+      assert Mount.connect_ip(connected(headers)) == "203.0.113.7"
+    end
+
+    test "falls back to the peer when the header is missing" do
+      put_client_ip({:header, "x-real-ip"})
+      assert Mount.connect_ip(connected([{"x-forwarded-for", "203.0.113.7"}])) == "10.0.0.1"
+    end
+
+    test "falls back to the peer when the value is not an IP" do
+      put_client_ip({:header, "x-real-ip"})
+      assert Mount.connect_ip(connected([{"x-real-ip", "unknown"}])) == "10.0.0.1"
+      assert Mount.connect_ip(connected([{"x-real-ip", ""}])) == "10.0.0.1"
+      assert Mount.connect_ip(connected([{"x-real-ip", <<0xFF>>}])) == "10.0.0.1"
+    end
+
+    test "formats an IPv6 value as it formats an IPv6 peer" do
+      put_client_ip({:header, "x-real-ip"})
+      peer = {0x2001, 0xDB8, 0, 0, 0, 0, 0, 1}
+
+      assert Mount.connect_ip(connected([{"x-real-ip", "2001:DB8:0:0::1"}])) ==
+               Mount.connect_ip(connected([], peer))
+
+      assert Mount.connect_ip(connected([], peer)) == "2001:db8::1"
+    end
+
+    test "refuses a header Phoenix never passes to a LiveView" do
+      put_client_ip({:header, "forwarded"})
+
+      error = assert_raise ArgumentError, fn -> Mount.connect_ip(connected([])) end
+      assert error.message =~ ~s({:header, "forwarded"})
+      assert error.message =~ "x-"
+      assert error.message =~ "{module, function, args}"
+    end
+  end
+
+  describe "connect_ip/1 with {module, function, args}" do
+    test "passes the connect info and the extra args through" do
+      put_client_ip({IpSource, :echo, [self(), nil]})
+      Mount.connect_ip(connected([{"x-real-ip", "203.0.113.7"}]))
+
+      assert_received {:client_ip_info, info}
+
+      assert info == %{
+               peer_data: %{address: {10, 0, 0, 1}, port: 4000, ssl_cert: nil},
+               x_headers: [{"x-real-ip", "203.0.113.7"}]
+             }
+    end
+
+    test "formats the address it returns" do
+      put_client_ip({IpSource, :echo, [self(), "2001:DB8:0:0::1"]})
+      assert Mount.connect_ip(connected([])) == "2001:db8::1"
+    end
+
+    # The function decided there is no address; the peer does not overrule it.
+    test "keeps nil as nil, peer data or not" do
+      put_client_ip({IpSource, :echo, [self(), nil]})
+      assert Mount.connect_ip(connected([])) == nil
+    end
+
+    test "refuses a return that is not an IP" do
+      put_client_ip({IpSource, :echo, [self(), "unknown"]})
+
+      error = assert_raise ArgumentError, fn -> Mount.connect_ip(connected([])) end
+      assert error.message =~ "IpSource.echo/3"
+      assert error.message =~ ~s("unknown")
+    end
+  end
+
+  test "connect_ip/1 refuses any other :client_ip, naming the three forms" do
+    put_client_ip(:bogus)
+
+    error = assert_raise ArgumentError, fn -> Mount.connect_ip(connected([])) end
+    assert error.message =~ ":bogus"
+    assert error.message =~ ":peer"
+    assert error.message =~ "{:header, name}"
+    assert error.message =~ "{module, function, args}"
+  end
+
+  describe "on_mount/4" do
+    # A connected socket for a signed-in tab that names itself, mounted at a
+    # router, which is the path that builds a browser session.
+    defp signed_in_tab do
+      %Phoenix.LiveView.Socket{
+        router: SomeRouter,
+        transport_pid: self(),
+        assigns: %{__changed__: %{}, current_user: %{id: 1}},
+        private: %{
+          connect_info: %{peer_data: %{address: {10, 0, 0, 1}, port: 4000, ssl_cert: nil}},
+          connect_params: %{"tab" => %{"id" => "tab-1"}},
+          lifecycle: %Phoenix.LiveView.Lifecycle{}
+        }
+      }
+    end
+
+    # The session and the scope must record one answer, and a function the host
+    # wrote must not run twice for it.
+    test "resolves the address once, for the session and the assign alike" do
+      put_client_ip({IpSource, :echo, [self(), "203.0.113.7"]})
+
+      assert {:cont, socket} = Mount.on_mount(:default, %{}, %{}, signed_in_tab())
+
+      assert_received {:client_ip_info, _info}
+      refute_received {:client_ip_info, _info}
+
+      assert Mount.ip(socket) == "203.0.113.7"
+      assert Mount.browser_session(socket).ip == "203.0.113.7"
+    end
   end
 
   describe "connect_info_violations/1" do

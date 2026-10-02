@@ -38,6 +38,47 @@
 
 ### Breaking changes
 
+- **The IP on audit rows and browser sessions is now the peer address by
+  default.** It used to be the first entry of `X-Forwarded-For` (or
+  `X-Real-IP`) when either was present. That entry is whatever the client
+  sent, so anyone could choose the address recorded against them, even behind
+  a proxy. Where the address comes from is now one setting,
+  `config :ash_quick, client_ip: ...`, read at connect time: `:peer` (the
+  default), `{:header, name}` or `{module, function, args}`. See
+  `AshQuick.Config.client_ip/0`.
+
+  **Who is affected:** an app behind a reverse proxy records the proxy's
+  address on every audit row and browser session until it sets `:client_ip`.
+  A controller building its scope from `conn.remote_ip` records the proxy's
+  address even then: build it from `AshQuick.ClientIp.from_conn/1` instead, so
+  controllers and LiveViews read the address the same way.
+
+  **Migrating:** have the proxy overwrite a header with the client's address,
+  and name that header. With Caddy:
+
+  ```
+  reverse_proxy app:4000 {
+      header_up X-Real-IP {client_ip}
+  }
+  ```
+
+  ```elixir
+  config :ash_quick, client_ip: {:header, "x-real-ip"}
+  ```
+
+  If something sits in front of Caddy (a WAF, a CDN), list it in Caddy's
+  `trusted_proxies` so `{client_ip}` is the real client rather than that
+  proxy. AshQuick reads the header's last entry and does not walk a chain of
+  proxies; that is the proxy's job. For a single nginx proxy, the header is
+  `proxy_set_header X-Real-IP $remote_addr;`.
+
+  **Name a header only if nothing but the proxy can reach the app.** Whoever
+  can reach the app directly can set the header to any address they like.
+
+  A bad `:client_ip` raises only once something connects. Assert
+  `AshQuick.ClientIp.config_violations/1` is empty in a test to catch it before
+  a deploy.
+
 - **Writes with no actor are now audited.** A create, update or destroy with
   no actor (a background job, a scheduled task, an integration) used to leave
   no audit row at all. It now records one with `actor_id: nil` and
