@@ -97,9 +97,25 @@ defmodule AshQuick.LiveView.Mount do
 
   ## The IP
 
-  `connect_ip/1` reads an `X-Forwarded-For` ahead of the peer address. It is
-  here because it shares the scope's deadline and comes off the socket, not
-  because it has anything to do with impersonation.
+  `connect_ip/1` is here because it shares the scope's deadline and comes off
+  the socket, not because it has anything to do with impersonation.
+
+  Where it reads the address from is `config :ash_quick, client_ip: ...`, read
+  at connect time, so `runtime.exs` may set it. The default, `:peer`, is the
+  address of whatever opened the connection. A header is believed only when
+  `:client_ip` names one:
+
+      config :ash_quick, client_ip: {:header, "x-real-ip"}
+
+  **Name a header only when nothing but your proxy can reach the app.** Whoever
+  can reach the app can set the header to anything, and the address they chose
+  is then what their audit rows and browser sessions record. AshQuick takes the
+  last entry of the header's last occurrence and nothing more: it does not walk
+  a chain of proxies. Finding the client behind whatever sits in front of your
+  proxy (a WAF, a CDN) is the proxy's job, done in its own trusted-proxies
+  setting, and the header it sets should carry that one answer. Anything that
+  needs more than a header can name a `{module, function, args}` instead. See
+  `AshQuick.Config.client_ip/0` for the three forms.
 
   It needs both keys on the endpoint:
 
@@ -168,20 +184,31 @@ defmodule AshQuick.LiveView.Mount do
   def ip(socket), do: socket.assigns[@ip_assign]
 
   @doc """
-  The address `socket` connected from, preferring a proxy's forwarded header
-  over the peer address.
+  The address `socket` connected from, read from wherever `:client_ip` says.
 
-  `nil` on a disconnected mount, which has no connection to describe yet.
+  The peer address unless configured otherwise; see `AshQuick.Config.client_ip/0`.
+  `nil` when the source it names has no address to give.
+
+  Raises `ArgumentError` when `:client_ip` is not one of the forms it accepts,
+  or when a `{module, function, args}` returns something other than `nil` or an
+  IP address string.
   """
-  def connect_ip(socket), do: forwarded_ip(socket) || peer_ip(socket)
+  def connect_ip(socket) do
+    info = %{
+      peer_data: LiveView.get_connect_info(socket, :peer_data),
+      x_headers: LiveView.get_connect_info(socket, :x_headers)
+    }
+
+    client_ip(Config.client_ip(), info)
+  end
 
   @doc """
   The ways `endpoint` falls short of what `connect_ip/1` needs, as a list of
   sentences — empty when it satisfies it.
 
   Nothing calls this on a host's behalf. A missing `connect_info` key is
-  indistinguishable at runtime from a request that genuinely had no forwarded
-  header, so the only place it can be caught is a test asserting this is empty.
+  indistinguishable at runtime from a request that genuinely had no address to
+  give, so the only place it can be caught is a test asserting this is empty.
   """
   def connect_info_violations(endpoint) when is_atom(endpoint) do
     cond do
@@ -374,25 +401,69 @@ defmodule AshQuick.LiveView.Mount do
 
   defp path(_uri), do: nil
 
-  defp forwarded_ip(socket) do
-    with headers when is_list(headers) <- LiveView.get_connect_info(socket, :x_headers),
-         {_key, value} <- Enum.find(headers, &forwarded?/1),
-         address <- value |> String.split(",") |> List.first() |> String.trim(),
-         {:ok, ip} <- address |> String.to_charlist() |> :inet.parse_address() do
-      format(ip)
-    else
-      _other -> nil
+  defp client_ip(:peer, info), do: peer_ip(info)
+
+  defp client_ip({:header, configured}, info) when is_binary(configured) do
+    name = String.downcase(configured)
+
+    if not String.starts_with?(name, "x-") do
+      raise ArgumentError,
+            "config :ash_quick, client_ip: {:header, #{inspect(configured)}} names a header " <>
+              "AshQuick can never read: Phoenix's :x_headers connect info holds only " <>
+              "headers starting with \"x-\", so every connection would fall back to " <>
+              "the peer address. Have the proxy set an x- header instead, or read the " <>
+              "address yourself with a {module, function, args}."
+    end
+
+    header_ip(info, name) || peer_ip(info)
+  end
+
+  # The function has already decided, so its `nil` is not second-guessed with
+  # the peer address.
+  defp client_ip({module, function, args} = mfa, info)
+       when is_atom(module) and is_atom(function) and is_list(args) do
+    case apply(module, function, [info | args]) do
+      nil -> nil
+      address when is_binary(address) -> parse(address) || raise_bad_return(mfa, address)
+      other -> raise_bad_return(mfa, other)
     end
   end
 
-  defp forwarded?({key, _value}), do: key in ~w(x-forwarded-for x-real-ip)
+  defp client_ip(other, _info) do
+    raise ArgumentError,
+          "config :ash_quick, client_ip: must be :peer, {:header, name} with name a " <>
+            "string, or {module, function, args}; got: #{inspect(other)}"
+  end
 
-  defp peer_ip(socket) do
-    case LiveView.get_connect_info(socket, :peer_data) do
-      %{address: address} -> format(address)
-      _other -> nil
+  defp raise_bad_return({module, function, args}, returned) do
+    raise ArgumentError,
+          "#{inspect(module)}.#{function}/#{length(args) + 1}, configured as " <>
+            ":client_ip, must return nil or an IP address string; it returned: " <>
+            inspect(returned)
+  end
+
+  # The last occurrence and its last entry are the ones the nearest proxy wrote;
+  # anything before them came from further away, the client included.
+  defp header_ip(%{x_headers: headers}, name) when is_list(headers) do
+    case headers |> Enum.reverse() |> List.keyfind(name, 0) do
+      {_name, value} -> value |> String.split(",") |> List.last() |> String.trim() |> parse()
+      nil -> nil
     end
   end
+
+  defp header_ip(_info, _name), do: nil
+
+  # Bytewise, so a value that is not UTF-8 is refused by the parser rather than
+  # crashing the mount.
+  defp parse(address) do
+    case address |> :erlang.binary_to_list() |> :inet.parse_address() do
+      {:ok, ip} -> format(ip)
+      {:error, _reason} -> nil
+    end
+  end
+
+  defp peer_ip(%{peer_data: %{address: address}}), do: format(address)
+  defp peer_ip(_info), do: nil
 
   defp format(address), do: address |> :inet.ntoa() |> to_string()
 end
