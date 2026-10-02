@@ -29,6 +29,12 @@ defmodule AshQuick.Audit.Verifier do
   alias AshQuick.Audit.Row
   alias Spark.Dsl.Verifier
 
+  @unusable """
+  Every create, update and destroy on it writes its entry there, so without \
+  a usable one the resource does not fail here — it fails on every write, \
+  inside the action's transaction.\
+  """
+
   @impl true
   def verify(dsl_state) do
     if audits?(dsl_state) do
@@ -83,9 +89,38 @@ defmodule AshQuick.Audit.Verifier do
     refused = Row.fields() -- (missing ++ accepted(action))
 
     if missing == [] and refused == [] do
-      check_changes(store, action, dsl_state)
+      check_actor_ids(store, action, dsl_state)
     else
       {:error, error(dsl_state, unwritable(store, missing, refused))}
+    end
+  end
+
+  # A write with no actor is recorded with `actor_id: nil` and
+  # `real_actor_id: nil`, so a store that refuses `nil` in either fails every
+  # background job, scheduled task and integration that writes an audited
+  # resource. Read off the attribute either way: a `belongs_to` hands its
+  # `allow_nil?` to the source attribute. An argument carrying the id into the
+  # action refuses `nil` on its own.
+  defp check_actor_ids(store, action, dsl_state) do
+    case Enum.find_value([:actor_id, :real_actor_id], &refuses_nil(store, action, &1)) do
+      nil -> check_changes(store, action, dsl_state)
+      {field, refusing} -> {:error, error(dsl_state, actor_id_required(store, field, refusing))}
+    end
+  end
+
+  defp refuses_nil(store, action, field) do
+    attribute = Ash.Resource.Info.attribute(store, field)
+    argument = Enum.find(action.arguments, &(&1.name == field))
+
+    cond do
+      not attribute.allow_nil? ->
+        {field, "its `#{field}` attribute"}
+
+      argument && not argument.allow_nil? ->
+        {field, "the `#{field}` argument of its `:create` action"}
+
+      true ->
+        nil
     end
   end
 
@@ -131,6 +166,10 @@ defmodule AshQuick.Audit.Verifier do
   defp audit_change?(_change), do: false
 
   defp error(dsl_state, {problem, remedy}) do
+    error(dsl_state, {problem, @unusable, remedy})
+  end
+
+  defp error(dsl_state, {problem, consequence, remedy}) do
     module = Verifier.get_persisted(dsl_state, :module)
 
     Spark.Error.DslError.exception(
@@ -139,9 +178,7 @@ defmodule AshQuick.Audit.Verifier do
       message: """
       #{inspect(module)} is audited, and #{problem}
 
-      Every create, update and destroy on it writes its entry there, so without \
-      a usable one the resource does not fail here — it fails on every write, \
-      inside the action's transaction.
+      #{consequence}
 
       #{remedy}
       Or stop auditing this resource, which is a decision to keep no record of \
@@ -242,6 +279,34 @@ defmodule AshQuick.Audit.Verifier do
      or regenerate it:
 
          mix igniter.install ash_quick
+     """}
+  end
+
+  defp actor_id_required(store, field, refusing) do
+    relationship = field |> to_string() |> String.replace_suffix("_id", "")
+
+    {"""
+     the store #{inspect(store)} refuses `nil` for `#{field}`: \
+     #{refusing} has `allow_nil?: false`.
+     """,
+     """
+     Writes with no actor, such as a background job's, are now recorded with \
+     `actor_id: nil` and `real_actor_id: nil`. A store that refuses either does \
+     not fail here — it fails every one of those writes, inside the action's \
+     transaction.\
+     """,
+     """
+     Let #{inspect(store)} take `nil` for `#{field}` — `allow_nil? true` on the \
+     attribute, or on the `belongs_to :#{relationship}` relationship it is the \
+     source of, and on any `#{field}` argument its `:create` takes:
+
+         belongs_to :#{relationship}, MyApp.Accounts.User do
+           allow_nil? true
+         end
+
+     then generate the migration:
+
+         mix ash.codegen allow_nil_audit_actor
      """}
   end
 

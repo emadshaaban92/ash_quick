@@ -50,7 +50,8 @@ defmodule AshQuick.Audit.Row do
       context: simple_context(changeset.context),
       actor_id: actor_id,
       # Never `nil` while there is an actor: the two are simply equal unless
-      # someone was impersonating.
+      # someone was impersonating. A write with no actor and no scope behind it
+      # has neither, and both are `nil`.
       real_actor_id: id(AshQuick.Scope.real_actor(changeset)) || actor_id,
       ip: AshQuick.Scope.ip(changeset),
       tenant: changeset.tenant
@@ -187,9 +188,12 @@ defmodule AshQuick.Audit.Row do
 
   # Ash takes any term as an actor, and a caller that already holds the id
   # passes that rather than reading the record back — so both are the actor
-  # this row names. Anything else cannot be named, and an entry that says
-  # nobody did it is worse than the write failing here: that is the record
-  # somebody will come looking for.
+  # this row names. No actor at all is a write nobody was behind, and the row
+  # says so with `nil`. Anything else is an actor that cannot be named, and an
+  # entry that says nobody did it when somebody did is worse than the write
+  # failing here: that is the record somebody will come looking for.
+  defp actor_id(_changeset, nil), do: nil
+
   defp actor_id(changeset, actor) do
     case id(actor) do
       nil -> raise AshQuick.Audit.ActorError, resource: changeset.resource, actor: actor

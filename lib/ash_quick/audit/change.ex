@@ -8,9 +8,21 @@ defmodule AshQuick.Audit.Change do
   resource that turns it off at resource level and wants only some of its
   actions audited attaches it to those by hand.
 
-  Nothing is logged for a write with no actor: an audit entry names who made
-  the change, and a system write has nobody to name. That is the only condition
-  checked here — every other write in the batch is handed over.
+  Every audited write is recorded, including one with no actor — a background
+  job, a scheduled task, an integration. Its row has `actor_id: nil`, which says
+  that nobody was behind it rather than leaving no trace that it happened.
+
+  To say *what* made a write, name it under `action_source` in the action's
+  context — `context: %{action_source: "nightly_sync"}` — and it is kept in the
+  row's `context`. That is a convention rather than a requirement: nothing
+  refuses a write without one. It is worth setting on any write a person did not
+  make through a form, with an actor or without, because one key across a host
+  is one filter across its log. Any other top-level string or atom value in the
+  context is kept too; a nested value is not.
+
+  There are two ways to keep a write out of the log: name its action in
+  `exclude_actions`, or turn auditing off for the resource. Passing no actor is
+  not one of them.
 
   An action named in `exclude_actions` records nothing — for one that
   authorizes and emits but writes nothing, where a row per record would say a
@@ -121,18 +133,18 @@ defmodule AshQuick.Audit.Change do
   end
 
   @impl true
-  def after_batch([{changeset, _record} | _] = changesets_and_results, _opts, %{actor: actor})
-      when actor != nil do
+  def after_batch([{changeset, _record} | _] = changesets_and_results, _opts, context) do
     if excluded?(changeset) do
       :ok
     else
       Ash.Tracer.span :custom, "Audit Log", changeset.context[:private][:tracer] do
-        log(changesets_and_results, actor)
+        log(changesets_and_results, context.actor)
       end
     end
   end
 
-  def after_batch(_changesets_and_results, _opts, _context), do: :ok
+  # A bulk update whose every changeset failed reaches here with nothing left.
+  def after_batch([], _opts, _context), do: :ok
 
   defp excluded?(%Ash.Changeset{resource: resource, action: %{name: name}}) do
     name in Declaration.exclude_actions(resource)

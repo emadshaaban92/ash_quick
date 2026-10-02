@@ -70,6 +70,42 @@ defmodule AshQuick.AuditTest do
     end
   end
 
+  describe "a write with no actor" do
+    # A background job: no scope, no conn, no LiveView — nothing but the write.
+    # A user stamps no `updated_by`, so the write is not refused for wanting an
+    # actor before the audit change ever sees it.
+    test "is recorded with a NULL actor, and the write goes through", %{admin: admin} do
+      updated =
+        admin
+        |> Ash.Changeset.for_update(:update, %{name: "Renamed by a job"},
+          context: %{action_source: "nightly_sync"}
+        )
+        |> Ash.update!(authorize?: false)
+
+      assert updated.name == "Renamed by a job"
+
+      assert [%{name: "Renamed by a job"}] =
+               Example.Accounts.User
+               |> Ash.Query.filter(id == ^admin.id)
+               |> Ash.read!(authorize?: false)
+
+      # The admin was written before, by the suite's setup; this is the job's.
+      assert [entry] =
+               entries(admin) |> Enum.filter(&(&1.context["action_source"] == "nightly_sync"))
+
+      assert entry.actor_id == nil
+      assert entry.real_actor_id == nil
+      assert entry.ip == nil
+      assert entry.changes["name"] == %{"from" => admin.name, "to" => "Renamed by a job"}
+
+      # NULL in the column itself, not a value Ash filled on the way out.
+      assert %{rows: [[nil]]} =
+               Example.Repo.query!("SELECT actor_id FROM audit_logs WHERE id = $1", [
+                 Ecto.UUID.dump!(entry.id)
+               ])
+    end
+  end
+
   describe "changes" do
     test "an update records what changed and says nothing about what did not",
          %{admin: admin} do

@@ -146,6 +146,90 @@ defmodule AshQuick.AuditTest do
     assert message =~ "role: :importer"
   end
 
+  describe "a write with no actor" do
+    # A background job, a scheduled task, an integration: nobody is behind the
+    # write, and the row says so rather than leaving no trace it happened.
+    test "is recorded, naming nobody" do
+      record =
+        Credential
+        |> Ash.Changeset.for_create(:create, %{name: "Gateway", api_key: "sk-job"})
+        |> Ash.create!()
+
+      updated =
+        record
+        |> Ash.Changeset.for_update(:rotate, %{password: "sk-2", reason: "nightly"})
+        |> Ash.update!()
+
+      assert [created, rotated] = entries(record)
+
+      assert created.actor_id == nil
+      assert created.real_actor_id == nil
+      assert created.action_name == :create
+      assert created.attributes[:name] == "Gateway"
+      assert created.changes[:name] == %{to: "Gateway"}
+
+      assert rotated.actor_id == nil
+      assert rotated.real_actor_id == nil
+      assert rotated.action_name == :rotate
+      assert rotated.arguments[:reason] == "nightly"
+      assert rotated.arguments[:password] == "**redacted**"
+      assert rotated.changes[:api_key] == %{from: "**redacted**", to: "**redacted**"}
+      assert updated.api_key == "sk-2"
+    end
+
+    test "keeps what its context says made it" do
+      record =
+        Credential
+        |> Ash.Changeset.for_create(:create, %{name: "Gateway"},
+          context: %{action_source: "nightly_sync", queue: :scheduled, run: %{id: 42}}
+        )
+        |> Ash.create!()
+
+      assert [entry] = entries(record)
+
+      assert entry.actor_id == nil
+      assert entry.context[:action_source] == "nightly_sync"
+      # `action_source` is the key to use, not the only one kept.
+      assert entry.context[:queue] == :scheduled
+      # Flat values only — a nested one is not kept.
+      refute Map.has_key?(entry.context, :run)
+    end
+
+    test "in bulk records one row per record" do
+      %Ash.BulkResult{status: :success, records: records} =
+        Ash.bulk_create(
+          [%{name: "One"}, %{name: "Two"}, %{name: "Three"}],
+          Credential,
+          :create,
+          return_records?: true,
+          return_errors?: true
+        )
+
+      assert length(records) == 3
+
+      for record <- records do
+        assert [entry] = entries(record)
+        assert entry.actor_id == nil
+        assert entry.attributes[:name] == record.name
+      end
+    end
+  end
+
+  # `exclude_actions` is how a host keeps a write out of the log, and passing no
+  # actor is not — so it has to hold either way.
+  test "an excluded action records nothing, with or without an actor", %{actor: actor} do
+    record =
+      Credential
+      |> Ash.Changeset.for_create(:create, %{name: "Gateway"}, actor: actor)
+      |> Ash.create!()
+
+    record |> Ash.Changeset.for_update(:touch, %{}, actor: actor) |> Ash.update!()
+    record |> Ash.Changeset.for_update(:touch, %{}) |> Ash.update!()
+
+    assert [entry] = entries(record)
+    assert entry.action_name == :create
+  end
+
   describe "changes" do
     setup %{actor: actor} do
       record =

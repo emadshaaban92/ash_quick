@@ -94,14 +94,17 @@ defmodule <%= inspect @module %> do
 <%= if @actor_resource do %><% else %>
     # No `:actor_resource` is configured, so these are plain columns rather than
     # relationships to the person they name. Relate them once there is a
-    # resource to relate them to.
-    attribute :actor_id, :uuid, allow_nil?: false, public?: true
+    # resource to relate them to. `actor_id` is nil for a write with no actor —
+    # a background job, an integration — which is recorded too.
+    attribute :actor_id, :uuid, allow_nil?: true, public?: true
     attribute :real_actor_id, :uuid, allow_nil?: true, public?: true
 <% end %>  end
 <%= if @actor_resource do %>
   relationships do
     belongs_to :actor, <%= inspect @actor_resource %> do
       public? true
+      # A write with no actor — a background job, an integration — is recorded too.
+      allow_nil? true
     end
 
     # Who was actually at the keyboard. Equal to `:actor` unless the write
