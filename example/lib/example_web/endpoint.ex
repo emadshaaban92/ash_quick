@@ -10,9 +10,10 @@ defmodule ExampleWeb.Endpoint do
 
   # `:peer_data` is what `AshQuick.LiveView.Mount.ip/1` reads the request
   # address from, and `:x_headers` is where a header named in
-  # `config :ash_quick, client_ip: ...` would be read from; without them every
-  # audited write records no address and nothing says so. `AshQuick.LiveView.Mount.connect_info_violations/1`
-  # is the assertion — see `test/example_web/host_conformance_test.exs`.
+  # `config :ash_quick, client_ip: ...` would be read from. Without them every
+  # audited write records no address and nothing says so.
+  # `AshQuick.LiveView.Mount.connect_info_violations/1` is the assertion; see
+  # `test/example_web/host_conformance_test.exs`.
   socket "/live", Phoenix.LiveView.Socket,
     websocket: [connect_info: [:peer_data, :x_headers, session: @session_options]],
     longpoll: [connect_info: [:peer_data, :x_headers, session: @session_options]]

@@ -62,7 +62,7 @@ defmodule AshQuick.LiveView.MountTest do
     @moduledoc false
   end
 
-  defmodule ClientIp do
+  defmodule IpSource do
     @moduledoc false
     def echo(info, test_pid, answer) do
       send(test_pid, {:client_ip_info, info})
@@ -174,7 +174,7 @@ defmodule AshQuick.LiveView.MountTest do
 
   describe "connect_ip/1 with {module, function, args}" do
     test "passes the connect info and the extra args through" do
-      put_client_ip({ClientIp, :echo, [self(), nil]})
+      put_client_ip({IpSource, :echo, [self(), nil]})
       Mount.connect_ip(connected([{"x-real-ip", "203.0.113.7"}]))
 
       assert_received {:client_ip_info, info}
@@ -186,21 +186,21 @@ defmodule AshQuick.LiveView.MountTest do
     end
 
     test "formats the address it returns" do
-      put_client_ip({ClientIp, :echo, [self(), "2001:DB8:0:0::1"]})
+      put_client_ip({IpSource, :echo, [self(), "2001:DB8:0:0::1"]})
       assert Mount.connect_ip(connected([])) == "2001:db8::1"
     end
 
     # The function decided there is no address; the peer does not overrule it.
     test "keeps nil as nil, peer data or not" do
-      put_client_ip({ClientIp, :echo, [self(), nil]})
+      put_client_ip({IpSource, :echo, [self(), nil]})
       assert Mount.connect_ip(connected([])) == nil
     end
 
     test "refuses a return that is not an IP" do
-      put_client_ip({ClientIp, :echo, [self(), "unknown"]})
+      put_client_ip({IpSource, :echo, [self(), "unknown"]})
 
       error = assert_raise ArgumentError, fn -> Mount.connect_ip(connected([])) end
-      assert error.message =~ "ClientIp.echo/3"
+      assert error.message =~ "IpSource.echo/3"
       assert error.message =~ ~s("unknown")
     end
   end
@@ -213,6 +213,37 @@ defmodule AshQuick.LiveView.MountTest do
     assert error.message =~ ":peer"
     assert error.message =~ "{:header, name}"
     assert error.message =~ "{module, function, args}"
+  end
+
+  describe "on_mount/4" do
+    # A connected socket for a signed-in tab that names itself, mounted at a
+    # router, which is the path that builds a browser session.
+    defp signed_in_tab do
+      %Phoenix.LiveView.Socket{
+        router: SomeRouter,
+        transport_pid: self(),
+        assigns: %{__changed__: %{}, current_user: %{id: 1}},
+        private: %{
+          connect_info: %{peer_data: %{address: {10, 0, 0, 1}, port: 4000, ssl_cert: nil}},
+          connect_params: %{"tab" => %{"id" => "tab-1"}},
+          lifecycle: %Phoenix.LiveView.Lifecycle{}
+        }
+      }
+    end
+
+    # The session and the scope must record one answer, and a function the host
+    # wrote must not run twice for it.
+    test "resolves the address once, for the session and the assign alike" do
+      put_client_ip({IpSource, :echo, [self(), "203.0.113.7"]})
+
+      assert {:cont, socket} = Mount.on_mount(:default, %{}, %{}, signed_in_tab())
+
+      assert_received {:client_ip_info, _info}
+      refute_received {:client_ip_info, _info}
+
+      assert Mount.ip(socket) == "203.0.113.7"
+      assert Mount.browser_session(socket).ip == "203.0.113.7"
+    end
   end
 
   describe "connect_info_violations/1" do

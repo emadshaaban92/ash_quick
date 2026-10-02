@@ -117,6 +117,11 @@ defmodule AshQuick.LiveView.Mount do
   needs more than a header can name a `{module, function, args}` instead. See
   `AshQuick.Config.client_ip/0` for the three forms.
 
+  A controller reads the same answer from its `Plug.Conn` with
+  `AshQuick.ClientIp.from_conn/1`. Build the controller scope from that rather
+  than from `conn.remote_ip`, or a host behind a proxy records the proxy's
+  address on every write a controller makes.
+
   It needs both keys on the endpoint:
 
       socket "/live", Phoenix.LiveView.Socket,
@@ -125,11 +130,13 @@ defmodule AshQuick.LiveView.Mount do
   A missing one is not an error anywhere. `connect_ip/1` answers `nil` and
   every audited write quietly records no address, which is why
   `connect_info_violations/1` exists for a test to assert on. See
-  `AshQuick.Scope.contract_violations/1`, which is there for the same reason.
+  `AshQuick.Scope.contract_violations/1`, which is there for the same reason, and
+  `AshQuick.ClientIp.config_violations/1`, which checks the setting itself.
   """
 
   alias AshQuick.BrowserSession
   alias AshQuick.BrowserSessionPresence
+  alias AshQuick.ClientIp
   alias AshQuick.Config
   alias AshQuick.Impersonation.Token
   alias Phoenix.Component
@@ -149,12 +156,15 @@ defmodule AshQuick.LiveView.Mount do
   """
   def on_mount(:default, _params, _session, socket) do
     real_actor = socket.assigns[Config.actor_assign()]
-    {session, socket} = resolve(socket, real_actor)
+    # Once per mount: the session and the scope record the same answer, and a
+    # configured `{module, function, args}` runs once rather than twice.
+    ip = connect_ip(socket)
+    {session, socket} = resolve(socket, real_actor, ip)
 
     {:cont,
      socket
      |> Component.assign(@session_assign, session)
-     |> Component.assign(@ip_assign, connect_ip(socket))
+     |> Component.assign(@ip_assign, ip)
      |> attach_hooks(session)}
   end
 
@@ -178,8 +188,12 @@ defmodule AshQuick.LiveView.Mount do
   def browser_session(socket), do: socket.assigns[@session_assign]
 
   @doc """
-  The address this connection came from, or `nil` off a disconnected mount or
-  an endpoint offering neither `:x_headers` nor `:peer_data`.
+  The address this connection came from, as `connect_ip/1` resolved it on mount.
+
+  Set on the disconnected render as well as the connected one: the first reads
+  the request, the second the socket. `nil` when the source `:client_ip` names
+  has no address to give, such as an endpoint offering neither `:x_headers` nor
+  `:peer_data`.
   """
   def ip(socket), do: socket.assigns[@ip_assign]
 
@@ -187,19 +201,16 @@ defmodule AshQuick.LiveView.Mount do
   The address `socket` connected from, read from wherever `:client_ip` says.
 
   The peer address unless configured otherwise; see `AshQuick.Config.client_ip/0`.
-  `nil` when the source it names has no address to give.
+  `nil` when the source it names has no address to give. Raises as
+  `AshQuick.ClientIp.resolve/1` does.
 
-  Raises `ArgumentError` when `:client_ip` is not one of the forms it accepts,
-  or when a `{module, function, args}` returns something other than `nil` or an
-  IP address string.
+  The mount calls this once and assigns the answer, so read it with `ip/1`.
   """
   def connect_ip(socket) do
-    info = %{
+    ClientIp.resolve(%{
       peer_data: LiveView.get_connect_info(socket, :peer_data),
       x_headers: LiveView.get_connect_info(socket, :x_headers)
-    }
-
-    client_ip(Config.client_ip(), info)
+    })
   end
 
   @doc """
@@ -265,13 +276,13 @@ defmodule AshQuick.LiveView.Mount do
 
   # Nobody signed in is no session: a sign-in page has nobody to register and
   # nobody to stand in for.
-  defp resolve(socket, nil), do: {nil, socket}
+  defp resolve(socket, nil, _ip), do: {nil, socket}
 
-  defp resolve(socket, real_actor) do
+  defp resolve(socket, real_actor, ip) do
     case LiveView.get_connect_params(socket) do
       params when is_map(params) ->
         {impersonation, socket} = impersonation(params, socket, real_actor)
-        {session(params, impersonation, real_actor, socket), socket}
+        {session(params, impersonation, real_actor, ip), socket}
 
       # A disconnected render carries no params at all, so it has no tab to
       # name — which is the same reason it is always the real actor.
@@ -292,9 +303,9 @@ defmodule AshQuick.LiveView.Mount do
   defp impersonation(_params, socket, _real_actor), do: {nil, socket}
 
   # The tab names itself in the connect params.
-  defp session(%{"tab" => %{"id" => id} = tab}, impersonation, real_actor, socket)
+  defp session(%{"tab" => %{"id" => id} = tab}, impersonation, real_actor, ip)
        when is_binary(id) do
-    build(id, opened_at(tab), impersonation, real_actor, socket)
+    build(id, opened_at(tab), impersonation, real_actor, ip)
   end
 
   # A tab that does not name itself is still identified by the impersonation it
@@ -305,21 +316,21 @@ defmodule AshQuick.LiveView.Mount do
          _params,
          {_actor, %{id: id, started_at: started_at}} = impersonation,
          real_actor,
-         socket
+         ip
        ) do
-    build(id, started_at, impersonation, real_actor, socket)
+    build(id, started_at, impersonation, real_actor, ip)
   end
 
   # Nothing names this tab and it is standing in for nobody. There is no session
   # to register and nothing a register could say about it.
-  defp session(_params, nil, _real_actor, _socket), do: nil
+  defp session(_params, nil, _real_actor, _ip), do: nil
 
-  defp build(id, started_at, impersonation, real_actor, socket) do
+  defp build(id, started_at, impersonation, real_actor, ip) do
     %BrowserSession{
       id: id,
       real_actor: real_actor,
       started_at: started_at,
-      ip: connect_ip(socket)
+      ip: ip
     }
     |> impersonating(impersonation)
   end
@@ -400,70 +411,4 @@ defmodule AshQuick.LiveView.Mount do
   end
 
   defp path(_uri), do: nil
-
-  defp client_ip(:peer, info), do: peer_ip(info)
-
-  defp client_ip({:header, configured}, info) when is_binary(configured) do
-    name = String.downcase(configured)
-
-    if not String.starts_with?(name, "x-") do
-      raise ArgumentError,
-            "config :ash_quick, client_ip: {:header, #{inspect(configured)}} names a header " <>
-              "AshQuick can never read: Phoenix's :x_headers connect info holds only " <>
-              "headers starting with \"x-\", so every connection would fall back to " <>
-              "the peer address. Have the proxy set an x- header instead, or read the " <>
-              "address yourself with a {module, function, args}."
-    end
-
-    header_ip(info, name) || peer_ip(info)
-  end
-
-  # The function has already decided, so its `nil` is not second-guessed with
-  # the peer address.
-  defp client_ip({module, function, args} = mfa, info)
-       when is_atom(module) and is_atom(function) and is_list(args) do
-    case apply(module, function, [info | args]) do
-      nil -> nil
-      address when is_binary(address) -> parse(address) || raise_bad_return(mfa, address)
-      other -> raise_bad_return(mfa, other)
-    end
-  end
-
-  defp client_ip(other, _info) do
-    raise ArgumentError,
-          "config :ash_quick, client_ip: must be :peer, {:header, name} with name a " <>
-            "string, or {module, function, args}; got: #{inspect(other)}"
-  end
-
-  defp raise_bad_return({module, function, args}, returned) do
-    raise ArgumentError,
-          "#{inspect(module)}.#{function}/#{length(args) + 1}, configured as " <>
-            ":client_ip, must return nil or an IP address string; it returned: " <>
-            inspect(returned)
-  end
-
-  # The last occurrence and its last entry are the ones the nearest proxy wrote;
-  # anything before them came from further away, the client included.
-  defp header_ip(%{x_headers: headers}, name) when is_list(headers) do
-    case headers |> Enum.reverse() |> List.keyfind(name, 0) do
-      {_name, value} -> value |> String.split(",") |> List.last() |> String.trim() |> parse()
-      nil -> nil
-    end
-  end
-
-  defp header_ip(_info, _name), do: nil
-
-  # Bytewise, so a value that is not UTF-8 is refused by the parser rather than
-  # crashing the mount.
-  defp parse(address) do
-    case address |> :erlang.binary_to_list() |> :inet.parse_address() do
-      {:ok, ip} -> format(ip)
-      {:error, _reason} -> nil
-    end
-  end
-
-  defp peer_ip(%{peer_data: %{address: address}}), do: format(address)
-  defp peer_ip(_info), do: nil
-
-  defp format(address), do: address |> :inet.ntoa() |> to_string()
 end

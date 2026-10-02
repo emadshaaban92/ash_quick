@@ -49,6 +49,9 @@
 
   **Who is affected:** an app behind a reverse proxy records the proxy's
   address on every audit row and browser session until it sets `:client_ip`.
+  A controller building its scope from `conn.remote_ip` records the proxy's
+  address even then: build it from `AshQuick.ClientIp.from_conn/1` instead, so
+  controllers and LiveViews read the address the same way.
 
   **Migrating:** have the proxy overwrite a header with the client's address,
   and name that header. With Caddy:
@@ -71,6 +74,10 @@
 
   **Name a header only if nothing but the proxy can reach the app.** Whoever
   can reach the app directly can set the header to any address they like.
+
+  A bad `:client_ip` raises only once something connects. Assert
+  `AshQuick.ClientIp.config_violations/1` is empty in a test to catch it before
+  a deploy.
 
 - **Writes with no actor are now audited.** A create, update or destroy with
   no actor (a background job, a scheduled task, an integration) used to leave

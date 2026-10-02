@@ -91,9 +91,9 @@ defmodule AshQuick.Config do
     by `AshQuick.LiveView.Impersonation` before the host's scope exists.
     Defaults to `:current_user`.
 
-  * `:client_ip` — Where `AshQuick.LiveView.Mount.connect_ip/1` reads the
-    address an audit row and a browser session record. Read at connect time, so
-    it may be set in `runtime.exs`. One of:
+  * `:client_ip` — Where `AshQuick.ClientIp` reads the address an audit row and
+    a browser session record, for a LiveView and a controller alike. Read on
+    every request, so it may be set in `runtime.exs`. One of:
 
       * `:peer` — the address of whatever opened the connection. The default.
       * `{:header, name}` — the last entry of the last `name` header, falling
@@ -105,7 +105,8 @@ defmodule AshQuick.Config do
 
     **Name a header only when nothing but your proxy can reach the app**:
     whoever can reach it can set the header to any address they like. See
-    `client_ip/0`.
+    `client_ip/0`, and assert `AshQuick.ClientIp.config_violations/1` is empty
+    in a test.
 
   * `:versioning_ignored_attributes` / `:versioning_ignored_relationships` —
     **Additions** to what an update may change without bumping the optimistic
@@ -211,9 +212,11 @@ defmodule AshQuick.Config do
   @doc """
   Where the client's IP address is read from. Defaults to `:peer`.
 
-  What `AshQuick.LiveView.Mount.connect_ip/1` resolves on every connect, and so
-  the address audit rows and browser sessions record. Read then rather than at
-  compile time, so `runtime.exs` may set it. It accepts exactly three forms:
+  What `AshQuick.ClientIp` resolves on every request, through
+  `AshQuick.LiveView.Mount.connect_ip/1` for a LiveView and
+  `AshQuick.ClientIp.from_conn/1` for a controller, and so the address audit
+  rows and browser sessions record. Read then rather than at compile time, so
+  `runtime.exs` may set it. It accepts exactly three forms:
 
     * `:peer` — the `:peer_data` address, or `nil` when there is none.
 
@@ -226,13 +229,17 @@ defmodule AshQuick.Config do
 
     * `{module, function, args}` — called as
       `apply(module, function, [info | args])`, where `info` is
-      `%{peer_data: ..., x_headers: ...}` straight from
-      `Phoenix.LiveView.get_connect_info/2`, either possibly `nil`. It returns
+      `%{peer_data: ..., x_headers: ...}`, shaped as
+      `Phoenix.LiveView.get_connect_info/2` returns them. It runs on the
+      disconnected render too, where both are read from the request, and either
+      is `nil` only when the endpoint does not offer it. It returns
       `nil` or a string `:inet.parse_address/1` accepts, formatted the same way
       as the other forms; anything else raises `ArgumentError`. `nil` means no
       address, and is not replaced by the peer's.
 
-  Any other value raises `ArgumentError` on connect.
+  Any other value raises `ArgumentError` on connect. That happens only once
+  something connects, so check the value in a test with
+  `AshQuick.ClientIp.config_violations/1`.
 
   **Name a header only when nothing but your proxy can reach the app.** Whoever
   can reach the app can set the header to any address they like, and that is

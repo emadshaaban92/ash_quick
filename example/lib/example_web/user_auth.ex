@@ -46,12 +46,16 @@ defmodule ExampleWeb.UserAuth do
   @doc """
   Builds the scope for the dead render and for anything served by a controller.
 
+  The address comes from `AshQuick.ClientIp.from_conn/1` rather than
+  `conn.remote_ip`, so a controller's writes record the same address as a
+  LiveView's, wherever `config :ash_quick, client_ip: ...` says to read it.
+
   Also puts the actor's language on the process. This is the render the browser
   gets *first*, so skipping it here means every page flashes English before the
   socket connects.
   """
   def assign_scope(conn, _opts) do
-    scope = Scope.new(actor: conn.assigns[:current_user], ip: peer_ip(conn))
+    scope = Scope.new(actor: conn.assigns[:current_user], ip: AshQuick.ClientIp.from_conn(conn))
 
     put_locale(scope)
 
@@ -195,7 +199,4 @@ defmodule ExampleWeb.UserAuth do
       {:error, _not_found} -> nil
     end
   end
-
-  defp peer_ip(%Plug.Conn{remote_ip: nil}), do: nil
-  defp peer_ip(%Plug.Conn{remote_ip: remote_ip}), do: remote_ip |> :inet.ntoa() |> to_string()
 end

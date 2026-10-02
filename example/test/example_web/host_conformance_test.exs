@@ -32,6 +32,10 @@ defmodule ExampleWeb.HostConformanceTest do
     assert AshQuick.LiveView.Mount.connect_info_violations(ExampleWeb.Endpoint) == []
   end
 
+  test "the client IP source is one the mount can read" do
+    assert AshQuick.ClientIp.config_violations() == []
+  end
+
   test "the modules this application supplies by name are the ones it wired" do
     assert AshQuick.Config.actor_resource() == Example.Accounts.User
     assert AshQuick.Config.audit_resource() == Example.Accounts.AuditLog
