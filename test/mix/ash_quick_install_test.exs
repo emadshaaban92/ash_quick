@@ -221,6 +221,84 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
     end
   end
 
+  describe "the error reporter" do
+    test "writes Tower's default as a placeholder, and says it is one" do
+      igniter = install()
+      config = created(igniter, "config/config.exs")
+
+      # Each comment directly above the block it explains.
+      assert config =~
+               ~r/delivers them\. \S+#module-reporters\nconfig :tower, reporters: \[Tower\.EphemeralReporter\]\n/
+
+      assert config =~ ~r/not in `runtime\.exs`\.\nconfig :ash_quick,\n/
+      assert config =~ "# AshQuick reports every error a page could not explain through Tower."
+
+      assert_has_notice(igniter, &(&1 =~ "config :tower, reporters: [TowerSentry]"))
+      assert_has_notice(igniter, &(&1 =~ "unconfigured_error_reporter"))
+    end
+
+    # The project's choice, in either spelling of `config`: neither a second
+    # value written over it nor a notice asking for what is already there.
+    test "leaves a :reporters the project already sets alone" do
+      for existing <- [
+            "config :tower, reporters: [TowerSentry]",
+            "config :tower, :reporters, [TowerSentry]",
+            "config :tower, log_level: :error, reporters: []"
+          ] do
+        igniter = install(%{"config/config.exs" => "import Config\n\n#{existing}\n"})
+        config = created(igniter, "config/config.exs")
+
+        assert config =~ existing
+        refute config =~ "Tower.EphemeralReporter", existing
+        refute_notice(igniter, "unconfigured_error_reporter")
+      end
+    end
+
+    # Either file is read after `config.exs`, so a placeholder written there
+    # would change nothing — and the notice would ask for what is done.
+    test "leaves config.exs alone when prod.exs or runtime.exs sets the reporters" do
+      for file <- ~w(config/prod.exs config/runtime.exs) do
+        igniter =
+          install(%{file => "import Config\n\nconfig :tower, reporters: [TowerSentry]\n"})
+
+        refute created(igniter, "config/config.exs") =~ "Tower.EphemeralReporter", file
+        refute_notice(igniter, "unconfigured_error_reporter")
+      end
+    end
+
+    # Above the env import, as everything else in a Phoenix config.exs is, so
+    # a dev.exs or prod.exs setting still wins over it.
+    test "lands above the import of the environment's config" do
+      igniter =
+        install(%{
+          "config/config.exs" => """
+          import Config
+
+          config :test, ecto_repos: [Test.Repo]
+
+          import_config "\#{config_env()}.exs"
+          """
+        })
+
+      config = created(igniter, "config/config.exs")
+      {tower, _} = :binary.match(config, "config :tower, reporters: [Tower.EphemeralReporter]")
+      {import, _} = :binary.match(config, "import_config")
+
+      assert tower < import
+      assert config =~ ~r/#module-reporters\nconfig :tower,/
+    end
+
+    test "adds the reporters beside other :tower settings, and keeps those" do
+      igniter =
+        install(%{"config/config.exs" => "import Config\n\nconfig :tower, log_level: :error\n"})
+
+      config = created(igniter, "config/config.exs")
+
+      assert config =~ "log_level: :error"
+      assert config =~ "reporters: [Tower.EphemeralReporter]"
+    end
+  end
+
   describe "the audit store" do
     test "generates the store, its domain, and the migration for both" do
       igniter = install()
@@ -499,6 +577,10 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
     after
       Application.put_env(:ash_quick, :audit_resource, original)
     end
+  end
+
+  defp refute_notice(igniter, text) do
+    refute Enum.any?(igniter.notices, &(&1 =~ text)), "unexpected notice containing #{text}"
   end
 
   defp created(igniter, path) do

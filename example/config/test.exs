@@ -33,7 +33,15 @@ config :ex_aws, :http_client, Example.Test.S3Stub
 # this is set, the way `:dev_routes` gates the dashboard.
 config :example, test_routes: true
 
-# No role is granted those pages, which is what keeps them out of every nav —
-# and exactly what the check reports about a page the router serves.
 config :ash_quick,
-  check: [exempt: [unreachable_entry: ["/test/digits_only"]]]
+  check: [
+    exempt: [
+      # No role is granted those pages, which is what keeps them out of every
+      # nav — and exactly what the check reports about a page the router serves.
+      unreachable_entry: ["/test/digits_only"],
+      # Tower keeps its default reporter here on purpose: it is the one that
+      # holds events in memory, and `Example.ActionErrorsTest` reads what was
+      # reported back from it.
+      unconfigured_error_reporter: [:tower]
+    ]
+  ]

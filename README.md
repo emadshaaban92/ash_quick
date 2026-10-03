@@ -23,7 +23,7 @@ $ mix igniter.install ash_quick
 ```
 
 That writes everything the rest of this section describes: the configuration
-block, the audit store with its domain and migration, a starter nav and access
+block, a placeholder for Tower's reporter, the audit store with its domain and migration, a starter nav and access
 control, the router import, the formatter entries, the supervised presence, and
 the Tailwind source line. It states the one step it will not guess at — the
 client half of `app.js`, which is a rewrite rather than a line to append — and
@@ -64,6 +64,24 @@ that into a refusal to boot. Everything else is read at runtime and may move.
 
 `AshQuick.Config` documents every key, including the S3 ones,
 `:humanize_overrides`, `:refetch_window` and `:impersonation_max_age`.
+
+### Error reporting
+
+An error a page cannot explain — anything but a validation, a stale record, a
+refused permission or a missing record — is shown to the person as a generic
+sentence and reported through [Tower](https://hexdocs.pm/tower), which comes
+with AshQuick. Tower's default reporter keeps the last 50 events in memory and
+sends them nowhere, so name one that delivers them; each is a package of its
+own, listed under [Tower's reporters](https://hexdocs.pm/tower/Tower.html#module-reporters):
+
+```elixir
+config :tower, reporters: [TowerSentry]
+```
+
+The installer writes `reporters: [Tower.EphemeralReporter]` here as a
+placeholder, and `mix ash_quick.check` reports `unconfigured_error_reporter`
+until it is replaced. `reporters: []` is taken as a decision (a test
+environment, say) and is not reported.
 
 ### Assets
 
@@ -439,7 +457,7 @@ Custom QuickView templates should call `AshQuick.can?/4` rather than a bare
 A Spark verifier sees one resource's DSL and refuses to compile it if something
 would fail at request time. Two kinds of mistake are outside that by
 construction: a fact spanning *two* resources, and anything at all about the
-router. `mix ash_quick.check` is those:
+router. `mix ash_quick.check` is those, and one fact about the configuration:
 
 ```console
 $ mix ash_quick.check           # report, exit 0
@@ -463,6 +481,10 @@ entry no role can reach. These need the set of routes *some* role holds, which
 only the host can enumerate — implement the optional
 `AshQuick.AccessControl.all_routes/0`. Without it they are reported as not run,
 rather than passing for want of anything to compare against.
+
+Over the configuration: Tower's `:reporters` left at its default, which keeps
+the errors a page could not explain in memory and sends them nowhere — see
+[Error reporting](#error-reporting).
 
 What it deliberately does **not** report: whether a resource turned versioning
 or auditing off, or whether it has a lookup action. `enabled? false` is already
@@ -494,7 +516,6 @@ broken.
 | `ex_aws`, `ex_aws_s3` | `AshQuick.Storage.S3`, the default object store |
 | `ex_money` | Rendering `Money` values |
 | `localize` | Locale-aware date and time formatting |
-| `tower` | Reporting the errors a page could not explain |
 
 Export and print are feature-detected at runtime —
 `AshQuick.Config.exports_enabled?/0` and `print_enabled?/0` — so the export and

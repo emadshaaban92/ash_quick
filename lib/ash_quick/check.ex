@@ -5,10 +5,12 @@ defmodule AshQuick.Check do
 
   A Spark verifier sees one resource's DSL and refuses to compile it when
   something would fail at request time. Two kinds of mistake are outside that by
-  construction, and they are the whole of what is here: a fact spanning *two*
+  construction, and they are most of what is here: a fact spanning *two*
   resources, and anything at all about the router — `quick_view/3` cannot see
   the `live/3` written next to it, and nothing at compile time holds a nav to an
-  access control it was never told about.
+  access control it was never told about. The rest is configuration a library
+  can only read once the application's is loaded: where the errors a page could
+  not explain are reported.
 
   What is deliberately absent is a check over a decision a resource has already
   stated. `versioning enabled? false` is the statement; asking for a sentence
@@ -62,6 +64,18 @@ defmodule AshQuick.Check do
   `AshQuick.AccessControl.all_routes/0`, and are reported in `skipped` rather
   than passing silently when it does not.
 
+  Over the application's configuration:
+
+    * `:unconfigured_error_reporter` — Tower's `:reporters` left at its default,
+      `[Tower.EphemeralReporter]`. Every error a page could not explain is
+      reported through Tower, and that reporter keeps them in memory and sends
+      them nowhere, so they are lost. `reporters: []`, or any other list, is the
+      host's decision and is not reported. Read from the configuration of the
+      environment the check runs in. The subject is `:tower`, so a host that
+      keeps the default somewhere on purpose exempts it there:
+      `exempt: [unconfigured_error_reporter: [:tower]]`, in that environment's
+      config file.
+
   ## Advisory findings
 
   `--strict` fails on defects and ignores advisories. A number a project watches
@@ -86,6 +100,7 @@ defmodule AshQuick.Check do
   on the command that would make it invisible.
   """
 
+  alias AshQuick.Check.ErrorReporting
   alias AshQuick.Check.Finding
   alias AshQuick.Check.Nav
   alias AshQuick.Check.Report
@@ -107,6 +122,9 @@ defmodule AshQuick.Check do
     * `:access_control` — defaults to the one the nav declares.
     * `:exempt` — `[check_name: [subject]]`. Defaults to the configured
       `:check, :exempt`.
+    * `:tower_reporters` — the reporters Tower is configured with. Defaults to
+      `:tower`'s `:reporters`, read with `:tower` loaded so its own default
+      counts.
   """
   @spec run(keyword()) :: Report.t()
   def run(opts \\ []) do
@@ -117,7 +135,10 @@ defmodule AshQuick.Check do
     [
       Resources.run(domains(opts)),
       Routing.run(router),
-      Nav.run(nav, router, access_control)
+      Nav.run(nav, router, access_control),
+      opts
+      |> Keyword.get_lazy(:tower_reporters, &ErrorReporting.configured_reporters/0)
+      |> ErrorReporting.run()
     ]
     |> Enum.reduce(%Report{}, fn {findings, skipped}, report ->
       %Report{

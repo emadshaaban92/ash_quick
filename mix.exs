@@ -51,6 +51,11 @@ defmodule AshQuick.MixProject do
       {:live_select, "~> 1.7"},
       {:jason, "~> 1.4"},
 
+      # Where an error a page could not explain is reported. Required rather
+      # than optional so that report has one destination, which
+      # `mix ash_quick.check` can hold a host to configuring.
+      {:tower, "~> 0.8"},
+
       # Optional. Each one turns a feature on; without it the feature is absent
       # rather than broken — see `AshQuick.Config.exports_enabled?/0` and
       # `print_enabled?/0`, and `AshQuick.Storage.S3`.
@@ -66,7 +71,6 @@ defmodule AshQuick.MixProject do
       {:ex_money, "~> 6.0", optional: true},
       {:localize, "~> 1.0", optional: true},
       {:merge_pdf, "~> 0.5", optional: true},
-      {:tower, "~> 0.8", optional: true},
 
       # The installer and generators are mix tasks in this package, and a host
       # runs them in its own environment — so `only: [:dev, :test]` would leave
