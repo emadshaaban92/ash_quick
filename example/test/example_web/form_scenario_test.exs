@@ -16,6 +16,8 @@ defmodule ExampleWeb.FormScenarioTest do
 
   require Ash.Query
 
+  import ExUnit.CaptureLog
+
   alias Example.Catalog.{Brand, Product}
   alias Example.Test.PlainBrand
 
@@ -327,6 +329,114 @@ defmodule ExampleWeb.FormScenarioTest do
 
       assert Ash.reload!(brand, authorize?: false).version == 1
     end
+  end
+
+  describe "a refused save, in the log" do
+    # The person is shown why a save failed, so the log is told only *what*
+    # failed — resource, action, field names — and never what was submitted.
+    test "names the fields that failed, not the values put in them", ctx do
+      %{conn: conn, admin: admin} = ctx
+      log_saves_at_debug()
+      code = "#{System.unique_integer([:positive])}-not-digits"
+
+      log =
+        capture_log([level: :debug], fn ->
+          conn
+          |> log_in(admin)
+          |> visit(~p"/test/digits_only/create")
+          |> fill_in("Code", with: code)
+          |> click_button("Save")
+          |> assert_has(".text-error", text: "is required")
+        end)
+
+      assert log =~ "form save on Example.Test.DigitsOnly.create refused: errors on fields"
+      assert log =~ "code"
+      assert log =~ "name"
+      refute log =~ code
+      refute log =~ "AshPhoenix.Form"
+    end
+
+    test "names a single refused attribute, not its value", ctx do
+      %{conn: conn, admin: admin} = ctx
+      log_saves_at_debug()
+      code = "#{System.unique_integer([:positive])}-not-digits"
+      name = "Name #{System.unique_integer([:positive])}"
+
+      log =
+        capture_log([level: :debug], fn ->
+          conn
+          |> log_in(admin)
+          |> visit(~p"/test/digits_only/create")
+          |> fill_in("Code", with: code)
+          |> fill_in("Name", with: name)
+          |> click_button("Save")
+          |> assert_has("#flash-error", text: "Code must be digits")
+        end)
+
+      assert log =~
+               "form save on Example.Test.DigitsOnly.create refused: invalid value for field code"
+
+      refute log =~ code
+      refute log =~ name
+      refute log =~ "must be digits"
+    end
+
+    test "names the resource of a stale save, not what either editor typed", ctx do
+      %{conn: conn, admin: admin, brand: brand} = ctx
+      log_saves_at_debug()
+
+      first = conn |> log_in(admin) |> visit(~p"/brands/#{brand.id}/update")
+      second = conn |> log_in(admin) |> visit(~p"/brands/#{brand.id}/update")
+
+      first
+      |> fill_in("Name", with: "Renamed by the first")
+      |> click_button("Save")
+      |> assert_has("h1", text: "Renamed by the first")
+
+      log =
+        capture_log([level: :debug], fn ->
+          second
+          |> fill_in("Name", with: "Renamed by the second")
+          |> click_button("Save")
+          |> assert_has("*", text: AshQuick.LiveView.ActionErrors.stale_message())
+        end)
+
+      assert log =~
+               "form save on Example.Catalog.Brand.update refused: " <>
+                 "the record changed since it was loaded"
+
+      refute log =~ "Renamed by the"
+      refute log =~ brand.name
+    end
+
+    # The leak this guards against was a `:warning`, which the suite's own
+    # level lets through — so the submitted value is refuted here too, not
+    # only the new line.
+    test "says nothing at the test suite's own level", %{conn: conn, admin: admin} do
+      code = "#{System.unique_integer([:positive])}-not-digits"
+
+      log =
+        capture_log(fn ->
+          conn
+          |> log_in(admin)
+          |> visit(~p"/test/digits_only/create")
+          |> fill_in("Code", with: code)
+          |> click_button("Save")
+          |> assert_has(".text-error", text: "is required")
+        end)
+
+      refute log =~ "form save on"
+      refute log =~ code
+    end
+  end
+
+  # Raised for the form's own module rather than globally: `config/test.exs`
+  # holds the suite at `:warning`, and this module is `async`, so a global
+  # `:debug` would pour every concurrent test's debug output — LiveView's own
+  # event log, which carries the params — into the captures of tests beside it.
+  defp log_saves_at_debug do
+    Logger.put_module_level(AshQuick.LiveView.FormUtils, :debug)
+    on_exit(fn -> Logger.delete_module_level(AshQuick.LiveView.FormUtils) end)
   end
 
   defp by_sku(sku) do

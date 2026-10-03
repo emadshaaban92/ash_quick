@@ -468,12 +468,12 @@ defmodule AshQuick.LiveView.FormUtils do
       # hit it — and how `Ash.Error.error_descriptions/1`, a debug dump of the
       # error class and its bread crumbs, ends up in a toast.
       {:error, %{source: %{errors: [%Ash.Error.Changes.StaleRecord{} = error]}}} ->
-        Logger.warning("Stale record error: #{inspect(error)}")
+        log_failed_save(socket, fn -> "the record changed since it was loaded" end)
 
         {:halt, put_flash(socket, :error, ActionErrors.user_facing_message(error))}
 
       {:error, %{source: %{errors: [%Ash.Error.Changes.InvalidAttribute{} = error]}} = form} ->
-        Logger.warning("Invalid attribute error: #{inspect(error)}")
+        log_failed_save(socket, fn -> "invalid value for field #{error.field}" end)
 
         # Wrapped in the class Ash would have raised it under, which is the
         # shape `user_facing_message/1` renders sub-errors out of.
@@ -482,7 +482,7 @@ defmodule AshQuick.LiveView.FormUtils do
         {:halt, socket |> assign(form: form) |> put_flash(:error, message)}
 
       {:error, form} ->
-        Logger.warning("Error while saving form: \n #{form |> inspect()}")
+        log_failed_save(socket, fn -> describe_failed_save(form) end)
 
         case AshPhoenix.Form.errors(form) do
           # A submit that failed with nothing to say about any input is the
@@ -494,6 +494,36 @@ defmodule AshQuick.LiveView.FormUtils do
   end
 
   defp handle_form_events(_, _, socket, _options), do: {:cont, socket}
+
+  # A refused save is an outcome the person was already shown, not an incident,
+  # so it is told at debug — and only as *what* failed. Never the params, the
+  # form, its changeset, the record, the actor or an error struct: each carries
+  # what was submitted, and an error's message can interpolate it from `vars`.
+  # Field names, the resource and action, and error modules are all it says.
+  defp log_failed_save(socket, describe) do
+    Logger.debug(fn ->
+      "form save on #{inspect(socket.assigns.form.resource)}.#{socket.assigns.ash_action.name} " <>
+        "refused: #{describe.()}"
+    end)
+  end
+
+  defp describe_failed_save(form) do
+    case AshPhoenix.Form.errors(form) do
+      [] ->
+        modules =
+          form.source.errors
+          |> List.wrap()
+          |> Enum.map_join(", ", fn
+            %module{} -> inspect(module)
+            _not_a_struct -> "an unstructured error"
+          end)
+
+        "no field errors, the action returned [#{modules}]"
+
+      errors ->
+        "errors on fields #{errors |> Keyword.keys() |> Enum.uniq() |> Enum.join(", ")}"
+    end
+  end
 
   # An error about the record as a whole names no input — `:_form` is the key
   # `AshPhoenix.FormData.Error` files those under — so there is no field beside
