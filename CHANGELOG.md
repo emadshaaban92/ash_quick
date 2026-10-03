@@ -4,6 +4,15 @@
 
 ### Bug fixes
 
+- **A failed form save no longer logs what was submitted.** A save the action
+  refused (a validation, a stale record, a policy) logged the whole
+  `AshPhoenix.Form` — params, changeset, record and actor — or the error
+  struct carrying the submitted value, at `:warning`, so every validation
+  failure put whatever was typed (email addresses included) into log storage.
+  It is now one `:debug` line naming the resource, the action and what failed:
+  the field names, or the error modules when no field is to blame. Values are
+  never logged. If you relied on seeing these at `:warning`, raise the level
+  for `AshQuick.LiveView.FormUtils` to `:debug`.
 - **A QuickView list is no longer re-rendered on every event.** Assigns made
   during a render are never stored on the socket, so change tracking marked
   every one of them changed every time, and each event re-rendered whatever
