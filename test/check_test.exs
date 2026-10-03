@@ -15,11 +15,21 @@ defmodule AshQuick.CheckTest do
   alias AshQuick.Test.Check.Domain
   alias AshQuick.Test.Check.Nav
 
+  # Tower's reporters are passed in rather than read, so this module never
+  # touches the `:tower` app env; `AshQuick.CheckTowerConfigTest` reads it.
   defp run(opts \\ []) do
-    Check.run(Keyword.merge([domains: [Domain], nav: Nav, exempt: []], opts))
+    Check.run(
+      Keyword.merge(
+        [domains: [Domain], nav: Nav, exempt: [], tower_reporters: [Tower.EphemeralReporter]],
+        opts
+      )
+    )
   end
 
   defp found(%Report{findings: findings}), do: Enum.map(findings, &{&1.check, &1.subject})
+
+  defp only_tower(%Report{findings: findings}),
+    do: Enum.filter(findings, &(&1.check == :unconfigured_error_reporter))
 
   describe "what the check finds" do
     test "every check fires, and names what it is about" do
@@ -35,7 +45,8 @@ defmodule AshQuick.CheckTest do
                {:unrouted_grant, "/gone"},
                {:linkless_route, "/orphan"},
                {:unreachable_entry, "/missing"},
-               {:unreachable_entry, "/gizmos"}
+               {:unreachable_entry, "/gizmos"},
+               {:unconfigured_error_reporter, :tower}
              ]
     end
 
@@ -84,7 +95,34 @@ defmodule AshQuick.CheckTest do
     end
 
     test "nothing is found when there is nothing to check" do
-      assert %Report{findings: []} = Check.run(domains: [], nav: nil, exempt: [])
+      assert %Report{findings: []} =
+               Check.run(domains: [], nav: nil, exempt: [], tower_reporters: [])
+    end
+  end
+
+  describe "where unexplained errors are reported" do
+    # The default delivers nowhere, so the errors a page reduced to a generic
+    # sentence are lost — broken, not unfinished, so it counts under --strict.
+    test "Tower's default reporter is a defect" do
+      assert [finding] = only_tower(run(tower_reporters: [Tower.EphemeralReporter]))
+
+      assert %{subject: :tower, severity: :defect} = finding
+      assert finding.message =~ "config :tower, reporters: ["
+      assert finding in Check.defects(run())
+    end
+
+    # Nobody writes an empty list by accident; hosts set it in test.
+    test "an explicit empty list is a decision, not reported" do
+      assert only_tower(run(tower_reporters: [])) == []
+    end
+
+    test "any other list is not reported" do
+      assert only_tower(run(tower_reporters: [SomeReporter])) == []
+      assert only_tower(run(tower_reporters: [Tower.EphemeralReporter, SomeReporter])) == []
+    end
+
+    test "is exempted under :tower" do
+      assert only_tower(run(exempt: [unconfigured_error_reporter: [:tower]])) == []
     end
   end
 
@@ -136,6 +174,7 @@ defmodule AshQuick.CheckTest do
       assert found(report) |> Keyword.keys() |> Enum.uniq() == ~w(
                hand_routed_quick_view mislabelled_route stray_base_path unroutable_action
                unroutable_show unrouted_nav_path unrouted_grant linkless_route unreachable_entry
+               unconfigured_error_reporter
              )a
     end
 
@@ -151,7 +190,7 @@ defmodule AshQuick.CheckTest do
       assert text =~ "## missing_extension (1) — advisory, not counted"
       assert text =~ "## unreachable_entry (2)"
       assert text =~ "AshQuick.Test.Check.Bare does not carry the AshQuick extension."
-      assert text =~ "11 defect(s), 1 advisory."
+      assert text =~ "12 defect(s), 1 advisory."
 
       checks = Regex.scan(~r/^## (\w+)/m, text, capture: :all_but_first) |> List.flatten()
       assert checks == Enum.sort(checks)

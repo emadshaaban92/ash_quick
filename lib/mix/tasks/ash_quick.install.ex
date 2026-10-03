@@ -22,6 +22,11 @@ if Code.ensure_loaded?(Igniter) do
       * Writes `config :ash_quick` into `config/config.exs` — never
         `runtime.exs`, because `:endpoint` and `:actor_resource` are
         `Application.compile_env/2` reads.
+      * Writes `config :tower, reporters: [Tower.EphemeralReporter]` into
+        `config/config.exs`, as a placeholder to replace: the errors a page
+        could not explain are reported through Tower, and that reporter keeps
+        them in memory only. Left alone when the project already sets Tower's
+        `:reporters`.
       * Generates the audit store, its domain and its migration. Generated into
         the application rather than shipped as a library resource, because
         projects add columns to it.
@@ -76,6 +81,13 @@ if Code.ensure_loaded?(Igniter) do
     them in as they compile — so this belongs here and not in `runtime.exs`.
     """
 
+    @tower_comment """
+    AshQuick reports every error a page could not explain through Tower. This
+    reporter is Tower's default, and keeps them only in memory: name one that
+    delivers them. https://hexdocs.pm/tower/Tower.html#module-reporters
+    """
+    @tower_comment_first_line @tower_comment |> String.split("\n") |> hd()
+
     @css_path "assets/css/app.css"
     @css_source ~s|@source "../../deps/ash_quick/lib/**/*.*ex";|
 
@@ -125,6 +137,7 @@ if Code.ensure_loaded?(Igniter) do
       )
       |> configure(endpoint, actor_resource, audit_resource, nav, web_module, options)
       |> configure_section_order()
+      |> configure_error_reporting()
       |> import_router_macro(router)
       |> Igniter.Project.Application.add_new_child(AshQuick.BrowserSessionPresence,
         after: [Phoenix.PubSub]
@@ -204,6 +217,58 @@ if Code.ensure_loaded?(Igniter) do
         comment: @config_comment
       )
     end
+
+    # There is no reporter to default to: each one that delivers anywhere is a
+    # package of its own. So the placeholder is Tower's own default, written out
+    # where the host will edit it — and what `mix ash_quick.check` reports until
+    # they do. A reporter set in any of the files that would win over this one
+    # is the host's, and gets neither the placeholder nor the notice.
+    defp configure_error_reporting(igniter) do
+      if Enum.any?(~w(config.exs prod.exs runtime.exs), &configures_reporters?(igniter, &1)) do
+        igniter
+      else
+        igniter
+        |> Igniter.Project.Config.configure(
+          "config.exs",
+          :tower,
+          [:reporters],
+          [Tower.EphemeralReporter],
+          updater: &{:ok, &1}
+        )
+        |> Igniter.update_file("config/config.exs", &comment_reporters/1)
+        |> Igniter.add_notice(reporter_notice())
+      end
+    end
+
+    # Put into the text rather than through `configure_group/6`'s `:comment`,
+    # which Igniter hangs on whichever node it lands beside when another
+    # commented group was added to the same file in the same run.
+    defp comment_reporters(source) do
+      content = Rewrite.Source.get(source, :content)
+      placeholder = ~r/^([ \t]*)(config :tower,.*Tower\.EphemeralReporter)/m
+
+      if String.contains?(content, @tower_comment_first_line) do
+        source
+      else
+        Rewrite.Source.update(
+          source,
+          :content,
+          Regex.replace(placeholder, content, &comment_above/3, global: false)
+        )
+      end
+    end
+
+    defp comment_above(_match, indent, line) do
+      comment =
+        @tower_comment
+        |> String.split("\n", trim: true)
+        |> Enum.map_join(&"#{indent}# #{&1}\n")
+
+      comment <> indent <> line
+    end
+
+    defp configures_reporters?(igniter, file),
+      do: Igniter.Project.Config.configures_key?(igniter, file, :tower, :reporters)
 
     # `translate_error/1` is where a host's changeset errors become the strings
     # a form renders, and every Phoenix application already has one. Left unset
@@ -402,6 +467,21 @@ if Code.ensure_loaded?(Igniter) do
 
     defp template(task, name) do
       :ash_quick |> Application.app_dir("priv/templates") |> Path.join(task) |> Path.join(name)
+    end
+
+    defp reporter_notice do
+      """
+      Name an error reporter in `config/config.exs`:
+
+          config :tower, reporters: [TowerSentry]
+
+      The errors a page could not explain are reported through Tower, and the
+      reporter written there for now, `Tower.EphemeralReporter`, keeps them in
+      memory and sends them nowhere. Every reporter that delivers them is a
+      package of its own: https://hexdocs.pm/tower/Tower.html#module-reporters.
+      Until one is named, `mix ash_quick.check` reports
+      `unconfigured_error_reporter`.
+      """
     end
 
     # The client half is structural rather than a line to append — the params

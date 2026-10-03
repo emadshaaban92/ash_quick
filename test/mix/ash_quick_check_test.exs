@@ -2,9 +2,12 @@ defmodule Mix.Tasks.AshQuick.CheckTest do
   @moduledoc """
   The task itself: what it prints, and what `--strict` does with it.
 
-  `async: false`, and it swaps the configured nav — the task reads the
-  application's own configuration, which is the whole point of it, so there is
-  nothing to inject and the swap is real global state.
+  `async: false`, and it swaps the configured nav and Tower's reporters — the
+  task reads the application's own configuration, which is the whole point of
+  it, so there is nothing to inject and the swap is real global state.
+
+  Tower's reporters are set to `[]` for every test but the one about them, so
+  the others are not reading this suite's unconfigured Tower as a finding.
   """
   use ExUnit.Case, async: false
 
@@ -14,9 +17,13 @@ defmodule Mix.Tasks.AshQuick.CheckTest do
 
   setup do
     previous = Application.get_env(:ash_quick, :nav)
+    reporters = Application.fetch_env!(:tower, :reporters)
     Application.put_env(:ash_quick, :nav, AshQuick.Test.Check.Nav)
+    Application.put_env(:tower, :reporters, [])
 
     on_exit(fn ->
+      Application.put_env(:tower, :reporters, reporters)
+
       case previous do
         nil -> Application.delete_env(:ash_quick, :nav)
         nav -> Application.put_env(:ash_quick, :nav, nav)
@@ -61,6 +68,21 @@ defmodule Mix.Tasks.AshQuick.CheckTest do
     assert output =~ "## missing_extension (1) — advisory, not counted"
     assert output =~ "AshQuick.Test.Check.Unadopted"
     assert output =~ "0 defect(s), 1 advisory."
+  end
+
+  # Read from the application's configuration like everything else here, and a
+  # defect: the errors it is about are lost, not merely unadopted.
+  test "--strict fails on Tower left at its default reporter" do
+    Application.put_env(:ash_quick, :nav, nil)
+    Application.put_env(:tower, :reporters, [Tower.EphemeralReporter])
+
+    output =
+      capture_io(fn ->
+        assert_raise Mix.Error, ~r/1 defect/, fn -> Task.run(["--strict"]) end
+      end)
+
+    assert output =~ "## unconfigured_error_reporter (1)"
+    assert output =~ "config :tower, reporters: [TowerSentry]"
   end
 
   test "refuses an option it does not know rather than ignoring it" do

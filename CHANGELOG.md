@@ -47,6 +47,41 @@
 
 ### Breaking changes
 
+- **`:tower` is now a required dependency.** It was optional, and in a host
+  without it the errors a page could not explain went to `Logger.error`
+  instead. They now always go to Tower, through `Tower.report_exception/3`
+  (or `Tower.report/4` for an error that is not an exception), and are not
+  logged by AshQuick as well.
+
+  **Who is affected:** a host that did not depend on `:tower`. It now gets
+  Tower's application started at boot, and with it:
+
+  - Tower's `:logger` handler, which reports every process crash to Tower's
+    reporters, and any log event at Tower's `log_level` (`:critical` by
+    default) or above;
+  - Tower's telemetry handler for `[:oban, :job, :exception]`, which reports
+    failing Oban jobs if the host runs Oban;
+  - the `uuid_v7` package, and OTP's `:inets` application.
+
+  Tower's default reporter, `Tower.EphemeralReporter`, keeps the last 50
+  events in memory and sends them nowhere. A host that leaves it in place
+  loses every error a page could not explain, where it used to have them in
+  its log.
+
+  **Migrating:** name a reporter that delivers them, each a package of its
+  own (see [Tower's reporters](https://hexdocs.pm/tower/Tower.html#module-reporters)):
+
+  ```elixir
+  config :tower, reporters: [TowerSentry]
+  ```
+
+  `mix ash_quick.check` now reports `unconfigured_error_reporter`, a defect,
+  while `:reporters` is Tower's default. `reporters: []` (for a test
+  environment, say) is not reported. `mix igniter.install ash_quick` writes the
+  default as a placeholder in `config/config.exs` when no `:reporters` is set.
+  A host that already depended on `:tower` and configured a reporter has
+  nothing to do.
+
 - **The IP on audit rows and browser sessions is now the peer address by
   default.** It used to be the first entry of `X-Forwarded-For` (or
   `X-Real-IP`) when either was present. That entry is whatever the client

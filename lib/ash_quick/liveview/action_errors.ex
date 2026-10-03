@@ -9,11 +9,6 @@ defmodule AshQuick.LiveView.ActionErrors do
   # helpful text; anything unexpected (framework/unknown errors, raw exceptions)
   # is reported to Tower (which fans out to the configured reporters) and reduced
   # to a generic sentence so internal structs never reach the user.
-  #
-  # `:tower` is an optional dependency. A host without it gets the same
-  # sentences, with the report going to `Logger` instead — see `report_error/1`.
-
-  require Logger
 
   @stale_message "This record changed since you opened it — reload to see the latest, then try again."
   @forbidden_message "You don't have permission to do that."
@@ -74,8 +69,7 @@ defmodule AshQuick.LiveView.ActionErrors do
     friendly copy;
   - `Ash.Error.Invalid` is rendered from its sub-errors, one sentence per thing
     that was wrong with the input;
-  - everything else is reported (to Tower, or to `Logger` in a host without it)
-    and reduced to `generic_message/0`.
+  - everything else is reported to Tower and reduced to `generic_message/0`.
   """
   def user_facing_message(message) when is_binary(message), do: message
 
@@ -220,32 +214,13 @@ defmodule AshQuick.LiveView.ActionErrors do
     @generic_message
   end
 
-  # `:tower` is an optional dependency, and this is the error handler — the code
-  # keeping the page up when an action failed. Calling a module the host never
-  # installed would raise `UndefinedFunctionError` from here and take the
-  # LiveView down with it, turning every unexpected error into a crash. So the
-  # report is best-effort: Tower when the host has it, `Logger` when it does
-  # not, and a sentence either way.
-  #
-  # Resolved per call rather than at compile time: adding `:tower` to a host
-  # does not recompile this library, so a compile-time choice would keep
-  # reporting to `Logger` long after the host wired Tower up.
   defp report_error(error) do
     stacktrace = current_stacktrace()
 
-    if Code.ensure_loaded?(Tower) do
-      # Through `apply/3` so compiling in a host without `:tower` does not warn
-      # about a module that is deliberately absent.
-      if is_exception(error) do
-        apply(Tower, :report_exception, [error, stacktrace])
-      else
-        apply(Tower, :report, [:error, error, stacktrace])
-      end
+    if is_exception(error) do
+      Tower.report_exception(error, stacktrace)
     else
-      Logger.error(
-        "Unexpected action error: #{inspect(error)}\n" <>
-          Exception.format_stacktrace(stacktrace)
-      )
+      Tower.report(:error, error, stacktrace)
     end
 
     :ok
