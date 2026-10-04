@@ -73,6 +73,17 @@
 
 ### Breaking changes
 
+- **The version counter is no longer writable by actions.** The `:version`
+  attribute versioning adds is now `writable?: false`, so an action with
+  `accept :*` no longer takes a submitted `version` and writes it in place of
+  `current + 1`. Only the lock moves the counter. The database column is
+  unchanged, so no migration is needed.
+
+  **Who is affected:** a resource that defines the counter itself. The
+  versioning verifier now refuses one without `writable?: false`, and its
+  message says so. Add the option to the attribute. A host that set `version`
+  through an action was bypassing the lock's bump and should stop.
+
 - **`:tower` is now a required dependency.** It was optional, and in a host
   without it the errors a page could not explain went to `Logger.error`
   instead. They now always go to Tower, through `Tower.report_exception/3`

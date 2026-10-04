@@ -40,6 +40,18 @@ defmodule AshQuick.VersioningVerifierTest do
 
   # The errors the compiler would have raised, for a resource built from `body`.
   defp verifier_errors(body) do
+    module = compile(body)
+    Process.put({Spark.Dsl, :test_collector}, self())
+    module.__verify_spark_dsl__(module)
+
+    receive do
+      {Spark.Dsl, :verifier_errors, ^module, errors} -> errors
+    after
+      0 -> []
+    end
+  end
+
+  defp compile(body) do
     name = "VersioningProbe#{:erlang.unique_integer([:positive])}"
 
     source = """
@@ -76,16 +88,7 @@ defmodule AshQuick.VersioningVerifierTest do
     # The compiler reports the failure itself, on its own process — swallowed
     # here so a deliberate failure does not look like a broken test run.
     capture_io(:stderr, fn -> Code.compile_string(source) end)
-
-    Process.put({Spark.Dsl, :test_collector}, self())
-    module = Module.concat([name])
-    module.__verify_spark_dsl__(module)
-
-    receive do
-      {Spark.Dsl, :verifier_errors, ^module, errors} -> errors
-    after
-      0 -> []
-    end
+    Module.concat([name])
   end
 
   defp message(body) do
@@ -107,6 +110,7 @@ defmodule AshQuick.VersioningVerifierTest do
     assert message =~ "default is nil, expected 1"
     assert message =~ "allow_nil? is true, expected false"
     assert message =~ "always_select? is false, expected true"
+    assert message =~ "writable? is true, expected false"
 
     # and it says how to get out of it, both ways
     assert message =~ "attribute :lock_version"
@@ -134,9 +138,50 @@ defmodule AshQuick.VersioningVerifierTest do
                default: 1,
                allow_nil?: false,
                public?: true,
-               always_select?: true
+               always_select?: true,
+               writable?: false
            end
            """) == []
+  end
+
+  test "the counter AshQuick adds is not writable, so accept :* leaves it out" do
+    module =
+      compile("""
+      attributes do
+        uuid_primary_key :id
+        attribute :name, :string, public?: true
+      end
+
+      actions do
+        default_accept :*
+        defaults [:read, :create, :update]
+      end
+      """)
+
+    refute Ash.Resource.Info.attribute(module, :version).writable?
+
+    for action <- [:create, :update] do
+      accepted = Ash.Resource.Info.action(module, action).accept
+      assert :name in accepted
+      refute :version in accepted
+    end
+  end
+
+  test "a counter an action can write refuses to compile" do
+    message =
+      message("""
+      attributes do
+        uuid_primary_key :id
+
+        attribute :version, :integer,
+          default: 1,
+          allow_nil?: false,
+          public?: true,
+          always_select?: true
+      end
+      """)
+
+    assert message =~ "writable? is true, expected false"
   end
 
   test "opting out lets a foreign :version through untouched" do

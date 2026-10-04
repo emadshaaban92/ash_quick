@@ -21,7 +21,17 @@ defmodule AshQuick.Versioning.Declaration do
   # share the name. The transformer builds the attribute from this and the
   # verifier checks a resource's own against it, so neither can drift into
   # rejecting what the other adds.
-  @counter [type: :integer, default: 1, allow_nil?: false, always_select?: true]
+  #
+  # `writable?: false` because only the lock may move it: `accept :*` would
+  # otherwise take a submitted `version` and write it in place of `current + 1`.
+  # The lock writes it with `force_change_attribute/3`, which ignores the flag.
+  @counter [
+    type: :integer,
+    default: 1,
+    allow_nil?: false,
+    always_select?: true,
+    writable?: false
+  ]
 
   def default_enabled?, do: @enabled?
   def default_attribute, do: @attribute
