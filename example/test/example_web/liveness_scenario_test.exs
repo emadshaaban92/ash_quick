@@ -257,18 +257,10 @@ defmodule ExampleWeb.LivenessScenarioTest do
     # Recording what `transaction: :all` does and does not cover, because the
     # obvious way to fail a bulk Deactivate turns out not to fail it.
     #
-    # `Product` is versioned, so a selected row moved behind the page is one the
-    # optimistic lock's filter no longer matches. A single-row update raises
-    # `StaleRecord` on that; a bulk update writes zero rows and calls it a
-    # success, so the batch comes back `:success`, the other row is committed,
-    # and the moved row is silently left alone. Nothing rolls back because
-    # nothing errored.
-    #
-    # This is not what this test file is about and not what the notification
-    # change alters — it is here so the next reader does not spend the afternoon
-    # I did looking for the failure. What liveness has to get right either way
-    # is the last assertion: the row that was written publishes, and the row
-    # that was not stays quiet.
+    # `Product` is versioned, so the moved row no longer matches the lock and the
+    # bulk write skips it without an error. The page says so and keeps that row
+    # selected; the row that was written still publishes, the skipped one stays
+    # quiet.
     test "over a row that moved behind the page skips it rather than failing", ctx do
       %{conn: conn, admin: admin} = ctx
 
@@ -288,7 +280,13 @@ defmodule ExampleWeb.LivenessScenarioTest do
 
       session
       |> click_link(@bulk, "Deactivate")
-      |> refute_has("#flash-error")
+      |> assert_has("#flash-error",
+        text:
+          "Deactivate applied to 1 of 2 selected rows. The other row was not changed " <>
+            "and is still selected: check it and try again."
+      )
+      |> assert_has("input[name='#{second.id}'][checked]")
+      |> refute_has("input[name='#{first.id}'][checked]")
 
       refute Ash.reload!(first, authorize?: false).active
       assert Ash.reload!(second, authorize?: false).active
