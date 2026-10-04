@@ -185,7 +185,8 @@ defmodule AshQuick do
       end
 
   Declared (or left at the default), the resource gains an integer counter
-  defaulting to `1`, and every `:update` and `:destroy` is filtered on the
+  defaulting to `1` and not writable by any action, so only the lock moves it,
+  and every `:update` and `:destroy` is filtered on the
   value the actor loaded and bumps it. A write against a record someone else
   has since changed matches no row and comes back as
   `Ash.Error.Changes.StaleRecord` rather than overwriting them.
