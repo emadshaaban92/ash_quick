@@ -254,9 +254,6 @@ defmodule ExampleWeb.LivenessScenarioTest do
       refute Ash.reload!(unrelated, authorize?: false).active
     end
 
-    # Recording what `transaction: :all` does and does not cover, because the
-    # obvious way to fail a bulk Deactivate turns out not to fail it.
-    #
     # `Product` is versioned, so the moved row no longer matches the lock and the
     # bulk write skips it without an error. The page says so and keeps that row
     # selected; the row that was written still publishes, the skipped one stays
