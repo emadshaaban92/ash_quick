@@ -8,7 +8,8 @@ defmodule AshQuick.LiveView.Liveness.Graph do
 
   Returns `{watchable, skipped}` — `watchable` a list of `{resource, id}` whose
   resource publishes, `skipped` a `%{resource => count}` of the records found
-  behind a resource that publishes nothing.
+  behind a resource that publishes nothing, or that has no `:id` to name a topic
+  by.
 
   What materialized is the answer, which is why this walks the data rather than
   the view's declared `load:`. A module calculation's `load/3` dependencies stay
@@ -29,7 +30,7 @@ defmodule AshQuick.LiveView.Liveness.Graph do
     {watchable, skipped} =
       value
       |> collect(MapSet.new())
-      |> Enum.split_with(fn {resource, _id} -> Topics.enabled?(resource) end)
+      |> Enum.split_with(fn {resource, id} -> not is_map(id) and Topics.enabled?(resource) end)
 
     {watchable, Enum.frequencies_by(skipped, &elem(&1, 0))}
   end
@@ -49,28 +50,47 @@ defmodule AshQuick.LiveView.Liveness.Graph do
 
   defp collect(_value, seen), do: seen
 
-  # The `{resource, id}` set dedups and guards cycles at once: a child holding
+  # The `{resource, key}` set dedups and guards cycles at once: a child holding
   # its parent, whose children hold it back, terminates on its own.
   #
   # Recursion does not stop at a resource that publishes nothing, or a silent
   # join row would hide the children the page renders under it.
-  defp visit(%{id: nil}, _resource, seen), do: seen
+  defp visit(record, resource, seen) do
+    case node_key(record, resource) do
+      nil ->
+        seen
 
-  defp visit(%{id: id} = record, resource, seen) do
-    key = {resource, id}
-
-    if MapSet.member?(seen, key) do
-      seen
-    else
-      resource
-      |> related_values(record)
-      |> Enum.reduce(MapSet.put(seen, key), &collect/2)
+      key ->
+        if MapSet.member?(seen, key) do
+          seen
+        else
+          resource
+          |> related_values(record)
+          |> Enum.reduce(MapSet.put(seen, key), &collect/2)
+        end
     end
   end
 
-  # AshQuick requires an `:id` primary key, so a record without one is not a
-  # node this graph can name.
-  defp visit(_record, _resource, seen), do: seen
+  # A record is named by its `:id` when that is its primary key, which is what
+  # a topic is built from. Anything else — a join row keyed by the two ids it
+  # joins — is named by its primary-key values: it has no topic to watch, but
+  # the records behind it still do. A map never passes for an `:id`, which is
+  # how `walk/1` tells the two apart.
+  #
+  # A record whose key is not all there (one built but never persisted) is not
+  # a node yet.
+  defp node_key(record, resource) do
+    case Ash.Resource.Info.primary_key(resource) do
+      [:id] -> if id = Map.get(record, :id), do: {resource, id}
+      [] -> nil
+      fields -> if values = complete_key(record, fields), do: {resource, values}
+    end
+  end
+
+  defp complete_key(record, fields) do
+    values = Map.take(record, fields)
+    if Enum.any?(values, fn {_field, value} -> is_nil(value) end), do: nil, else: values
+  end
 
   # Relationships only. An embedded resource lives in an attribute and has no
   # topic of its own — no primary key either — since its changes arrive as an
