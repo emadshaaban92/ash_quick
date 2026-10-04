@@ -14,7 +14,7 @@ defmodule AshQuick.AshTypes.Attachment.Value do
   @derive Jason.Encoder
   defstruct [:key, :file_type, :original_filename, :byte_size]
 
-  @type file_type :: :image | :video
+  @type file_type :: :image | :video | :document
 
   @type t :: %__MODULE__{
           key: String.t(),

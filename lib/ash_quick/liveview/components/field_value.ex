@@ -165,6 +165,39 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     """
   end
 
+  # A document has nothing to preview inline, so a servable one is a link to it.
+  # Opened in a new tab rather than embedded: the host decides whether the
+  # browser renders it or downloads it, through the object's own headers.
+  def attachment_preview(
+        %{value: %AshQuick.AshTypes.Attachment.Value{file_type: :document}} = assigns
+      ) do
+    assigns =
+      assign(
+        assigns,
+        :resolution,
+        AshQuick.Storage.url_for(assigns.value, states: assigns.states)
+      )
+
+    ~H"""
+    <a
+      :if={match?({:ok, _}, @resolution)}
+      href={elem(@resolution, 1)}
+      target="_blank"
+      rel="noopener noreferrer"
+      class="link inline-flex items-center gap-1 text-sm"
+    >
+      <AshQuick.Components.icon name="hero-document" class="w-4 h-4" />
+      {@value.original_filename || Path.basename(@value.key)}
+    </a>
+    <AshQuick.Components.attachment_img
+      :if={not match?({:ok, _}, @resolution)}
+      value={@value}
+      states={@states}
+      class="max-w-36 px-3 py-2"
+    />
+    """
+  end
+
   def attachment_preview(%{value: %AshQuick.AshTypes.Attachment.Value{}} = assigns) do
     ~H"""
     <AshQuick.Components.attachment_img value={@value} states={@states} class="max-w-36" />

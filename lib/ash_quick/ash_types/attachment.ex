@@ -1,6 +1,6 @@
 defmodule AshQuick.AshTypes.Attachment do
   @moduledoc """
-  An Ash type for uploaded files (images and videos), stored as an
+  An Ash type for uploaded files (images, videos and documents), stored as an
   object-storage `key` plus media-class metadata.
 
   Per-field policy is expressed as Ash type constraints and read by the
@@ -11,8 +11,8 @@ defmodule AshQuick.AshTypes.Attachment do
       to grant or deny anonymous access. See `AshQuick.Storage` for the
       bucket policy contract the host application is expected to
       provide.
-    * `:accepts` (list of `:image` and/or `:video`, required) — allowed
-      media classes for this field.
+    * `:accepts` (list of `:image`, `:video` and/or `:document`, required) —
+      allowed media classes for this field. `:document` is PDF.
     * `:max_size_mb` (positive integer, default 50) — hard per-file size
       cap.
 
@@ -87,7 +87,7 @@ defmodule AshQuick.AshTypes.Attachment do
         """
       ],
       accepts: [
-        type: {:list, {:in, [:image, :video]}},
+        type: {:list, {:in, [:image, :video, :document]}},
         required: true,
         doc: "Allowed media classes for this attachment field. At least one."
       ],
@@ -197,8 +197,10 @@ defmodule AshQuick.AshTypes.Attachment do
   defp cast_file_type(nil), do: nil
   defp cast_file_type(:image), do: :image
   defp cast_file_type(:video), do: :video
+  defp cast_file_type(:document), do: :document
   defp cast_file_type("image"), do: :image
   defp cast_file_type("video"), do: :video
+  defp cast_file_type("document"), do: :document
   defp cast_file_type(_), do: nil
 
   defp cast_byte_size(nil), do: nil

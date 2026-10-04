@@ -70,6 +70,13 @@ defmodule AshQuick.AshTypes.AttachmentTest do
               }} = Attachment.cast_input(input, @private_constraints)
     end
 
+    test "casts a document's string file_type" do
+      input = %{"key" => "private/return_requests/receipt.pdf", "file_type" => "document"}
+
+      assert {:ok, %Value{file_type: :document}} =
+               Attachment.cast_input(input, visibility: :private, accepts: [:document])
+    end
+
     test "rejects a map without a key" do
       assert :error = Attachment.cast_input(%{file_type: :image}, @public_constraints)
     end
@@ -185,6 +192,20 @@ defmodule AshQuick.AshTypes.AttachmentTest do
     test "accepts a value whose file_type is in :accepts" do
       value = %Value{key: "private/return_requests/x.mp4", file_type: :video}
       assert {:ok, ^value} = Attachment.apply_constraints(value, @private_constraints)
+    end
+
+    test "accepts a document on a field that accepts documents" do
+      value = %Value{key: "private/return_requests/x.pdf", file_type: :document}
+
+      assert {:ok, ^value} =
+               Attachment.apply_constraints(value, visibility: :private, accepts: [:document])
+    end
+
+    test "rejects a document on an image field" do
+      value = %Value{key: "public/products/x.pdf", file_type: :document}
+
+      assert {:error, errors} = Attachment.apply_constraints(value, @public_constraints)
+      assert Enum.any?(errors, fn err -> err[:field] == :file_type end)
     end
 
     test "skips file_type validation when file_type is nil (best-effort field)" do

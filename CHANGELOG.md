@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Features
+
+- **Attachments can be PDFs.** `AshQuick.AshTypes.Attachment` takes a third
+  media class, `:document`, in `accepts:`. A field that accepts it offers
+  `.pdf` in the picker and saves the value with `file_type: :document`. A
+  servable document renders as a link to it, opened in a new tab, instead of
+  an `<img>`. While the host is holding it, the usual placeholder renders.
+  Whether the browser shows the PDF or downloads it is up to the host,
+  through the headers it stores on the object. AshQuick does not look at the
+  bytes, so a host that accepts documents should check them behind the
+  `AshQuick.Storage` lifecycle callbacks.
+
 ### Bug fixes
 
 - **A QuickView list is no longer re-rendered on every event.** Assigns made
