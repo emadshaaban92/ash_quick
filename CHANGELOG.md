@@ -16,6 +16,12 @@
 
 ### Bug fixes
 
+- **A single attachment field shows whether the file is ready.** A field
+  holding one attachment rendered without asking the host for the file's
+  state, so it showed the file as ready while the host was still processing
+  it or had rejected it: a broken image, or a link to nothing. It now shows
+  the Processing or Rejected placeholder, as a field holding several
+  attachments already did.
 - **Derived bulk actions report the rows they did not write.** Activate,
   Deactivate and Delete from the bulk menu could write fewer rows than were
   selected, for example skipping a row that changed since the page loaded,

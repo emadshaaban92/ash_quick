@@ -14,6 +14,48 @@ defmodule AshQuick.LiveView.Components.FieldValueTest do
   alias AshQuick.AshTypes.Attachment.Value
   alias AshQuick.LiveView.Components.FieldValue
 
+  describe "field_value/1" do
+    # The fixture host answers `object_states/1` from rows it keeps, so holding
+    # an object is a row saying so.
+    defp hold(key, state) do
+      AshQuick.Test.Uploads.StoredObject
+      |> Ash.Changeset.for_create(:create, %{serving_key: key, state: state})
+      |> Ash.create!()
+    end
+
+    test "a single attachment field shows the state the host holds it in" do
+      hold("private/return_requests/held.jpg", :processing)
+      hold("private/return_requests/refused.jpg", :rejected)
+
+      for {key, label} <- [
+            {"private/return_requests/held.jpg", "Processing"},
+            {"private/return_requests/refused.jpg", "Rejected"}
+          ] do
+        html =
+          render_component(&FieldValue.field_value/1,
+            ash_field: %{type: AshQuick.AshTypes.Attachment},
+            value: %Value{key: key, file_type: :image}
+          )
+
+        assert html =~ label
+        refute html =~ "<img"
+      end
+    end
+
+    test "a multiple attachment field shows the state the host holds each in" do
+      hold("private/return_requests/held.jpg", :processing)
+
+      html =
+        render_component(&FieldValue.field_value/1,
+          ash_field: %{type: {:array, AshQuick.AshTypes.Attachment}},
+          value: [%Value{key: "private/return_requests/held.jpg", file_type: :image}]
+        )
+
+      assert html =~ "Processing"
+      refute html =~ "<img"
+    end
+  end
+
   describe "attachment_preview/1" do
     test "renders an <img> for image attachments" do
       value = %Value{key: "public/products/abc.jpg", file_type: :image}

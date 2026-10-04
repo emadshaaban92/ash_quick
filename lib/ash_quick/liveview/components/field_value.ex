@@ -11,8 +11,10 @@ defmodule AshQuick.LiveView.Components.FieldValue do
   end
 
   def field_value(%{ash_field: %{type: AshQuick.AshTypes.Attachment}} = assigns) do
+    assigns = assign(assigns, :states, AshQuick.Storage.states_for([assigns.value]))
+
     ~H"""
-    <.attachment_preview value={@value} />
+    <.attachment_preview value={@value} states={@states} />
     """
   end
 
