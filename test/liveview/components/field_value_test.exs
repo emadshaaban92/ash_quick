@@ -34,6 +34,35 @@ defmodule AshQuick.LiveView.Components.FieldValueTest do
       refute html =~ "<img"
     end
 
+    test "renders a link, not an <img>, for document attachments" do
+      value = %Value{
+        key: "private/return_requests/receipt.pdf",
+        file_type: :document,
+        original_filename: "purchase receipt.pdf"
+      }
+
+      html = render_component(&FieldValue.attachment_preview/1, value: value)
+
+      assert html =~ ~s(href="https://)
+      assert html =~ "private/return_requests/receipt.pdf"
+      assert html =~ "purchase receipt.pdf"
+      assert html =~ ~s(rel="noopener noreferrer")
+      refute html =~ "<img"
+    end
+
+    test "renders the placeholder, not a link, for a document the host is holding" do
+      value = %Value{key: "private/return_requests/receipt.pdf", file_type: :document}
+
+      html =
+        render_component(&FieldValue.attachment_preview/1,
+          value: value,
+          states: %{"private/return_requests/receipt.pdf" => :processing}
+        )
+
+      assert html =~ "Processing"
+      refute html =~ "href="
+    end
+
     test "renders empty span for nil value" do
       html = render_component(&FieldValue.attachment_preview/1, value: nil)
       assert html =~ "<span></span>"

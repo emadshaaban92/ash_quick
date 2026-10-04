@@ -201,7 +201,7 @@ defmodule AshQuick.Storage do
 
   `opts` carries what the surface knows, all optional:
 
-    * `:accepts` — the field's allowed media classes (`[:image, :video]`)
+    * `:accepts` — the field's allowed media classes (`[:image, :video, :document]`)
     * `:max_bytes` — the field's size cap, in bytes
     * `:content_type`, `:byte_size` — as the client declared them
     * `:filename` — the original filename

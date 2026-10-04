@@ -232,19 +232,7 @@ defmodule AshQuick.LiveView.Components.FormView do
 
       <%= for entry <- @uploads[@upload_name].entries do %>
         <div class="flex items-center gap-2 mt-2 text-sm text-base-content/70">
-          <.icon
-            :if={String.starts_with?(entry.client_type || "", "video/")}
-            name="hero-film"
-            class="w-4 h-4"
-          />
-          <.icon
-            :if={
-              entry.client_type == nil or
-                not String.starts_with?(entry.client_type, "video/")
-            }
-            name="hero-photo"
-            class="w-4 h-4"
-          />
+          <.icon name={entry_icon(entry.client_type)} class="w-4 h-4" />
           <span class="truncate">{entry.client_name}</span>
         </div>
         <progress class="progress progress-primary w-full mt-2" value={entry.progress} max="100">
@@ -413,4 +401,8 @@ defmodule AshQuick.LiveView.Components.FormView do
     </div>
     """
   end
+
+  defp entry_icon("video/" <> _), do: "hero-film"
+  defp entry_icon("application/pdf"), do: "hero-document"
+  defp entry_icon(_client_type), do: "hero-photo"
 end

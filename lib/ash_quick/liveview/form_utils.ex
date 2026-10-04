@@ -410,6 +410,7 @@ defmodule AshQuick.LiveView.FormUtils do
     |> Enum.flat_map(fn
       :image -> ~w(.jpg .jpeg .png .webp)
       :video -> ~w(.mp4 .mov .webm)
+      :document -> ~w(.pdf)
     end)
   end
 
@@ -740,6 +741,7 @@ defmodule AshQuick.LiveView.FormUtils do
     case filename |> Path.extname() |> String.downcase() do
       ext when ext in ~w(.jpg .jpeg .png .heic .webp) -> :image
       ext when ext in ~w(.mp4 .mov .webm .mkv) -> :video
+      ".pdf" -> :document
       _ -> nil
     end
   end
