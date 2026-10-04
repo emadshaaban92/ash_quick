@@ -341,10 +341,16 @@ defmodule AshQuick.LiveView.ListUtils do
         %{status: :error} ->
           socket |> put_flash(:error, "Unknown Error")
 
-        _ ->
+        # A bulk write that matches no row (a stale one, say) is not an error, so
+        # `:success` does not mean every selected row was written. The records it
+        # returns are the ones that were; the rest are reported and kept selected.
+        %{records: written} ->
+          skipped_ids = Enum.map(records, & &1.id) -- Enum.map(written, & &1.id)
+
           socket
           |> assign(data: load_data!(socket, socket.assigns.params, options))
-          |> assign(selected_rows: %{})
+          |> assign(selected_rows: Map.take(socket.assigns.selected_rows, skipped_ids))
+          |> report_skipped_rows(action, length(records), skipped_ids)
           |> Liveness.resync(:data, options)
           |> refresh_row_actions(options)
       end
@@ -486,6 +492,7 @@ defmodule AshQuick.LiveView.ListUtils do
       strategy: :stream,
       transaction: :all,
       stop_on_error?: true,
+      return_records?: true,
       # One publication per row written, so a page holding a row hears about a
       # bulk write as it does a row action's. A batch that errors is rolled back
       # whole by `transaction: :all` and publishes nothing, so nothing is
@@ -504,8 +511,30 @@ defmodule AshQuick.LiveView.ListUtils do
       strategy: :stream,
       transaction: :all,
       stop_on_error?: true,
+      return_records?: true,
       notify?: true
     )
+  end
+
+  defp report_skipped_rows(socket, _action, _selected, []), do: socket
+
+  defp report_skipped_rows(socket, action, selected, skipped_ids) do
+    put_flash(socket, :error, skipped_rows_message(action, selected, length(skipped_ids)))
+  end
+
+  defp skipped_rows_message(action, selected, skipped) do
+    applied =
+      "#{Utils.humanize(action.name)} applied to #{selected - skipped} of #{selected} selected rows."
+
+    case skipped do
+      1 ->
+        applied <> " The other row was not changed and is still selected: check it and try again."
+
+      _ ->
+        applied <>
+          " The other #{skipped} rows were not changed and are still selected: " <>
+          "check them and try again."
+    end
   end
 
   defp assign_row_actions(socket, id, %Options{resource: resource}) do

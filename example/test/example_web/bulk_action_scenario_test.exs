@@ -129,6 +129,80 @@ defmodule ExampleWeb.BulkActionScenarioTest do
       assert Ash.reload!(untouched, authorize?: false).active
     end
 
+    test "a derived action that writes every row reports nothing and clears the selection",
+         ctx do
+      %{conn: conn, admin: admin, first: first, second: second} = ctx
+
+      conn
+      |> log_in(admin)
+      |> visit(~p"/products")
+      |> tick_rows([first.id, second.id])
+      |> click_link(@bulk, "Deactivate")
+      |> refute_has("#flash-error")
+      |> refute_has(@bulk)
+
+      refute Ash.reload!(first, authorize?: false).active
+      refute Ash.reload!(second, authorize?: false).active
+    end
+
+    # `Product` is versioned. A row moved behind the page no longer matches the
+    # lock, and the bulk write skips it without an error, so the page has to
+    # compare what was written with what was selected to say anything at all.
+    test "a derived action reports the rows it did not write and keeps them selected", ctx do
+      %{conn: conn, admin: admin, first: first, second: second, untouched: untouched} = ctx
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products")
+        |> tick_rows([first.id, second.id, untouched.id])
+
+      move_behind_the_view(second)
+      move_behind_the_view(untouched)
+
+      session
+      |> click_link(@bulk, "Deactivate")
+      |> assert_has("#flash-error",
+        text:
+          "Deactivate applied to 1 of 3 selected rows. The other 2 rows were not changed " <>
+            "and are still selected: check them and try again."
+      )
+      |> assert_has("input[name='#{second.id}'][checked]")
+      |> assert_has("input[name='#{untouched.id}'][checked]")
+      |> refute_has("input[name='#{first.id}'][checked]")
+
+      refute Ash.reload!(first, authorize?: false).active
+      assert Ash.reload!(second, authorize?: false).active
+      assert Ash.reload!(untouched, authorize?: false).active
+    end
+
+    # Destroys take the lock too (#15), and a stale one is skipped the same way
+    # rather than failing the batch. Pinned so an Ash change that turns it into
+    # an error, which the error branches would then report, is noticed.
+    test "a derived Delete skips a row moved behind the page and reports it", ctx do
+      %{conn: conn, admin: admin, first: first, second: second} = ctx
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products")
+        |> tick_rows([first.id, second.id])
+
+      move_behind_the_view(second)
+
+      session
+      |> click_link(@bulk, "Delete")
+      |> assert_has("#flash-error",
+        text:
+          "Delete applied to 1 of 2 selected rows. The other row was not changed " <>
+            "and is still selected: check it and try again."
+      )
+      |> assert_has("input[name='#{second.id}'][checked]")
+
+      assert {:error, _} = Ash.get(Example.Catalog.Product, first.id, authorize?: false)
+      assert {:ok, _} = Ash.get(Example.Catalog.Product, second.id, authorize?: false)
+    end
+
     test "a declared action runs the one the resource could not offer", ctx do
       %{conn: conn, admin: admin, first: first, second: second, untouched: untouched} = ctx
 
@@ -262,6 +336,12 @@ defmodule ExampleWeb.BulkActionScenarioTest do
 
       assert Money.to_string!(Ash.reload!(first, authorize?: false).price) =~ "100"
     end
+  end
+
+  # Bumps the version and tells nobody, so the page still holds the old one and
+  # the optimistic lock no longer matches what it would write against.
+  defp move_behind_the_view(record) do
+    Ash.Seed.update!(record, %{version: record.version + 1})
   end
 
   # Ticking a row is a change on the list's own form, which is what the

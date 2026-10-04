@@ -4,6 +4,14 @@
 
 ### Bug fixes
 
+- **Derived bulk actions report the rows they did not write.** Activate,
+  Deactivate and Delete from the bulk menu could write fewer rows than were
+  selected, for example skipping a row that changed since the page loaded,
+  and still report success: the other rows were committed, the selection was
+  cleared, and nothing was said. They were skipped silently. The page now
+  compares the rows written with the rows selected, shows an error naming how
+  many were applied, and keeps the rows that were not written selected so
+  they can be checked and retried.
 - **A failed form save no longer logs what was submitted.** A save the action
   refused (a validation, a stale record, a policy) logged the whole
   `AshPhoenix.Form` — params, changeset, record and actor — or the error
