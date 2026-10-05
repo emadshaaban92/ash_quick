@@ -7,6 +7,7 @@ defmodule AshQuick.LiveView.Components.FormView do
   alias Ash.Resource.Relationships.BelongsTo
   alias Ash.Resource.Actions.Argument
   alias Ash.Type
+  alias Phoenix.LiveView.JS
 
   alias AshQuick.LiveView.FormUtils
   alias AshQuick.LiveView.Utils
@@ -175,11 +176,72 @@ defmodule AshQuick.LiveView.Components.FormView do
     """
   end
 
-  defp field_input(%{field: %{type: field_type}} = assigns)
-       when field_type in [
-              AshQuick.AshTypes.Attachment,
-              {:array, AshQuick.AshTypes.Attachment}
-            ] do
+  # An array of attachments: a row per stored file, each with a ✕, over a drop
+  # zone for more. Nothing here posts the list — the form holds it on the server
+  # (`FormUtils.carry_uploaded_attachments/2`), an upload appends to it, and the
+  # ✕ names a position. Stored rows stay up while a pick uploads, so the pick
+  # reads as an addition rather than a replacement.
+  defp field_input(%{field: %{type: {:array, AshQuick.AshTypes.Attachment}}} = assigns) do
+    upload = assigns.uploads["#{assigns.phx_field.name}_upload"]
+
+    # Positions are counted before anything is filtered out, so a ✕ names the
+    # same position in the list the form holds.
+    rows =
+      assigns.phx_field.value
+      |> List.wrap()
+      |> Enum.with_index()
+      |> Enum.filter(&match?({%AshQuick.AshTypes.Attachment.Value{}, _}, &1))
+
+    name = assigns.field.name |> Utils.humanize() |> String.downcase()
+
+    prompt =
+      if rows == [],
+        do: gettext("Add %{name}", name: name),
+        else: gettext("Add more %{name}", name: name)
+
+    errors =
+      if Phoenix.Component.used_input?(assigns.phx_field), do: assigns.phx_field.errors, else: []
+
+    # Only the root form's attributes hold their list on the server. An argument
+    # is the action's to fold, and a nested form's params are not addressed from
+    # the root, so their rows have no ✕ that could do anything.
+    removable? =
+      match?(%Ash.Resource.Attribute{}, assigns.field) and
+        not String.contains?(assigns.form.name, "[")
+
+    assigns =
+      assigns
+      |> assign(:upload, upload)
+      |> assign(:removable?, removable?)
+      |> assign(:rows, rows)
+      |> assign(:prompt, prompt)
+      |> assign(:states, rows |> Enum.map(&elem(&1, 0)) |> AshQuick.Storage.states_for())
+      |> assign(:errors, Enum.map(errors, &translate_error(&1)))
+
+    ~H"""
+    <section
+      phx-drop-target={@upload.ref}
+      data-attachment-field={@field.name}
+      class="flex flex-col gap-2 sm:col-span-4 card bg-base-100 p-5 my-3"
+    >
+      <h3 class="font-semibold">{Utils.humanize(@field.name)}</h3>
+      <ul :if={@rows != []} class="divide-y divide-base-300">
+        <.attachment_row
+          :for={{value, index} <- @rows}
+          value={value}
+          states={@states}
+          on_remove={
+            @removable? && JS.push("remove-attachment", value: %{field: @field.name, index: index})
+          }
+        />
+      </ul>
+      <.attachment_dropzone upload={@upload} id={@phx_field.id} prompt={@prompt} />
+      <.error :for={msg <- @errors}>{msg}</.error>
+    </section>
+    """
+  end
+
+  defp field_input(%{field: %{type: AshQuick.AshTypes.Attachment}} = assigns) do
     upload_name = "#{assigns.phx_field.name}_upload"
 
     # Only values that resolved to an attachment can be previewed. An argument
@@ -220,11 +282,8 @@ defmodule AshQuick.LiveView.Components.FormView do
         class="file-input w-full"
       />
       <%!-- Carries an existing attachment across a validate round trip, as the JSON
-      the type casts back. Only a single-valued field has one to carry: a list
-      has no scalar rendering, so the input would post an empty string the type
-      cannot cast, failing a field the user never touched. --%>
+      the type casts back. --%>
       <.input
-        :if={@field.type == AshQuick.AshTypes.Attachment}
         type="hidden"
         field={@phx_field}
         value={attachment_input_value(@phx_field.value)}

@@ -395,6 +395,7 @@ msgstr "ليس لديك صلاحية للقيام بهذا الإجراء. تو�
 msgid "You're impersonating %{actor}"
 msgstr "أنت تتصفح بحساب %{actor}"
 
+#: lib/ash_quick/components.ex
 #: lib/ash_quick/liveview/components/form_view.ex
 #, elixir-autogen, elixir-format
 msgid "cancel"
@@ -426,3 +427,48 @@ msgstr "شرط"
 #, elixir-autogen, elixir-format
 msgid "No results on this page, of %{count} in total"
 msgstr "لا توجد نتائج في هذه الصفحة، من أصل %{count}"
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "%{count}, %{size} MB each — %{exts}"
+msgstr "%{count}، %{size} ميغابايت لكل ملف — %{exts}"
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Add %{name}"
+msgstr "إضافة %{name}"
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Add more %{name}"
+msgstr "إضافة المزيد من %{name}"
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "One file"
+msgstr "ملف واحد"
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Remove"
+msgstr "إزالة"
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Up to %{count} at a time"
+msgstr "حتى %{count} في المرة الواحدة"
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "any type"
+msgstr "أي نوع"
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "browse"
+msgstr "تصفّح"
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "drop them here or"
+msgstr "أفلتها هنا أو"

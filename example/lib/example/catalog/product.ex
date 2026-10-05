@@ -103,6 +103,31 @@ defmodule Example.Catalog.Product do
         end)
       end
     end
+
+    # Uploads that land as new images after the ones already there, folded onto
+    # `:images` by the action itself. That is how a host appends to an array of
+    # embeds from an upload, and the argument is spent as it folds: an upload
+    # form that seeded it with what is stored would attach every stored image a
+    # second time.
+    update :add_images do
+      accept []
+
+      argument :new_images, {:array, :attachment},
+        allow_nil?: false,
+        constraints: [items: [visibility: :public, accepts: [:image], max_size_mb: 10]]
+
+      require_atomic? false
+
+      change fn changeset, _context ->
+        added =
+          changeset
+          |> Ash.Changeset.get_argument(:new_images)
+          |> List.wrap()
+          |> Enum.map(&%{attachment: &1})
+
+        Ash.Changeset.change_attribute(changeset, :images, (changeset.data.images || []) ++ added)
+      end
+    end
   end
 
   policies do

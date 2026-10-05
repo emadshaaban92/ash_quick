@@ -205,7 +205,7 @@ defmodule Example.Uploads.FileObject do
     attribute :accepts, {:array, :atom},
       allow_nil?: true,
       public?: true,
-      constraints: [items: [one_of: [:image, :video]]]
+      constraints: [items: [one_of: [:image, :video, :document]]]
 
     attribute :max_bytes, :integer, allow_nil?: true, public?: true, constraints: [min: 0]
 

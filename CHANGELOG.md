@@ -4,6 +4,19 @@
 
 ### Features
 
+- **Stored attachments can be removed one by one, and an array of them has a
+  real widget.** An `{:array, :attachment}` attribute on a form now renders as
+  a card: a row per stored file (its preview and name) with a ✕, over a drop
+  zone that states the upload's limits (files at a time, size, extensions).
+  The ✕ pushes `"remove-attachment"` with the field and the row's position,
+  and the form drops that position from the list it holds on the server. The
+  list never travels through the page, so the browser can only say which
+  position to remove. Stored rows stay up while a pick is uploading. The rows
+  and the zone are public as `AshQuick.Components.attachment_row/1` and
+  `AshQuick.Components.attachment_dropzone/1`, so a host with a richer row
+  (alt text, a featured flag) can keep its own and reuse the zone. A removed
+  file stays in the bucket, as a replaced one already did.
+
 - **Attachments can be PDFs.** `AshQuick.AshTypes.Attachment` takes a third
   media class, `:document`, in `accepts:`. A field that accepts it offers
   `.pdf` in the picker and saves the value with `file_type: :document`. A
@@ -15,6 +28,26 @@
   `AshQuick.Storage` lifecycle callbacks.
 
 ### Bug fixes
+
+- **An upload on an update form adds to an array of attachments.** The first
+  pick on an `{:array, :attachment}` attribute replaced every file the record
+  already held, because nothing on the page carried the stored list and the
+  upload was folded onto nothing. The form now starts from the record's list,
+  so uploads append. A host that relied on an upload replacing the list gets
+  append plus a ✕ per file instead. An `add_*` argument the action folds onto
+  an attribute is unchanged: it is never seeded from the record. A single
+  `:attachment` field still takes the last file picked.
+- **A posted value can no longer set an array of attachments.** A hand-sent
+  `validate` or `save` carrying `form[<field>]` for an `{:array, :attachment}`
+  attribute won over the list the form held, and was saved. The type checks
+  only the visibility prefix, so a `private/` key belonging to another record
+  was accepted, and the details page would have signed a URL for it. The
+  posted value is now dropped and the server-held list is used. No input
+  renders for the field, so no honest post contained it.
+- **A form with nothing but uploads can be saved.** Its submit posts no
+  `form` params, since a file input's value never travels with the form, and
+  the event fell through to the host's `handle_event/3` and took the page
+  down. It is now saved as an empty form plus the uploads.
 
 - **Live updates reach records behind a join row.** The live-update walk
   stopped at any record without an `:id`, so a join resource keyed by the two
