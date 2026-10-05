@@ -16,6 +16,14 @@
 
 ### Bug fixes
 
+- **Live updates reach records behind a join row.** The live-update walk
+  stopped at any record without an `:id`, so a join resource keyed by the two
+  ids it joins (a user's organization memberships) hid the records behind it:
+  renaming an organization never refreshed the user's page, and `explain/1`
+  said nothing about the memberships it passed over. The walk now names such a
+  record by its primary-key values, follows its relationships, and counts it
+  under `:skipped`. Only records with an `:id` are watched.
+
 - **A single attachment field shows whether the file is ready.** A field
   holding one attachment rendered without asking the host for the file's
   state, so it showed the file as ready while the host was still processing
