@@ -7,7 +7,8 @@ defmodule Example.Catalog.Category do
   dropdown destination, so its lookup action has to satisfy the contract for a
   page other than its own. And `:image` is an `:attachment` declared
   `visibility: :private`, which is the other half of the key-prefix pair the
-  presign tests assert.
+  presign tests assert. `:documents` is its array counterpart: a list of
+  attachments that an update form appends to and removes from.
   """
 
   use Ash.Resource,
@@ -38,7 +39,7 @@ defmodule Example.Catalog.Category do
   end
 
   actions do
-    default_accept [:code, :name, :image, :parent_id]
+    default_accept [:code, :name, :image, :documents, :parent_id]
     defaults [:create, :read, :update, :destroy]
 
     read :index do
@@ -83,6 +84,17 @@ defmodule Example.Catalog.Category do
       public?: true,
       allow_nil?: true,
       constraints: [visibility: :private, accepts: [:image], max_size_mb: 10]
+
+    # A plain array of attachments, typed on the record rather than wrapped in an
+    # embed the way `Product.images` is. Nothing on the page carries its value,
+    # so the form holds it on the server: an upload appends to it, and a file is
+    # removed by position. Private, so a key that came from anywhere but the
+    # server would be one a signed URL is handed out for.
+    attribute :documents, {:array, :attachment},
+      public?: true,
+      allow_nil?: true,
+      default: [],
+      constraints: [items: [visibility: :private, accepts: [:image, :document], max_size_mb: 10]]
   end
 
   relationships do

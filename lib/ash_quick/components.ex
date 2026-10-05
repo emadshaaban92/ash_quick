@@ -10,6 +10,9 @@ defmodule AshQuick.Components do
   * `icon/1` — Heroicon via CSS class
   * `attachment_img/1` — Attachment image, or a placeholder while the host
     is still holding the object
+  * `attachment_row/1` — One stored attachment: a preview, its name, and a ✕
+  * `attachment_dropzone/1` — A drop zone over an upload, with the files on
+    their way in
   * `label/1` — Form label
   * `error/1` — Error message
   * `button/1` — Button
@@ -168,6 +171,160 @@ defmodule AshQuick.Components do
   # Published on the placeholder itself, so a host that draws over it takes off
   # exactly what this put on.
   defp processing_placeholder_class, do: "bg-base-200 text-base-content/50 text-xs"
+
+  @doc """
+  Renders one stored attachment as a row: a preview, its file name, and a ✕.
+
+  The preview is `AshQuick.LiveView.Components.FieldValue`'s, so an image is a
+  thumbnail, a video a player, a document a link, and an object the host is
+  still holding its placeholder. The ✕ renders only when `on_remove` is given,
+  and does whatever that command says: the default form widget pushes
+  `"remove-attachment"` with the field and the row's position, which an AshQuick
+  form handles by dropping that position from the list it holds.
+
+  A host that wants more on each row (alt text, a featured flag, reordering)
+  keeps its own row and reuses `attachment_dropzone/1` beside it.
+
+  Render rows inside a `<ul>`.
+
+  ## Examples
+
+      <ul>
+        <.attachment_row
+          :for={{value, index} <- Enum.with_index(@values)}
+          value={value}
+          states={@states}
+          on_remove={JS.push("remove-attachment", value: %{field: :documents, index: index})}
+        />
+      </ul>
+  """
+  attr :value, :any, required: true, doc: "an `AshQuick.AshTypes.Attachment.Value`"
+  attr :states, :map, default: %{}, doc: "prefetched states from `AshQuick.Storage.states_for/1`"
+
+  attr :on_remove, :any,
+    default: nil,
+    doc: "a `Phoenix.LiveView.JS` command (or event name) for the ✕; no ✕ when nil"
+
+  attr :rest, :global
+
+  def attachment_row(assigns) do
+    ~H"""
+    <li data-attachment-row class="flex items-center gap-3 py-2" {@rest}>
+      <div class="w-20 shrink-0 overflow-hidden rounded-box">
+        <AshQuick.LiveView.Components.FieldValue.attachment_preview value={@value} states={@states} />
+      </div>
+      <span data-attachment-name class="grow truncate text-sm">
+        {@value.original_filename || Path.basename(@value.key)}
+      </span>
+      <button
+        :if={@on_remove}
+        type="button"
+        phx-click={@on_remove}
+        aria-label={gettext("Remove")}
+        class="btn btn-ghost btn-sm btn-square"
+      >
+        <.icon name="hero-x-mark" class="w-4 h-4" />
+      </button>
+    </li>
+    """
+  end
+
+  @doc """
+  Renders a drop zone over an upload, and the files on their way in through it.
+
+  The zone is a `<label>` around a visually hidden `live_file_input/1`: the
+  input stays in the page because the upload is addressed through it, and the
+  label is what a click, a tap or the keyboard reaches. Put `phx-drop-target`
+  on whatever should take a drop — the whole card, usually:
+
+      <section phx-drop-target={@uploads.documents.ref}>
+        <ul>...</ul>
+        <.attachment_dropzone upload={@uploads.documents} prompt="Add more documents" />
+      </section>
+
+  Under the prompt it states the upload's own limits — how many files at once,
+  how large, which extensions — so the person learns them before a pick is
+  refused. Below it, each entry in flight: an icon for its kind, its name, its
+  progress, a ✕ that pushes `cancel_event` with `entry` (the upload's name)
+  and `ref`, and anything wrong with it. An AshQuick form handles
+  `"cancel-upload"` itself.
+  """
+  attr :upload, Phoenix.LiveView.UploadConfig, required: true
+  attr :prompt, :string, required: true, doc: "what the zone offers, e.g. \"Add more documents\""
+  attr :id, :string, default: nil, doc: "the file input's id; the upload's ref when nil"
+  attr :cancel_event, :string, default: "cancel-upload"
+
+  def attachment_dropzone(assigns) do
+    assigns = assign(assigns, :input_id, assigns.id || assigns.upload.ref)
+
+    ~H"""
+    <div data-attachment-dropzone>
+      <label
+        for={@input_id}
+        class="flex flex-col items-center gap-1 p-5 text-center border-2 border-dashed border-base-300 rounded-box cursor-pointer hover:border-primary focus-within:border-primary"
+      >
+        <.icon name="hero-arrow-up-tray" class="w-6 h-6 text-base-content/50" />
+        <span class="text-sm">
+          {@prompt} — {gettext("drop them here or")}
+          <span class="link link-primary">{gettext("browse")}</span>
+        </span>
+        <span class="text-xs text-base-content/60">{upload_limits(@upload)}</span>
+        <.live_file_input upload={@upload} id={@input_id} class="sr-only" />
+      </label>
+
+      <div :for={entry <- @upload.entries} data-upload-entry class="mt-2">
+        <div class="flex items-center gap-2 text-sm text-base-content/70">
+          <.icon name={entry_icon(entry.client_type)} class="w-4 h-4 shrink-0" />
+          <span class="truncate">{entry.client_name}</span>
+          <progress class="progress progress-primary grow" value={entry.progress} max="100">
+            {entry.progress}%
+          </progress>
+          <button
+            type="button"
+            phx-click={@cancel_event}
+            phx-value-entry={@upload.name}
+            phx-value-ref={entry.ref}
+            aria-label={gettext("cancel")}
+            class="btn btn-ghost btn-sm btn-square"
+          >
+            <.icon name="hero-x-mark" class="w-4 h-4" />
+          </button>
+        </div>
+        <p :for={err <- upload_errors(@upload, entry)} class="text-error text-sm mt-1">
+          {AshQuick.LiveView.FormUtils.upload_error_message(err)}
+        </p>
+      </div>
+
+      <p :for={err <- upload_errors(@upload)} class="text-error text-sm mt-1">
+        {AshQuick.LiveView.FormUtils.upload_error_message(err)}
+      </p>
+    </div>
+    """
+  end
+
+  defp upload_limits(upload) do
+    size = Float.round(upload.max_file_size / (1024 * 1024), 1)
+
+    exts =
+      case upload.accept do
+        accept when is_binary(accept) ->
+          accept |> String.split(",", trim: true) |> Enum.join(", ")
+
+        _any ->
+          gettext("any type")
+      end
+
+    count =
+      if upload.max_entries == 1,
+        do: gettext("One file"),
+        else: gettext("Up to %{count} at a time", count: upload.max_entries)
+
+    gettext("%{count}, %{size} MB each — %{exts}", count: count, size: size, exts: exts)
+  end
+
+  defp entry_icon("video/" <> _), do: "hero-film"
+  defp entry_icon("application/pdf"), do: "hero-document"
+  defp entry_icon(_client_type), do: "hero-photo"
 
   ## Label
 

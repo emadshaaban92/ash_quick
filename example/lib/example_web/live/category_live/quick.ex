@@ -24,6 +24,7 @@ defmodule ExampleWeb.CategoryLive.Quick do
         :name,
         {[parent: :name], label: "Parent"},
         {:image, widget: &ExampleWeb.ImageWidgets.image/1},
+        :documents,
         :active,
         :inserted_at,
         :updated_at

@@ -391,6 +391,7 @@ msgstr ""
 msgid "You're impersonating %{actor}"
 msgstr ""
 
+#: lib/ash_quick/components.ex
 #: lib/ash_quick/liveview/components/form_view.ex
 #, elixir-autogen, elixir-format
 msgid "cancel"
@@ -421,4 +422,49 @@ msgstr ""
 #: lib/ash_quick/liveview/components/list_view.ex
 #, elixir-autogen, elixir-format
 msgid "No results on this page, of %{count} in total"
+msgstr ""
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "%{count}, %{size} MB each — %{exts}"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Add %{name}"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Add more %{name}"
+msgstr ""
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "One file"
+msgstr ""
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Remove"
+msgstr ""
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Up to %{count} at a time"
+msgstr ""
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "any type"
+msgstr ""
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "browse"
+msgstr ""
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "drop them here or"
 msgstr ""

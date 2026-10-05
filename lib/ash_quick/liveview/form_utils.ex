@@ -356,12 +356,20 @@ defmodule AshQuick.LiveView.FormUtils do
 
   defp put_uploaded_values(socket, field, values) do
     form = socket.assigns.form
+    held = if held_attachments?(field), do: held_attachments(form, field)
+
+    put_field_value(socket, field, fold_uploaded_values(field, held, values))
+  end
+
+  # Validates the form with `value` as the field's params and everything else
+  # it already holds.
+  defp put_field_value(socket, field, value) do
+    form = socket.assigns.form
     key = field.name |> to_string()
     raw_params = form.raw_params || %{}
-    value = fold_uploaded_values(field, raw_params[key], values)
 
-    # The field's own params are folded into `value` above, so they must not
-    # survive into the re-seed as well — they would be applied a second time.
+    # The field's own params are folded into `value` by the caller, so they must
+    # not survive into the re-seed as well — they would be applied a second time.
     carried = raw_params |> Map.delete(key) |> carry_embedded_params(form)
 
     form =
@@ -386,6 +394,9 @@ defmodule AshQuick.LiveView.FormUtils do
   # - An array attribute — `ReturnRequest.attachments` — keeps them, and this
   #   batch lands after them. Picking twice has to read like picking both at
   #   once, or the earlier files are dropped with nothing on the page to say so.
+  #   What it keeps is `held_attachments/2`: on an update form that starts as
+  #   the record's own list, so the first batch lands after the stored files
+  #   rather than in place of them.
   defp fold_uploaded_values(%{type: AshQuick.AshTypes.Attachment}, _held, [value | _]), do: value
 
   defp fold_uploaded_values(%Argument{}, _held, values), do: values
@@ -418,7 +429,14 @@ defmodule AshQuick.LiveView.FormUtils do
   # page is showing the forbidden panel. Nothing stops someone pushing a form
   # event at it anyway — refuse rather than build on a nil form.
   defp handle_form_events(event, _params, %{assigns: %{form: nil}} = socket, _options)
-       when event in ["cancel-upload", "add-form", "remove-form", "validate", "save"] do
+       when event in [
+              "cancel-upload",
+              "add-form",
+              "remove-form",
+              "remove-attachment",
+              "validate",
+              "save"
+            ] do
     {:halt, socket |> put_flash(:error, AshQuick.LiveView.ActionErrors.forbidden_message())}
   end
 
@@ -434,6 +452,31 @@ defmodule AshQuick.LiveView.FormUtils do
   defp handle_form_events("remove-form", %{"path" => path}, socket, _options) do
     form = AshPhoenix.Form.remove_form(socket.assigns.form, path)
     {:halt, socket |> assign(form: form) |> clear_flash()}
+  end
+
+  # The ✕ beside a stored file. The page says which position, and nothing else:
+  # the list itself is held here, so there is no value of the client's to take.
+  # Anything that does not name a position in an array attribute of attachments
+  # is ignored rather than passed on to the host's own `handle_event/3`.
+  defp handle_form_events("remove-attachment", params, socket, _options) do
+    form = socket.assigns.form
+
+    with %{"field" => name, "index" => index} when is_binary(name) <- params,
+         %{} = field <- held_attachments_field(form, name),
+         {:ok, position} <- attachment_position(index),
+         held when is_list(held) and position < length(held) <- held_attachments(form, field) do
+      {:halt, socket |> put_field_value(field, List.delete_at(held, position)) |> clear_flash()}
+    else
+      _nothing_to_remove -> {:halt, socket}
+    end
+  end
+
+  # A form whose only inputs are uploads (an action taking nothing but an
+  # `add_*` argument) posts no `form` params at all: a file input's value never
+  # travels with the form. That is an empty form, not someone else's event.
+  defp handle_form_events(event, params, socket, options)
+       when event in ["validate", "save"] and not is_map_key(params, "form") do
+    handle_form_events(event, Map.put(params, "form", %{}), socket, options)
   end
 
   defp handle_form_events("validate", %{"form" => params}, socket, _options) do
@@ -495,6 +538,18 @@ defmodule AshQuick.LiveView.FormUtils do
   end
 
   defp handle_form_events(_, _, socket, _options), do: {:cont, socket}
+
+  # `JS.push/2` sends the position as a number, a `phx-value-index` as a string.
+  defp attachment_position(index) when is_integer(index) and index >= 0, do: {:ok, index}
+
+  defp attachment_position(index) when is_binary(index) do
+    case Integer.parse(index) do
+      {position, ""} when position >= 0 -> {:ok, position}
+      _not_a_position -> :error
+    end
+  end
+
+  defp attachment_position(_index), do: :error
 
   # A refused save is an outcome the person was already shown, not an incident,
   # so it is told at debug — and only as *what* failed. Never the params, the
@@ -572,21 +627,78 @@ defmodule AshQuick.LiveView.FormUtils do
   # `validate` would lose them mid-edit, and a save would put the record's old
   # list back over them. Hand them to each round trip instead.
   #
-  # Only what the params do not already speak for: a field whose value the
-  # action has taken somewhere else (an `add_*` argument folded onto an
-  # attribute, say) is dropped from the params as it is folded, and must not be
-  # applied a second time here.
+  # For an attribute, the held list is the value, and whatever the browser
+  # posted under its name is dropped. No input renders for it, so no honest post
+  # contains it, and the visibility prefix is all the type checks: a key taken
+  # from the client could be another record's private object, which the details
+  # page would then sign a URL for. `[]` is carried like any other list — it is
+  # a person removing every file, and leaving it out would put the record's own
+  # list back at save.
+  #
+  # An argument carries only a non-empty batch, and never over what the params
+  # already say: a field whose value the action has taken somewhere else (an
+  # `add_*` argument folded onto an attribute, say) is dropped from the params
+  # as it is folded, and must not be applied a second time here.
   defp carry_uploaded_attachments(params, form) do
+    raw_params = form.raw_params || %{}
+
     Utils.action_fields(form.resource, form.action)
     |> Enum.filter(&(&1.type == {:array, AshQuick.AshTypes.Attachment}))
     |> Enum.reduce(params, fn field, updated_params ->
       key = field.name |> to_string()
 
-      case Map.get(form.raw_params || %{}, key) do
-        [_ | _] = held -> Map.put_new(updated_params, key, held)
-        _nothing_held -> updated_params
+      case {held_attachments?(field), raw_params} do
+        {true, %{^key => held}} -> Map.put(updated_params, key, held)
+        {true, _nothing_held} -> Map.delete(updated_params, key)
+        {false, %{^key => [_ | _] = held}} -> Map.put_new(updated_params, key, held)
+        {false, _nothing_held} -> updated_params
       end
     end)
+  end
+
+  # An array *attribute* of attachments is the one shape whose value the form
+  # holds on the server. A single attachment rides its hidden input, and an
+  # argument is the action's to fold — seeding one from the record would attach
+  # every stored file twice.
+  defp held_attachments?(%Ash.Resource.Attribute{type: {:array, AshQuick.AshTypes.Attachment}}),
+    do: true
+
+  defp held_attachments?(_field), do: false
+
+  defp held_attachments_field(form, name) do
+    Utils.action_fields(form.resource, form.action)
+    |> Enum.find(&(held_attachments?(&1) and to_string(&1.name) == name))
+  end
+
+  # What an array attribute of attachments holds right now. Once the form's
+  # params have the key, they are the answer, `[]` included. Before that it is
+  # the record's own list — which is what makes a first upload on an update form
+  # land after the stored files rather than in place of them. A create form has
+  # no record, so nothing.
+  defp held_attachments(form, field) do
+    key = field.name |> to_string()
+
+    case form.raw_params do
+      %{^key => held} -> held
+      _nothing_held_yet -> stored_attachments(form.data, field.name)
+    end
+  end
+
+  defp stored_attachments(nil, _field_name), do: nil
+
+  defp stored_attachments(record, field_name) do
+    record |> Map.get(field_name) |> List.wrap() |> Enum.map(&attachment_to_params/1)
+  end
+
+  # The same shape an upload is consumed into, so the params never hold two
+  # kinds of entry.
+  defp attachment_to_params(%AshQuick.AshTypes.Attachment.Value{} = value) do
+    %{
+      "key" => value.key,
+      "file_type" => value.file_type && to_string(value.file_type),
+      "original_filename" => value.original_filename,
+      "byte_size" => value.byte_size
+    }
   end
 
   @doc """
@@ -806,7 +918,7 @@ defmodule AshQuick.LiveView.FormUtils do
         params |> Map.put(field.name |> to_string(), value)
 
       {{:array, AshQuick.AshTypes.Attachment}, values, _} ->
-        params |> Map.put(field.name |> to_string(), values)
+        params |> Map.put(field.name |> to_string(), saved_before(field, params, form) ++ values)
     end
   end
 
@@ -822,6 +934,20 @@ defmodule AshQuick.LiveView.FormUtils do
   end
 
   defp maybe_upload_image(_field, params, _socket, _form), do: params
+
+  # What a save's unconsumed entries land after. For an array attribute that is
+  # the list the params hold — carried from the server by
+  # `carry_uploaded_attachments/2` — or, where they hold none, the record's. An
+  # argument starts from nothing, as it always has.
+  defp saved_before(field, params, form) do
+    key = field.name |> to_string()
+
+    case {held_attachments?(field), params} do
+      {true, %{^key => held}} when is_list(held) -> held
+      {true, _nothing_held} -> stored_attachments(form.data, field.name) || []
+      {false, _argument} -> []
+    end
+  end
 
   # The attachment params for every finished entry, in the order the files were
   # picked in: `Phoenix.LiveView.Upload.uploaded_entries/2` builds its done-list
