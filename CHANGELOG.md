@@ -29,6 +29,13 @@
 
 ### Bug fixes
 
+- **A widget on a relationship path no longer crashes on an empty
+  relationship.** `{[bill_of_sale: :display_name], widget: ...}` raised a
+  `BadMapError` on the details page and in the list when `bill_of_sale` was
+  `nil`, because the lookup tried `Map.get(nil, :display_name)` before its
+  `nil` case. The widget is now handed `nil`, as a field without a widget
+  already rendered blank.
+
 - **An upload on an update form adds to an array of attachments.** The first
   pick on an `{:array, :attachment}` attribute replaced every file the record
   already held, because nothing on the page carried the stored list and the

@@ -231,7 +231,7 @@ defmodule AshQuick.LiveView.Components.ListView do
 
   defp render_field(%{field: %QuickField{widget: widget, path: path}, record: record} = assigns)
        when is_function(widget) do
-    assigns = assigns |> assign(:value, resolve_value(record, path))
+    assigns = assigns |> assign(:value, QuickField.resolve_value(record, path))
     widget.(assigns)
   end
 
@@ -244,14 +244,6 @@ defmodule AshQuick.LiveView.Components.ListView do
     </span>
     """
   end
-
-  defp resolve_value(record, path) when is_atom(path), do: Map.get(record, path)
-
-  defp resolve_value(record, [{relationship, nested}]) do
-    record |> Map.get(relationship) |> resolve_value(nested)
-  end
-
-  defp resolve_value(nil, _path), do: nil
 
   # The menu resolves its own contents when it is opened, and only the open row's
   # are held in the assigns. Every entry costs an `Ash.can?` — a changeset build

@@ -40,6 +40,21 @@ defmodule AshQuick.LiveView.QuickField do
     end
   end
 
+  @doc """
+  The value a widget is handed for `path` on `record`.
+
+  A relationship path walks through a related record that may not be there: an
+  empty nullable `belongs_to` reads as `nil`, and so does everything past it.
+  The `nil` clause comes first because `nil` is itself an atom, so the
+  `is_atom/1` clause would otherwise take it and `Map.get/2` on `nil` raises.
+  """
+  def resolve_value(nil, _path), do: nil
+  def resolve_value(record, path) when is_atom(path), do: Map.get(record, path)
+
+  def resolve_value(record, [{relationship, nested}]) do
+    record |> Map.get(relationship) |> resolve_value(nested)
+  end
+
   defp normalize_path(path) when is_atom(path), do: path
   defp normalize_path([{_relationship, _nested}] = path), do: path
 
