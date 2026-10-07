@@ -8,6 +8,7 @@ defmodule AshQuick.LiveView.FormUtils do
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.QuickView.Options
   alias Ash.Resource.Actions.Argument
+  alias Ash.Resource.Attribute
   alias Ash.Type
   alias AshQuick.LiveView.Utils
   alias AshQuick.Storage
@@ -78,7 +79,7 @@ defmodule AshQuick.LiveView.FormUtils do
       )
       |> then(&add_nested_forms(&1, &1.form_keys))
 
-    socket |> assign(form: form)
+    socket |> assign(form: form) |> assign_issued_attachment_keys()
   end
 
   # The read in `set_record!/5` runs through the actor's scope, so a record the
@@ -100,7 +101,57 @@ defmodule AshQuick.LiveView.FormUtils do
       |> prefill_form_has_many_args(socket)
       |> prefill_changed_embedded_forms()
 
-    socket |> assign(form: form)
+    socket |> assign(form: form) |> assign_issued_attachment_keys()
+  end
+
+  # The attachment keys this form will take from a post, per top-level field:
+  # what the record held in that field when the form was built, and what the
+  # action's own changes put there before anyone touched it (a seeded embed,
+  # say). An upload adds the keys it mints under its own field. A key from
+  # anywhere else is one the form never issued for that field, and
+  # `drop_unissued_attachments/3` takes it out of the post. Keyed by field so a
+  # key cannot move between fields of the same visibility: out of one the actor
+  # cannot see or the action does not accept, into one it can.
+  #
+  # Keys an action's change creates during a later `validate` are not issued,
+  # so a post naming them back is dropped. Nothing does that today; a change
+  # that wants it should set the value at build time.
+  defp assign_issued_attachment_keys(socket) do
+    form = socket.assigns.form
+
+    issued =
+      [Map.get(socket.assigns, :record), form.source]
+      |> Enum.map(&issued_keys_in/1)
+      |> Enum.reduce(%{}, &Map.merge(&2, &1, fn _field, a, b -> MapSet.union(a, b) end))
+
+    socket |> assign(ash_quick_issued_attachment_keys: issued)
+  end
+
+  defp issued_keys_in(%Ash.Changeset{attributes: attributes}) do
+    Map.new(attributes, fn {field, value} -> {field, MapSet.new(Storage.keys_in(value))} end)
+  end
+
+  defp issued_keys_in(%resource{} = record) do
+    if Ash.Resource.Info.resource?(resource) do
+      resource
+      |> Ash.Resource.Info.attributes()
+      |> Map.new(&{&1.name, MapSet.new(Storage.keys_in(Map.get(record, &1.name)))})
+    else
+      %{}
+    end
+  end
+
+  defp issued_keys_in(_no_record), do: %{}
+
+  defp issue_attachment_keys(socket, field, values) do
+    keys = for %{"key" => key} <- values, is_binary(key), into: MapSet.new(), do: key
+    issued = Map.get(socket.assigns, :ash_quick_issued_attachment_keys, %{})
+
+    socket
+    |> assign(
+      ash_quick_issued_attachment_keys:
+        Map.update(issued, field.name, keys, &MapSet.union(&1, keys))
+    )
   end
 
   # AshPhoenix doesn't derive an actor from the scope for nested-form
@@ -325,7 +376,7 @@ defmodule AshQuick.LiveView.FormUtils do
 
     if entries != [] and Enum.all?(entries, & &1.done?) do
       values = consume_attachment_entries(socket, upload_name, constraints)
-      put_uploaded_values(socket, field, values)
+      socket |> issue_attachment_keys(field, values) |> put_uploaded_values(field, values)
     else
       socket
     end
@@ -482,6 +533,7 @@ defmodule AshQuick.LiveView.FormUtils do
   defp handle_form_events("validate", %{"form" => params}, socket, _options) do
     params =
       params
+      |> drop_unissued_attachments(socket.assigns.form, socket)
       |> carry_uploaded_attachments(socket.assigns.form)
       |> maybe_put_has_many(socket.assigns.form)
 
@@ -491,7 +543,11 @@ defmodule AshQuick.LiveView.FormUtils do
   end
 
   defp handle_form_events("save", %{"form" => params}, socket, _options) do
-    params = carry_uploaded_attachments(params, socket.assigns.form)
+    params =
+      params
+      |> drop_unissued_attachments(socket.assigns.form, socket)
+      |> carry_uploaded_attachments(socket.assigns.form)
+
     form = AshPhoenix.Form.validate(socket.assigns.form, params)
 
     case AshPhoenix.Form.submit(form,
@@ -618,6 +674,161 @@ defmodule AshQuick.LiveView.FormUtils do
       updated_params |> Map.put_new(arg.name |> to_string(), [])
     end)
   end
+
+  # A post names attachments by value: a single one rides its hidden input as
+  # JSON, an embed's ride its sub-form's, and nothing stops a hand-sent post
+  # naming any field at all. The type checks only the visibility prefix, so a
+  # key is accepted on its shape — another record's private object included,
+  # which the page would then sign a URL for, on the next render as much as
+  # after a save. So a post may name only keys this form issued
+  # (`assign_issued_attachment_keys/1`); any other is dropped before the form
+  # sees it. A field whose posted value is dropped keeps the value the form
+  # already held for it.
+  #
+  # The walk goes by the resource rather than by the sub-forms that exist: a
+  # post can name a position no sub-form has yet.
+  defp drop_unissued_attachments(params, form, socket) do
+    issued = Map.get(socket.assigns, :ash_quick_issued_attachment_keys, %{})
+
+    # Only what a post can carry a value for. An accepted foreign key also
+    # brings its relationship into the action's fields, and a relationship has
+    # no type to walk.
+    fields =
+      form.resource
+      |> Utils.action_fields(form.action)
+      |> Enum.filter(&match?(%struct{} when struct in [Attribute, Argument], &1))
+
+    case drop_unissued(params, fields, &Map.get(issued, &1.name, MapSet.new())) do
+      {params, []} ->
+        params
+
+      {params, dropped} ->
+        # Names only: the keys themselves are what was forged.
+        Logger.warning(fn ->
+          "form post on #{inspect(form.resource)}.#{form.action} named attachment keys " <>
+            "the form did not issue, dropped from: #{dropped |> Enum.uniq() |> Enum.join(", ")}"
+        end)
+
+        params
+    end
+  end
+
+  # `issued_for` says which keys a field may hold. At the top it is that field's
+  # own set; inside an embed it is the set of the top-level field the embed sits
+  # in, since that is the field a key was issued for.
+  defp drop_unissued(params, fields, issued_for) when is_map(params) do
+    Enum.reduce(fields, {params, []}, fn field, {acc, dropped} ->
+      key = field.name |> to_string()
+
+      case Map.fetch(acc, key) do
+        {:ok, value} ->
+          field.type
+          |> drop_unissued_value(value, issued_for.(field))
+          |> apply_unissued(acc, key, field.name, dropped)
+
+        :error ->
+          {acc, dropped}
+      end
+    end)
+  end
+
+  defp drop_unissued(params, _fields, _issued_for), do: {params, []}
+
+  defp apply_unissued(:keep, params, _key, _name, dropped), do: {params, dropped}
+
+  defp apply_unissued(:drop, params, key, name, dropped),
+    do: {Map.delete(params, key), [name | dropped]}
+
+  defp apply_unissued({:put, value, []}, params, key, _name, dropped),
+    do: {Map.put(params, key, value), dropped}
+
+  defp apply_unissued({:put, value, inner}, params, key, name, dropped),
+    do: {Map.put(params, key, value), [name | inner ++ dropped]}
+
+  defp drop_unissued_value(AshQuick.AshTypes.Attachment, value, issued) do
+    if issued_attachment?(value, issued), do: :keep, else: :drop
+  end
+
+  defp drop_unissued_value({:array, AshQuick.AshTypes.Attachment}, values, issued) do
+    # No input renders for an array, so a post naming one at all is hand-sent:
+    # one forged entry drops the whole of it, and the form's own list stands.
+    if each_entry(values, &issued_attachment?(&1, issued)) == values, do: :keep, else: :drop
+  end
+
+  defp drop_unissued_value({:array, type}, values, issued) do
+    drop_unissued_value(type, values, issued, :list)
+  end
+
+  defp drop_unissued_value(type, value, issued) do
+    drop_unissued_value(type, value, issued, :single)
+  end
+
+  defp drop_unissued_value(type, value, issued, shape) do
+    with true <- Ash.Type.embedded_type?(type),
+         fields when fields != [] <- Ash.Resource.Info.attributes(type) do
+      issued_for = fn _field -> issued end
+      walk = &drop_unissued(&1, fields, issued_for)
+
+      {value, dropped} =
+        case shape do
+          :single -> walk.(value)
+          :list -> each_nested(value, walk)
+        end
+
+      {:put, value, dropped}
+    else
+      _not_an_embed -> :keep
+    end
+  end
+
+  # A list posts either as a list or as a map keyed by position.
+  defp each_entry(values, keep?) when is_list(values), do: Enum.filter(values, keep?)
+
+  defp each_entry(values, keep?) when is_map(values) and not is_struct(values) do
+    values |> Enum.filter(fn {_position, value} -> keep?.(value) end) |> Map.new()
+  end
+
+  defp each_entry(values, _keep?), do: values
+
+  defp each_nested(values, walk) when is_list(values) do
+    values
+    |> Enum.map(walk)
+    |> Enum.reduce({[], []}, fn {value, dropped}, {acc, all} ->
+      {[value | acc], dropped ++ all}
+    end)
+    |> then(fn {acc, all} -> {Enum.reverse(acc), all} end)
+  end
+
+  defp each_nested(values, walk) when is_map(values) and not is_struct(values) do
+    Enum.reduce(values, {%{}, []}, fn {position, value}, {acc, all} ->
+      {value, dropped} = walk.(value)
+      {Map.put(acc, position, value), dropped ++ all}
+    end)
+  end
+
+  defp each_nested(values, _walk), do: {values, []}
+
+  # Nothing named is nothing forged: a blank hidden input, an empty entry. A
+  # value that is not an attachment at all is left to fail its cast.
+  defp issued_attachment?(value, issued) do
+    case attachment_param_key(value) do
+      nil -> true
+      key -> MapSet.member?(issued, key)
+    end
+  end
+
+  defp attachment_param_key(%AshQuick.AshTypes.Attachment.Value{key: key}), do: key
+
+  defp attachment_param_key(json) when is_binary(json) do
+    case Jason.decode(json) do
+      {:ok, map} when is_map(map) -> attachment_param_key(map)
+      _not_json -> nil
+    end
+  end
+
+  defp attachment_param_key(%{"key" => key}) when is_binary(key) and key != "", do: key
+  defp attachment_param_key(%{key: key}) when is_binary(key) and key != "", do: key
+  defp attachment_param_key(_value), do: nil
 
   # An array of attachments has no scalar rendering, so — unlike a single one,
   # which rides a hidden input — nothing on the page carries its value back.

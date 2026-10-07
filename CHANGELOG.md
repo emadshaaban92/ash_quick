@@ -41,6 +41,20 @@
 
 ### Bug fixes
 
+- **A form takes only the attachment keys it issued.** A single attachment
+  round-trips through a hidden input, so an edited post could set its key to
+  anything with the right visibility prefix, such as another record's private
+  object. The page then signed a URL for it, as soon as the next render and
+  after a save. The same held for an `{:array, :attachment}` argument and for
+  an attachment inside an embed. A form now takes a key for a field only if
+  the record held it in that field when the form was built, or an upload on
+  the page minted it for that field, so a key cannot move from a field the
+  actor cannot write into one it can. Any other key is dropped from
+  `validate` and `save` with a warning naming the field, and the field keeps
+  the value the form already held. A host widget
+  that posts keys from an upload pipeline of its own will see those keys
+  dropped.
+
 - **Clicking an attachment drop zone opens the file picker.** The zone's
   label pointed its `for` at the form field's id, while the file input inside
   it always carries the upload's ref as its id, so a click or a tap on the
