@@ -12,7 +12,7 @@ defmodule AshQuick.Test.Uploads.StoredObject do
   What the fixture host records when it takes custody of an object.
 
   A host that intercepts the write key has to remember it did, or
-  `object_states/1` has nothing to answer from — so the seam needs somewhere to
+  `object_states/2` has nothing to answer from — so the seam needs somewhere to
   keep that, and this is it. `private? true` keeps one test's objects out of
   another's.
   """
@@ -50,7 +50,7 @@ defmodule AshQuick.Test.Uploads.ObjectStore do
   deliberately different values so a URL built from the wrong one is visible.
 
   The **lifecycle** half is why it implements `object_arriving/2`,
-  `object_states/1` and `object_referenced/3`. It takes custody by routing the
+  `object_states/2` and `object_referenced/4`. It takes custody by routing the
   bytes to a quarantine prefix and withholding the object until something
   promotes it — the shape of a host that scans or transcodes before serving.
   `AshQuick.Storage.S3` implements none of the three and is the other side of
@@ -91,8 +91,12 @@ defmodule AshQuick.Test.Uploads.ObjectStore do
     {:ok, @quarantine_prefix <> serving_key}
   end
 
+  # The opts each lookup was made with, kept in the calling process so a test
+  # rendering in that process can see whose behalf a page read states on.
   @impl true
-  def object_states(keys) do
+  def object_states(keys, opts) do
+    Process.put({__MODULE__, :object_states_opts}, opts)
+
     StoredObject
     |> Ash.Query.filter(serving_key in ^keys)
     |> Ash.read!()
@@ -100,7 +104,10 @@ defmodule AshQuick.Test.Uploads.ObjectStore do
   end
 
   @impl true
-  def object_referenced(_keys, _resource, _resource_id), do: :ok
+  def object_referenced(_keys, _resource, _resource_id, _opts), do: :ok
+
+  @doc "The opts the last `object_states/2` in this process was called with."
+  def last_object_states_opts, do: Process.get({__MODULE__, :object_states_opts})
 
   @doc """
   Releases `serving_key`, as the host's own pipeline would once whatever it was

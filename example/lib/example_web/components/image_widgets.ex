@@ -17,6 +17,7 @@ defmodule ExampleWeb.ImageWidgets do
 
   @doc "Renders an attachment as a thumbnail — one, a list of them, or nothing."
   attr :value, :any, required: true
+  attr :scope, :any, default: nil, doc: "the page's scope, which the host reads states for"
 
   def image(%{value: nil} = assigns) do
     ~H"""
@@ -25,7 +26,7 @@ defmodule ExampleWeb.ImageWidgets do
   end
 
   def image(%{value: value} = assigns) when is_list(value) do
-    assigns = assign(assigns, :states, states(Enum.map(value, & &1.attachment)))
+    assigns = assign(assigns, :states, states(Enum.map(value, & &1.attachment), assigns[:scope]))
 
     ~H"""
     <div class="flex flex-wrap gap-2">
@@ -41,7 +42,7 @@ defmodule ExampleWeb.ImageWidgets do
   end
 
   def image(assigns) do
-    assigns = assign(assigns, :states, states([assigns.value]))
+    assigns = assign(assigns, :states, states([assigns.value], assigns[:scope]))
 
     ~H"""
     <.attachment_img value={@value} alt="" states={@states} class="max-w-36" />
@@ -52,5 +53,5 @@ defmodule ExampleWeb.ImageWidgets do
   # reads an absent key as `:ready` — right for a caller that prefetched the
   # page's states, wrong here, where skipping the lookup would point an `<img>`
   # at an object the host is still holding.
-  defp states(attachments), do: AshQuick.Storage.states_for(attachments)
+  defp states(attachments, scope), do: AshQuick.Storage.states_for(attachments, scope: scope)
 end

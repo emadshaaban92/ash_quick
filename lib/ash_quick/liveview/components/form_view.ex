@@ -215,7 +215,10 @@ defmodule AshQuick.LiveView.Components.FormView do
       |> assign(:removable?, removable?)
       |> assign(:rows, rows)
       |> assign(:prompt, prompt)
-      |> assign(:states, rows |> Enum.map(&elem(&1, 0)) |> AshQuick.Storage.states_for())
+      |> assign(
+        :states,
+        rows |> Enum.map(&elem(&1, 0)) |> AshQuick.Storage.states_for(scope: assigns[:scope])
+      )
       |> assign(:errors, Enum.map(errors, &translate_error(&1)))
 
     ~H"""
@@ -257,7 +260,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       assigns
       |> assign(:upload_name, upload_name)
       |> assign(:saved_values, saved_values)
-      |> assign(:states, AshQuick.Storage.states_for(saved_values))
+      |> assign(:states, AshQuick.Storage.states_for(saved_values, scope: assigns[:scope]))
 
     ~H"""
     <section

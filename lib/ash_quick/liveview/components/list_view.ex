@@ -153,7 +153,7 @@ defmodule AshQuick.LiveView.Components.ListView do
                       />
                     </td>
                     <td :for={field <- @fields}>
-                      <.render_field field={field} record={row} />
+                      <.render_field field={field} record={row} scope={@scope} />
                     </td>
                     <td>
                       <div class="flex items-center justify-end">
@@ -240,7 +240,7 @@ defmodule AshQuick.LiveView.Components.ListView do
 
     ~H"""
     <span class="relative">
-      <.field_value value={@value} path={@path} />
+      <.field_value value={@value} path={@path} scope={@scope} />
     </span>
     """
   end

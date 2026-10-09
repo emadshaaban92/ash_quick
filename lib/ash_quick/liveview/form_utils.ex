@@ -500,7 +500,7 @@ defmodule AshQuick.LiveView.FormUtils do
              |> maybe_put_nested_params(form)
              |> maybe_put_has_many(form)
              |> upload_images(socket, form),
-           before_submit: &reference_attachments/1,
+           before_submit: &reference_attachments(&1, Map.get(socket.assigns, :scope)),
            action_opts: [context: %{action_source: AshQuick.form_source()}]
          ) do
       {:ok, rec} ->
@@ -993,11 +993,12 @@ defmodule AshQuick.LiveView.FormUtils do
   # objects takes the record down with it. A saved record pointing at an object
   # its host never accepted is one the page can never resolve, and the seller
   # would have been told the save worked.
-  defp reference_attachments(%Ash.Changeset{} = changeset) do
+  # The scope goes with it, so the host records the reference as whoever saved.
+  defp reference_attachments(%Ash.Changeset{} = changeset, scope) do
     Ash.Changeset.after_action(changeset, fn _changeset, record ->
       record
       |> attachment_keys()
-      |> Storage.object_referenced(record.__struct__, Map.get(record, :id))
+      |> Storage.object_referenced(record.__struct__, Map.get(record, :id), scope: scope)
       |> case do
         :ok -> {:ok, record}
         {:error, error} -> {:error, error}
@@ -1006,7 +1007,7 @@ defmodule AshQuick.LiveView.FormUtils do
   end
 
   # A read form or a generic action carries no attachments to reference.
-  defp reference_attachments(source), do: source
+  defp reference_attachments(source, _scope), do: source
 
   defp attachment_keys(record), do: Storage.attachment_keys(record)
 

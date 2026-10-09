@@ -101,8 +101,8 @@ defmodule AshQuick.Storage do
   `:visibility` constraint) and what the field expects of it (`:accepts`,
   `:max_size_mb`). It does not know what the host wants to *do* with an
   object before serving it — scan it, transcode it, or nothing at all. The
-  three optional callbacks `object_arriving/2`, `object_states/1` and
-  `object_referenced/3` are that seam, worded in terms of object lifecycle
+  three optional callbacks `object_arriving/2`, `object_states/2` and
+  `object_referenced/4` are that seam, worded in terms of object lifecycle
   rather than any one of those.
 
   A storage module that leaves them out gets the passthrough: bytes go
@@ -121,7 +121,19 @@ defmodule AshQuick.Storage do
   throughout.
 
   A host that intercepts the key is then responsible for getting the object
-  to the serving key; until it does, `object_states/1` is how it says so.
+  to the serving key; until it does, `object_states/2` is how it says so.
+
+  ### Who is asking
+
+  Every lifecycle callback is handed the request's `:scope` in its opts, so a
+  host can do its work as the person behind it — read through their policies,
+  stamp them on what it records — rather than as nobody or a platform bot.
+  The scope is whatever the surface was mounted with; outside a request (a
+  seed, a job) it is `nil`, and the host decides what that means.
+
+  `object_states/1` and `object_referenced/3`, the arities from before the
+  scope was passed, are still called for a storage module that exports them
+  and not the newer one.
   """
 
   alias AshQuick.AshTypes.Attachment.Value
@@ -197,7 +209,7 @@ defmodule AshQuick.Storage do
   browser upload, immediately before the PUT for a server-side one. This is the
   host's chance to record the object, and to say where it wants the bytes. A
   host that would rather not work on an object until something references it can
-  wait for `c:object_referenced/3` — a picked file is not a saved one.
+  wait for `c:object_referenced/4` — a picked file is not a saved one.
 
   `opts` carries what the surface knows, all optional:
 
@@ -222,8 +234,17 @@ defmodule AshQuick.Storage do
   answer is treated as `:ready` — an object the host never took custody of is
   one it has no reason to withhold.
 
-  Optional; left out, every object is `:ready`.
+  This is on the render path, once per attachment field, so it reads for
+  whoever is looking at the page. `opts`:
+
+    * `:scope` — the host's request scope, `nil` outside a request
+
+  Optional; left out, every object is `:ready`. A module exporting only the
+  older `object_states/1` is called with `keys` alone.
   """
+  @callback object_states(keys :: [key()], opts :: keyword()) :: %{optional(key()) => state()}
+
+  @doc "The arity before `opts` was passed. Prefer `c:object_states/2`."
   @callback object_states(keys :: [key()]) :: %{optional(key()) => state()}
 
   @doc """
@@ -234,12 +255,29 @@ defmodule AshQuick.Storage do
   abandoned. With `auto_upload: true` the bytes are in storage from the moment a
   file is picked, so this is the only signal that anything came back for them.
 
-  Optional; left out, the reference is `:ok` and nothing is recorded.
+  It runs inside the save, so it acts for whoever saved. `opts`:
+
+    * `:scope` — the scope the form was submitted with
+
+  Optional; left out, the reference is `:ok` and nothing is recorded. A module
+  exporting only the older `object_referenced/3` is called without `opts`.
   """
+  @callback object_referenced(
+              keys :: [key()],
+              resource :: module(),
+              resource_id :: term(),
+              opts :: keyword()
+            ) :: :ok | {:error, term()}
+
+  @doc "The arity before `opts` was passed. Prefer `c:object_referenced/4`."
   @callback object_referenced(keys :: [key()], resource :: module(), resource_id :: term()) ::
               :ok | {:error, term()}
 
-  @optional_callbacks object_arriving: 2, object_states: 1, object_referenced: 3
+  @optional_callbacks object_arriving: 2,
+                      object_states: 2,
+                      object_states: 1,
+                      object_referenced: 4,
+                      object_referenced: 3
 
   @doc """
   Returns `{:ok, url}` for the given attachment value, or `:processing` /
@@ -251,6 +289,8 @@ defmodule AshQuick.Storage do
       authoritative: a key absent from it is `:ready`. Pass this when
       rendering more than one attachment; without it each call costs its
       own lookup.
+    * `:scope` — the request scope the lookup is made for, when `:states`
+      is not given. See `c:object_states/2`.
     * `:variant` — which rendition to serve. Only `:original` (the
       default) exists today; anything else raises. The argument is here
       so a host that later derives renditions has somewhere to ask for
@@ -275,9 +315,12 @@ defmodule AshQuick.Storage do
 
   Keys the host holds no state for are absent from the result, which
   `url_for/2` reads as `:ready`.
+
+  Pass `scope:` — the page's request scope — so the host reads for whoever is
+  looking. See `c:object_states/2`.
   """
-  @spec states_for([Value.t() | String.t()]) :: %{optional(key()) => state()}
-  def states_for(values) do
+  @spec states_for([Value.t() | String.t()], keyword()) :: %{optional(key()) => state()}
+  def states_for(values, opts \\ []) do
     values
     |> Enum.flat_map(fn
       %Value{key: key} when is_binary(key) -> [key]
@@ -285,7 +328,7 @@ defmodule AshQuick.Storage do
       _other -> []
     end)
     |> Enum.uniq()
-    |> object_states()
+    |> object_states(Keyword.take(opts, [:scope]))
   end
 
   @doc """
@@ -330,7 +373,7 @@ defmodule AshQuick.Storage do
   defp state(key, opts) do
     case Keyword.fetch(opts, :states) do
       {:ok, states} -> Map.get(states, key, :ready)
-      :error -> Map.get(object_states([key]), key, :ready)
+      :error -> Map.get(object_states([key], Keyword.take(opts, [:scope])), key, :ready)
     end
   end
 
@@ -376,15 +419,17 @@ defmodule AshQuick.Storage do
   def object_arriving(serving_key, opts \\ []),
     do: lifecycle(:object_arriving, [serving_key, opts], {:ok, serving_key})
 
-  @doc "See `c:object_states/1`. The passthrough answer withholds nothing."
-  def object_states([]), do: %{}
-  def object_states(keys), do: lifecycle(:object_states, [keys], %{})
+  @doc "See `c:object_states/2`. The passthrough answer withholds nothing."
+  def object_states(keys, opts \\ [])
+  def object_states([], _opts), do: %{}
+  def object_states(keys, opts), do: lifecycle(:object_states, [keys], opts, %{})
 
-  @doc "See `c:object_referenced/3`. The passthrough answer is `:ok`."
-  def object_referenced([], _resource, _resource_id), do: :ok
+  @doc "See `c:object_referenced/4`. The passthrough answer is `:ok`."
+  def object_referenced(keys, resource, resource_id, opts \\ [])
+  def object_referenced([], _resource, _resource_id, _opts), do: :ok
 
-  def object_referenced(keys, resource, resource_id),
-    do: lifecycle(:object_referenced, [keys, resource, resource_id], :ok)
+  def object_referenced(keys, resource, resource_id, opts),
+    do: lifecycle(:object_referenced, [keys, resource, resource_id], opts, :ok)
 
   defp impl, do: AshQuick.Config.storage()
 
@@ -396,6 +441,25 @@ defmodule AshQuick.Storage do
     if Code.ensure_loaded?(impl) and function_exported?(impl, callback, length(args)),
       do: apply(impl, callback, args),
       else: passthrough
+  end
+
+  # `object_states` and `object_referenced` took no opts before the scope was
+  # passed. A module written against that arity is still called with it, so
+  # adding `opts` is not a change every host has to make on the same day.
+  defp lifecycle(callback, args, opts, passthrough) do
+    impl = impl()
+    Code.ensure_loaded?(impl)
+
+    cond do
+      function_exported?(impl, callback, length(args) + 1) ->
+        apply(impl, callback, args ++ [opts])
+
+      function_exported?(impl, callback, length(args)) ->
+        apply(impl, callback, args)
+
+      true ->
+        passthrough
+    end
   end
 
   defmodule S3 do
