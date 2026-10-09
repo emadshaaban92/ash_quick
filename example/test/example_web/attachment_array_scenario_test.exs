@@ -259,6 +259,32 @@ defmodule ExampleWeb.AttachmentArrayScenarioTest do
       assert render(view) =~ "partway.jpg"
     end
 
+    test "a click on the zone reaches the file input", %{conn: conn, admin: admin} do
+      # A label that wraps an input activates it only when its `for` is absent
+      # or names that input. `live_file_input/1` always renders the upload's
+      # ref as its id, so the label must point at the ref.
+      category = category(actor: admin)
+
+      session = conn |> visit(~p"/categories/#{category.id}/update")
+
+      session =
+        unwrap(session, fn view ->
+          html = render(view)
+          send(self(), {:html, html})
+          html
+        end)
+
+      assert_received {:html, html}
+
+      [ref] =
+        html
+        |> LazyHTML.from_document()
+        |> LazyHTML.query("[data-attachment-dropzone] input[type=file]")
+        |> LazyHTML.attribute("id")
+
+      assert_has(session, "label[for='#{ref}'] input[type=file]##{ref}")
+    end
+
     test "an empty list asks for the first one", %{conn: conn, admin: admin} do
       view = open(conn, category(actor: admin))
 

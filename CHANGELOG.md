@@ -41,6 +41,13 @@
 
 ### Bug fixes
 
+- **Clicking an attachment drop zone opens the file picker.** The zone's
+  label pointed its `for` at the form field's id, while the file input inside
+  it always carries the upload's ref as its id, so a click or a tap on the
+  zone (or its "browse" link) reached nothing; only a drop worked.
+  `AshQuick.Components.attachment_dropzone/1` no longer takes an `id`: its
+  label now points at the upload's ref.
+
 - **A widget on a relationship path no longer crashes on an empty
   relationship.** `{[bill_of_sale: :display_name], widget: ...}` raised a
   `BadMapError` on the details page and in the list when `bill_of_sale` was
