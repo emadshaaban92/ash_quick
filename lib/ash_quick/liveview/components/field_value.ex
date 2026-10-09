@@ -4,6 +4,14 @@ defmodule AshQuick.LiveView.Components.FieldValue do
 
   alias AshQuick.LiveView.Utils
 
+  attr :value, :any, required: true
+  attr :path, :any, required: true
+  attr :ash_field, :any, default: nil
+
+  attr :scope, :any,
+    default: nil,
+    doc: "the page's request scope, which an attachment's state is read for"
+
   def field_value(%{value: nil} = assigns) do
     ~H"""
     <span></span>
@@ -11,7 +19,8 @@ defmodule AshQuick.LiveView.Components.FieldValue do
   end
 
   def field_value(%{ash_field: %{type: AshQuick.AshTypes.Attachment}} = assigns) do
-    assigns = assign(assigns, :states, AshQuick.Storage.states_for([assigns.value]))
+    assigns =
+      assign(assigns, :states, AshQuick.Storage.states_for([assigns.value], scope: assigns.scope))
 
     ~H"""
     <.attachment_preview value={@value} states={@states} />
@@ -19,7 +28,8 @@ defmodule AshQuick.LiveView.Components.FieldValue do
   end
 
   def field_value(%{ash_field: %{type: {:array, AshQuick.AshTypes.Attachment}}} = assigns) do
-    assigns = assign(assigns, :states, AshQuick.Storage.states_for(assigns.value))
+    assigns =
+      assign(assigns, :states, AshQuick.Storage.states_for(assigns.value, scope: assigns.scope))
 
     ~H"""
     <div class="flex flex-wrap gap-2">
@@ -32,7 +42,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     ~H"""
     <span :for={{item, i} <- Enum.with_index(@value)}>
       <span :if={i != 0}> - </span>
-      <.field_value value={item} path={@path} />
+      <.field_value value={item} path={@path} scope={@scope} />
     </span>
     """
   end
@@ -47,7 +57,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     assigns = assigns |> assign(path: path)
 
     ~H"""
-    <.field_value value={@value} path={@path} />
+    <.field_value value={@value} path={@path} scope={@scope} />
     """
   end
 
@@ -59,7 +69,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
       |> assign(path: [])
 
     ~H"""
-    <.field_value value={@value} path={@path} ash_field={@ash_field} />
+    <.field_value value={@value} path={@path} ash_field={@ash_field} scope={@scope} />
     """
   end
 
@@ -72,7 +82,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
       |> assign(path: rest)
 
     ~H"""
-    <.field_value value={@value} path={@path} ash_field={@ash_field} />
+    <.field_value value={@value} path={@path} ash_field={@ash_field} scope={@scope} />
     """
   end
 

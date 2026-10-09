@@ -15,7 +15,7 @@ defmodule AshQuick.LiveView.Components.FieldValueTest do
   alias AshQuick.LiveView.Components.FieldValue
 
   describe "field_value/1" do
-    # The fixture host answers `object_states/1` from rows it keeps, so holding
+    # The fixture host answers `object_states/2` from rows it keeps, so holding
     # an object is a row saying so.
     defp hold(key, state) do
       AshQuick.Test.Uploads.StoredObject
@@ -53,6 +53,19 @@ defmodule AshQuick.LiveView.Components.FieldValueTest do
 
       assert html =~ "Processing"
       refute html =~ "<img"
+    end
+
+    test "reads states on behalf of the page's scope" do
+      scope = %{actor: %{id: "viewer"}}
+
+      render_component(&FieldValue.field_value/1,
+        path: [],
+        ash_field: %{type: AshQuick.AshTypes.Attachment},
+        value: %Value{key: "private/return_requests/any.jpg", file_type: :image},
+        scope: scope
+      )
+
+      assert AshQuick.Test.Uploads.ObjectStore.last_object_states_opts() == [scope: scope]
     end
   end
 

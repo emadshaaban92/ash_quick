@@ -19,8 +19,11 @@ defmodule Example.Uploads.ObjectStore do
 
   Custody is taken at presign rather than at save because uploads are
   `auto_upload: true`: the bytes are in storage the moment a file is picked.
-  `object_referenced/3` is the only signal that anything ever came back for
+  `object_referenced/4` is the only signal that anything ever came back for
   them.
+
+  Every callback is handed the request's `:scope` and runs as its actor, so
+  the rows say who handed an object over and who saved what it is attached to.
   """
 
   @behaviour AshQuick.Storage
@@ -79,21 +82,27 @@ defmodule Example.Uploads.ObjectStore do
     end
   end
 
+  # Read as the viewer, but not authorized as them: a key absent from the answer
+  # is served, so a read their policies filtered would hand them every object
+  # still in quarantine.
   @impl true
-  def object_states(keys) do
-    case FileObject.by_keys(keys, authorize?: false) do
+  def object_states(keys, opts) do
+    case FileObject.by_keys(keys, actor: actor(opts), authorize?: false) do
       {:ok, file_objects} -> Map.new(file_objects, &{&1.key, &1.state})
       {:error, _error} -> %{}
     end
   end
 
   @impl true
-  def object_referenced(keys, resource, resource_id) do
-    with {:ok, file_objects} <- FileObject.by_keys(keys, authorize?: false) do
+  def object_referenced(keys, resource, resource_id, opts) do
+    actor = actor(opts)
+
+    with {:ok, file_objects} <- FileObject.by_keys(keys, actor: actor, authorize?: false) do
       Enum.reduce_while(file_objects, :ok, fn file_object, :ok ->
         file_object
         |> FileObject.reference(
           %{resource_name: short_name(resource), resource_id: resource_id},
+          actor: actor,
           authorize?: false
         )
         |> case do

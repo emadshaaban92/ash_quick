@@ -93,8 +93,10 @@ defmodule AshQuick.Components do
   `AshQuick.Storage.url_for/2` says which case this is; the placeholder inherits
   `class` so the surrounding layout does not shift.
 
-  Pass `states` — one `AshQuick.Storage.states_for/1` call for the whole page —
-  wherever more than one attachment is rendered.
+  Pass `states` — one `AshQuick.Storage.states_for/2` call for the whole page,
+  with the page's `scope:` — wherever more than one attachment is rendered.
+  The scope is what lets the host read states as the person viewing; see
+  `c:AshQuick.Storage.object_states/2`.
 
   ## The processing placeholder names its object
 
@@ -120,9 +122,17 @@ defmodule AshQuick.Components do
 
       <.attachment_img value={img.attachment} alt={img.alt} class="w-16 h-16" />
       <.attachment_img :for={i <- @images} value={i.attachment} states={@states} />
+
+  where `@states` was assigned once for the page:
+
+      assign(socket, :states, AshQuick.Storage.states_for(attachments, scope: socket.assigns.scope))
   """
   attr :value, :any, required: true, doc: "an `AshQuick.AshTypes.Attachment.Value` or nil"
-  attr :states, :map, default: %{}, doc: "prefetched states from `AshQuick.Storage.states_for/1`"
+
+  attr :states, :map,
+    default: %{},
+    doc: "prefetched states from `AshQuick.Storage.states_for/2`, called with the page's `scope:`"
+
   attr :class, :any, default: nil
   attr :alt, :any, default: ""
   attr :rest, :global
@@ -199,7 +209,10 @@ defmodule AshQuick.Components do
       </ul>
   """
   attr :value, :any, required: true, doc: "an `AshQuick.AshTypes.Attachment.Value`"
-  attr :states, :map, default: %{}, doc: "prefetched states from `AshQuick.Storage.states_for/1`"
+
+  attr :states, :map,
+    default: %{},
+    doc: "prefetched states from `AshQuick.Storage.states_for/2`, called with the page's `scope:`"
 
   attr :on_remove, :any,
     default: nil,

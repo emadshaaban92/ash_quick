@@ -33,6 +33,7 @@ defmodule Example.Uploads.FileObject do
 
     references do
       reference :actor, on_delete: :nilify, on_update: :update
+      reference :referenced_by, on_delete: :nilify, on_update: :update
     end
 
     custom_indexes do
@@ -125,18 +126,21 @@ defmodule Example.Uploads.FileObject do
       change set_attribute(:state, :rejected)
     end
 
-    # Stamped when a saved record first names this key. The timestamp is not
-    # refreshed on a later save: "was this ever attached to anything" is the
-    # question, and the first answer settles it.
+    # Stamped when a saved record first names this key, with whoever saved it —
+    # the actor the seam runs this as. Neither is refreshed on a later save:
+    # "was this ever attached to anything" is the question, and the first
+    # answer settles it.
     update :reference do
       accept [:resource_name, :resource_id]
 
       require_atomic? false
 
-      change fn changeset, _context ->
+      change fn changeset, context ->
         case Ash.Changeset.get_data(changeset, :referenced_at) do
           nil ->
-            Ash.Changeset.force_change_attribute(changeset, :referenced_at, DateTime.utc_now())
+            changeset
+            |> Ash.Changeset.force_change_attribute(:referenced_at, DateTime.utc_now())
+            |> Ash.Changeset.force_change_attribute(:referenced_by_id, actor_id(context.actor))
 
           _already ->
             changeset
@@ -146,7 +150,7 @@ defmodule Example.Uploads.FileObject do
   end
 
   policies do
-    # Stamped by `Example.Uploads.ObjectStore.object_referenced/3` with
+    # Stamped by `Example.Uploads.ObjectStore.object_referenced/4` with
     # `authorize?: false`, and by nothing else. Left authorizable it renders as
     # a button on the details page, and because it takes inputs that button
     # patches to `/file_objects/:id/reference` — a route this read-only page
@@ -233,6 +237,14 @@ defmodule Example.Uploads.FileObject do
       public? true
       allow_nil? true
     end
+
+    # Who saved the record that first referenced this key. Nullable for the
+    # same reason, and because a record can be saved with nobody behind it.
+    belongs_to :referenced_by, Example.Accounts.User do
+      domain Example.Accounts
+      public? true
+      allow_nil? true
+    end
   end
 
   calculations do
@@ -243,4 +255,7 @@ defmodule Example.Uploads.FileObject do
   identities do
     identity :unique_key, [:key]
   end
+
+  defp actor_id(%{id: id}), do: id
+  defp actor_id(_no_actor), do: nil
 end

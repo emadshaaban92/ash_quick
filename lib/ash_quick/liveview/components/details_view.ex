@@ -87,7 +87,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
               {field.label}
             </dt>
             <dd class="w-3/4 text-base-content">
-              <.render_field field={field} record={@record} />
+              <.render_field field={field} record={@record} scope={@scope} />
             </dd>
           </div>
         </dl>
@@ -175,7 +175,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
     assigns = assigns |> assign(:value, record) |> assign(:path, path)
 
     ~H"""
-    <.field_value value={@value} path={@path} />
+    <.field_value value={@value} path={@path} scope={@scope} />
     """
   end
 

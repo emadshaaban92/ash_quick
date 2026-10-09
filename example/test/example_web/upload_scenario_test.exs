@@ -10,7 +10,7 @@ defmodule ExampleWeb.UploadScenarioTest do
 
   So custody is taken at **presign**: `Example.Uploads.ObjectStore.object_arriving/2`
   opens a row, routes the bytes to `Example.Uploads.Quarantine`, and the key the
-  browser is sent to is not the key the record will hold. `object_referenced/3`
+  browser is sent to is not the key the record will hold. `object_referenced/4`
   is the only signal that anything ever came back for it, which is what makes an
   abandoned upload distinguishable from a live one rather than invisible.
 
@@ -83,6 +83,10 @@ defmodule ExampleWeb.UploadScenarioTest do
       assert [object] = uploaded_objects(admin)
       refute is_nil(object.referenced_at)
       assert object.resource_id == category.id
+
+      # Stamped as whoever pressed Save, not as nobody: the seam is handed the
+      # form's scope.
+      assert object.referenced_by_id == admin.id
 
       # And the record holds the serving key, so the two directions agree.
       assert category.image.key == object.key
@@ -171,7 +175,7 @@ defmodule ExampleWeb.UploadScenarioTest do
 
       # `take_custody` upserts on the key, because a surface may present the
       # same one more than once — a re-render, a reconnect — and "the row for
-      # key K" has to stay singular for `object_states/1` to answer at all.
+      # key K" has to stay singular for `object_states/2` to answer at all.
       assert {:ok, [^object]} = FileObject.by_keys([object.key], authorize?: false)
     end
   end

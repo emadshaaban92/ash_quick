@@ -46,4 +46,37 @@ defmodule AshQuick.StorageLifecycleTest do
       assert url =~ key
     end)
   end
+
+  defmodule LegacyStore do
+    @moduledoc "A storage module written before the lifecycle callbacks took opts."
+    def object_states(keys), do: Map.new(keys, &{&1, :rejected})
+    def object_referenced(keys, _resource, _resource_id), do: send(self(), {:referenced, keys})
+  end
+
+  defmodule ScopedStore do
+    @moduledoc "One written against the arities that take the scope."
+    def object_states(keys, opts), do: Map.new(keys, &{&1, {:states, opts[:scope]}})
+
+    def object_referenced(keys, _resource, _resource_id, opts),
+      do: send(self(), {:referenced, keys, opts[:scope]})
+  end
+
+  test "the scope reaches a module that takes it, and is dropped for one that does not" do
+    key = "private/lifecycle/scoped.jpg"
+    scope = %{actor: %{id: "someone"}}
+
+    with_storage(ScopedStore, fn ->
+      assert Storage.states_for([key], scope: scope) == %{key => {:states, scope}}
+      assert Storage.object_states([key]) == %{key => {:states, nil}}
+      assert Storage.object_referenced([key], __MODULE__, nil, scope: scope)
+      assert_received {:referenced, [^key], ^scope}
+    end)
+
+    with_storage(LegacyStore, fn ->
+      assert Storage.states_for([key], scope: scope) == %{key => :rejected}
+      assert Storage.url_for(%Value{key: key}, scope: scope) == :rejected
+      assert Storage.object_referenced([key], __MODULE__, nil, scope: scope)
+      assert_received {:referenced, [^key]}
+    end)
+  end
 end

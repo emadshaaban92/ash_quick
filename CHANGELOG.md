@@ -27,6 +27,18 @@
   bytes, so a host that accepts documents should check them behind the
   `AshQuick.Storage` lifecycle callbacks.
 
+- **Every storage lifecycle callback is told who is asking.**
+  `object_states/2` and `object_referenced/4` take an `opts` list carrying the
+  request's `:scope`, as `object_arriving/2` already did. A host can now read
+  states as the person viewing the page and record a reference as the person
+  who saved, instead of as nobody or a platform bot. Pass `scope:` to
+  `AshQuick.Storage.states_for/2` (and to `url_for/2` when it looks states up
+  itself); AshQuick's own list, details and form surfaces pass the page's
+  scope, and so does the save. A storage module that exports only the older
+  `object_states/1` or `object_referenced/3` is still called with them, so
+  nothing has to change on upgrade. List and details widgets now receive
+  `@scope` in their assigns.
+
 ### Bug fixes
 
 - **A widget on a relationship path no longer crashes on an empty
