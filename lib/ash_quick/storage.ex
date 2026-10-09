@@ -76,7 +76,7 @@ defmodule AshQuick.Storage do
   what turns that into a placeholder rather than a broken image.
 
   Reading state costs a lookup per key, so a caller rendering several
-  attachments passes `states_for/1` once via `:states` rather than
+  attachments passes `states_for/2` once via `:states` rather than
   paying it per image.
 
   ## The storage seam
@@ -285,7 +285,7 @@ defmodule AshQuick.Storage do
 
   Options:
 
-    * `:states` — a `%{key => state}` map from `states_for/1`, treated as
+    * `:states` — a `%{key => state}` map from `states_for/2`, treated as
       authoritative: a key absent from it is `:ready`. Pass this when
       rendering more than one attachment; without it each call costs its
       own lookup.
