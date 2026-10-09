@@ -247,8 +247,13 @@ defmodule AshQuick.Components do
 
   The zone is a `<label>` around a visually hidden `live_file_input/1`: the
   input stays in the page because the upload is addressed through it, and the
-  label is what a click, a tap or the keyboard reaches. Put `phx-drop-target`
-  on whatever should take a drop — the whole card, usually:
+  label is what a click, a tap or the keyboard reaches. The label's `for` is the
+  upload's ref, because `live_file_input/1` always renders the ref as the
+  input's id (LiveView's upload hook finds the input by it); a label whose
+  `for` names any other id activates nothing. So the zone takes no `id`.
+
+  Put `phx-drop-target` on whatever should take a drop — the whole card,
+  usually:
 
       <section phx-drop-target={@uploads.documents.ref}>
         <ul>...</ul>
@@ -264,16 +269,13 @@ defmodule AshQuick.Components do
   """
   attr :upload, Phoenix.LiveView.UploadConfig, required: true
   attr :prompt, :string, required: true, doc: "what the zone offers, e.g. \"Add more documents\""
-  attr :id, :string, default: nil, doc: "the file input's id; the upload's ref when nil"
   attr :cancel_event, :string, default: "cancel-upload"
 
   def attachment_dropzone(assigns) do
-    assigns = assign(assigns, :input_id, assigns.id || assigns.upload.ref)
-
     ~H"""
     <div data-attachment-dropzone>
       <label
-        for={@input_id}
+        for={@upload.ref}
         class="flex flex-col items-center gap-1 p-5 text-center border-2 border-dashed border-base-300 rounded-box cursor-pointer hover:border-primary focus-within:border-primary"
       >
         <.icon name="hero-arrow-up-tray" class="w-6 h-6 text-base-content/50" />
@@ -282,7 +284,7 @@ defmodule AshQuick.Components do
           <span class="link link-primary">{gettext("browse")}</span>
         </span>
         <span class="text-xs text-base-content/60">{upload_limits(@upload)}</span>
-        <.live_file_input upload={@upload} id={@input_id} class="sr-only" />
+        <.live_file_input upload={@upload} class="sr-only" />
       </label>
 
       <div :for={entry <- @upload.entries} data-upload-entry class="mt-2">

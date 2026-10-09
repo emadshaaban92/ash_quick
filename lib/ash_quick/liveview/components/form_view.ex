@@ -238,7 +238,7 @@ defmodule AshQuick.LiveView.Components.FormView do
           }
         />
       </ul>
-      <.attachment_dropzone upload={@upload} id={@phx_field.id} prompt={@prompt} />
+      <.attachment_dropzone upload={@upload} prompt={@prompt} />
       <.error :for={msg <- @errors}>{msg}</.error>
     </section>
     """
