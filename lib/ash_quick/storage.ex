@@ -355,18 +355,25 @@ defmodule AshQuick.Storage do
 
   def attachment_keys(_record), do: []
 
-  defp keys_in(%Value{key: key}) when is_binary(key), do: [key]
-  defp keys_in(values) when is_list(values), do: Enum.flat_map(values, &keys_in/1)
+  @doc false
+  # Every attachment key inside one attribute's value: an attachment, a list of
+  # them, or a union, a typed map or an embed holding any of those.
+  def keys_in(%Value{key: key}) when is_binary(key), do: [key]
+  def keys_in(values) when is_list(values), do: Enum.flat_map(values, &keys_in/1)
+  def keys_in(%Ash.Union{value: value}), do: keys_in(value)
+
+  def keys_in(values) when is_map(values) and not is_struct(values),
+    do: values |> Map.values() |> keys_in()
 
   # Everything else a struct-valued attribute can hold — a `DateTime`, an
   # `Ash.NotLoaded`, a `Money` — is not an Ash resource and stops the walk here.
-  defp keys_in(%resource{} = embedded) do
+  def keys_in(%resource{} = embedded) do
     if Ash.Resource.Info.resource?(resource) and Ash.Resource.Info.embedded?(resource),
       do: attachment_keys(embedded),
       else: []
   end
 
-  defp keys_in(_value), do: []
+  def keys_in(_value), do: []
 
   # A prefetched map is the whole batch, so a missing key means "no state
   # held" rather than "not fetched yet".

@@ -78,7 +78,7 @@ defmodule AshQuick.LiveView.FormUtils do
       )
       |> then(&add_nested_forms(&1, &1.form_keys))
 
-    socket |> assign(form: form)
+    socket |> assign(form: form) |> assign_issued_attachment_keys()
   end
 
   # The read in `set_record!/5` runs through the actor's scope, so a record the
@@ -100,8 +100,86 @@ defmodule AshQuick.LiveView.FormUtils do
       |> prefill_form_has_many_args(socket)
       |> prefill_changed_embedded_forms()
 
-    socket |> assign(form: form)
+    socket |> assign(form: form) |> assign_issued_attachment_keys()
   end
+
+  # The attachment keys this form will take from a post, per top-level field:
+  # what the form held in that field when it was built, read off the form
+  # itself rather than the page's `record` assign, which a create form reached
+  # by a patch still carries from the page before. That covers the record's
+  # own values (`form.data`), what the action's changes put there before anyone
+  # touched it (a seeded embed, say), and every sub-form under the field — an
+  # embed's, or a related record's under a managed relationship. Keyed by field
+  # so a key cannot move between fields of the same visibility: out of one the
+  # actor cannot see or the action does not accept, into one it can.
+  #
+  # Keys this page mints for an upload are held apart, in
+  # `ash_quick_minted_attachment_keys`, and count for every field: they are
+  # recorded where they are created (`presign_attachment_upload/3`), so it does
+  # not matter which path consumes the entry, or where an action folds it. They
+  # belong to this form, so a new form starts without any, as it does after a
+  # save: a key uploaded for one record must not be taken into the next.
+  defp assign_issued_attachment_keys(socket) do
+    socket
+    |> assign(
+      ash_quick_issued_attachment_keys: attachment_keys_by_field(socket.assigns.form, true)
+    )
+    |> assign(ash_quick_minted_attachment_keys: MapSet.new())
+  end
+
+  # Every attachment key a form holds, by the top-level field it sits under.
+  # `with_data?` adds what the forms' records already store; without it this is
+  # only what the forms would write, which is what a post can have put there.
+  defp attachment_keys_by_field(form, with_data?) do
+    own =
+      form
+      |> form_values(with_data?)
+      |> Enum.map(fn {field, value} -> {field, MapSet.new(Storage.keys_in(value))} end)
+
+    nested =
+      for {field, forms} <- form.forms, do: {field, subtree_attachment_keys(forms, with_data?)}
+
+    Enum.reduce(own ++ nested, %{}, fn {field, keys}, acc ->
+      Map.update(acc, field, keys, &MapSet.union(&1, keys))
+    end)
+  end
+
+  defp subtree_attachment_keys(forms, with_data?) do
+    forms
+    |> List.wrap()
+    |> Enum.map(&attachment_keys_by_field(&1, with_data?))
+    |> Enum.flat_map(&Map.values/1)
+    |> Enum.reduce(MapSet.new(), &MapSet.union/2)
+  end
+
+  defp form_values(form, with_data?) do
+    stored = if with_data?, do: record_values(form.data), else: []
+    source = form.source
+
+    stored ++
+      Enum.to_list(Map.get(source, :attributes, %{})) ++
+      Enum.to_list(Map.get(source, :arguments, %{}))
+  end
+
+  defp record_values(%resource{} = record) do
+    if Ash.Resource.Info.resource?(resource) do
+      resource
+      |> Ash.Resource.Info.attributes()
+      |> Enum.map(&{&1.name, Map.get(record, &1.name)})
+    else
+      []
+    end
+  end
+
+  defp record_values(_no_record), do: []
+
+  defp mint_attachment_key(%Phoenix.LiveView.Socket{} = socket, key) do
+    minted = Map.get(socket.assigns, :ash_quick_minted_attachment_keys, MapSet.new())
+    assign(socket, ash_quick_minted_attachment_keys: MapSet.put(minted, key))
+  end
+
+  # Called outside a LiveView there is no form to take the key back.
+  defp mint_attachment_key(socket, _key), do: socket
 
   # AshPhoenix doesn't derive an actor from the scope for nested-form
   # sub-changesets, so pass it explicitly for managed relationships.
@@ -485,15 +563,24 @@ defmodule AshQuick.LiveView.FormUtils do
       |> carry_uploaded_attachments(socket.assigns.form)
       |> maybe_put_has_many(socket.assigns.form)
 
-    form = AshPhoenix.Form.validate(socket.assigns.form, params)
-
-    {:halt, socket |> assign(form: form) |> clear_flash()}
+    case validate_issued(socket.assigns.form, params, socket) do
+      {_params, form} -> {:halt, socket |> assign(form: form) |> clear_flash()}
+      :refused -> {:halt, socket}
+    end
   end
 
   defp handle_form_events("save", %{"form" => params}, socket, _options) do
     params = carry_uploaded_attachments(params, socket.assigns.form)
-    form = AshPhoenix.Form.validate(socket.assigns.form, params)
 
+    case validate_issued(socket.assigns.form, params, socket) do
+      {params, form} -> submit_form(form, params, socket)
+      :refused -> {:halt, put_flash(socket, :error, ActionErrors.forbidden_message())}
+    end
+  end
+
+  defp handle_form_events(_, _, socket, _options), do: {:cont, socket}
+
+  defp submit_form(form, params, socket) do
     case AshPhoenix.Form.submit(form,
            params:
              params
@@ -504,6 +591,7 @@ defmodule AshQuick.LiveView.FormUtils do
            action_opts: [context: %{action_source: AshQuick.form_source()}]
          ) do
       {:ok, rec} ->
+        socket = assign(socket, ash_quick_minted_attachment_keys: MapSet.new())
         handle_success(rec, params, socket.assigns.ash_action.name, socket)
 
       # Every message below comes from `AshQuick.LiveView.ActionErrors`, which
@@ -536,8 +624,6 @@ defmodule AshQuick.LiveView.FormUtils do
         end
     end
   end
-
-  defp handle_form_events(_, _, socket, _options), do: {:cont, socket}
 
   # `JS.push/2` sends the position as a number, a `phx-value-index` as a string.
   defp attachment_position(index) when is_integer(index) and index >= 0, do: {:ok, index}
@@ -617,6 +703,73 @@ defmodule AshQuick.LiveView.FormUtils do
     |> Enum.reduce(params, fn arg, updated_params ->
       updated_params |> Map.put_new(arg.name |> to_string(), [])
     end)
+  end
+
+  # A post names attachments by value: a single one rides its hidden input as
+  # JSON, an embed's ride its sub-form's, and nothing stops a hand-sent post
+  # naming any field at all. The type checks only the visibility prefix, so a
+  # key is accepted on its shape — another record's private object included,
+  # which the page would then sign a URL for, on the next render as much as
+  # after a save. So a post may name only keys this form issued
+  # (`assign_issued_attachment_keys/1`).
+  #
+  # The check reads the validated form rather than the post: what the type's
+  # own cast made of it, on the root form and every sub-form, whatever shape
+  # carried it there — an attachment, a list, an embed, a union, a typed map, a
+  # related record's form under a managed relationship. A field holding a key
+  # the form never issued for it goes back to the value the form already held,
+  # and the post is validated again. Whether the post named the key is not
+  # asked: a cast can decode or normalise a string on its way to the value, so
+  # the text of the post is no measure of what it set. An action's change that
+  # adds a key of its own during `validate` has it refused the same way; one
+  # that wants it should set the value when the form is built.
+  #
+  # Returns the params to go on with and the form validated with them, or
+  # `:refused` when even that holds such a key.
+  defp validate_issued(form, params, socket) do
+    validated = AshPhoenix.Form.validate(form, params)
+
+    case unissued_fields(validated, socket) do
+      [] ->
+        {params, validated}
+
+      fields ->
+        # Names only: the keys themselves are what was forged.
+        Logger.warning(fn ->
+          "form post on #{inspect(form.resource)}.#{form.action} named attachment keys " <>
+            "the form did not issue, dropped from: #{Enum.join(fields, ", ")}"
+        end)
+
+        params = restore_held_params(params, form, fields)
+        validated = AshPhoenix.Form.validate(form, params)
+
+        if unissued_fields(validated, socket) == [],
+          do: {params, validated},
+          else: :refused
+    end
+  end
+
+  defp unissued_fields(form, socket) do
+    issued = Map.get(socket.assigns, :ash_quick_issued_attachment_keys, %{})
+    minted = Map.get(socket.assigns, :ash_quick_minted_attachment_keys, MapSet.new())
+
+    for {field, keys} <- attachment_keys_by_field(form, false),
+        allowed = issued |> Map.get(field, MapSet.new()) |> MapSet.union(minted),
+        not MapSet.subset?(keys, allowed),
+        do: field
+  end
+
+  # Each field goes back to what the form held for it: its last accepted
+  # params, or — where it has none yet — nothing, so the record's own value
+  # stands. An embed left out of the params would be cleared instead, so it is
+  # carried from the changeset the way an upload's fold carries it.
+  defp restore_held_params(params, form, fields) do
+    keys = Enum.map(fields, &to_string/1)
+
+    params
+    |> Map.drop(keys)
+    |> Map.merge(Map.take(form.raw_params || %{}, keys))
+    |> carry_embedded_params(form)
   end
 
   # An array of attachments has no scalar rendering, so — unlike a single one,
@@ -722,6 +875,12 @@ defmodule AshQuick.LiveView.FormUtils do
   host was told about only on save would be one it never heard of for every
   form that is abandoned.
 
+  The serving key is also recorded on the socket as one this page minted. A
+  form takes back only attachment keys it issued, and these count for every
+  field, so an upload is taken wherever it lands: a sub-form's, or a field an
+  action folds it onto. A host that signs its own uploads without this
+  function has its keys dropped from the post.
+
   The field's `:accepts` and `:max_size_mb` go with it because they cannot
   be recovered later — a key alone does not say which Ash type constraint
   produced it.
@@ -744,7 +903,12 @@ defmodule AshQuick.LiveView.FormUtils do
             content_length: entry.client_size
           )
 
-        {:ok, %{uploader: "S3", key: write_key, serving_key: serving_key, url: url}, socket}
+        # Recorded here, where the key is made, rather than where an entry is
+        # consumed: a form takes back only keys it issued, and every upload —
+        # on the root form or a sub-form, consumed on progress or at save —
+        # passes through this one place.
+        {:ok, %{uploader: "S3", key: write_key, serving_key: serving_key, url: url},
+         mint_attachment_key(socket, serving_key)}
 
       # The host refused to take the object. Nothing has been written yet, so
       # failing the entry is the honest outcome — the browser shows the error
@@ -887,6 +1051,15 @@ defmodule AshQuick.LiveView.FormUtils do
           updated_params
       end
     end)
+  end
+
+  # A list carried from the changeset (`carry_embedded_params/2`) rather than
+  # posted by the browser: the same entries, by position.
+  defp upload_images(params, socket, forms) when is_list(forms) and is_list(params) do
+    params
+    |> Enum.with_index()
+    |> Map.new(fn {posted, position} -> {to_string(position), posted} end)
+    |> upload_images(socket, forms)
   end
 
   defp upload_images(params, socket, form) when is_map(params) do
