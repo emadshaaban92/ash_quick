@@ -52,8 +52,8 @@
   a key cannot move from a field the actor cannot write into one it can. The
   check reads what the type's cast made of the post, on the form and every
   sub-form, so it covers unions, typed maps and managed relationships as well.
-  A field holding a key the post named but the form never issued goes back to
-  the value the form held, with a warning naming the field. A host widget
+  A field holding a key the form never issued goes back to the value the form
+  held, with a warning naming the field. A host widget
   that signs uploads without `FormUtils.presign_attachment_upload/3` will see
   its keys dropped.
 

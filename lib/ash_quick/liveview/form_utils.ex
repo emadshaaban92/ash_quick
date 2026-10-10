@@ -116,12 +116,15 @@ defmodule AshQuick.LiveView.FormUtils do
   # Keys this page mints for an upload are held apart, in
   # `ash_quick_minted_attachment_keys`, and count for every field: they are
   # recorded where they are created (`presign_attachment_upload/3`), so it does
-  # not matter which path consumes the entry, or where an action folds it.
+  # not matter which path consumes the entry, or where an action folds it. They
+  # belong to this form, so a new form starts without any, as it does after a
+  # save: a key uploaded for one record must not be taken into the next.
   defp assign_issued_attachment_keys(socket) do
     socket
     |> assign(
       ash_quick_issued_attachment_keys: attachment_keys_by_field(socket.assigns.form, true)
     )
+    |> assign(ash_quick_minted_attachment_keys: MapSet.new())
   end
 
   # Every attachment key a form holds, by the top-level field it sits under.
@@ -588,6 +591,7 @@ defmodule AshQuick.LiveView.FormUtils do
            action_opts: [context: %{action_source: AshQuick.form_source()}]
          ) do
       {:ok, rec} ->
+        socket = assign(socket, ash_quick_minted_attachment_keys: MapSet.new())
         handle_success(rec, params, socket.assigns.ash_action.name, socket)
 
       # Every message below comes from `AshQuick.LiveView.ActionErrors`, which
@@ -713,16 +717,19 @@ defmodule AshQuick.LiveView.FormUtils do
   # own cast made of it, on the root form and every sub-form, whatever shape
   # carried it there — an attachment, a list, an embed, a union, a typed map, a
   # related record's form under a managed relationship. A field holding a key
-  # the post named but the form never issued for it goes back to the value the
-  # form already held, and the post is validated again. A key the post did not
-  # name is the action's own doing, not the post's, and is left alone.
+  # the form never issued for it goes back to the value the form already held,
+  # and the post is validated again. Whether the post named the key is not
+  # asked: a cast can decode or normalise a string on its way to the value, so
+  # the text of the post is no measure of what it set. An action's change that
+  # adds a key of its own during `validate` has it refused the same way; one
+  # that wants it should set the value when the form is built.
   #
   # Returns the params to go on with and the form validated with them, or
   # `:refused` when even that holds such a key.
   defp validate_issued(form, params, socket) do
     validated = AshPhoenix.Form.validate(form, params)
 
-    case unissued_fields(validated, params, socket) do
+    case unissued_fields(validated, socket) do
       [] ->
         {params, validated}
 
@@ -736,20 +743,19 @@ defmodule AshQuick.LiveView.FormUtils do
         params = restore_held_params(params, form, fields)
         validated = AshPhoenix.Form.validate(form, params)
 
-        if unissued_fields(validated, params, socket) == [],
+        if unissued_fields(validated, socket) == [],
           do: {params, validated},
           else: :refused
     end
   end
 
-  defp unissued_fields(form, params, socket) do
+  defp unissued_fields(form, socket) do
     issued = Map.get(socket.assigns, :ash_quick_issued_attachment_keys, %{})
     minted = Map.get(socket.assigns, :ash_quick_minted_attachment_keys, MapSet.new())
-    posted = posted_strings(params)
 
     for {field, keys} <- attachment_keys_by_field(form, false),
         allowed = issued |> Map.get(field, MapSet.new()) |> MapSet.union(minted),
-        Enum.any?(keys, &(not MapSet.member?(allowed, &1) and named_in?(posted, &1))),
+        not MapSet.subset?(keys, allowed),
         do: field
   end
 
@@ -765,18 +771,6 @@ defmodule AshQuick.LiveView.FormUtils do
     |> Map.merge(Map.take(form.raw_params || %{}, keys))
     |> carry_embedded_params(form)
   end
-
-  # Every string in a post, the JSON a hidden input carries included: a key is
-  # named in a post if one of them contains it.
-  defp posted_strings(value) when is_binary(value), do: [value]
-  defp posted_strings(values) when is_list(values), do: Enum.flat_map(values, &posted_strings/1)
-
-  defp posted_strings(values) when is_map(values) and not is_struct(values),
-    do: values |> Map.values() |> posted_strings()
-
-  defp posted_strings(_value), do: []
-
-  defp named_in?(posted, key), do: Enum.any?(posted, &String.contains?(&1, key))
 
   # An array of attachments has no scalar rendering, so — unlike a single one,
   # which rides a hidden input — nothing on the page carries its value back.

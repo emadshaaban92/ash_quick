@@ -46,6 +46,41 @@ defmodule ExampleWeb.AttachmentForgeryTest do
       assert Ash.reload!(category, authorize?: false).image.key == "private/categories/mine.jpg"
     end
 
+    test "is not set by a forged value written with JSON escapes", ctx do
+      # `\/` decodes to `/`, so the post's text never contains the key the
+      # cast makes of it.
+      %{conn: conn, admin: admin} = ctx
+      category = category_with_image(admin, "private/categories/mine.jpg")
+      escaped = Jason.encode!(@stolen_private, escape: :html_safe)
+      refute escaped =~ "private/categories/someone-elses.jpg"
+
+      {:ok, view, _html} = live(conn, ~p"/categories/#{category.id}/update")
+
+      refute change(view, %{"image" => escaped}) =~ "someone-elses"
+      submit(view, %{"image" => escaped})
+
+      assert Ash.reload!(category, authorize?: false).image.key == "private/categories/mine.jpg"
+    end
+
+    test "is not set on the next form by a key uploaded for the last one", ctx do
+      %{conn: conn, admin: admin} = ctx
+      category = category(actor: admin)
+
+      {:ok, view, _html} = live(conn, ~p"/categories/#{category.id}/update")
+      pick(view, "mine.jpg", "form[image]_upload")
+      submit(view, %{})
+      uploaded = Ash.reload!(category, authorize?: false).image.key
+
+      code = unique("C")
+      render_patch(view, ~p"/categories/create")
+
+      view
+      |> form("form[phx-submit=save]", %{"form" => %{"code" => code, "name" => "Tents"}})
+      |> render_submit(%{"form" => %{"image" => Jason.encode!(%{"key" => uploaded})}})
+
+      assert Ash.get!(Category, [code: code], authorize?: false).image == nil
+    end
+
     test "keeps its own value across a validate, and takes a fresh pick", ctx do
       %{conn: conn, admin: admin} = ctx
       category = category_with_image(admin, "private/categories/mine.jpg")
