@@ -199,8 +199,7 @@ defmodule AshQuick.LiveView.Components.FormView do
         do: gettext("Add %{name}", name: name),
         else: gettext("Add more %{name}", name: name)
 
-    errors =
-      if Phoenix.Component.used_input?(assigns.phx_field), do: assigns.phx_field.errors, else: []
+    errors = attachment_errors(assigns.phx_field)
 
     # Only the root form's attributes hold their list on the server. An argument
     # is the action's to fold, and a nested form's params are not addressed from
@@ -261,10 +260,12 @@ defmodule AshQuick.LiveView.Components.FormView do
       |> assign(:upload_name, upload_name)
       |> assign(:saved_values, saved_values)
       |> assign(:states, AshQuick.Storage.states_for(saved_values, scope: assigns[:scope]))
+      |> assign(:errors, Enum.map(attachment_errors(assigns.phx_field), &translate_error(&1)))
 
     ~H"""
     <section
       phx-drop-target={@uploads[@upload_name].ref}
+      data-attachment-field={@field.name}
       class="flex flex-col sm:col-span-2 card bg-base-100 p-5 my-3"
     >
       <div class="flex justify-between">
@@ -285,12 +286,13 @@ defmodule AshQuick.LiveView.Components.FormView do
         class="file-input w-full"
       />
       <%!-- Carries an existing attachment across a validate round trip, as the JSON
-      the type casts back. --%>
-      <.input
+      the type casts back. A bare input: the field's errors render once, below. --%>
+      <input
         type="hidden"
-        field={@phx_field}
+        name={@phx_field.name}
         value={attachment_input_value(@phx_field.value)}
       />
+      <.error :for={msg <- @errors}>{msg}</.error>
 
       <%= for entry <- @uploads[@upload_name].entries do %>
         <div class="flex items-center gap-2 mt-2 text-sm text-base-content/70">
@@ -424,6 +426,19 @@ defmodule AshQuick.LiveView.Components.FormView do
       phx-debounce="blur"
     />
     """
+  end
+
+  # A field's errors show once the person has touched it or submitted the form.
+  # An attachment field needs the second half: a save with nothing picked leaves
+  # it out of the params it is made with (the hidden input's blank is no value
+  # the type can take), and `used_input?/1` reads a field missing from the
+  # params as one nobody touched — on a create form, where there is no record's
+  # value to put back in its place, the error the save failed on never shows.
+  defp attachment_errors(%Phoenix.HTML.FormField{} = field) do
+    submitted? =
+      match?(%Phoenix.HTML.Form{source: %AshPhoenix.Form{submitted_once?: true}}, field.form)
+
+    if submitted? or Phoenix.Component.used_input?(field), do: field.errors, else: []
   end
 
   defp attachment_input_value(nil), do: nil

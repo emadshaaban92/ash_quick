@@ -52,6 +52,32 @@ defmodule Example.Catalog.Category do
       change manage_relationship(:children, type: :create)
     end
 
+    # A save that must bring a file, for each shape of attachment field: the
+    # single `:image` and the array `:documents`, on a create (reached as
+    # `/categories/create?action=...`) and on an update. `present/1` is enough
+    # for the single field; an array holding nothing is `[]`, which `present/1`
+    # lets through, so that one is checked by `RequireFiles`.
+    create :create_with_image do
+      accept [:code, :name, :image]
+      validate present(:image)
+    end
+
+    create :create_with_documents do
+      accept [:code, :name, :documents]
+      validate {Example.Catalog.Validations.RequireFiles, field: :documents}
+    end
+
+    update :attach_image do
+      accept [:image]
+      validate present(:image)
+    end
+
+    update :attach_documents do
+      accept [:documents]
+      require_atomic? false
+      validate {Example.Catalog.Validations.RequireFiles, field: :documents}
+    end
+
     read :index do
       argument :search, :string
 
