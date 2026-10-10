@@ -111,4 +111,17 @@ defmodule AshQuick.StorageTest do
       assert {:ok, _url} = Storage.url_for(value, states: %{})
     end
   end
+
+  describe "keys_in/1" do
+    # What a form checks a post against and what a save references, so a key
+    # a value can hold anywhere has to be found.
+    test "finds a key inside a union and a typed map, as well as a list" do
+      a = %Value{key: "private/x/a.pdf", file_type: :document}
+      b = %Value{key: "private/x/b.jpg", file_type: :image}
+
+      assert Storage.keys_in([%Ash.Union{type: :file, value: a}]) == ["private/x/a.pdf"]
+      assert Storage.keys_in(%{"cover" => b, "note" => "text"}) == ["private/x/b.jpg"]
+      assert Storage.keys_in(%Ash.Union{type: :text, value: "private/x/a.pdf"}) == []
+    end
+  end
 end

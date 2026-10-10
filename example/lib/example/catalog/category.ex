@@ -42,6 +42,16 @@ defmodule Example.Catalog.Category do
     default_accept [:code, :name, :image, :documents, :parent_id]
     defaults [:create, :read, :update, :destroy]
 
+    # A create that brings its children along through `manage_relationship`.
+    # Each child's attachments ride a sub-form for another changeset than the
+    # one being created, so this is the shape a form has to look past its own
+    # fields for when it checks the keys a post names.
+    create :create_with_children do
+      accept [:code, :name]
+      argument :children, {:array, :map}, allow_nil?: true, default: []
+      change manage_relationship(:children, type: :create)
+    end
+
     read :index do
       argument :search, :string
 

@@ -357,9 +357,13 @@ defmodule AshQuick.Storage do
 
   @doc false
   # Every attachment key inside one attribute's value: an attachment, a list of
-  # them, or an embed holding either.
+  # them, or a union, a typed map or an embed holding any of those.
   def keys_in(%Value{key: key}) when is_binary(key), do: [key]
   def keys_in(values) when is_list(values), do: Enum.flat_map(values, &keys_in/1)
+  def keys_in(%Ash.Union{value: value}), do: keys_in(value)
+
+  def keys_in(values) when is_map(values) and not is_struct(values),
+    do: values |> Map.values() |> keys_in()
 
   # Everything else a struct-valued attribute can hold — a `DateTime`, an
   # `Ash.NotLoaded`, a `Money` — is not an Ash resource and stops the walk here.

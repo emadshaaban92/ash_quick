@@ -7,11 +7,12 @@ defmodule ExampleWeb.AttachmentForgeryTest do
   object it has no claim to, such as another record's private file, and the
   page would sign a URL for it, on the next render as much as after a save.
 
-  The keys a form will take are the ones it issued: what the record held when
-  the form was built, and what an upload in this LiveView minted. Anything else
-  is dropped from the post, whatever shape of field carries it: a single
-  attachment (which round-trips through a hidden input), an argument, or an
-  attachment inside an embed.
+  The keys a form will take are the ones it issued: what the form held when it
+  was built, and what an upload in this LiveView minted. A field holding any
+  other key goes back to the value the form held, whatever shape of field
+  carries it: a single attachment (which round-trips through a hidden input),
+  an argument, an attachment inside an embed, or one on a related record's
+  sub-form.
   """
   use ExampleWeb.FeatureCase, async: true
 
@@ -76,6 +77,86 @@ defmodule ExampleWeb.AttachmentForgeryTest do
       |> render_submit(%{"form" => %{"image" => Jason.encode!(@stolen_private)}})
 
       assert Ash.get!(Category, [code: code], authorize?: false).image == nil
+    end
+
+    test "gives way to the file the form held, not to nothing", %{conn: conn} do
+      code = unique("C")
+      {:ok, view, _html} = live(conn, ~p"/categories/create")
+      pick(view, "fresh.jpg", "form[image]_upload")
+
+      view
+      |> form("form[phx-submit=save]", %{"form" => %{"code" => code, "name" => "Tents"}})
+      |> render_submit(%{"form" => %{"image" => Jason.encode!(@stolen_private)}})
+
+      assert Ash.get!(Category, [code: code], authorize?: false).image.original_filename ==
+               "fresh.jpg"
+    end
+
+    test "on a create form reached from another record's page, is not that record's", ctx do
+      # The page's `record` assign outlives a patch to the create form, so the
+      # keys it held must not be the ones the new form issues.
+      %{conn: conn, admin: admin} = ctx
+      category = category_with_image(admin, "private/categories/mine.jpg")
+      code = unique("C")
+
+      {:ok, view, _html} = live(conn, ~p"/categories/#{category.id}")
+      render_patch(view, ~p"/categories/create")
+
+      view
+      |> form("form[phx-submit=save]", %{"form" => %{"code" => code, "name" => "Tents"}})
+      |> render_submit(%{
+        "form" => %{"image" => Jason.encode!(%{"key" => "private/categories/mine.jpg"})}
+      })
+
+      assert Ash.get!(Category, [code: code], authorize?: false).image == nil
+    end
+  end
+
+  describe "an upload in a sub-form" do
+    test "is kept across a save that fails", %{conn: conn, admin: admin} do
+      # The entry is consumed by the failed save and lives on only in the
+      # sub-form's hidden input, which the next post names back.
+      product = product_with_image(admin, "public/products/mine.jpg")
+
+      {:ok, view, _html} = live(conn, ~p"/products/#{product.id}/update")
+      view |> element("[phx-click=add-form][phx-value-path='form[images]']") |> render_click()
+      pick(view, "fresh.jpg", "form[images][1][attachment]_upload")
+
+      submit(view, %{"name" => ""})
+      submit(view, %{"name" => "Renamed"})
+
+      reloaded = Ash.reload!(product, authorize?: false)
+      assert reloaded.name == "Renamed"
+      assert ["public/products/mine.jpg", fresh] = image_keys(reloaded.images)
+      assert fresh =~ "fresh.jpg"
+    end
+  end
+
+  describe "a related record's sub-form" do
+    test "is not set by a forged key", %{conn: conn} do
+      # `create_with_children` takes `:children` as a map argument and hands it
+      # to `manage_relationship`: each child is its own changeset.
+      code = unique("C")
+      {:ok, view, _html} = live(conn, ~p"/categories/create?action=create_with_children")
+      view |> element("[phx-click=add-form][phx-value-path='form[children]']") |> render_click()
+
+      view
+      |> form("form[phx-submit=save]", %{"form" => %{"code" => code, "name" => "Tents"}})
+      |> render_submit(%{
+        "form" => %{
+          "children" => %{
+            "0" => %{
+              "code" => unique("C"),
+              "name" => "Pegs",
+              "image" => Jason.encode!(@stolen_private)
+            }
+          }
+        }
+      })
+
+      refute Category
+             |> Ash.read!(authorize?: false)
+             |> Enum.any?(&match?(%{image: %{key: "private/categories/someone-elses.jpg"}}, &1))
     end
   end
 
