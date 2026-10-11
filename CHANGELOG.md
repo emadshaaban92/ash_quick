@@ -69,6 +69,16 @@
   input no longer counts as a touch, which matches the array. The single
   field's hidden input no longer repeats the file input's id.
 
+- **A list of nested forms shows the error its save failed on.** A create
+  whose action needs at least one nested entry, saved with none added, posts
+  nothing under the field, so the form read it as untouched and left its
+  section empty; the error reached the page only as a toast, and not at all
+  when the save failed on more than one field. The rule from the attachment
+  fix above now lives in `AshQuick.Components.field_errors/2`: a field's
+  errors show once the person has used the input or the form has been
+  submitted. `AshQuick.Components.input/1`, the nested-form sections and the
+  attachment widgets all use it.
+
 - **Clicking an attachment drop zone opens the file picker.** The zone's
   label pointed its `for` at the form field's id, while the file input inside
   it always carries the upload's ref as its id, so a click or a tap on the

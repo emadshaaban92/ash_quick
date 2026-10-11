@@ -99,6 +99,7 @@ defmodule ExampleWeb.Router do
         ] do
         quick_view "/digits_only", Example.Test.DigitsOnlyLive.Quick
         quick_view "/required_attachments", Example.Test.RequiredAttachmentsLive.Quick
+        quick_view "/required_entries", Example.Test.RequiredEntriesLive.Quick
       end
     end
   end

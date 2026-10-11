@@ -38,7 +38,11 @@ config :ash_quick,
     exempt: [
       # No role is granted those pages, which is what keeps them out of every
       # nav — and exactly what the check reports about a page the router serves.
-      unreachable_entry: ["/test/digits_only", "/test/required_attachments"],
+      unreachable_entry: [
+        "/test/digits_only",
+        "/test/required_attachments",
+        "/test/required_entries"
+      ],
       # Tower keeps its default reporter here on purpose: it is the one that
       # holds events in memory, and `Example.ActionErrorsTest` reads what was
       # reported back from it.
