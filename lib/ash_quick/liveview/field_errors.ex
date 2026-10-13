@@ -14,6 +14,8 @@ defmodule AshQuick.LiveView.FieldErrors do
   helper of the same name.
   """
 
+  use Phoenix.Component
+
   alias Phoenix.HTML.FormField
 
   @doc """
@@ -39,44 +41,78 @@ defmodule AshQuick.LiveView.FieldErrors do
   LiveView never marks a hidden input unused, so a blank one posts `""` with
   every change event and `used_input?/1` would count it as a touch, showing
   the error on the first keystroke anywhere in the form. Only a field holding
-  something the person put there counts as used.
+  something the person put there counts as used, and an array emptied by its
+  ✕ (`[]`) does.
   """
   def for_hidden_input(%FormField{form: form, field: name} = field) do
     used? =
-      Phoenix.Component.used_input?(field) and not blank?(Map.get(form.params, to_string(name)))
+      Phoenix.Component.used_input?(field) and
+        Map.get(form.params, to_string(name)) not in [nil, ""]
 
     for_field(field, used?)
   end
 
   @doc """
-  Whether the person has used a LiveSelect widget, given what it was told on
-  the render before (`nil` on the first). A select widget keeps the result in
-  its own assigns and passes it to `for_select/2`.
+  `for_field/2` for a LiveSelect widget, which must also render
+  `used_marker/1` for the field.
 
-  Its value posts from a hidden input too, but unlike an attachment's it can
-  be cleared, and a cleared select posts the same blank as one never touched.
-  So the widget remembers: it counts as used once it has posted a value, or
-  once a change event came while it started with one, as clearing a stored
-  value does. A form with no params yet starts over.
+  Its value posts from a hidden input too, and a cleared select posts the same
+  blank as one never touched, so the value cannot say whether it was used. The
+  change event can: LiveSelect fires it from the field's own hidden input, so
+  its `_target` names the field. The form marks that field in its params
+  (`mark_used/2`), and `used_marker/1` keeps the mark on the page. Each post
+  carries it from then on, and so does the post that recovers the form after a
+  reconnect. A field another input's change merely posts along is not marked,
+  however long it has held a value.
   """
-  def select_touch(_touch, %FormField{form: %{params: params}} = field)
-      when map_size(params) == 0,
-      do: %{started_blank?: blank?(field.value), used?: false}
+  def for_select(%FormField{form: form, field: name} = field),
+    do: for_field(field, Map.has_key?(form.params, used_key(name)))
 
-  def select_touch(nil, %FormField{} = field),
-    do: select_touch(%{started_blank?: blank?(field.value), used?: false}, field)
+  @doc """
+  Marks the field the change event's `_target` names as used, in the form
+  params it posted (`params["form"]` for a QuickView). A multi-select emptied
+  of its last pick fires from its `<name>_empty_selection` input, which marks
+  `<name>`. Anything else, such as a target in no posted form, is left alone.
+  """
+  def mark_used(params, [_form_name | path]) when is_map(params) do
+    case Enum.split(path, -1) do
+      {parents, [name]} when is_binary(name) and name != "" ->
+        put_used(params, parents, used_key(String.replace_suffix(name, "_empty_selection", "")))
 
-  def select_touch(%{used?: true} = touch, _field), do: touch
-
-  def select_touch(%{started_blank?: started_blank?} = touch, %FormField{} = field) do
-    posted = Map.get(field.form.params, to_string(field.field))
-    %{touch | used?: not started_blank? or not blank?(posted)}
+      _no_field ->
+        params
+    end
   end
 
-  @doc "`for_field/2` for a LiveSelect widget, with what `select_touch/2` made of it."
-  def for_select(%FormField{} = field, %{used?: used?}), do: for_field(field, used?)
+  def mark_used(params, _target), do: params
 
-  defp blank?(value), do: value in [nil, "", []]
+  defp put_used(params, [], key), do: Map.put(params, key, "true")
+
+  defp put_used(params, [parent | rest], key) do
+    case params do
+      %{^parent => %{} = nested} -> Map.put(params, parent, put_used(nested, rest, key))
+      _not_posted -> params
+    end
+  end
+
+  @doc """
+  The hidden input that keeps `field`'s used mark on the page, rendered by any
+  widget that reads its errors through `for_select/1`. Renders nothing until
+  the field is marked.
+  """
+  def used_marker(%{field: %FormField{form: form, field: name}} = assigns) do
+    assigns =
+      Phoenix.Component.assign(assigns,
+        name: Phoenix.HTML.Form.input_name(form, used_key(name)),
+        used?: Map.has_key?(form.params, used_key(name))
+      )
+
+    ~H"""
+    <input :if={@used?} type="hidden" name={@name} value="true" />
+    """
+  end
+
+  defp used_key(name), do: "_used_#{name}"
 
   # An `AshPhoenix.Form` marks itself and every sub-form submitted on the first
   # submit, so a nested field sees it too.

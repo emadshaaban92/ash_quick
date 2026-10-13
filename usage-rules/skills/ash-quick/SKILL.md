@@ -301,6 +301,24 @@ def input(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
 end
 ```
 
+A host `widget:` built on `LiveSelect` posts its value from a hidden input,
+which `used_input?/1` cannot judge, and a cleared select posts the same blank
+as one never touched. Read its errors with `FieldErrors.for_select/1` and
+render `FieldErrors.used_marker/1` beside it. The form marks the field the
+change event came from, and the marker keeps that mark on the page:
+
+```elixir
+def roles_widget(assigns) do
+  assigns = assign(assigns, :errors, AshQuick.LiveView.FieldErrors.for_select(assigns.phx_field))
+
+  ~H"""
+  <LiveSelect.live_select field={@phx_field} mode={:tags} options={...} />
+  <AshQuick.LiveView.FieldErrors.used_marker field={@phx_field} />
+  <.error :for={msg <- @errors}>{msg}</.error>
+  """
+end
+```
+
 To use host app components, import them in the QuickView module **before** `use`:
 
 ```elixir

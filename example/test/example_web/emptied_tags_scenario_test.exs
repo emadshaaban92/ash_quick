@@ -22,7 +22,11 @@ defmodule ExampleWeb.EmptiedTagsScenarioTest do
 
     assert picked_tags(view) == ["red", "blue"]
 
-    render_change(view, "validate", emptied())
+    render_change(
+      view,
+      "validate",
+      Map.put(emptied(), "_target", ["form", "tags_empty_selection"])
+    )
 
     assert picked_tags(view) == []
     assert errors(view) == ["pick at least one"]
@@ -38,7 +42,11 @@ defmodule ExampleWeb.EmptiedTagsScenarioTest do
     record = picks_with_tags([:red])
     {:ok, view, _html} = live(conn, "/test/required_picks/#{record.id}/clear_tags")
 
-    render_change(view, "validate", emptied())
+    render_change(
+      view,
+      "validate",
+      Map.put(emptied(), "_target", ["form", "tags_empty_selection"])
+    )
 
     assert picked_tags(view) == []
     assert errors(view) == []

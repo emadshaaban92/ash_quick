@@ -5,6 +5,7 @@ defmodule AshQuick.LiveView.FormUtils do
   import Phoenix.LiveView
   import Phoenix.Component, only: [assign: 2]
   alias AshQuick.LiveView.ActionErrors
+  alias AshQuick.LiveView.FieldErrors
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.QuickView.Options
   alias Ash.Resource.Actions.Argument
@@ -557,9 +558,10 @@ defmodule AshQuick.LiveView.FormUtils do
     handle_form_events(event, Map.put(params, "form", %{}), socket, options)
   end
 
-  defp handle_form_events("validate", %{"form" => params}, socket, _options) do
+  defp handle_form_events("validate", %{"form" => params} = event, socket, _options) do
     params =
       params
+      |> FieldErrors.mark_used(event["_target"])
       |> put_emptied_selections()
       |> carry_uploaded_attachments(socket.assigns.form)
       |> maybe_put_has_many(socket.assigns.form)

@@ -10,7 +10,7 @@ defmodule AshQuick.LiveView.Components.HasManyInput do
   def render(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
     assigns =
       assigns
-      |> assign(:errors, AshQuick.LiveView.FieldErrors.for_select(field, assigns.touch))
+      |> assign(:errors, AshQuick.LiveView.FieldErrors.for_select(field))
 
     ~H"""
     <div phx-feedback-for={@field.name} class="sm:col-span-2">
@@ -31,6 +31,7 @@ defmodule AshQuick.LiveView.Components.HasManyInput do
         phx-target={@myself}
       />
 
+      <AshQuick.LiveView.FieldErrors.used_marker field={@field} />
       <.error :for={msg <- @errors} class="-mt-6">{msg}</.error>
     </div>
     """
@@ -38,23 +39,13 @@ defmodule AshQuick.LiveView.Components.HasManyInput do
 
   @impl true
   def update(assigns, socket) do
-    {:ok, assign(socket, assigns) |> set_default_options() |> set_field() |> track_touch()}
+    {:ok, assign(socket, assigns) |> set_default_options() |> set_field()}
   end
 
   defp set_default_options(socket) do
     assign(
       socket,
       default_options: get_options(socket)
-    )
-  end
-
-  defp track_touch(socket) do
-    %{field: field} = socket.assigns
-
-    assign(
-      socket,
-      :touch,
-      AshQuick.LiveView.FieldErrors.select_touch(socket.assigns[:touch], field)
     )
   end
 
