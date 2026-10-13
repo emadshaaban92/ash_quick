@@ -47,8 +47,11 @@ defmodule AshQuick.LiveView.QuickField do
   empty nullable `belongs_to` reads as `nil`, and so does everything past it.
   The `nil` clause comes first because `nil` is itself an atom, so the
   `is_atom/1` clause would otherwise take it and `Map.get/2` on `nil` raises.
+  A related record a policy hides is passed on as it is, for the same reason a
+  missing one reads as `nil`: there is nothing past it to read.
   """
   def resolve_value(nil, _path), do: nil
+  def resolve_value(%Ash.ForbiddenField{} = forbidden, _path), do: forbidden
   def resolve_value(record, path) when is_atom(path), do: Map.get(record, path)
 
   def resolve_value(record, [{relationship, nested}]) do

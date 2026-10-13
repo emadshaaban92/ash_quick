@@ -1,6 +1,7 @@
 defmodule AshQuick.LiveView.Components.FieldValue do
   @moduledoc false
   use Phoenix.Component
+  use Gettext, backend: AshQuick.Gettext
 
   alias AshQuick.LiveView.Utils
 
@@ -15,6 +16,19 @@ defmodule AshQuick.LiveView.Components.FieldValue do
   def field_value(%{value: nil} = assigns) do
     ~H"""
     <span></span>
+    """
+  end
+
+  # What Ash leaves in a field a field policy hides from this actor. It is not
+  # a value of the field's type, so no clause below can render it, and HEEx
+  # refuses the struct itself. A mark rather than a blank, so a hidden value is
+  # not mistaken for an empty one. Matched on the value alone, ahead of every
+  # clause that reads `ash_field` or walks `path`.
+  def field_value(%{value: %Ash.ForbiddenField{}} = assigns) do
+    ~H"""
+    <span class="text-base-content/50" title={gettext("Hidden")}>
+      <span aria-hidden="true">—</span><span class="sr-only">{gettext("Hidden")}</span>
+    </span>
     """
   end
 

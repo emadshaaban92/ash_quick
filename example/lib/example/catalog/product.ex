@@ -128,9 +128,24 @@ defmodule Example.Catalog.Product do
         Ash.Changeset.change_attribute(changeset, :images, (changeset.data.images || []) ++ added)
       end
     end
+
+    # For the app's own code, never for a page: `public?: false` is how Ash marks
+    # an action internal. It takes no input, so a QuickView that went by type
+    # alone would offer it on every row and derive it into the bulk menu.
+    update :reindex do
+      public? false
+      accept []
+    end
   end
 
   policies do
+    # The policy Ash documents for internal actions. It lets every call to one
+    # through, so nothing but `public?` stands between `:reindex` and a visitor
+    # who names it.
+    bypass private_action?() do
+      authorize_if always()
+    end
+
     policy action_type([:create, :update, :destroy]) do
       authorize_if Example.Checks.ActorCanWrite
     end

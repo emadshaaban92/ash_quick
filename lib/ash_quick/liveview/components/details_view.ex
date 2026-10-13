@@ -168,7 +168,13 @@ defmodule AshQuick.LiveView.Components.DetailsView do
   defp render_field(%{field: %QuickField{widget: widget, path: path}, record: record} = assigns)
        when is_function(widget) do
     assigns = assigns |> assign(:value, QuickField.resolve_value(record, path))
-    widget.(assigns)
+
+    # A widget is written for the field's own type, so it is never handed the
+    # mark Ash leaves in a field a policy hides: `field_value/1` renders that.
+    case assigns.value do
+      %Ash.ForbiddenField{} -> ~H"<.field_value value={@value} path={[]} scope={@scope} />"
+      _ -> widget.(assigns)
+    end
   end
 
   defp render_field(%{field: %QuickField{path: path}, record: record} = assigns) do
@@ -179,13 +185,10 @@ defmodule AshQuick.LiveView.Components.DetailsView do
     """
   end
 
-  defp available_actions(record, scope) do
-    all_actions = Ash.Resource.Info.actions(record)
-
-    all_actions
-    |> Stream.filter(&(&1.type == :update))
+  defp available_actions(%resource{} = record, scope) do
+    resource
+    |> Utils.record_actions()
     |> Utils.reject_redundant_activation(record)
-    |> Stream.concat(all_actions |> Enum.filter(&(&1.type == :destroy)))
     |> Stream.filter(&AshQuick.can?({record, &1}, scope, :ash_quick_details))
   end
 

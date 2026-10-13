@@ -468,3 +468,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "drop them here or"
 msgstr ""
+
+#: lib/ash_quick/liveview/components/field_value.ex
+#, elixir-autogen, elixir-format
+msgid "Hidden"
+msgstr ""

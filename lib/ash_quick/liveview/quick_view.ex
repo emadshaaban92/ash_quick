@@ -695,7 +695,12 @@ defmodule AshQuick.LiveView.QuickView do
     do_prepare_assigns(socket, socket.assigns.params, ash_action, options)
   end
 
-  defp do_prepare_assigns(socket, %{id: nil}, %Actions.Read{get?: false}, %Options{} = options) do
+  defp do_prepare_assigns(
+         socket,
+         %{id: nil},
+         %Actions.Read{get?: false} = action,
+         %Options{} = options
+       ) do
     # Computed once at mount (do_mount) — record-less Ash.can? is scope-dependent
     # only, so it must not be re-filtered on every navigation.
     resource_actions = socket.assigns[:resource_bulk_actions] || []
@@ -706,7 +711,7 @@ defmodule AshQuick.LiveView.QuickView do
 
     socket
     |> assign(:id, "#{Ash.Resource.Info.trace_name(options.resource)}-list")
-    |> assign(:fields, options.list_fields)
+    |> assign(:fields, visible_fields(socket, options.list_fields, action, options))
     |> assign(:new_action_label, options.new_action_label)
     |> assign(:new_click, fn -> JS.push("new_click") end)
     |> assign(:actions, custom_actions ++ resource_actions)
@@ -715,12 +720,12 @@ defmodule AshQuick.LiveView.QuickView do
     |> assign(:path_for_page, &URLParams.path_for_page(path, params, &1))
   end
 
-  defp do_prepare_assigns(socket, %{id: id}, %Actions.Read{}, %Options{} = options) do
+  defp do_prepare_assigns(socket, %{id: id}, %Actions.Read{} = action, %Options{} = options) do
     print_actions = build_print_actions(options.print_templates)
 
     socket
     |> assign(:id, "#{id}-details")
-    |> assign(:fields, options.details_fields)
+    |> assign(:fields, visible_fields(socket, options.details_fields, action, options))
     |> assign(:print_actions, print_actions)
     |> assign(:print_templates, options.print_templates)
   end
@@ -733,6 +738,13 @@ defmodule AshQuick.LiveView.QuickView do
   defp do_prepare_assigns(socket, %{id: id}, %Actions.Update{}, %Options{}) do
     socket
     |> assign(:id, "#{id}-form")
+  end
+
+  # A column every row would show as hidden is left out instead. Recomputed per
+  # navigation, but the answer only changes with the scope, so the assign is
+  # only marked changed when it does.
+  defp visible_fields(socket, fields, action, %Options{resource: resource}) do
+    AshQuick.LiveView.Utils.visible_fields(fields, resource, action, socket.assigns[:scope])
   end
 
   defp build_print_actions(print_templates) do
@@ -802,7 +814,22 @@ defmodule AshQuick.LiveView.QuickView do
 
     action_name = action_from_params(params, options, live_action)
 
-    {params, resolved_action(options.resource, action_name, params)}
+    action =
+      if reachable?(options, action_name),
+        do: resolved_action(options.resource, action_name, params)
+
+    {params, action}
+  end
+
+  # A URL names actions on the visitor's behalf, so it reaches only public
+  # ones. See `AshQuick.LiveView.Utils.record_actions/1` for what a private
+  # action is, and why the policy Ash recommends for one cannot be relied on to
+  # refuse a visitor. The page's own defaults are the exception, because the
+  # host named them in code: a lookup action kept private so that no API serves
+  # it is still what this page lists through.
+  defp reachable?(%Options{} = options, action_name) do
+    action_name in [options.list_default_action, options.details_default_action] or
+      match?(%{public?: true}, Ash.Resource.Info.action(options.resource, action_name))
   end
 
   # `/create` is the only shape `quick_view/3` declares with a `live_action`,

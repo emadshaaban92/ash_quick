@@ -188,9 +188,11 @@ defmodule AshQuick.Check.Routing do
 
   defp input_taking_actions(nil), do: []
 
+  # Public only: a private action has no button on any page, so it needs no
+  # route to patch to.
   defp input_taking_actions(resource) do
     resource
-    |> Ash.Resource.Info.actions()
+    |> Ash.Resource.Info.public_actions()
     |> Enum.filter(&(&1.type in [:update, :destroy]))
     |> Enum.reject(&Enum.empty?(Ash.Resource.Info.action_inputs(resource, &1.name)))
   end
