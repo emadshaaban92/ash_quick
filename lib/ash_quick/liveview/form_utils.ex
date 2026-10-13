@@ -560,6 +560,7 @@ defmodule AshQuick.LiveView.FormUtils do
   defp handle_form_events("validate", %{"form" => params}, socket, _options) do
     params =
       params
+      |> put_emptied_selections()
       |> carry_uploaded_attachments(socket.assigns.form)
       |> maybe_put_has_many(socket.assigns.form)
 
@@ -570,7 +571,7 @@ defmodule AshQuick.LiveView.FormUtils do
   end
 
   defp handle_form_events("save", %{"form" => params}, socket, _options) do
-    params = carry_uploaded_attachments(params, socket.assigns.form)
+    params = params |> put_emptied_selections() |> carry_uploaded_attachments(socket.assigns.form)
 
     case validate_issued(socket.assigns.form, params, socket) do
       {params, form} -> submit_form(form, params, socket)
@@ -689,6 +690,24 @@ defmodule AshQuick.LiveView.FormUtils do
       updated_params |> Map.put_new(field_name |> to_string(), %{})
     end)
   end
+
+  # A multi-select emptied of its last pick posts no value under its name, only
+  # LiveSelect's `<name>_empty_selection` marker. Read as absent, the field
+  # would fall back to the value the record holds, and the select would redraw
+  # every stored pick. The marker is the page saying the list is now empty, on
+  # the root form and on any sub-form.
+  @empty_selection "_empty_selection"
+
+  defp put_emptied_selections(%{} = params) when not is_struct(params) do
+    Enum.reduce(params, %{}, fn {key, value}, acc ->
+      case String.split(key, @empty_selection) do
+        [name, ""] when name != "" -> Map.put_new(acc, name, [])
+        _other -> Map.put(acc, key, put_emptied_selections(value))
+      end
+    end)
+  end
+
+  defp put_emptied_selections(value), do: value
 
   defp maybe_put_has_many(params, form) do
     AshPhoenix.Form.arguments(form)

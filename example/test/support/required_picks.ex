@@ -12,6 +12,8 @@ defmodule Example.Test.RequiredPicks do
   A required relationship, a required atom and a required array of atoms, each
   rendered by a select widget rather than `input/1`, and a page over it. The
   update takes the two single selects, which can be cleared of a stored value.
+  `:retag` and `:clear_tags` edit only the tags, with and without the rule
+  that one must be picked.
 
   The relationship points at `Example.Test.RequiredAttachments`, the nearest
   test resource with a lookup action, so nothing here reaches a demo page.
@@ -37,6 +39,16 @@ defmodule Example.Test.RequiredPicks do
     update :update do
       primary? true
       accept [:kind, :owner_id]
+    end
+
+    update :retag do
+      accept [:tags]
+      require_atomic? false
+      validate &__MODULE__.require_tags/2
+    end
+
+    update :clear_tags do
+      accept [:tags]
     end
 
     read :index do

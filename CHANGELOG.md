@@ -51,6 +51,14 @@
   `AshQuick.LiveView.FieldErrors.select_touch/2` and `for_select/2`;
   `for_hidden_input/1` is now for attachments only.
 
+- **A tag select can be emptied on an edit form.** Removing the last pick
+  from an array-of-atom or has-many select posts nothing under the field's
+  name, only LiveSelect's `<name>_empty_selection` marker. The form read the
+  field as absent and fell back to the value the record held, so every stored
+  pick came back, no error showed, and a save kept the old list. A form now
+  reads the marker as an empty list, on the root form and on any sub-form,
+  before it validates or saves.
+
 - **A form takes only the attachment keys it issued.** A single attachment
   round-trips through a hidden input, so an edited post could set its key to
   anything with the right visibility prefix, such as another record's private
