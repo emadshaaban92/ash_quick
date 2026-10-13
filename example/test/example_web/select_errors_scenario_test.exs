@@ -9,6 +9,8 @@ defmodule ExampleWeb.SelectErrorsScenarioTest do
   """
   use ExampleWeb.FeatureCase, async: true
 
+  alias Example.Test.{RequiredAttachments, RequiredPicks}
+
   setup %{conn: conn, admin: admin} do
     {:ok, conn: log_in(conn, admin)}
   end
@@ -30,6 +32,60 @@ defmodule ExampleWeb.SelectErrorsScenarioTest do
     |> render_submit()
 
     for {field, message} <- @fields, do: assert(errors(view, field) == [message])
+  end
+
+  # A cleared select posts the same blank as one never touched, so only the
+  # widget's memory of the pick can tell them apart.
+  test "say what is missing once a pick is taken back", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/test/required_picks/create")
+    owner = Ash.create!(RequiredAttachments, %{code: unique("R"), name: "Owner"})
+
+    change(view, %{"owner_id" => owner.id, "kind" => "small", "tags" => ["red"]})
+
+    for {field, _message} <- @fields, do: assert(errors(view, field) == [])
+
+    # An emptied tag select drops its `tags[]` inputs and posts only this
+    # marker, which the form helper cannot do while the inputs are on the page.
+    render_change(view, "validate", %{
+      "form" => %{
+        "code" => unique("P"),
+        "owner_id" => "",
+        "kind" => "",
+        "tags_empty_selection" => ""
+      }
+    })
+
+    for {field, message} <- @fields, do: assert(errors(view, field) == [message])
+  end
+
+  test "on an update form, say what is missing once a stored value is cleared", %{conn: conn} do
+    owner = Ash.create!(RequiredAttachments, %{code: unique("R"), name: "Owner"})
+
+    record =
+      Ash.create!(RequiredPicks, %{
+        code: unique("P"),
+        kind: :small,
+        tags: [:red],
+        owner_id: owner.id
+      })
+
+    {:ok, view, _html} = live(conn, "/test/required_picks/#{record.id}/update")
+
+    assert errors(view, :kind) == []
+    assert errors(view, :owner_id) == []
+
+    change(view, %{"kind" => ""})
+
+    assert errors(view, :kind) == ["is required"]
+    assert errors(view, :owner_id) == []
+
+    change(view, %{"owner_id" => ""})
+
+    assert errors(view, :owner_id) == ["is required"]
+  end
+
+  defp change(view, params) do
+    view |> form("form[phx-submit=save]") |> render_change(%{"form" => params})
   end
 
   # The messages rendered beside the field's select.

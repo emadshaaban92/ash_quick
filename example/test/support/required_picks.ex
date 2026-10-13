@@ -10,7 +10,8 @@ end
 defmodule Example.Test.RequiredPicks do
   @moduledoc """
   A required relationship, a required atom and a required array of atoms, each
-  rendered by a select widget rather than `input/1`, and a page over it.
+  rendered by a select widget rather than `input/1`, and a page over it. The
+  update takes the two single selects, which can be cleared of a stored value.
 
   The relationship points at `Example.Test.RequiredAttachments`, the nearest
   test resource with a lookup action, so nothing here reaches a demo page.
@@ -31,6 +32,11 @@ defmodule Example.Test.RequiredPicks do
       primary? true
       accept [:code, :kind, :tags, :owner_id]
       validate &__MODULE__.require_tags/2
+    end
+
+    update :update do
+      primary? true
+      accept [:kind, :owner_id]
     end
 
     read :index do
