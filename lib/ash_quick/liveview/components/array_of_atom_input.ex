@@ -8,7 +8,7 @@ defmodule AshQuick.LiveView.Components.ArrayOfAtomInput do
   def render(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
     assigns =
       assigns
-      |> assign(:errors, AshQuick.LiveView.FieldErrors.for_hidden_input(field))
+      |> assign(:errors, AshQuick.LiveView.FieldErrors.for_select(field))
 
     ~H"""
     <div phx-feedback-for={@field.name} class="sm:col-span-2">
@@ -29,6 +29,7 @@ defmodule AshQuick.LiveView.Components.ArrayOfAtomInput do
         phx-target={@myself}
       />
 
+      <AshQuick.LiveView.FieldErrors.used_marker field={@field} />
       <.error :for={msg <- @errors} class="-mt-6">{msg}</.error>
     </div>
     """

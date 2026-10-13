@@ -1,6 +1,18 @@
 ExUnit.start()
 Ecto.Adapters.SQL.Sandbox.mode(Example.Repo, :manual)
 
+# Ash's Ets data layer registers a table's manager before the manager creates
+# the table, so two async tests that touch it first at once can read the gap as
+# `:table_not_found`. Creating each table up front closes it.
+for resource <- [
+      Example.Test.DigitsOnly,
+      Example.Test.RequiredAttachments,
+      Example.Test.RequiredEntries,
+      Example.Test.RequiredPicks
+    ] do
+  {:ok, _table} = Ash.DataLayer.Ets.TableManager.start(resource, nil)
+end
+
 # The bucket exports are written to. See `Example.Test.S3Stub`.
 Example.Test.S3Stub.start()
 

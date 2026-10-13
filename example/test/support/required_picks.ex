@@ -10,7 +10,11 @@ end
 defmodule Example.Test.RequiredPicks do
   @moduledoc """
   A required relationship, a required atom and a required array of atoms, each
-  rendered by a select widget rather than `input/1`, and a page over it.
+  rendered by a select widget rather than `input/1`, and a page over it. The
+  update takes the two single selects, which can be cleared of a stored value,
+  and refuses a large kind with an error on the owner.
+  `:retag` and `:clear_tags` edit only the tags, with and without the rule
+  that one must be picked.
 
   The relationship points at `Example.Test.RequiredAttachments`, the nearest
   test resource with a lookup action, so nothing here reaches a demo page.
@@ -33,6 +37,23 @@ defmodule Example.Test.RequiredPicks do
       validate &__MODULE__.require_tags/2
     end
 
+    update :update do
+      primary? true
+      accept [:kind, :owner_id]
+      require_atomic? false
+      validate &__MODULE__.small_owner/2
+    end
+
+    update :retag do
+      accept [:tags]
+      require_atomic? false
+      validate &__MODULE__.require_tags/2
+    end
+
+    update :clear_tags do
+      accept [:tags]
+    end
+
     read :index do
       argument :search, :string
 
@@ -49,6 +70,16 @@ defmodule Example.Test.RequiredPicks do
         default_limit 20
         countable :by_default
       end
+    end
+  end
+
+  # A rule on one field that another field's change breaks, so a page can show
+  # an error under a select the person never opened.
+  @doc false
+  def small_owner(changeset, _context) do
+    case Ash.Changeset.get_attribute(changeset, :kind) do
+      :large -> {:error, field: :owner_id, message: "takes only small ones"}
+      _kind -> :ok
     end
   end
 

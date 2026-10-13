@@ -60,9 +60,39 @@ defmodule ExampleWeb.AttachmentErrorsScenarioTest do
     end
   end
 
+  describe "an array of attachments emptied by ✕" do
+    # The ✕ empties the list the form holds to `[]`, which is the person's own
+    # doing, so its error shows at once rather than waiting for the save.
+    test "says what is missing before the save", %{conn: conn} do
+      view = open(conn, "create?action=create_with_documents")
+      code = unique("R")
+      pick(view, "scan.pdf")
+      save(view, %{"code" => code, "name" => "Scan"})
+
+      record = RequiredAttachments |> Ash.read!() |> Enum.find(&(&1.code == code))
+      assert [_document] = record.documents
+      view = open(conn, "#{record.id}/attach_documents")
+      assert errors(view, :documents) == []
+
+      view |> element("[data-attachment-row] button[aria-label='Remove']") |> render_click()
+
+      assert errors(view, :documents) == ["must be present"]
+    end
+  end
+
   defp open(conn, path) do
     {:ok, view, _html} = live(conn, "/test/required_attachments/#{path}")
     view
+  end
+
+  defp pick(view, filename) do
+    content = "%PDF-1.4\n%%EOF\n"
+
+    view
+    |> file_input("form", "form[documents]_upload", [
+      %{name: filename, content: content, type: "application/pdf", size: byte_size(content)}
+    ])
+    |> render_upload(filename)
   end
 
   defp change(view, params) do
