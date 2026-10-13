@@ -98,6 +98,7 @@ defmodule ExampleWeb.Router do
           {ExampleWeb.UserAuth, :assign_scope}
         ] do
         quick_view "/digits_only", Example.Test.DigitsOnlyLive.Quick
+        quick_view "/required_attachments", Example.Test.RequiredAttachmentsLive.Quick
       end
     end
   end

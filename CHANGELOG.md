@@ -57,6 +57,18 @@
   that signs uploads without `FormUtils.presign_attachment_upload/3` will see
   its keys dropped.
 
+- **An attachment field shows the error its save failed on.** When an
+  action's own validation refused an attachment field on a create form, such
+  as `validate present(:signed_scan)` with nothing picked, a save made
+  without any change event before it failed with nothing on the page saying
+  why. The save leaves a field with nothing picked out of its params, and a
+  field missing from them read as untouched, for the single field and an
+  array alike. Both now show the error inside the field's section once the
+  form has been submitted. The single field also no longer shows it on the
+  first change anywhere in the form while nothing is picked: its blank hidden
+  input no longer counts as a touch, which matches the array. The single
+  field's hidden input no longer repeats the file input's id.
+
 - **Clicking an attachment drop zone opens the file picker.** The zone's
   label pointed its `for` at the form field's id, while the file input inside
   it always carries the upload's ref as its id, so a click or a tap on the

@@ -199,9 +199,6 @@ defmodule AshQuick.LiveView.Components.FormView do
         do: gettext("Add %{name}", name: name),
         else: gettext("Add more %{name}", name: name)
 
-    errors =
-      if Phoenix.Component.used_input?(assigns.phx_field), do: assigns.phx_field.errors, else: []
-
     # Only the root form's attributes hold their list on the server. An argument
     # is the action's to fold, and a nested form's params are not addressed from
     # the root, so their rows have no ✕ that could do anything.
@@ -219,7 +216,7 @@ defmodule AshQuick.LiveView.Components.FormView do
         :states,
         rows |> Enum.map(&elem(&1, 0)) |> AshQuick.Storage.states_for(scope: assigns[:scope])
       )
-      |> assign(:errors, Enum.map(errors, &translate_error(&1)))
+      |> assign(:errors, attachment_errors(assigns.phx_field))
 
     ~H"""
     <section
@@ -261,10 +258,12 @@ defmodule AshQuick.LiveView.Components.FormView do
       |> assign(:upload_name, upload_name)
       |> assign(:saved_values, saved_values)
       |> assign(:states, AshQuick.Storage.states_for(saved_values, scope: assigns[:scope]))
+      |> assign(:errors, attachment_errors(assigns.phx_field))
 
     ~H"""
     <section
       phx-drop-target={@uploads[@upload_name].ref}
+      data-attachment-field={@field.name}
       class="flex flex-col sm:col-span-2 card bg-base-100 p-5 my-3"
     >
       <div class="flex justify-between">
@@ -285,12 +284,13 @@ defmodule AshQuick.LiveView.Components.FormView do
         class="file-input w-full"
       />
       <%!-- Carries an existing attachment across a validate round trip, as the JSON
-      the type casts back. --%>
-      <.input
+      the type casts back. A bare input: the field's errors render once, below. --%>
+      <input
         type="hidden"
-        field={@phx_field}
+        name={@phx_field.name}
         value={attachment_input_value(@phx_field.value)}
       />
+      <.error :for={msg <- @errors}>{msg}</.error>
 
       <%= for entry <- @uploads[@upload_name].entries do %>
         <div class="flex items-center gap-2 mt-2 text-sm text-base-content/70">
@@ -424,6 +424,28 @@ defmodule AshQuick.LiveView.Components.FormView do
       phx-debounce="blur"
     />
     """
+  end
+
+  # An attachment field's errors, translated, once the form has been submitted
+  # or the field holds something the person put there. Not `used_input?/1`
+  # alone, which is wrong both ways here. A single field's hidden input posts
+  # `""` with every change event while nothing is picked (LiveView never marks
+  # a hidden input unused), so that blank would count as a touch and the error
+  # would show on the first keystroke anywhere in the form. And a save with
+  # nothing picked leaves the field out of the params it is made with
+  # (`FormUtils.drop_blank_attachment_param/2`), so on a create form, with no
+  # record's value to put back, the error that save failed on read as one for
+  # an untouched field and never showed.
+  defp attachment_errors(%Phoenix.HTML.FormField{form: form, field: field} = phx_field) do
+    submitted? = match?(%Phoenix.HTML.Form{source: %AshPhoenix.Form{submitted_once?: true}}, form)
+
+    touched? =
+      Phoenix.Component.used_input?(phx_field) and
+        Map.get(form.params, to_string(field)) not in [nil, ""]
+
+    if submitted? or touched?,
+      do: Enum.map(phx_field.errors, &translate_error/1),
+      else: []
   end
 
   defp attachment_input_value(nil), do: nil
