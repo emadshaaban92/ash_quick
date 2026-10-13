@@ -10,7 +10,7 @@ defmodule AshQuick.LiveView.Components.HasManyInput do
   def render(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
     assigns =
       assigns
-      |> assign(:errors, Enum.map(field.errors, &translate_error(&1)))
+      |> assign(:errors, AshQuick.LiveView.FieldErrors.for_hidden_input(field))
 
     ~H"""
     <div phx-feedback-for={@field.name} class="sm:col-span-2">

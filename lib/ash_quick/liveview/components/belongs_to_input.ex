@@ -10,7 +10,7 @@ defmodule AshQuick.LiveView.Components.BelongsToInput do
   def render(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
     assigns =
       assigns
-      |> assign(:errors, Enum.map(field.errors, &translate_error(&1)))
+      |> assign(:errors, AshQuick.LiveView.FieldErrors.for_hidden_input(field))
       |> assign(:placeholder, assigns[:placeholder] || "")
 
     ~H"""

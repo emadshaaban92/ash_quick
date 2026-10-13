@@ -26,6 +26,15 @@ defmodule AshQuick.Components do
     By default does simple string interpolation. Configure a custom
     translator via `:error_translator` in the AshQuick config if you
     need i18n support.
+
+  ## Every public function here is imported into every QuickView
+
+  `use AshQuick.LiveView.QuickView` imports this module whole. A host
+  QuickView with a local function of the same name and arity as a public one
+  here fails to compile once it calls it unqualified, so adding a public
+  function is a potentially breaking change for hosts. Helpers that are not
+  components go in a module QuickView does not import, such as
+  `AshQuick.LiveView.FieldErrors`.
   """
   use Phoenix.Component
   use Gettext, backend: AshQuick.Gettext
@@ -535,11 +544,9 @@ defmodule AshQuick.Components do
   slot :inner_block
 
   def input(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
-    errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
-
     assigns
     |> assign(field: nil, id: assigns.id || field.id)
-    |> assign(:errors, Enum.map(errors, &translate_error(&1)))
+    |> assign(:errors, AshQuick.LiveView.FieldErrors.for_field(field))
     |> assign_new(:name, fn -> if assigns.multiple, do: field.name <> "[]", else: field.name end)
     |> assign_new(:value, fn -> field.value end)
     |> input()
