@@ -74,10 +74,14 @@
   nothing under the field, so the form read it as untouched and left its
   section empty; the error reached the page only as a toast, and not at all
   when the save failed on more than one field. The rule from the attachment
-  fix above now lives in `AshQuick.Components.field_errors/2`: a field's
-  errors show once the person has used the input or the form has been
+  fix above now lives in `AshQuick.LiveView.FieldErrors.for_field/2`: a
+  field's errors show once the person has used the input or the form has been
   submitted. `AshQuick.Components.input/1`, the nested-form sections and the
-  attachment widgets all use it.
+  attachment widgets all use it. It is deliberately not in
+  `AshQuick.Components`: every public function there is imported into every
+  QuickView, so a new one breaks any host QuickView that calls a helper of its
+  own by the same name. Adding a public function to `AshQuick.Components` is a
+  potentially breaking change for hosts.
 
 - **Clicking an attachment drop zone opens the file picker.** The zone's
   label pointed its `for` at the form field's id, while the file input inside

@@ -9,6 +9,7 @@ defmodule AshQuick.LiveView.Components.FormView do
   alias Ash.Type
   alias Phoenix.LiveView.JS
 
+  alias AshQuick.LiveView.FieldErrors
   alias AshQuick.LiveView.FormUtils
   alias AshQuick.LiveView.Utils
   alias AshQuick.LiveView.URLParams
@@ -334,7 +335,7 @@ defmodule AshQuick.LiveView.Components.FormView do
   end
 
   defp field_input(%{form_key_type: :list, phx_field: phx_field} = assigns) do
-    assigns = assigns |> assign(:errors, field_errors(phx_field))
+    assigns = assigns |> assign(:errors, FieldErrors.for_field(phx_field))
 
     ~H"""
     <section class="sm:col-span-4 card bg-base-100 p-5 my-3">
@@ -376,7 +377,7 @@ defmodule AshQuick.LiveView.Components.FormView do
   end
 
   defp field_input(%{form_key_type: :single, phx_field: phx_field} = assigns) do
-    assigns = assigns |> assign(:errors, field_errors(phx_field))
+    assigns = assigns |> assign(:errors, FieldErrors.for_field(phx_field))
 
     ~H"""
     <.inputs_for :let={nested_phx_form} field={@phx_field}>
@@ -424,7 +425,7 @@ defmodule AshQuick.LiveView.Components.FormView do
     """
   end
 
-  # An attachment field's errors (`AshQuick.Components.field_errors/2`). A
+  # An attachment field's errors (`FieldErrors.for_field/2`). A
   # single field's hidden input posts `""` with every change event while
   # nothing is picked, and LiveView never marks a hidden input unused, so
   # `used_input?/1` would count that blank as a touch and show the error on the
@@ -435,7 +436,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       Phoenix.Component.used_input?(phx_field) and
         Map.get(form.params, to_string(field)) not in [nil, ""]
 
-    field_errors(phx_field, used?)
+    FieldErrors.for_field(phx_field, used?)
   end
 
   defp attachment_input_value(nil), do: nil

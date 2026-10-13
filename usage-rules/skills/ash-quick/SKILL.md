@@ -277,6 +277,14 @@ lib/my_app_web/live/orders/
 Template has access to: `@record`, `@resource`, `@params`, `@scope`, `@options`.
 `AshQuick.Components` is imported and `Phoenix.LiveView.JS` is aliased.
 
+That import is the whole module, into every QuickView. A QuickView's own
+helper with the same name and arity as a public function of
+`AshQuick.Components` fails to compile once it is called unqualified
+("imported ... conflicts with local function"). So adding a public function
+there is a potentially breaking change for hosts. Put helpers that are not
+components in a module QuickView does not import, as
+`AshQuick.LiveView.FieldErrors` is.
+
 To use host app components, import them in the QuickView module **before** `use`:
 
 ```elixir

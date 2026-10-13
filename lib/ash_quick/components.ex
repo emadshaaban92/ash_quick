@@ -26,8 +26,15 @@ defmodule AshQuick.Components do
     By default does simple string interpolation. Configure a custom
     translator via `:error_translator` in the AshQuick config if you
     need i18n support.
-  * `field_errors/2` — The errors to render beside a field, once it was used
-    or the form submitted.
+
+  ## Every public function here is imported into every QuickView
+
+  `use AshQuick.LiveView.QuickView` imports this module whole. A host
+  QuickView with a local function of the same name and arity as a public one
+  here fails to compile once it calls it unqualified, so adding a public
+  function is a potentially breaking change for hosts. Helpers that are not
+  components go in a module QuickView does not import, such as
+  `AshQuick.LiveView.FieldErrors`.
   """
   use Phoenix.Component
   use Gettext, backend: AshQuick.Gettext
@@ -539,7 +546,7 @@ defmodule AshQuick.Components do
   def input(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
     assigns
     |> assign(field: nil, id: assigns.id || field.id)
-    |> assign(:errors, field_errors(field))
+    |> assign(:errors, AshQuick.LiveView.FieldErrors.for_field(field))
     |> assign_new(:name, fn -> if assigns.multiple, do: field.name <> "[]", else: field.name end)
     |> assign_new(:value, fn -> field.value end)
     |> input()
@@ -631,37 +638,6 @@ defmodule AshQuick.Components do
     </div>
     """
   end
-
-  ## Field errors
-
-  @doc """
-  The errors to render beside `field`, translated, or `[]` while they would
-  only be noise.
-
-  They show once the person has used the input, or once the form has been
-  submitted. `Phoenix.Component.used_input?/1` alone misses the second case
-  whenever a field is absent from the params a refused save was made with: a
-  list of nested forms with none added posts nothing under its name, and an
-  attachment with nothing picked is left out on purpose. Such a field reads as
-  untouched, so the error the save failed on never showed.
-
-  `used?` is what counts as using the input, for a widget whose posted value
-  says more than `used_input?/1` can (an attachment's blank hidden input is not
-  a touch). It defaults to `used_input?/1`.
-  """
-  def field_errors(%Phoenix.HTML.FormField{} = field),
-    do: field_errors(field, Phoenix.Component.used_input?(field))
-
-  def field_errors(%Phoenix.HTML.FormField{} = field, used?) do
-    if used? or submitted?(field.form),
-      do: Enum.map(field.errors, &translate_error/1),
-      else: []
-  end
-
-  # An `AshPhoenix.Form` marks itself and every sub-form submitted on the first
-  # submit, so a nested field sees it too.
-  defp submitted?(%Phoenix.HTML.Form{source: %AshPhoenix.Form{submitted_once?: true}}), do: true
-  defp submitted?(_form), do: false
 
   ## Error translation
 
