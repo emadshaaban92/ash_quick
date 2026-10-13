@@ -34,6 +34,22 @@ defmodule AshQuick.LiveView.FieldErrors do
       else: []
   end
 
+  @doc """
+  `for_field/2` for a field whose value posts from a hidden input: an
+  attachment, or a LiveSelect widget. LiveView never marks a hidden input
+  unused, so a blank one posts `""` with every change event and
+  `used_input?/1` would count it as a touch, showing the error on the first
+  keystroke anywhere in the form. Only a field holding something the person
+  put there counts as used.
+  """
+  def for_hidden_input(%FormField{form: form, field: name} = field) do
+    used? =
+      Phoenix.Component.used_input?(field) and
+        Map.get(form.params, to_string(name)) not in [nil, ""]
+
+    for_field(field, used?)
+  end
+
   # An `AshPhoenix.Form` marks itself and every sub-form submitted on the first
   # submit, so a nested field sees it too.
   defp submitted?(%Phoenix.HTML.Form{source: %AshPhoenix.Form{submitted_once?: true}}), do: true

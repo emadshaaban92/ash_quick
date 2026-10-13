@@ -41,7 +41,8 @@ config :ash_quick,
       unreachable_entry: [
         "/test/digits_only",
         "/test/required_attachments",
-        "/test/required_entries"
+        "/test/required_entries",
+        "/test/required_picks"
       ],
       # Tower keeps its default reporter here on purpose: it is the one that
       # holds events in memory, and `Example.ActionErrorsTest` reads what was

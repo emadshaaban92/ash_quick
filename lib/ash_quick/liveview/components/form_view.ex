@@ -217,7 +217,7 @@ defmodule AshQuick.LiveView.Components.FormView do
         :states,
         rows |> Enum.map(&elem(&1, 0)) |> AshQuick.Storage.states_for(scope: assigns[:scope])
       )
-      |> assign(:errors, attachment_errors(assigns.phx_field))
+      |> assign(:errors, FieldErrors.for_hidden_input(assigns.phx_field))
 
     ~H"""
     <section
@@ -259,7 +259,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       |> assign(:upload_name, upload_name)
       |> assign(:saved_values, saved_values)
       |> assign(:states, AshQuick.Storage.states_for(saved_values, scope: assigns[:scope]))
-      |> assign(:errors, attachment_errors(assigns.phx_field))
+      |> assign(:errors, FieldErrors.for_hidden_input(assigns.phx_field))
 
     ~H"""
     <section
@@ -423,20 +423,6 @@ defmodule AshQuick.LiveView.Components.FormView do
       phx-debounce="blur"
     />
     """
-  end
-
-  # An attachment field's errors (`FieldErrors.for_field/2`). A
-  # single field's hidden input posts `""` with every change event while
-  # nothing is picked, and LiveView never marks a hidden input unused, so
-  # `used_input?/1` would count that blank as a touch and show the error on the
-  # first keystroke anywhere in the form. Only a field holding something the
-  # person put there counts as used.
-  defp attachment_errors(%Phoenix.HTML.FormField{form: form, field: field} = phx_field) do
-    used? =
-      Phoenix.Component.used_input?(phx_field) and
-        Map.get(form.params, to_string(field)) not in [nil, ""]
-
-    FieldErrors.for_field(phx_field, used?)
   end
 
   defp attachment_input_value(nil), do: nil
