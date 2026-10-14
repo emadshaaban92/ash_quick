@@ -100,12 +100,13 @@ defmodule ExampleWeb.PrivateActionsScenarioTest do
       for url <- [~p"/products/#{product.id}/reindex", ~p"/products/#{product.id}?action=reindex"] do
         {:ok, view, _html} = live(conn, url)
 
-        assert render(view) =~ "404"
+        assert has_element?(view, "h1", "404")
       end
 
-      # The same URL shape still serves the product's public update.
-      {:ok, _view, html} = live(conn, ~p"/products/#{product.id}/update")
-      refute html =~ "404"
+      # The same URL shape still serves the product's public update. The page
+      # carries random ids and tokens, so "404" anywhere in it is no signal.
+      {:ok, view, html} = live(conn, ~p"/products/#{product.id}/update")
+      refute has_element?(view, "h1", "404")
       assert html =~ "Four-season tent"
     end
   end
