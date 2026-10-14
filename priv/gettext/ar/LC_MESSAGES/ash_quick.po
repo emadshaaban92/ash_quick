@@ -472,3 +472,8 @@ msgstr "تصفّح"
 #, elixir-autogen, elixir-format
 msgid "drop them here or"
 msgstr "أفلتها هنا أو"
+
+#: lib/ash_quick/liveview/components/field_value.ex
+#, elixir-autogen, elixir-format
+msgid "Hidden"
+msgstr "مخفي"

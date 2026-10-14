@@ -274,6 +274,75 @@ defmodule AshQuick.LiveView.Utils do
   end
 
   @doc """
+  The actions a page may take on a record of `resource`: its public updates,
+  then its public destroys.
+
+  An action declared `public?: false` is the host's own. Ash's documentation
+  says no extension may expose one, and the policy it recommends for them,
+  `bypass private_action?() do authorize_if always() end`, lets every call to
+  one through. Offered here, it would be an action anyone holding the page can
+  run with no policy asking who they are.
+  """
+  def record_actions(resource) do
+    actions = Ash.Resource.Info.public_actions(resource)
+
+    Enum.filter(actions, &(&1.type == :update)) ++ Enum.filter(actions, &(&1.type == :destroy))
+  end
+
+  @doc """
+  The action out of `actions` that a client event names, or `nil`.
+
+  An event carries whatever the browser sent, so the name is matched against
+  what the page could have offered rather than looked up on the resource. A name
+  that matches nothing is refused here instead of reaching `Ash.Resource.Info`,
+  where it would find a private action, a read or a create just as readily.
+  """
+  def offered_action(actions, name) when is_binary(name) do
+    Enum.find(actions, &(Atom.to_string(&1.name) == name))
+  end
+
+  def offered_action(_actions, _name), do: nil
+
+  @doc """
+  `fields` without the ones a field policy hides from `scope` on every record
+  `action` reads.
+
+  A field whose policy depends on the record stays, since the actor sees it on
+  some rows, and Ash marks the rest with `Ash.ForbiddenField`. Only a field of
+  `resource` itself is asked about: a relationship path is judged by the related
+  resource's policies, record by record, in the same way.
+
+  The answer only shapes the page. Ash has already replaced what the actor may
+  not read, so a check that fails keeps every field rather than failing the
+  page.
+  """
+  def visible_fields(fields, resource, action, scope) do
+    policed =
+      resource
+      |> Ash.Resource.Info.fields([:attributes, :calculations, :aggregates])
+      |> MapSet.new(& &1.name)
+
+    names = fields |> Enum.map(&field_path/1) |> Enum.filter(&MapSet.member?(policed, &1))
+
+    case names do
+      [] ->
+        fields
+
+      names ->
+        # Before Ash 3.35 the check skips an authorizer whose module is not
+        # loaded yet, and answers "visible" for every field. A module is loaded
+        # on first use in development and tests, so the first page rendered
+        # would show every column. Ash 3.35 loads them itself.
+        resource |> Ash.Resource.Info.authorizers() |> Enum.each(&Code.ensure_loaded/1)
+
+        case Ash.can_see_fields({resource, action.name}, scope, Enum.uniq(names)) do
+          {:ok, visible} -> Enum.reject(fields, &(Map.get(visible, field_path(&1)) == false))
+          {:error, _error} -> fields
+        end
+    end
+  end
+
+  @doc """
   Drops the activation action `record` is already in the state of — `:activate`
   from an active record, `:deactivate` from an inactive one — so a page offers
   only the transition that means something.

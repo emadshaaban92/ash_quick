@@ -41,6 +41,34 @@
 
 ### Bug fixes
 
+- **A QuickView no longer offers or runs a private action.** Every list, menu
+  and URL lookup used to walk all of a resource's actions, so an update or
+  destroy declared `public? false` was offered on each row, an input-less one
+  was derived into the bulk menu, and any of them could be reached by naming
+  it in `?action=`, in `/:id/:action`, or in a hand-sent `"row_action_click"`
+  or `"bulk_action"` event. Ash's documentation says no extension may expose a
+  private action, and the policy it recommends for them,
+  `bypass private_action?() do authorize_if always() end`, lets every call to
+  one through, so such a page ran internal actions for anyone who named them.
+  Pages now list and resolve public actions only, and an event's action name
+  is matched against the update and destroy actions the page could have
+  offered instead of being looked up on the resource. A name that matches
+  none is refused with the usual flash. `list: [default_action: ...]` and
+  `details: [default_action: ...]` may still name a private read, since the
+  host chose it in code. `mix ash_quick.check` and the dropdown checks at
+  compile time skip private actions too.
+
+- **A field a field policy hides no longer crashes the page.** Ash reads it
+  back as `%Ash.ForbiddenField{}`, which HEEx cannot render, so one policy on
+  a listed column took the list or details page down for everyone it hid the
+  column from. A hidden value now renders as a muted dash with a "Hidden"
+  label for screen readers, and a list or details `widget:` is never handed
+  one. A column hidden on every record (`Ash.can_see_fields/4` says the actor
+  can never see it) is left out of the list, the details page and the CSV
+  export. A column whose policy depends on the record stays, and shows the
+  mark on the rows it is hidden on. `AshQuick.LiveView.QuickField.resolve_value/2`
+  passes a hidden relationship through instead of reading into it.
+
 - **A select shows its error once a pick is taken back.** Clearing the
   relationship, atom or array-of-atom select, or removing its last tag, posts
   the same blank as a select never touched, so a required one said nothing
@@ -212,6 +240,17 @@
   default interpolation gets the same treatment.
 
 ### Breaking changes
+
+- **Ash 3.32.1 or later is required.** Column filtering uses
+  `Ash.can_see_fields/4`, which arrived in 3.32.1.
+
+- **A private action can no longer be reached from a page.** See the bug fix
+  above.
+
+  **Who is affected:** a host that relied on a QuickView to offer or open an
+  update, destroy or create declared `public? false`. Make the action public
+  if the page should offer it, and keep the authorization in a policy that
+  refuses the actors who should not run it.
 
 - **The version counter is no longer writable by actions.** The `:version`
   attribute versioning adds is now `writable?: false`, so an action with

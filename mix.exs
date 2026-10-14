@@ -41,7 +41,9 @@ defmodule AshQuick.MixProject do
     [
       # Required. The resource layer, its DSL toolkit, and the web layer every
       # QuickView renders through.
-      {:ash, "~> 3.0"},
+      # 3.32.1 for `Ash.can_see_fields/4`, which decides the columns a field
+      # policy hides.
+      {:ash, "~> 3.32 and >= 3.32.1"},
       {:ash_phoenix, "~> 2.0"},
       {:spark, "~> 2.0"},
       {:phoenix, "~> 1.8"},

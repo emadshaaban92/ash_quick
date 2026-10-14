@@ -162,8 +162,9 @@ defmodule AshQuick.LiveView.QuickView.Options do
 
   # `Utils.action_fields/2` without a scope is the superset the scope-filtered
   # form can render — field restrictions only ever narrow it — so checking it is
-  # sound rather than merely convenient. Every create and update action is
-  # walked because a QuickView reaches any of them through `?action=`.
+  # sound rather than merely convenient. Every public create and update action
+  # is walked because a QuickView reaches any of them through `?action=`, and a
+  # private one never.
   #
   # A field carrying a configured widget is skipped: `FormView.field_input/1`
   # matches the widget clause before the relationship ones, so that field
@@ -171,7 +172,7 @@ defmodule AshQuick.LiveView.QuickView.Options do
   # lookup action of it would refuse to compile a page over a search that
   # cannot happen.
   defp dropdown_destinations(%__MODULE__{resource: resource} = options) do
-    for action <- Ash.Resource.Info.actions(resource),
+    for action <- Ash.Resource.Info.public_actions(resource),
         action.type in [:create, :update],
         field <- Utils.action_fields(resource, action.name),
         not is_nil(field),

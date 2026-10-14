@@ -5,6 +5,7 @@ defmodule AshQuick.LiveView.DetailsUtils do
   import Phoenix.Component, only: [assign: 2]
 
   alias Ash.Resource.Actions
+  alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.Liveness
   alias AshQuick.LiveView.Utils
@@ -122,20 +123,9 @@ defmodule AshQuick.LiveView.DetailsUtils do
          socket,
          options
        ) do
-    action_atom = String.to_existing_atom(action_name)
-    action = Ash.Resource.Info.action(options.resource, action_atom)
-    action_inputs = Ash.Resource.Info.action_inputs(options.resource, action_atom)
-
-    case action_inputs |> Enum.to_list() do
-      [] ->
-        {:halt, do_action(id, action, socket, options)}
-
-      _ ->
-        params =
-          socket.assigns.params
-          |> URLParams.to_action_params(action_name, id: id)
-
-        {:halt, push_patch(socket, to: URLParams.full_path(socket.assigns.base_path, params))}
+    case options.resource |> Utils.record_actions() |> Utils.offered_action(action_name) do
+      nil -> {:halt, put_flash(socket, :error, ActionErrors.forbidden_message())}
+      action -> {:halt, row_action(id, action, socket, options)}
     end
   end
 
@@ -185,12 +175,26 @@ defmodule AshQuick.LiveView.DetailsUtils do
 
   defp handle_details_events(_, _, socket, _options), do: {:cont, socket}
 
+  defp row_action(id, action, socket, options) do
+    case Ash.Resource.Info.action_inputs(options.resource, action.name) |> Enum.to_list() do
+      [] ->
+        do_action(id, action, socket, options)
+
+      _ ->
+        params =
+          socket.assigns.params
+          |> URLParams.to_action_params(action.name, id: id)
+
+        push_patch(socket, to: URLParams.full_path(socket.assigns.base_path, params))
+    end
+  end
+
   # `load_record!/3` reads through the actor's scope, so an unreadable (or
   # absent) record leaves `record: nil` and the page shows the 404 panel. The
   # control is never drawn there, but the event can still be pushed by hand —
   # refuse it instead of running the action against nil.
   defp do_action(_id, _action, %{assigns: %{record: nil}} = socket, _options) do
-    socket |> put_flash(:error, AshQuick.LiveView.ActionErrors.forbidden_message())
+    socket |> put_flash(:error, ActionErrors.forbidden_message())
   end
 
   defp do_action(_id, action, socket, options) do
@@ -198,7 +202,7 @@ defmodule AshQuick.LiveView.DetailsUtils do
 
     case run_action(record, action, socket) do
       {:error, error} ->
-        socket |> put_flash(:error, AshQuick.LiveView.ActionErrors.user_facing_message(error))
+        socket |> put_flash(:error, ActionErrors.user_facing_message(error))
 
       _ ->
         socket

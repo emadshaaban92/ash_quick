@@ -232,7 +232,13 @@ defmodule AshQuick.LiveView.Components.ListView do
   defp render_field(%{field: %QuickField{widget: widget, path: path}, record: record} = assigns)
        when is_function(widget) do
     assigns = assigns |> assign(:value, QuickField.resolve_value(record, path))
-    widget.(assigns)
+
+    # A widget is written for the field's own type, so it is never handed the
+    # mark Ash leaves in a field a policy hides: `field_value/1` renders that.
+    case assigns.value do
+      %Ash.ForbiddenField{} -> ~H"<.field_value value={@value} path={[]} scope={@scope} />"
+      _ -> widget.(assigns)
+    end
   end
 
   defp render_field(%{field: %QuickField{path: path}, record: record} = assigns) do

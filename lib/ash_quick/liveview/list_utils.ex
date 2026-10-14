@@ -236,6 +236,18 @@ defmodule AshQuick.LiveView.ListUtils do
       |> Enum.filter(fn {_k, v} -> v == "on" end)
       |> Enum.map(fn {k, _v} -> k end)
 
+    # A column every row would export blank is left out, as it is on the page.
+    options = %{
+      options
+      | export_fields:
+          Utils.visible_fields(
+            options.export_fields,
+            options.resource,
+            socket.assigns.ash_action,
+            socket.assigns.scope
+          )
+    }
+
     export_query =
       options.resource
       |> build_export_query(selected_ids, socket, options)
@@ -323,39 +335,10 @@ defmodule AshQuick.LiveView.ListUtils do
   end
 
   defp handle_list_events("bulk_action", %{"action_name" => action_name}, socket, options) do
-    selected_ids = socket.assigns.selected_rows |> Map.keys()
-
-    records = socket.assigns.data.results |> Enum.filter(&(&1.id in selected_ids))
-
-    action_atom = String.to_existing_atom(action_name)
-    action = Ash.Resource.Info.action(options.resource, action_atom)
-
-    socket =
-      case run_bulk_action(records, action, socket) do
-        %{status: :error, errors: [%{errors: [%{message: message}]}]} ->
-          socket |> put_flash(:error, message)
-
-        %{status: :error, errors: errors} ->
-          socket |> put_flash(:error, errors |> Ash.Error.error_descriptions())
-
-        %{status: :error} ->
-          socket |> put_flash(:error, "Unknown Error")
-
-        # A bulk write that matches no row (a stale one, say) is not an error, so
-        # `:success` does not mean every selected row was written. The records it
-        # returns are the ones that were; the rest are reported and kept selected.
-        %{records: written} ->
-          skipped_ids = Enum.map(records, & &1.id) -- Enum.map(written, & &1.id)
-
-          socket
-          |> assign(data: load_data!(socket, socket.assigns.params, options))
-          |> assign(selected_rows: Map.take(socket.assigns.selected_rows, skipped_ids))
-          |> report_skipped_rows(action, length(records), skipped_ids)
-          |> Liveness.resync(:data, options)
-          |> refresh_row_actions(options)
-      end
-
-    {:halt, socket}
+    case options.resource |> Utils.record_actions() |> Utils.offered_action(action_name) do
+      nil -> {:halt, refuse_action(socket)}
+      action -> {:halt, do_bulk_action(action, socket, options)}
+    end
   end
 
   # Resolved on open rather than on render — see `ListView.record_actions/1`. Only
@@ -370,20 +353,9 @@ defmodule AshQuick.LiveView.ListUtils do
          socket,
          options
        ) do
-    action_atom = String.to_existing_atom(action_name)
-    action = Ash.Resource.Info.action(options.resource, action_atom)
-    action_inputs = Ash.Resource.Info.action_inputs(options.resource, action_atom)
-
-    case action_inputs |> Enum.to_list() do
-      [] ->
-        {:halt, do_action(id, action, socket, options)}
-
-      _ ->
-        params =
-          socket.assigns.params
-          |> URLParams.to_action_params(action_name, id: id)
-
-        {:halt, push_patch(socket, to: URLParams.full_path(socket.assigns.path, params))}
+    case options.resource |> Utils.record_actions() |> Utils.offered_action(action_name) do
+      nil -> {:halt, refuse_action(socket)}
+      action -> {:halt, row_action(id, action, socket, options)}
     end
   end
 
@@ -418,6 +390,50 @@ defmodule AshQuick.LiveView.ListUtils do
   end
 
   defp handle_list_events(_, _, socket, _options), do: {:cont, socket}
+
+  defp do_bulk_action(action, socket, options) do
+    selected_ids = socket.assigns.selected_rows |> Map.keys()
+
+    records = socket.assigns.data.results |> Enum.filter(&(&1.id in selected_ids))
+
+    case run_bulk_action(records, action, socket) do
+      %{status: :error, errors: [%{errors: [%{message: message}]}]} ->
+        socket |> put_flash(:error, message)
+
+      %{status: :error, errors: errors} ->
+        socket |> put_flash(:error, errors |> Ash.Error.error_descriptions())
+
+      %{status: :error} ->
+        socket |> put_flash(:error, "Unknown Error")
+
+      # A bulk write that matches no row (a stale one, say) is not an error, so
+      # `:success` does not mean every selected row was written. The records it
+      # returns are the ones that were; the rest are reported and kept selected.
+      %{records: written} ->
+        skipped_ids = Enum.map(records, & &1.id) -- Enum.map(written, & &1.id)
+
+        socket
+        |> assign(data: load_data!(socket, socket.assigns.params, options))
+        |> assign(selected_rows: Map.take(socket.assigns.selected_rows, skipped_ids))
+        |> report_skipped_rows(action, length(records), skipped_ids)
+        |> Liveness.resync(:data, options)
+        |> refresh_row_actions(options)
+    end
+  end
+
+  defp row_action(id, action, socket, options) do
+    case Ash.Resource.Info.action_inputs(options.resource, action.name) |> Enum.to_list() do
+      [] ->
+        do_action(id, action, socket, options)
+
+      _ ->
+        params =
+          socket.assigns.params
+          |> URLParams.to_action_params(action.name, id: id)
+
+        push_patch(socket, to: URLParams.full_path(socket.assigns.path, params))
+    end
+  end
 
   defp handle_list_info(%{topic: topic, payload: %Ash.Notifier.Notification{}}, socket, _) do
     {:halt, AshPhoenix.LiveView.handle_live(socket, topic, :data)}
@@ -560,22 +576,20 @@ defmodule AshQuick.LiveView.ListUtils do
   end
 
   defp record_actions(record, resource, scope) do
-    actions = Ash.Resource.Info.actions(resource)
-
-    actions
-    |> Stream.filter(&(&1.type == :update))
+    resource
+    |> Utils.record_actions()
     |> Utils.reject_redundant_activation(record)
-    |> Enum.concat(Enum.filter(actions, &(&1.type == :destroy)))
     |> Enum.filter(&AshQuick.can?({record, &1}, scope, :ash_quick_list))
   end
 
   def resource_bulk_actions(resource, scope, _options) do
     actions =
       resource
-      |> Ash.Resource.Info.actions()
-      |> Stream.filter(&(&1.type == :update))
-      |> Stream.filter(&(Ash.Resource.Info.action_inputs(resource, &1.name) |> Enum.empty?()))
-      |> Enum.concat(Ash.Resource.Info.actions(resource) |> Enum.filter(&(&1.type == :destroy)))
+      |> Utils.record_actions()
+      |> Enum.reject(
+        &(&1.type == :update and
+            not Enum.empty?(Ash.Resource.Info.action_inputs(resource, &1.name)))
+      )
       |> Enum.filter(&AshQuick.can?({resource, &1.name}, scope, :ash_quick_list_bulk))
       |> Enum.map(
         &%{
