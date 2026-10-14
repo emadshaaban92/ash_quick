@@ -45,10 +45,10 @@ defmodule AshQuick.MixProject do
       # Floors track the versions the suite runs against. Two are also hard
       # minimums, so keep them if a floor is ever loosened: ash 3.35.0, where
       # `Ash.can_see_fields/4` (which decides the columns a field policy hides)
-      # stops skipping a policy authorizer that is not loaded yet, and
-      # ash_phoenix 2.3.20, for the dynamic `keep_live` subscriptions
-      # `AshQuick.LiveView.Liveness` re-targets. ash_phoenix sits at 2.3.25
-      # rather than 2.3.20 because that release fixed CVE-2026-82724..82727.
+      # loads a policy authorizer itself instead of skipping one that is not
+      # loaded yet, and ash_phoenix 2.3.20, for the dynamic `keep_live`
+      # subscriptions `AshQuick.LiveView.Liveness` re-targets. ash_phoenix sits
+      # at 2.3.25 because that release fixed CVE-2026-82724..82727.
       {:ash, "~> 3.36"},
       {:ash_phoenix, "~> 2.3 and >= 2.3.25"},
       {:spark, "~> 2.7"},

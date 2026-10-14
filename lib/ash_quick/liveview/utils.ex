@@ -329,12 +329,6 @@ defmodule AshQuick.LiveView.Utils do
         fields
 
       names ->
-        # Before Ash 3.35 the check skips an authorizer whose module is not
-        # loaded yet, and answers "visible" for every field. A module is loaded
-        # on first use in development and tests, so the first page rendered
-        # would show every column. Ash 3.35 loads them itself.
-        resource |> Ash.Resource.Info.authorizers() |> Enum.each(&Code.ensure_loaded/1)
-
         case Ash.can_see_fields({resource, action.name}, scope, Enum.uniq(names)) do
           {:ok, visible} -> Enum.reject(fields, &(Map.get(visible, field_path(&1)) == false))
           {:error, _error} -> fields
