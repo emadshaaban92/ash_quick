@@ -46,28 +46,28 @@ defmodule Example.MixProject do
     [
       # The library under test, from the checkout this app lives in.
       {:ash_quick, path: ".."},
-      {:ash, "~> 3.0"},
-      {:ash_phoenix, "~> 2.0"},
-      {:ash_postgres, "~> 2.0"},
-      {:ecto_sql, "~> 3.13"},
+      {:ash, "~> 3.36"},
+      {:ash_phoenix, "~> 2.3"},
+      {:ash_postgres, "~> 2.14"},
+      {:ecto_sql, "~> 3.14"},
       {:postgrex, ">= 0.0.0"},
       {:picosat_elixir, "~> 0.2"},
       {:phoenix, "~> 1.8.5"},
-      {:phoenix_ecto, "~> 4.5"},
-      {:phoenix_html, "~> 4.1"},
+      {:phoenix_ecto, "~> 4.7"},
+      {:phoenix_html, "~> 4.3"},
       {:phoenix_live_view, "~> 1.2"},
-      {:phoenix_live_reload, "~> 1.2", only: :dev},
+      {:phoenix_live_reload, "~> 1.7", only: :dev},
       {:phoenix_live_dashboard, "~> 0.9"},
-      {:bandit, "~> 1.5"},
+      {:bandit, "~> 1.12"},
       {:gettext, "~> 1.0"},
-      {:jason, "~> 1.2"},
+      {:jason, "~> 1.4"},
       {:live_select, "~> 1.7"},
-      {:telemetry_metrics, "~> 1.0"},
-      {:telemetry_poller, "~> 1.0"},
+      {:telemetry_metrics, "~> 1.2"},
+      {:telemetry_poller, "~> 1.3"},
 
       # Assets.
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
-      {:tailwind, "~> 0.4", runtime: Mix.env() == :dev},
+      {:tailwind, "~> 0.5", runtime: Mix.env() == :dev},
       {:heroicons,
        github: "tailwindlabs/heroicons",
        tag: "v2.2.0",
@@ -88,24 +88,24 @@ defmodule Example.MixProject do
       # `chromic_pdf` is deliberately absent: printing would want a Chrome on
       # the machine, and `AshQuick.Config.print_enabled?/0` simply leaves the
       # print control out without it — which is the behaviour worth showing.
-      {:exceed, "~> 0.6"},
-      {:nimble_csv, "~> 1.2"},
+      {:exceed, "~> 0.7"},
+      {:nimble_csv, "~> 1.3"},
       {:briefly, "~> 0.5"},
-      {:ex_aws, "~> 2.5"},
+      {:ex_aws, "~> 2.7"},
       {:ex_aws_s3, "~> 2.5"},
       {:ash_money, "~> 0.2"},
-      {:ex_money_sql, "~> 2.0"},
+      {:ex_money_sql, "~> 2.1"},
 
       # Tooling.
       {:igniter, "~> 0.8", only: [:dev, :test]},
-      {:sourceror, "~> 1.7", only: [:dev, :test]},
+      {:sourceror, "~> 1.12", only: [:dev, :test]},
       {:lazy_html, ">= 0.1.0", only: :test},
       {:phoenix_test, "~> 0.12", only: :test, runtime: false},
       # What ExAws parses a multipart upload's responses with. Only reached
       # through `Example.Test.S3Stub`, which is the only bucket this app talks to.
       {:sweet_xml, "~> 0.7", only: :test},
       {:excoveralls, "~> 0.18", only: :test},
-      {:tidewave, "~> 0.1", only: [:dev]}
+      {:tidewave, "~> 0.9", only: [:dev]}
     ]
   end
 

@@ -241,8 +241,18 @@
 
 ### Breaking changes
 
-- **Ash 3.32.1 or later is required.** Column filtering uses
-  `Ash.can_see_fields/4`, which arrived in 3.32.1.
+- **Ash 3.36 and ash_phoenix 2.3.25 or later are required.** Column
+  filtering uses `Ash.can_see_fields/4`, which arrived in 3.32.1 and from
+  3.35.0 no longer skips a policy authorizer that has not loaded yet. Live
+  pages re-target their subscriptions through `keep_live`'s dynamic
+  subscriptions, which arrived in ash_phoenix 2.3.20, and 2.3.25 fixed
+  CVE-2026-82724 through CVE-2026-82727. The other floors rose to the
+  releases the suite runs against: spark 2.7 and phoenix_html 4.3, and for
+  the optional features nimble_csv 1.3, exceed 0.7, ex_aws 2.7, ex_money 6.2,
+  localize 1.3 and sourceror 1.12.
+
+  **Who is affected:** a host on an older release of any of these. Update
+  them with `mix deps.update` alongside AshQuick.
 
 - **A private action can no longer be reached from a page.** See the bug fix
   above.

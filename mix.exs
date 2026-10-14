@@ -41,14 +41,20 @@ defmodule AshQuick.MixProject do
     [
       # Required. The resource layer, its DSL toolkit, and the web layer every
       # QuickView renders through.
-      # 3.32.1 for `Ash.can_see_fields/4`, which decides the columns a field
-      # policy hides.
-      {:ash, "~> 3.32 and >= 3.32.1"},
-      {:ash_phoenix, "~> 2.0"},
-      {:spark, "~> 2.0"},
+      #
+      # Floors track the versions the suite runs against. Two are also hard
+      # minimums, so keep them if a floor is ever loosened: ash 3.35.0, where
+      # `Ash.can_see_fields/4` (which decides the columns a field policy hides)
+      # loads a policy authorizer itself instead of skipping one that is not
+      # loaded yet, and ash_phoenix 2.3.20, for the dynamic `keep_live`
+      # subscriptions `AshQuick.LiveView.Liveness` re-targets. ash_phoenix sits
+      # at 2.3.25 because that release fixed CVE-2026-82724..82727.
+      {:ash, "~> 3.36"},
+      {:ash_phoenix, "~> 2.3 and >= 2.3.25"},
+      {:spark, "~> 2.7"},
       {:phoenix, "~> 1.8"},
       {:phoenix_live_view, "~> 1.2"},
-      {:phoenix_html, "~> 4.0"},
+      {:phoenix_html, "~> 4.3"},
       {:gettext, "~> 1.0"},
       {:live_select, "~> 1.7"},
       {:jason, "~> 1.4"},
@@ -64,14 +70,14 @@ defmodule AshQuick.MixProject do
       #
       # Optional deps are still fetched for this project itself, so the suite
       # exercises the features rather than only the guards.
-      {:nimble_csv, "~> 1.2", optional: true},
-      {:exceed, "~> 0.6", optional: true},
+      {:nimble_csv, "~> 1.3", optional: true},
+      {:exceed, "~> 0.7", optional: true},
       {:briefly, "~> 0.5", optional: true},
       {:chromic_pdf, "~> 1.17", optional: true},
-      {:ex_aws, "~> 2.5", optional: true},
+      {:ex_aws, "~> 2.7", optional: true},
       {:ex_aws_s3, "~> 2.5", optional: true},
-      {:ex_money, "~> 6.0", optional: true},
-      {:localize, "~> 1.0", optional: true},
+      {:ex_money, "~> 6.2", optional: true},
+      {:localize, "~> 1.3", optional: true},
       {:merge_pdf, "~> 0.5", optional: true},
 
       # The installer and generators are mix tasks in this package, and a host
@@ -79,14 +85,14 @@ defmodule AshQuick.MixProject do
       # them uncompilable exactly where they are used. Optional, so a project
       # that never generates anything does not carry them.
       {:igniter, "~> 0.8", optional: true},
-      {:sourceror, "~> 1.7", optional: true},
+      {:sourceror, "~> 1.12", optional: true},
 
       # Tooling.
       {:lazy_html, ">= 0.0.0", only: :test},
       {:simple_sat, "~> 0.1", only: [:test]},
-      {:ex_doc, "~> 0.34", only: :dev, runtime: false},
+      {:ex_doc, "~> 0.40", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:sobelow, "~> 0.14", only: [:dev, :test], runtime: false},
+      {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
     ]
   end
