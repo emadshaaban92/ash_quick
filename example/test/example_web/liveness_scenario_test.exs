@@ -242,6 +242,7 @@ defmodule ExampleWeb.LivenessScenarioTest do
           # own state, and the next thing that process sends carries it out. So
           # the page goes on to do something that does publish.
           |> force_row_action(unrelated.id, :deactivate)
+          |> click_button("#ash-quick-action-modal button", "Confirm")
         end)
 
       assert_receive %Broadcast{topic: ^unrelated_topic, payload: %Ash.Notifier.Notification{}}

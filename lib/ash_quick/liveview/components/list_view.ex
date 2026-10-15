@@ -312,22 +312,10 @@ defmodule AshQuick.LiveView.Components.ListView do
   end
 
   defp row_action(assigns) do
-    data_confirm =
-      assigns.record
-      |> Ash.Resource.Info.action_inputs(assigns.action.name)
-      |> Enum.to_list()
-      |> case do
-        [] -> gettext("Are you sure?")
-        _ -> nil
-      end
-
-    assigns = assigns |> assign(data_confirm: data_confirm)
-
     ~H"""
     <.link
       id={"#{@record.id}-action-#{@action.name}"}
       phx-click={JS.push("row_action_click", value: %{id: @record.id, action_name: @action.name})}
-      data-confirm={@data_confirm}
     >
       {Utils.humanize(@action.name)}
     </.link>

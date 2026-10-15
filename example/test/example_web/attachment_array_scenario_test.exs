@@ -249,7 +249,7 @@ defmodule ExampleWeb.AttachmentArrayScenarioTest do
 
       # Half-uploaded: the stored row stays on the page beside the entry.
       input =
-        file_input(view, "form", @upload, [
+        file_input(view, "form[phx-submit=save]", @upload, [
           %{name: "partway.jpg", content: @jpeg, type: "image/jpeg", size: byte_size(@jpeg)}
         ])
 
@@ -306,7 +306,7 @@ defmodule ExampleWeb.AttachmentArrayScenarioTest do
     content = if type == "application/pdf", do: @pdf, else: @jpeg
 
     view
-    |> file_input("form", upload, [
+    |> file_input("form[phx-submit=save]", upload, [
       %{name: filename, content: content, type: type, size: byte_size(content)}
     ])
     |> render_upload(filename)

@@ -185,7 +185,7 @@ defmodule ExampleWeb.UploadScenarioTest do
   # presign happens here.
   defp pick(view, filename) do
     view
-    |> file_input("form", @upload, [
+    |> file_input("form[phx-submit=save]", @upload, [
       %{name: filename, content: @jpeg, type: "image/jpeg", size: byte_size(@jpeg)}
     ])
     |> render_upload(filename)

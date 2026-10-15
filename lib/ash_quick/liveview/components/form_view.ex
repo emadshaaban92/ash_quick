@@ -21,11 +21,13 @@ defmodule AshQuick.LiveView.Components.FormView do
       assigns
       |> assign_new(:uploads, fn -> nil end)
       |> assign(:forbidden?, forbidden?)
+      |> assign(:confirm?, not forbidden? and Enum.empty?(fields(assigns.form, assigns.scope)))
 
     ~H"""
     <section class="p-3 sm:p-5">
+      <.confirm_form :if={@confirm?} {confirm_assigns(assigns)} />
       <.simple_form
-        :if={not @forbidden?}
+        :if={not @forbidden? and not @confirm?}
         for={@form}
         id={@id}
         phx-change="validate"
@@ -45,6 +47,45 @@ defmodule AshQuick.LiveView.Components.FormView do
     """
   end
 
+  defp fields(form, scope), do: Utils.action_fields(form.resource, form.action, scope)
+
+  defp confirm_assigns(assigns) do
+    Map.take(assigns, [:form, :id, :ash_action, :record, :ash_quick_background])
+  end
+
+  # An action that asks for nothing is a confirmation rather than a form: the
+  # action and the record it acts on, and the one button that runs it.
+  defp confirm_form(assigns) do
+    assigns =
+      assigns
+      |> assign_new(:record, fn -> nil end)
+      |> assign_new(:ash_quick_background, fn -> nil end)
+
+    ~H"""
+    <.form for={@form} id={@id} phx-submit="save" class="flex flex-col gap-4">
+      <h3 class="text-lg font-semibold">{Utils.humanize(@ash_action.name)}</h3>
+      <p :if={@ash_action.type != :create and @record} class="font-medium">
+        {AshQuick.Info.display_value(@record)}
+      </p>
+      <p class="text-base-content/70">{gettext("Are you sure?")}</p>
+      <div class="flex justify-end gap-2">
+        <.link :if={@ash_quick_background} patch={@ash_quick_background.path} class="btn btn-ghost">
+          {gettext("Cancel")}
+        </.link>
+        <button
+          type="submit"
+          class={[
+            "btn phx-submit-loading:opacity-75",
+            if(@ash_action.type == :destroy, do: "btn-error", else: "btn-primary")
+          ]}
+        >
+          {gettext("Confirm")}
+        </button>
+      </div>
+    </.form>
+    """
+  end
+
   @doc """
   Whether the actor may not run this form's action.
 
@@ -59,7 +100,8 @@ defmodule AshQuick.LiveView.Components.FormView do
 
   # An update form with no record: the actor cannot read it, or it does not
   # exist. Both look the same from here, and neither offers an action to run.
-  defp forbidden?(%{type: :update}, nil, _resource, _scope), do: true
+  defp forbidden?(%{type: type}, nil, _resource, _scope) when type in [:update, :destroy],
+    do: true
 
   # A create form has no record by nature — fall back to a record-less check.
   defp forbidden?(action, nil, resource, scope) do

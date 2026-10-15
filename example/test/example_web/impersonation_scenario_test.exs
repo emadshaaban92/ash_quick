@@ -318,8 +318,11 @@ defmodule ExampleWeb.ImpersonationScenarioTest do
       |> refute_has("a[id='#{editor.id}-action-impersonate']")
       |> assert_has("a[id='#{editor.id}-action-update']")
 
-      # Forged from the list anyway, it is refused rather than merely unoffered.
+      # Forged from the list anyway, it is refused rather than merely unoffered:
+      # the event opens its confirmation, and confirming is refused by the run.
       |> force_row_action(editor.id, :impersonate)
+      |> click_button("#ash-quick-action-modal button", "Confirm")
+      |> assert_has("#flash-error", text: "You don't have permission to do that.")
 
       assert impersonations_of(editor.id) == []
     end

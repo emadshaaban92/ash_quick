@@ -8,7 +8,6 @@ defmodule AshQuick.LiveView.DetailsUtils do
   alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.Liveness
-  alias AshQuick.LiveView.PrintUtils
   alias AshQuick.LiveView.Utils
   alias AshQuick.LiveView.QuickView.Options
 
@@ -131,60 +130,20 @@ defmodule AshQuick.LiveView.DetailsUtils do
 
   defp handle_details_events(_, _, socket, _options), do: {:cont, socket}
 
-  defp row_action(id, action, socket, options) do
-    case Ash.Resource.Info.action_inputs(options.resource, action.name) |> Enum.to_list() do
-      [] ->
-        do_action(id, action, socket, options)
-
-      _ ->
-        params =
-          socket.assigns.params
-          |> URLParams.to_action_params(action.name, id: id)
-
-        push_patch(socket, to: URLParams.full_path(socket.assigns.base_path, params))
-    end
-  end
-
+  # Every action opens at its own URL, over this page, and runs from there: a
+  # form for one that takes input, a confirmation for one that does not. What
+  # may open and run it is the modal's to decide, as it is for a typed URL.
+  #
   # `load_record!/3` reads through the actor's scope, so an unreadable (or
   # absent) record leaves `record: nil` and the page shows the 404 panel. The
   # control is never drawn there, but the event can still be pushed by hand —
-  # refuse it instead of running the action against nil.
-  defp do_action(_id, _action, %{assigns: %{record: nil}} = socket, _options) do
-    socket |> put_flash(:error, ActionErrors.forbidden_message())
+  # refuse it rather than open an action on a record nobody here can see.
+  defp row_action(id, action, %{assigns: %{record: %{id: id}}} = socket, _options) do
+    params = socket.assigns.params |> URLParams.to_action_params(action.name, id: id)
+    push_patch(socket, to: URLParams.full_path(socket.assigns.base_path, params))
   end
 
-  defp do_action(_id, action, socket, options) do
-    record = socket.assigns.record
-
-    result = run_action(record, action, socket)
-    socket = PrintUtils.print(socket, result)
-
-    case result do
-      {:error, error} ->
-        socket |> put_flash(:error, ActionErrors.user_facing_message(error))
-
-      _ ->
-        socket
-        |> assign(record: load_record!(socket, socket.assigns.params, options))
-        |> Liveness.resync(:record, options)
-    end
-  end
-
-  defp run_action(record, %Actions.Update{} = action, socket) do
-    record
-    |> Ash.update(
-      action: action,
-      scope: socket.assigns.scope,
-      context: %{action_source: :ash_quick_details}
-    )
-  end
-
-  defp run_action(record, %Actions.Destroy{} = action, socket) do
-    record
-    |> Ash.destroy(
-      action: action,
-      scope: socket.assigns.scope,
-      context: %{action_source: :ash_quick_details}
-    )
+  defp row_action(_id, _action, socket, _options) do
+    put_flash(socket, :error, ActionErrors.forbidden_message())
   end
 end

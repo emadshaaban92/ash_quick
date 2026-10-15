@@ -4,6 +4,30 @@
 
 ### Features
 
+- **Actions open in a modal over the page they were opened from.** A create,
+  an update or a destroy renders in a modal over the list or details the
+  visitor was on, kept at its search, filters and page; a URL reached directly
+  opens over the record's details, or the list for a create. Closing it, or
+  saving, returns to that page — so an update run from a searched list lands
+  back on that list rather than on the record's details. A create still goes
+  to the record it made, and a destroy opened over the record it destroyed goes
+  to the list.
+
+  An action that takes no input opens the same modal as a confirmation (Cancel
+  / Confirm) instead of a `data-confirm` browser dialog, and a destroy is
+  routed at `/:id/:action` like an update. Every action now runs through the
+  modal, stamped `AshQuick.form_source/0`: a row action no longer runs on the
+  click, stamped with its surface. A policy scoped
+  to a surface still decides which controls are drawn, but no longer refuses a
+  run. A host whose surface-scoped policy was the only thing refusing an action
+  without inputs needs a validation there, as a form with inputs already did —
+  or a `forbid_if context_equals(:action_source, :ash_quick_form)` where
+  QuickView must not run the action at all, as the impersonation docs now show.
+
+  Tests that selected the action's form as `"form"` now also match the forms
+  on the page underneath; select `"#ash-quick-action-modal form"`. Running an
+  action without inputs takes a submit of that form after the click.
+
 - **An action prints.** `change {AshQuick.Print, template: MyTemplate,
   delivery: :print}` on an action makes it print wherever AshQuick runs it: a
   row action, a bulk selection, the details page or the action's form. The

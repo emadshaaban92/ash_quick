@@ -257,11 +257,38 @@ URL determines view type:
 - `id: <uuid>` + read action -> **Details view**
 - `id: nil` + create action -> **Create form**
 - `id: <uuid>` + update action -> **Edit form**
+- `id: <uuid>` + destroy action -> **Delete confirmation**
 
 Action resolved from (priority order):
 1. `action` URL parameter
 2. `live_action` from router (e.g. `:create`)
 3. Configured default action
+
+## Actions open in a modal
+
+Every create, update and destroy renders in a modal (`#ash-quick-action-modal`)
+over the page it was opened from — a form when the action takes input, a
+confirmation (its name, the record, Cancel / Confirm) when it takes none. There
+is no `data-confirm` and no browser dialog anywhere.
+
+- The page underneath is a snapshot of the list or details the visitor was on,
+  rendered `inert`, at its search, filters and page. A URL reached with nothing
+  before it (a link, a refresh) opens over the record's details, or the list for
+  a create.
+- Closing (✕, Cancel, the backdrop, Escape) patches back to that page. Running
+  the action does too, except that a create goes to the record it made and a
+  destroy opened over the record it destroyed goes to the list.
+- A custom `action_<name>.html.heex` for a form renders inside the modal; a
+  custom read template renders as the page underneath.
+- A control is drawn where `AshQuick.can?/4` allows it on its surface. A click
+  (or a hand-pushed event, or a typed URL) only opens the action's URL; the
+  action runs stamped `AshQuick.form_source/0`. So a policy scoped to a surface
+  hides a control and never refuses the run — pair it with a validation, as for
+  any form, or forbid `:ash_quick_form` where QuickView must not run the action
+  at all.
+- In LiveView tests, target the modal: `form("#ash-quick-action-modal form")`,
+  and submit it to confirm. The page underneath is in the DOM too, so a bare
+  `"form"` selector matches its forms as well.
 
 ## Custom action templates
 

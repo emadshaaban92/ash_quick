@@ -77,8 +77,11 @@ defmodule ExampleWeb.ActivationScenarioTest do
       # One menu resolves at a time — opening the second put the first back to
       # its placeholder — so the row to be clicked is opened again.
       |> open_row_actions(active.id)
-      # Clicking it dims the row it was clicked on, without a reload.
+      # Clicking it asks first; confirming dims the row it was clicked on, on the
+      # list it was clicked from.
       |> click_link("a[id='#{active.id}-action-deactivate']", "Deactivate")
+      |> click_button("#ash-quick-action-modal button", "Confirm")
+      |> assert_path(~p"/brands")
       |> assert_has("tr[id='#{active.id}'].opacity-50")
 
       refute Ash.reload!(active, authorize?: false).active
