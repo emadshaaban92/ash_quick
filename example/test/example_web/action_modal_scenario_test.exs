@@ -219,6 +219,39 @@ defmodule ExampleWeb.ActionModalScenarioTest do
       assert {:error, _} = Ash.get(Product, product.id, authorize?: false)
     end
 
+    # The URL's id is the one the visitor typed; the record's is the one Ash
+    # cast. An upper-cased UUID loads the same record but is not equal to it.
+    test "from the record it deletes, reached by an upper-cased id, goes to the list", ctx do
+      %{conn: conn, admin: admin, product: product} = ctx
+      id = String.upcase(product.id)
+
+      {:ok, view, _html} = conn |> log_in(admin) |> live(~p"/products/#{id}")
+
+      view |> element("button", "Delete") |> render_click()
+      assert_patch(view, ~p"/products/#{product.id}/destroy")
+
+      view |> form("#{@modal} form") |> render_submit()
+
+      assert_patch(view, ~p"/products")
+      html = render(view)
+      refute html =~ "could not be found"
+      assert html =~ "Record deleted successfully"
+      assert has_element?(view, "table")
+      assert {:error, _} = Ash.get(Product, product.id, authorize?: false)
+    end
+
+    test "reached by its URL with nothing before it goes to the list", ctx do
+      %{conn: conn, admin: admin, product: product} = ctx
+
+      {:ok, view, _html} = conn |> log_in(admin) |> live(~p"/products/#{product.id}/destroy")
+
+      view |> form("#{@modal} form") |> render_submit()
+
+      assert_patch(view, ~p"/products")
+      refute render(view) =~ "could not be found"
+      assert {:error, _} = Ash.get(Product, product.id, authorize?: false)
+    end
+
     test "from a searched list stays on it", ctx do
       %{conn: conn, admin: admin, product: product} = ctx
       search = product.name
@@ -234,6 +267,24 @@ defmodule ExampleWeb.ActionModalScenarioTest do
       assert_patch(view, ~p"/products?search=#{search}")
       refute has_element?(view, "tr", product.name)
       assert {:error, _} = Ash.get(Product, product.id, authorize?: false)
+    end
+
+    # The socket still holds the record the visitor came from, but the page
+    # it was taken over is the list.
+    test "from a list reached from its record stays on the list", ctx do
+      %{conn: conn, admin: admin, product: product} = ctx
+      search = product.name
+
+      {:ok, view, _html} = conn |> log_in(admin) |> live(~p"/products/#{product.id}")
+      render_patch(view, ~p"/products?search=#{search}&page=1")
+
+      view |> element("##{product.id}-row-actions-dropdown [role=button]") |> render_click()
+      view |> element("##{product.id}-action-destroy") |> render_click()
+
+      view |> form("#{@modal} form") |> render_submit()
+
+      assert_patch(view, ~p"/products?search=#{search}&page=1")
+      refute has_element?(view, "tr", product.name)
     end
 
     test "reached by its URL by a role that may not delete is refused there", ctx do

@@ -1236,23 +1236,32 @@ defmodule AshQuick.LiveView.FormUtils do
 
   # A destroy returns to the page its modal opened over, unless that page was
   # the record it destroyed: then to the list.
+  # Matched on the record the page showed, not the id in its URL: that is the
+  # id as typed, and an upper-cased UUID loads the same record without being
+  # equal to it. Only on a details page, since a list the socket patched to
+  # from one still holds that record.
   defp handle_success(
          %{id: id},
          _form_params,
          _action,
          %{assigns: %{ash_action: %{type: :destroy}}} = socket
        ) do
+    list_path =
+      URLParams.full_path(
+        socket.assigns.base_path,
+        URLParams.to_list_params(socket.assigns.params)
+      )
+
     path =
       case socket.assigns.ash_quick_background do
-        %{assigns: %{params: %URLParams{id: background_id}}, path: path}
-        when background_id != id ->
+        %{assigns: %{params: %URLParams{id: url_id}, record: %{id: ^id}}} when url_id != nil ->
+          list_path
+
+        %{path: path} ->
           path
 
-        _ ->
-          URLParams.full_path(
-            socket.assigns.base_path,
-            URLParams.to_list_params(socket.assigns.params)
-          )
+        nil ->
+          list_path
       end
 
     {:halt, socket |> put_flash(:info, "Record deleted successfully") |> push_patch(to: path)}

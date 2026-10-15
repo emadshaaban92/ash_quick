@@ -84,6 +84,14 @@
 
 ### Bug fixes
 
+- **A destroy over its record's details reached by an upper-cased UUID goes to
+  the list.** Whether the modal opened over the record it destroyed was decided
+  by comparing the id in the details page's URL with the destroyed record's,
+  as strings. An upper-cased UUID loads the record, since Ash casts it to
+  lowercase, but is not equal to it, so the destroy patched back to the deleted
+  record's URL and showed the 404 panel. It is now matched against the record
+  the page showed.
+
 - **A QuickView no longer offers or runs a private action.** Every list, menu
   and URL lookup used to walk all of a resource's actions, so an update or
   destroy declared `public? false` was offered on each row, an input-less one
