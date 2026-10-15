@@ -4,6 +4,18 @@
 
 ### Features
 
+- **An action prints.** `change {AshQuick.Print, template: MyTemplate,
+  delivery: :print}` on an update action makes it print wherever AshQuick runs
+  it: a row action, a bulk selection, the details page or the action's form.
+  What it wrote goes to the template's `render/1` in one call, in the order the
+  rows were selected, and the action, the render and the PDF are one
+  transaction, so a render that fails records nothing. The PDF reaches the
+  browser over the LiveView socket: `delivery: :print` opens the print dialog
+  on it from an off-screen frame, `:download` (the default) saves it. Nothing
+  is uploaded and no link is handed out. The host calls `initPrinting()` from
+  `assets/js/print.js` once in its `app.js`. The action's button is its own,
+  shown where `Ash.can?` allows it like every other.
+
 - **Stored attachments can be removed one by one, and an array of them has a
   real widget.** An `{:array, :attachment}` attribute on a form now renders as
   a card: a row per stored file (its preview and name) with a ✕, over a drop
@@ -240,6 +252,12 @@
   default interpolation gets the same treatment.
 
 ### Breaking changes
+
+- **`:print_templates` is gone, with the print menu and its modal.** A
+  template prints through an action instead: give the resource an update that
+  writes nothing (`manual fn changeset, _context -> {:ok, changeset.data} end`)
+  carrying `{AshQuick.Print, template: MyTemplate}`. Prints get the action's
+  policies and an audit row, and are no longer uploaded to storage.
 
 - **Ash 3.36 and ash_phoenix 2.3.25 or later are required.** Column
   filtering uses `Ash.can_see_fields/4`, which arrived in 3.32.1 and from

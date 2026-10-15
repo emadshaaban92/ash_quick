@@ -67,17 +67,19 @@ defmodule AshQuick.PrintTemplate do
         end
       end
 
-  Then in your QuickView:
+  An action prints through it with `AshQuick.Print`, and its button is the
+  action's own. A print that only reads writes nothing:
 
-      use AshQuick.LiveView.QuickView,
-        resource: MyApp.TransferBatch,
-        print_templates: [MyApp.PDF.PickupListTemplate]
+      update :print_pickup_list do
+        manual fn changeset, _context -> {:ok, changeset.data} end
+        change {AshQuick.Print, template: MyApp.PDF.PickupListTemplate, delivery: :download}
+      end
 
   """
 
   @doc """
-  A human-readable label for this template (e.g. "Pickup List").
-  Used in action buttons and file names.
+  A human-readable label for this template (e.g. "Pickup List"), used in the
+  file name.
   """
   @callback label() :: String.t()
 
@@ -88,7 +90,8 @@ defmodule AshQuick.PrintTemplate do
   @callback load_opts() :: keyword()
 
   @doc """
-  Renders a PDF for the given list of loaded records.
+  Renders a PDF for the records an action wrote, loaded with `load_opts/0`, in
+  the order they were selected.
 
   Must return one of:
     - An HTML string — rendered directly by ChromicPDF with `preferCSSPageSize: true`.

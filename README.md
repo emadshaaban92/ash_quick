@@ -12,7 +12,8 @@ Everything the library needs from the application around it is a behaviour or a
 configuration key: the actor and tenant (`AshQuick.Scope`), object storage
 (`AshQuick.Storage`), route access (`AshQuick.AccessControl`), navigation
 (`AshQuick.Nav`), print templates (`AshQuick.PrintTemplate`) and field
-restriction checks (`AshQuick.FieldRestrictions.Check`).
+restriction checks (`AshQuick.FieldRestrictions.Check`). An action prints by
+carrying `AshQuick.Print`.
 
 The moduledocs are the reference. This is the order to read them in.
 
@@ -420,7 +421,7 @@ reference.
 | `AshQuick.AccessControl` | Answers which routes a scope may navigate to. Named on the nav, and what every rendering of it filters through. Not `Ash.can?`: a filter policy allows the action and returns no rows, so `can?` says yes for a page that would be empty. |
 | `AshQuick.Nav` | The host's navigation registry — one declaration the sidebar and the apps grid are both rendered from. QuickViews are discovered from the declared router; the declaration adds only what the router cannot say: a better label, an icon, a group, a non-QuickView path. |
 | `AshQuick.BrowserSessionPresence` | The live register of signed-in tabs. Supervised, not implemented — listed here because the tree entry is the host's. `AshQuick.LiveView.BrowserSessionsLive` is the page that reads it. |
-| `AshQuick.PrintTemplate` | One module per print template: its label, what to load, and the HTML ChromicPDF renders. Listed on a QuickView under `:print_templates`. |
+| `AshQuick.PrintTemplate` | One module per print template: its label, what to load, and the HTML ChromicPDF renders. An update action prints through it with `change {AshQuick.Print, template: ..., delivery: :print \| :download}`; the PDF reaches the browser over the LiveView socket, so the host imports `initPrinting` from `assets/js/print.js`. |
 | `AshQuick.FieldRestrictions.Check` | `match?/2` over an actor and tenant, deciding whether a restricted field is visible and writable. Hides the field in forms and strips it from the changeset. |
 
 ## Authorization on a surface
@@ -512,14 +513,15 @@ broken.
 | Dependency | What it enables |
 |---|---|
 | `exceed`, `nimble_csv` | Excel and CSV export |
-| `chromic_pdf`, `merge_pdf`, `briefly` | Printing |
+| `chromic_pdf`, `merge_pdf` | Printing (`AshQuick.Print`) |
 | `ex_aws`, `ex_aws_s3` | `AshQuick.Storage.S3`, the default object store |
 | `ex_money` | Rendering `Money` values |
 | `localize` | Locale-aware date and time formatting |
 
-Export and print are feature-detected at runtime —
-`AshQuick.Config.exports_enabled?/0` and `print_enabled?/0` — so the export and
-print controls simply do not appear. A host that points `:storage` at its own
+Export is feature-detected at runtime — `AshQuick.Config.exports_enabled?/0` —
+so its control simply does not appear. Printing has no control of its own: an
+action that carries `AshQuick.Print` needs ChromicPDF, and
+`AshQuick.Config.print_enabled?/0` says whether it is there. A host that points `:storage` at its own
 object store never loads the ExAws ones.
 
 ## The example app

@@ -6,6 +6,7 @@ defmodule AshQuick.LiveView.FormUtils do
   import Phoenix.Component, only: [assign: 2]
   alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.FieldErrors
+  alias AshQuick.LiveView.PrintUtils
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.QuickView.Options
   alias Ash.Resource.Actions.Argument
@@ -584,15 +585,22 @@ defmodule AshQuick.LiveView.FormUtils do
   defp handle_form_events(_, _, socket, _options), do: {:cont, socket}
 
   defp submit_form(form, params, socket) do
-    case AshPhoenix.Form.submit(form,
-           params:
-             params
-             |> maybe_put_nested_params(form)
-             |> maybe_put_has_many(form)
-             |> upload_images(socket, form),
-           before_submit: &reference_attachments(&1, Map.get(socket.assigns, :scope)),
-           action_opts: [context: %{action_source: AshQuick.form_source()}]
-         ) do
+    params =
+      params
+      |> maybe_put_nested_params(form)
+      |> maybe_put_has_many(form)
+      |> upload_images(socket, form)
+
+    {result, socket} =
+      PrintUtils.run(socket, form.resource, socket.assigns.ash_action.name, fn opts ->
+        AshPhoenix.Form.submit(form,
+          params: params,
+          before_submit: &reference_attachments(&1, Map.get(socket.assigns, :scope)),
+          action_opts: [context: %{action_source: AshQuick.form_source()}] ++ opts
+        )
+      end)
+
+    case result do
       {:ok, rec} ->
         socket = assign(socket, ash_quick_minted_attachment_keys: MapSet.new())
         handle_success(rec, params, socket.assigns.ash_action.name, socket)

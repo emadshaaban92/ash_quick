@@ -6,7 +6,6 @@ defmodule AshQuick.LiveView.Components.DetailsView do
   alias Phoenix.LiveView.JS
 
   import AshQuick.LiveView.Components.FieldValue
-  import AshQuick.LiveView.Components.PrintModal
 
   alias AshQuick.LiveView.Utils
   alias AshQuick.LiveView.QuickField
@@ -60,10 +59,6 @@ defmodule AshQuick.LiveView.Components.DetailsView do
         </:subtitle>
         <:actions>
           <div class="flex items-center gap-1">
-            <.details_print_menu
-              :if={@print_actions != []}
-              print_actions={@print_actions}
-            />
             <.featured_action
               :for={action <- @featured_actions}
               row={@record}
@@ -92,7 +87,6 @@ defmodule AshQuick.LiveView.Components.DetailsView do
           </div>
         </dl>
       </div>
-      <.print_modal :if={AshQuick.Config.print_enabled?()} print_data={@print_data} />
     </section>
     """
   end
@@ -207,26 +201,6 @@ defmodule AshQuick.LiveView.Components.DetailsView do
     >
       {Utils.humanize(@action.name)}
     </button>
-    """
-  end
-
-  defp details_print_menu(assigns) do
-    ~H"""
-    <div class="dropdown dropdown-end">
-      <div tabindex="0" role="button" class="btn btn-outline btn-sm">
-        <.icon name="hero-printer" class="w-4 h-4" /> {gettext("Print")}
-      </div>
-      <ul
-        tabindex="0"
-        class="dropdown-content menu bg-base-300 rounded-box z-10 w-48 p-2 shadow-[0_2px_15px_rgba(0,0,0,0.3)] border border-base-content/10"
-      >
-        <li :for={action <- @print_actions}>
-          <.link phx-click={action.func}>
-            {action.title}
-          </.link>
-        </li>
-      </ul>
-    </div>
     """
   end
 

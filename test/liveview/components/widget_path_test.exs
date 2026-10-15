@@ -70,9 +70,7 @@ defmodule AshQuick.LiveView.Components.WidgetPathTest do
         options: options,
         fields: options.details_fields,
         base_path: "/points",
-        params: %URLParams{},
-        print_actions: [],
-        print_data: nil
+        params: %URLParams{}
       }
       |> DetailsView.details_view()
       |> rendered_to_string()
@@ -97,7 +95,6 @@ defmodule AshQuick.LiveView.Components.WidgetPathTest do
       action_running: false,
       row_actions: nil,
       export_data: nil,
-      print_data: nil,
       data: %{results: [record(nil)], count: 1, limit: 20, offset: 0}
     }
 
