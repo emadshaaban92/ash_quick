@@ -59,8 +59,8 @@ defmodule ExampleWeb.HostConformanceTest do
   end
 
   test "export is on and print is off, which is what this app's dependencies say" do
-    # `chromic_pdf` is deliberately not a dependency — see `mix.exs`. The print
-    # control is absent rather than broken, which is the behaviour worth pinning.
+    # `chromic_pdf` is deliberately not a dependency — see `mix.exs`. No action
+    # here prints, and `AshQuick.PrintVerifierTest` pins that one could not.
     assert AshQuick.Config.exports_enabled?()
     refute AshQuick.Config.print_enabled?()
   end

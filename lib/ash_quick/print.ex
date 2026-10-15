@@ -18,6 +18,11 @@ defmodule AshQuick.Print do
   metadata); only a QuickView reads the mark, so an action called from
   anywhere else (a seed, another action) simply runs.
 
+  It goes on a create or an update action: those return the record to print.
+  On a resource carrying the `AshQuick` extension, a print that could not work
+  does not compile: one on a destroy action, one with options it refuses, or
+  one in an application without ChromicPDF.
+
   Options:
 
     * `:template` — a module implementing `AshQuick.PrintTemplate`.
