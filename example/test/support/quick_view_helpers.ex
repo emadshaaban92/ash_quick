@@ -10,8 +10,9 @@ defmodule ExampleWeb.QuickViewHelpers do
       `?limit=` slow. Until `open_row_actions/2` runs, a row offers a
       placeholder, and both `assert_has` and `refute_has` over its actions mean
       nothing.
-    * **A forged row action** is the only way to test the policy rather than the
-      UI. A missing link stops nobody from pushing the event behind it.
+    * **A forged row action**, and the forged confirmation after it, are the
+      only way to test the policy rather than the UI. A missing link or button
+      stops nobody from pushing the event behind it.
     * **A relationship dropdown** is a `LiveSelect` component with its own
       `phx-target`. Its options are loaded by the component, so they are not in
       the initial render and a plain `assert_has` over them fails whether or not
@@ -53,6 +54,17 @@ defmodule ExampleWeb.QuickViewHelpers do
         "action_name" => to_string(action_name)
       })
     end)
+  end
+
+  @doc """
+  Pushes the action modal's `save` event without clicking anything.
+
+  `force_row_action/3` for the step after it. A modal that refuses an action
+  draws no Confirm button, and a missing button stops nobody from pushing the
+  submit behind it, so only this asks whether the run itself refuses.
+  """
+  def force_confirm(session) do
+    PhoenixTest.unwrap(session, &LiveViewTest.render_submit(&1, "save", %{}))
   end
 
   @doc """

@@ -98,8 +98,15 @@ defmodule ExampleWeb.ActivationScenarioTest do
       |> assert_has(row(active.id))
       |> open_row_actions(active.id)
       |> refute_has("a[id='#{active.id}-action-deactivate']")
-      # A hidden link stops nobody from pushing the event behind it.
+      # A hidden link stops nobody from pushing the event behind it. The modal
+      # it opens shows the refusal instead of a confirmation.
       |> force_row_action(active.id, :deactivate)
+      |> assert_has("#ash-quick-action-modal", text: "Access Forbidden")
+      |> refute_has("#ash-quick-action-modal button", text: "Confirm")
+      # The missing button is UI too. Pushing the save it withheld proves the
+      # run itself refuses.
+      |> force_confirm()
+      |> assert_has("#flash-error", text: "You don't have permission to do that.")
 
       assert Ash.reload!(active, authorize?: false).active
     end
