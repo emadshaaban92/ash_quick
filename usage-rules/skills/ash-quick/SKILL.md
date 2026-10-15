@@ -149,7 +149,6 @@ The URL is not an option here — it is declared in the router with
   - `:refetch_window` — Minimum ms between refetches
   - `:pub_sub` — Custom PubSub module
 - `:filters` — Predefined toggle filters as a list of maps
-- `:print_templates` — Modules implementing `AshQuick.PrintTemplate`
 - `:export_fields` — Fields for Excel/CSV export
 
 ### List options (`:list`)
@@ -786,7 +785,11 @@ covers wiring them up.
   returns no rows, so `can?` says yes for a page that would be empty.
 - `AshQuick.Nav` — the navigation registry (see Navigation above).
 - `AshQuick.PrintTemplate`, `AshQuick.FieldRestrictions.Check` — print
-  templates and field-level checks.
+  templates and field-level checks. An update action prints through a template
+  with `change {AshQuick.Print, template: MyTemplate, delivery: :print}`
+  (`:download` is the default): run from a row, a bulk selection, the details
+  page or its form, the PDF goes over the socket to `assets/js/print.js`'s
+  `initPrinting/0`, which the host's `app.js` calls once.
 - `AshQuick.BrowserSessionPresence` in the supervision tree, and
   `AshQuick.LiveView.Mount` **first** in the live session's `on_mount`.
 

@@ -6,7 +6,6 @@ defmodule AshQuick.LiveView.Components.ListView do
   alias Phoenix.LiveView.JS
 
   import AshQuick.LiveView.Components.FieldValue
-  import AshQuick.LiveView.Components.PrintModal
 
   alias AshQuick.LiveView.Utils
   alias AshQuick.LiveView.QuickField
@@ -39,7 +38,6 @@ defmodule AshQuick.LiveView.Components.ListView do
   attr(:path_for_page, :any, default: nil, doc: "the function for generating pagination paths")
 
   attr(:actions, :any, default: nil)
-  attr(:print_actions, :list, default: [])
   attr(:filters, :map, default: nil)
   attr(:selected_rows, :map, default: nil)
   attr(:action_running, :boolean, default: false)
@@ -94,11 +92,6 @@ defmodule AshQuick.LiveView.Components.ListView do
               />
               <div class="flex items-center space-x-3 w-full sm:w-auto">
                 <.export_menu :if={AshQuick.Config.exports_enabled?()} />
-                <.print_menu
-                  :if={AshQuick.Config.print_enabled?() and @print_actions != []}
-                  print_actions={@print_actions}
-                  selected_rows={@selected_rows}
-                />
                 <.actions_menu
                   filtered_actions={present_actions(@actions)}
                   action_running={@action_running}
@@ -191,7 +184,6 @@ defmodule AshQuick.LiveView.Components.ListView do
         </div>
       </div>
       <.export_modal :if={AshQuick.Config.exports_enabled?()} export_data={@export_data} />
-      <.print_modal :if={AshQuick.Config.print_enabled?()} print_data={@print_data} />
     </section>
     """
   end
@@ -453,32 +445,6 @@ defmodule AshQuick.LiveView.Components.ListView do
         <button phx-click="close-export-modal">{gettext("close")}</button>
       </div>
     </dialog>
-    """
-  end
-
-  defp print_menu(assigns) do
-    ~H"""
-    <div
-      :if={@selected_rows != %{}}
-      class="dropdown dropdown-end"
-    >
-      <div tabindex="0" role="button" class="btn btn-outline btn-sm">
-        <.icon name="hero-printer" class="w-4 h-4" /> {gettext("Print")}
-      </div>
-      <ul
-        tabindex="0"
-        class="dropdown-content menu bg-base-300 rounded-box z-10 w-44 p-2 shadow-[0_2px_15px_rgba(0,0,0,0.3)] border border-base-content/10"
-      >
-        <li :for={action <- @print_actions}>
-          <.link
-            phx-click={action.func}
-            class="phx-click-loading:opacity-75"
-          >
-            {action.title}
-          </.link>
-        </li>
-      </ul>
-    </div>
     """
   end
 

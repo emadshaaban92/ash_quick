@@ -96,9 +96,8 @@ itself.
 * **No authentication library.** A `user_id` in the session is all
   `ExampleWeb.UserAuth` reads. Authentication is the host's problem and a real
   one would only obscure the seams this app is here to show.
-* **No `chromic_pdf`.** Printing would want a Chrome on the machine;
-  `AshQuick.Config.print_enabled?/0` leaves the print control out without it,
-  which is the behaviour worth showing. Export *is* enabled (`exceed`,
+* **No `chromic_pdf`.** Printing would want a Chrome on the machine, so no
+  action here carries `AshQuick.Print`. Export *is* enabled (`exceed`,
   `nimble_csv`, `briefly`), so every list has a working Excel/CSV menu.
 * **Nothing releases a quarantined object on a schedule.** There is no worker
   and no scanner here; `Example.Uploads.ObjectStore.release!/1` is the seam a

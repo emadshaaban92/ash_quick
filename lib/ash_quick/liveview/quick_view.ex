@@ -84,7 +84,6 @@ defmodule AshQuick.LiveView.QuickView do
             },
             %{"name" => "active", "label" => "Active", "expression" => %{"active" => %{"eq" => true}}}
           ]
-    * `:print_templates` — A list of modules implementing `AshQuick.PrintTemplate`.
     * `:export_fields` — Fields to include in Excel/CSV exports. Falls back to
       `:list` fields, then all resource attributes.
 
@@ -342,8 +341,9 @@ defmodule AshQuick.LiveView.QuickView do
   Optional dependencies (features are hidden when not available):
 
     * `exceed` + `nimble_csv` + `briefly` — Excel and CSV export
-    * `chromic_pdf` + `merge_pdf` — PDF generation
-    * `ex_aws` + `ex_aws_s3` — S3 storage for exports, prints, and image uploads
+    * `chromic_pdf` + `merge_pdf` — PDF generation for actions that print
+      (`AshQuick.Print`)
+    * `ex_aws` + `ex_aws_s3` — S3 storage for exports and image uploads
   """
   import Phoenix.Component, only: [assign: 3]
   alias Ash.Resource.Actions
@@ -362,7 +362,6 @@ defmodule AshQuick.LiveView.QuickView do
       import Phoenix.Template, only: [embed_templates: 1]
       import AshQuick.Components
       import AshQuick.LiveView.URLParams, only: [path_for_page: 3]
-      import AshQuick.LiveView.Components.PrintModal
       alias AshQuick.LiveView.Utils
       alias AshQuick.LiveView.URLParams
       alias Phoenix.LiveView.JS
@@ -676,8 +675,8 @@ defmodule AshQuick.LiveView.QuickView do
   end
 
   # Assigns what the generic templates render from, beyond what
-  # `load_params/4` loaded: the component id, the field list, the print and bulk
-  # action menus, and the pagination path builder. After the load because the
+  # `load_params/4` loaded: the component id, the field list, the bulk action
+  # menu, and the pagination path builder. After the load because the
   # list read can still drop a refused filter from `:params`, and
   # `path_for_page` has to build from what the page rendered; before
   # `after_handle_params/2` so a host can still override any of these.
@@ -706,7 +705,6 @@ defmodule AshQuick.LiveView.QuickView do
     resource_actions = socket.assigns[:resource_bulk_actions] || []
     custom_actions = socket.assigns[:bulk_actions] || []
 
-    print_actions = build_print_actions(options.print_templates)
     %{path: path, params: params} = socket.assigns
 
     socket
@@ -715,19 +713,13 @@ defmodule AshQuick.LiveView.QuickView do
     |> assign(:new_action_label, options.new_action_label)
     |> assign(:new_click, fn -> JS.push("new_click") end)
     |> assign(:actions, custom_actions ++ resource_actions)
-    |> assign(:print_actions, print_actions)
-    |> assign(:print_templates, options.print_templates)
     |> assign(:path_for_page, &URLParams.path_for_page(path, params, &1))
   end
 
   defp do_prepare_assigns(socket, %{id: id}, %Actions.Read{} = action, %Options{} = options) do
-    print_actions = build_print_actions(options.print_templates)
-
     socket
     |> assign(:id, "#{id}-details")
     |> assign(:fields, visible_fields(socket, options.details_fields, action, options))
-    |> assign(:print_actions, print_actions)
-    |> assign(:print_templates, options.print_templates)
   end
 
   defp do_prepare_assigns(socket, %{id: nil}, %Actions.Create{}, %Options{} = options) do
@@ -745,21 +737,6 @@ defmodule AshQuick.LiveView.QuickView do
   # only marked changed when it does.
   defp visible_fields(socket, fields, action, %Options{resource: resource}) do
     AshQuick.LiveView.Utils.visible_fields(fields, resource, action, socket.assigns[:scope])
-  end
-
-  defp build_print_actions(print_templates) do
-    if AshQuick.Config.print_enabled?() do
-      print_templates
-      |> Enum.with_index()
-      |> Enum.map(fn {template_mod, index} ->
-        %{
-          title: template_mod.label(),
-          func: JS.push("print_pdf", value: %{template_index: index})
-        }
-      end)
-    else
-      []
-    end
   end
 
   @doc """

@@ -8,6 +8,7 @@ defmodule AshQuick.LiveView.DetailsUtils do
   alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.Liveness
+  alias AshQuick.LiveView.PrintUtils
   alias AshQuick.LiveView.Utils
   alias AshQuick.LiveView.QuickView.Options
 
@@ -18,7 +19,6 @@ defmodule AshQuick.LiveView.DetailsUtils do
         %Options{} = options
       ) do
     socket
-    |> assign(print_data: nil)
     |> detach_hook(:quick_view_events_hook, :handle_event)
     |> attach_hook(:quick_view_events_hook, :handle_event, fn
       event, params, socket -> handle_details_events(event, params, socket, options)
@@ -129,50 +129,6 @@ defmodule AshQuick.LiveView.DetailsUtils do
     end
   end
 
-  defp handle_details_events(
-         "print_pdf",
-         %{"template_index" => template_index},
-         socket,
-         options
-       ) do
-    record = socket.assigns.record
-    scope = socket.assigns.scope
-
-    template_module = Enum.at(options.print_templates, template_index)
-
-    socket =
-      case Ash.Scope.ToOpts.get_actor(scope) do
-        {:ok, actor} when not is_nil(actor) ->
-          socket
-          |> assign_async(:print_data, fn ->
-            {:ok, url} =
-              AshQuick.LiveView.PrintUtils.generate_print_url(
-                [record.id],
-                actor,
-                scope,
-                template_module,
-                options.resource
-              )
-
-            {:ok, %{print_data: %{url: url}}}
-          end)
-
-        _ ->
-          socket |> put_flash(:error, "Unable to determine current user for printing")
-      end
-
-    {:halt, socket}
-  end
-
-  defp handle_details_events("close-print-modal", _, socket, _) do
-    socket =
-      socket
-      |> cancel_async(socket.assigns.print_data)
-      |> assign(print_data: nil)
-
-    {:halt, socket}
-  end
-
   defp handle_details_events(_, _, socket, _options), do: {:cont, socket}
 
   defp row_action(id, action, socket, options) do
@@ -200,7 +156,10 @@ defmodule AshQuick.LiveView.DetailsUtils do
   defp do_action(_id, action, socket, options) do
     record = socket.assigns.record
 
-    case run_action(record, action, socket) do
+    result = run_action(record, action, socket)
+    socket = PrintUtils.print(socket, result)
+
+    case result do
       {:error, error} ->
         socket |> put_flash(:error, ActionErrors.user_facing_message(error))
 

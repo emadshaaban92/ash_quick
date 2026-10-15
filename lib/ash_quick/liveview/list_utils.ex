@@ -11,6 +11,7 @@ defmodule AshQuick.LiveView.ListUtils do
   alias AshQuick.LiveView.CustomFilter
   alias AshQuick.LiveView.Components.FilterForm
   alias AshQuick.LiveView.Liveness
+  alias AshQuick.LiveView.PrintUtils
   alias AshQuick.LiveView.Utils
   alias AshQuick.LiveView.QuickView.Options
 
@@ -32,7 +33,6 @@ defmodule AshQuick.LiveView.ListUtils do
     |> assign(:params, params)
     |> assign(:selected_rows, %{})
     |> assign(:export_data, nil)
-    |> assign(:print_data, nil)
     |> assign(:row_actions, nil)
     |> detach_hook(:quick_view_events_hook, :handle_event)
     |> attach_hook(:quick_view_events_hook, :handle_event, fn
@@ -285,55 +285,6 @@ defmodule AshQuick.LiveView.ListUtils do
     {:halt, socket}
   end
 
-  defp handle_list_events(
-         "print_pdf",
-         %{"template_index" => template_index},
-         socket,
-         options
-       ) do
-    selected_ids =
-      socket.assigns.selected_rows
-      |> Map.drop(["all"])
-      |> Enum.filter(fn {_k, v} -> v == "on" end)
-      |> Enum.map(fn {k, _v} -> k end)
-
-    scope = socket.assigns.scope
-
-    template_module = Enum.at(options.print_templates, template_index)
-
-    socket =
-      case Ash.Scope.ToOpts.get_actor(scope) do
-        {:ok, actor} when not is_nil(actor) ->
-          socket
-          |> assign_async(:print_data, fn ->
-            {:ok, url} =
-              AshQuick.LiveView.PrintUtils.generate_print_url(
-                selected_ids,
-                actor,
-                scope,
-                template_module,
-                options.resource
-              )
-
-            {:ok, %{print_data: %{url: url}}}
-          end)
-
-        _ ->
-          socket |> put_flash(:error, "Unable to determine current user for printing")
-      end
-
-    {:halt, socket}
-  end
-
-  defp handle_list_events("close-print-modal", _, socket, _) do
-    socket =
-      socket
-      |> cancel_async(socket.assigns.print_data)
-      |> assign(print_data: nil)
-
-    {:halt, socket}
-  end
-
   defp handle_list_events("bulk_action", %{"action_name" => action_name}, socket, options) do
     case options.resource |> Utils.record_actions() |> Utils.offered_action(action_name) do
       nil -> {:halt, refuse_action(socket)}
@@ -396,7 +347,10 @@ defmodule AshQuick.LiveView.ListUtils do
 
     records = socket.assigns.data.results |> Enum.filter(&(&1.id in selected_ids))
 
-    case run_bulk_action(records, action, socket) do
+    result = records |> run_bulk_action(action, socket) |> in_selection_order(records)
+    socket = PrintUtils.print(socket, result)
+
+    case result do
       %{status: :error, errors: [%{errors: [%{message: message}]}]} ->
         socket |> put_flash(:error, message)
 
@@ -468,7 +422,10 @@ defmodule AshQuick.LiveView.ListUtils do
   end
 
   defp run_and_reload(record, action, socket, options) do
-    case run_action(record, action, socket) do
+    result = run_action(record, action, socket)
+    socket = PrintUtils.print(socket, result)
+
+    case result do
       {:error, error} ->
         socket |> put_flash(:error, AshQuick.LiveView.ActionErrors.user_facing_message(error))
 
@@ -531,6 +488,17 @@ defmodule AshQuick.LiveView.ListUtils do
       notify?: true
     )
   end
+
+  # A print's pages follow the rows as the list showed them, whatever order the
+  # bulk run hands its records back in.
+  defp in_selection_order(%Ash.BulkResult{records: [_ | _] = written} = result, records) do
+    position =
+      records |> Enum.with_index() |> Map.new(fn {record, index} -> {record.id, index} end)
+
+    %{result | records: Enum.sort_by(written, &position[&1.id])}
+  end
+
+  defp in_selection_order(result, _records), do: result
 
   defp report_skipped_rows(socket, _action, _selected, []), do: socket
 

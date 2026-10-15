@@ -19,7 +19,6 @@ defmodule AshQuick.LiveView.QuickView.Options do
     load: [],
     liveness_options: [],
     filters: %{},
-    print_templates: [],
     sidebar: true,
     list_fields: [],
     list_load: [],
@@ -80,7 +79,6 @@ defmodule AshQuick.LiveView.QuickView.Options do
             sidebar: [type: :boolean, default: true],
             liveness_options: [type: :keyword_list, keys: @liveness_schema],
             filters: [type: {:list, {:map, :string, :any}}],
-            print_templates: [type: {:list, :atom}],
             export_fields: [type: @fields_type],
             list: [type: :keyword_list, keys: @list_schema],
             details: [type: :keyword_list, keys: @details_schema],
@@ -103,7 +101,6 @@ defmodule AshQuick.LiveView.QuickView.Options do
       load: opts[:load] || [],
       liveness_options: opts[:liveness_options] || [],
       filters: opts[:filters] || %{},
-      print_templates: opts[:print_templates] || [],
       sidebar: opts[:sidebar],
       export_fields: normalize_fields(opts[:export_fields] || list_opts[:fields], default_attrs)
     }

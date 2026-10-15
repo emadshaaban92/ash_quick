@@ -1,101 +1,100 @@
 defmodule AshQuick.LiveView.PrintUtils do
   @moduledoc """
-  Generates PDFs from selected records using ChromicPDF, uploads to S3,
-  and returns a presigned download URL.
+  Prints what an action wrote, when the action carries `AshQuick.Print`:
+  renders it with ChromicPDF and pushes the PDF to the browser. Runs after the
+  action has committed, so a render that fails leaves the action's writes in
+  place and flashes that the PDF could not be produced.
 
-  Follows the same pattern as `AshQuick.LiveView.ExportUtils` for Excel/CSV exports.
-
-  ## Print Templates
-
-  A print template module must implement the `AshQuick.PrintTemplate` behaviour:
-
-    - `label/0`     — human-readable name for the template
-    - `load_opts/0`  — relationships/aggregates to load
-    - `render/1`     — returns ChromicPDF source(s) for the given records
-
-  ## Usage
-
-  Called from `ListUtils` / `DetailsUtils` when the user triggers a print action:
-
-      PrintUtils.generate_print_url(record_ids, actor, scope, template_module, resource)
+  The PDF travels over the LiveView socket as an `"ash_quick:pdf"` event, which
+  `assets/js/print.js` saves or prints. Nothing is stored and no link is
+  handed out: only the tab that ran the action gets it.
   """
 
-  require Ash.Query
+  require Logger
+  import Phoenix.LiveView, only: [push_event: 3, put_flash: 3]
 
-  alias AshQuick.LiveView.Utils
+  @render_failed "It was recorded, but its PDF could not be produced. Print it again."
 
   @doc """
-  Loads records by IDs, renders them to a PDF, uploads to S3, and returns a presigned URL.
+  Prints `result` — what an action returned: `{:ok, record}`, an
+  `Ash.BulkResult` or what `AshPhoenix.Form.submit/2` returns — when its
+  records carry a print. Anything else leaves the socket as it was.
   """
-  def generate_print_url(record_ids, actor, scope, template_module, resource) do
-    load_opts = template_module.load_opts()
-
-    records =
-      resource
-      |> Ash.Query.filter(id in ^record_ids)
-      |> Ash.Query.load(load_opts)
-      |> Utils.load_display_label()
-      |> Ash.read!(scope: scope)
-
-    {:ok, pdf_tmp_path} = Briefly.create(extname: ".pdf")
-
-    case template_module.render(records) do
-      html when is_binary(html) ->
-        ChromicPDF.print_to_pdf({:html, html},
-          output: pdf_tmp_path,
-          print_to_pdf: %{preferCSSPageSize: true}
-        )
-
-      sources when is_list(sources) ->
-        render_and_merge(sources, pdf_tmp_path)
-
-      %{source: source, opts: opts} ->
-        ChromicPDF.print_to_pdf(source, [{:output, pdf_tmp_path} | opts])
+  def print(socket, result) do
+    case printed(result) do
+      nil -> socket
+      {print, records} -> deliver(socket, print, records)
     end
-
-    resource_name = Ash.Resource.Info.plural_name(resource)
-    template_label = template_module.label() |> String.downcase() |> String.replace(" ", "_")
-
-    date_part =
-      AshQuick.Config.now_in_timezone()
-      |> Calendar.strftime("%y-%m-%d-%H-%M-%S")
-
-    count = length(records)
-
-    filename =
-      if count == 1 do
-        record = hd(records)
-        name = AshQuick.Info.display_value(record) || Map.get(record, :id)
-        "#{name}_#{template_label}"
-      else
-        "#{resource_name}_#{template_label}_#{count}"
-      end
-
-    key = "prints/#{actor.id}/#{filename}-#{date_part}.pdf"
-
-    :ok = AshQuick.Storage.upload(key, pdf_tmp_path, content_type: "application/pdf")
-
-    {:ok, AshQuick.Storage.presigned_get_url(key, expires_in: 3600)}
   end
 
-  # Renders each source individually with ChromicPDF (preserving native
-  # headers/footers/page numbers), then merges using MergePdf (lopdf/Rust)
-  # which does page-level concatenation without re-processing fonts.
-  # This avoids Ghostscript's pdfwrite device which mangles font subsets.
-  # sobelow_skip ["Traversal.FileModule"]
-  defp render_and_merge(sources, output_path) do
-    pdf_binaries =
-      Enum.map(sources, fn
-        %{source: source, opts: opts} ->
-          {:ok, blob} = ChromicPDF.print_to_pdf(source, opts)
-          Base.decode64!(blob)
+  # A bulk run that wrote nothing (every row stale) prints nothing either.
+  defp printed({:ok, %_{} = record}), do: marked([record])
+  defp printed(%Ash.BulkResult{status: :success, records: [_ | _] = records}), do: marked(records)
+  defp printed(_not_written), do: nil
 
-        source ->
-          {:ok, blob} = ChromicPDF.print_to_pdf(source)
-          Base.decode64!(blob)
-      end)
+  # Every record came from the same action, so the first one's mark is theirs.
+  defp marked([%{__metadata__: %{ash_quick_print: print}} | _] = records), do: {print, records}
+  defp marked(_records), do: nil
 
-    {:ok, merged} = MergePdf.merge_binaries(pdf_binaries)
-    File.write!(output_path, merged)
+  defp deliver(socket, print, records) do
+    {filename, pdf} = render!(print.template, records, socket.assigns.scope)
+
+    push_event(socket, "ash_quick:pdf", %{data: pdf, filename: filename, delivery: print.delivery})
+  rescue
+    exception ->
+      Logger.error(
+        "printing #{inspect(print.template)} failed after its action was recorded\n" <>
+          Exception.format(:error, exception, __STACKTRACE__)
+      )
+
+      put_flash(socket, :error, @render_failed)
+  end
+
+  defp render!(template, [%resource{} | _] = records, scope) do
+    records =
+      Ash.load!(records, [AshQuick.Info.display_label(resource) | template.load_opts()],
+        scope: scope
+      )
+
+    {filename(template, resource, records), render_pdf!(template.render(records))}
+  end
+
+  # ChromicPDF hands back base64, which is what the event carries.
+  defp render_pdf!(html) when is_binary(html) do
+    {:ok, pdf} = ChromicPDF.print_to_pdf({:html, html}, print_to_pdf: %{preferCSSPageSize: true})
+    pdf
+  end
+
+  defp render_pdf!(%{source: source, opts: opts}) do
+    {:ok, pdf} = ChromicPDF.print_to_pdf(source, opts)
+    pdf
+  end
+
+  # Each source rendered on its own keeps Chrome's headers, footers and page
+  # numbers; MergePdf joins the pages without re-processing fonts, which
+  # Ghostscript's pdfwrite mangles.
+  defp render_pdf!(sources) when is_list(sources) do
+    {:ok, merged} =
+      sources
+      |> Enum.map(&(&1 |> render_pdf!() |> Base.decode64!()))
+      |> MergePdf.merge_binaries()
+
+    Base.encode64(merged)
+  end
+
+  defp filename(template, resource, records) do
+    label = template.label() |> String.downcase() |> String.replace(" ", "_")
+    date = AshQuick.Config.now_in_timezone() |> Calendar.strftime("%y-%m-%d-%H-%M-%S")
+
+    name =
+      case records do
+        [record] ->
+          "#{AshQuick.Info.display_value(record) || record.id}_#{label}"
+
+        _ ->
+          "#{Ash.Resource.Info.plural_name(resource)}_#{label}_#{length(records)}"
+      end
+
+    "#{name}-#{date}.pdf"
   end
 end
