@@ -324,6 +324,10 @@ defmodule ExampleWeb.ImpersonationScenarioTest do
       |> force_row_action(editor.id, :impersonate)
       |> assert_has("#ash-quick-action-modal", text: "Access Forbidden")
       |> refute_has("#ash-quick-action-modal button", text: "Confirm")
+      # The missing button is UI. Pushing the save it withheld proves the run
+      # itself refuses, rather than merely going unoffered a second time.
+      |> force_confirm()
+      |> assert_has("#flash-error", text: "You don't have permission to do that.")
 
       assert impersonations_of(editor.id) == []
     end
