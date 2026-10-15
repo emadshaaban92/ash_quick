@@ -68,9 +68,11 @@ defmodule AshQuick.PrintTemplate do
       end
 
   An action prints through it with `AshQuick.Print`, and its button is the
-  action's own. A print that only reads writes nothing:
+  action's own. A print that only reads writes nothing, and `accept []` keeps
+  its form from offering the fields the action never writes:
 
       update :print_pickup_list do
+        accept []
         manual fn changeset, _context -> {:ok, changeset.data} end
         change {AshQuick.Print, template: MyApp.PDF.PickupListTemplate, delivery: :download}
       end

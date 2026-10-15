@@ -304,8 +304,8 @@ defmodule ExampleWeb.ListScenarioTest do
       product(name: "Four-season tent", actor: admin)
 
       # `exceed` and `nimble_csv` are dependencies of the example app, so both
-      # formats are offered. `chromic_pdf` deliberately is not, so the print
-      # control beside them is absent rather than broken.
+      # formats are offered. `chromic_pdf` deliberately is not, so nothing
+      # here prints.
       assert AshQuick.Config.exports_enabled?()
       refute AshQuick.Config.print_enabled?()
 

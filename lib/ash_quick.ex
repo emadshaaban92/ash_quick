@@ -725,7 +725,8 @@ defmodule AshQuick do
       AshQuick.Bookkeeping.Verifier,
       AshQuick.Audit.Verifier,
       AshQuick.Impersonation.Verifier,
-      AshQuick.Lookup.Verifier
+      AshQuick.Lookup.Verifier,
+      AshQuick.Print.Verifier
     ]
 
   @surface_sources [:ash_quick_details, :ash_quick_list, :ash_quick_list_bulk]

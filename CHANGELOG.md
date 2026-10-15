@@ -18,6 +18,11 @@
   `assets/js/print.js` once in its `app.js`. The action's button is its own,
   shown where `Ash.can?` allows it like every other.
 
+  On a resource carrying the `AshQuick` extension, a print that could not
+  work does not compile: one on a destroy action (which returns no record to
+  print), one whose options the change refuses, or one in an application
+  without ChromicPDF.
+
 - **Stored attachments can be removed one by one, and an array of them has a
   real widget.** An `{:array, :attachment}` attribute on a form now renders as
   a card: a row per stored file (its preview and name) with a ✕, over a drop

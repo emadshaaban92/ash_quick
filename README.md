@@ -520,8 +520,9 @@ broken.
 
 Export is feature-detected at runtime — `AshQuick.Config.exports_enabled?/0` —
 so its control simply does not appear. Printing has no control of its own: an
-action that carries `AshQuick.Print` needs ChromicPDF, and
-`AshQuick.Config.print_enabled?/0` says whether it is there. A host that points `:storage` at its own
+action that carries `AshQuick.Print` needs ChromicPDF, and a resource with the
+`AshQuick` extension does not compile with such an action until it is there.
+A host that points `:storage` at its own
 object store never loads the ExAws ones.
 
 ## The example app
