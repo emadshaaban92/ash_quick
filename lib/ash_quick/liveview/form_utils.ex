@@ -20,7 +20,7 @@ defmodule AshQuick.LiveView.FormUtils do
         %{type: action_type, name: action_name} = _action,
         %Options{} = options
       )
-      when action_type in [:create, :update] do
+      when action_type in [:create, :update, :destroy] do
     socket
     |> detach_hook(:quick_view_events_hook, :handle_event)
     |> attach_hook(:quick_view_events_hook, :handle_event, fn
@@ -44,7 +44,8 @@ defmodule AshQuick.LiveView.FormUtils do
 
   defp set_record!(socket, :create, _action_name, _params, _options), do: socket
 
-  defp set_record!(socket, :update, action_name, %URLParams{id: id}, options) do
+  defp set_record!(socket, action_type, action_name, %URLParams{id: id}, options)
+       when action_type in [:update, :destroy] do
     # A relationship is named whole rather than by a field of it: a dropdown
     # seeds its currently-selected option from this record rather than from its
     # own query, and `load_fields/3` brings the destination's display label
@@ -59,6 +60,8 @@ defmodule AshQuick.LiveView.FormUtils do
         %Ash.Resource.Relationships.ManyToMany{name: name} -> name
         _ -> []
       end)
+      # What the record is called, which a confirmation names it by.
+      |> then(&[AshQuick.Info.display_label(options.resource) | &1])
 
     record =
       options.resource
@@ -87,8 +90,20 @@ defmodule AshQuick.LiveView.FormUtils do
   # actor may not read comes back as nil — indistinguishable from one that does
   # not exist. There is no form to build for it: leave `form: nil` and let
   # `FormView.form_view/1` render the forbidden panel.
-  defp set_form(%{assigns: %{record: nil}} = socket, :update, _options) do
+  defp set_form(%{assigns: %{record: nil}} = socket, action_type, _options)
+       when action_type in [:update, :destroy] do
     socket |> assign(form: nil)
+  end
+
+  defp set_form(socket, :destroy, _options) do
+    form =
+      AshPhoenix.Form.for_destroy(socket.assigns.record, socket.assigns.ash_action.name,
+        transform_params: &transform_nested_params/3,
+        scope: socket.assigns.scope,
+        actor: actor(socket)
+      )
+
+    socket |> assign(form: form) |> assign_issued_attachment_keys()
   end
 
   defp set_form(socket, :update, _options) do
@@ -553,7 +568,8 @@ defmodule AshQuick.LiveView.FormUtils do
 
   # A form whose only inputs are uploads (an action taking nothing but an
   # `add_*` argument) posts no `form` params at all: a file input's value never
-  # travels with the form. That is an empty form, not someone else's event.
+  # travels with the form. Nor does a confirmation, which has no inputs. Both
+  # are an empty form, not someone else's event.
   defp handle_form_events(event, params, socket, options)
        when event in ["validate", "save"] and not is_map_key(params, "form") do
     handle_form_events(event, Map.put(params, "form", %{}), socket, options)
@@ -593,7 +609,7 @@ defmodule AshQuick.LiveView.FormUtils do
           |> maybe_put_has_many(form)
           |> upload_images(socket, form),
         before_submit: &reference_attachments(&1, Map.get(socket.assigns, :scope)),
-        action_opts: [context: %{action_source: AshQuick.form_source()}]
+        action_opts: action_opts(form)
       )
 
     socket = PrintUtils.print(socket, result)
@@ -633,6 +649,13 @@ defmodule AshQuick.LiveView.FormUtils do
         end
     end
   end
+
+  # A destroy hands back the record it destroyed only when asked to, and
+  # everything after the submit — the print, where to go next — reads it.
+  defp action_opts(%AshPhoenix.Form{type: :destroy}),
+    do: [context: %{action_source: AshQuick.form_source()}, return_destroyed?: true]
+
+  defp action_opts(_form), do: [context: %{action_source: AshQuick.form_source()}]
 
   # `JS.push/2` sends the position as a number, a `phx-value-index` as a string.
   defp attachment_position(index) when is_integer(index) and index >= 0, do: {:ok, index}
@@ -1210,6 +1233,42 @@ defmodule AshQuick.LiveView.FormUtils do
   defp reference_attachments(source, _scope), do: source
 
   defp attachment_keys(record), do: Storage.attachment_keys(record)
+
+  # A destroy returns to the page its modal opened over, unless that page was
+  # the record it destroyed: then to the list.
+  defp handle_success(
+         %{id: id},
+         _form_params,
+         _action,
+         %{assigns: %{ash_action: %{type: :destroy}}} = socket
+       ) do
+    path =
+      case socket.assigns.ash_quick_background do
+        %{assigns: %{params: %URLParams{id: background_id}}, path: path}
+        when background_id != id ->
+          path
+
+        _ ->
+          URLParams.full_path(
+            socket.assigns.base_path,
+            URLParams.to_list_params(socket.assigns.params)
+          )
+      end
+
+    {:halt, socket |> put_flash(:info, "Record deleted successfully") |> push_patch(to: path)}
+  end
+
+  # An update returns to the page its modal opened over, which reloads to show
+  # it. A create goes on to the record it made: the next thing anyone does
+  # with it is there.
+  defp handle_success(
+         _record,
+         _form_params,
+         _action,
+         %{assigns: %{ash_action: %{type: :update}, ash_quick_background: %{path: path}}} = socket
+       ) do
+    {:halt, socket |> put_flash(:info, "Record saved successfully") |> push_patch(to: path)}
+  end
 
   defp handle_success(record, _form_params, _action, socket) do
     %{base_path: base_path, params: params} = socket.assigns

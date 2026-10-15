@@ -288,7 +288,7 @@ defmodule ExampleWeb.AttachmentForgeryTest do
 
   defp pick(view, filename, upload) do
     view
-    |> file_input("form", upload, [
+    |> file_input("form[phx-submit=save]", upload, [
       %{name: filename, content: @jpeg, type: "image/jpeg", size: byte_size(@jpeg)}
     ])
     |> render_upload(filename)

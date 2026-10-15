@@ -442,13 +442,16 @@ defmodule AshQuick do
   them. Write the policy yourself: only the application knows who may
   impersonate whom, and a generated one would AND with it.
 
-  Keeping the action off the list view is worth a line in that policy. Only a
-  detail page can finish the job by minting the tab's token, so the list's
-  generic row action would leave an audit entry for an impersonation that never
-  happened:
+  Keeping the action off QuickView's own controls is worth two lines in that
+  policy. Only a page of your own can finish the job by minting the tab's token,
+  so QuickView's generic action would leave an audit entry for an impersonation
+  that never happened. The list's line keeps it out of the row menu; the form's
+  refuses the modal QuickView runs every action through, which a hand-pushed
+  event or a typed URL opens just the same:
 
       policy action(:impersonate) do
         forbid_if context_equals(:action_source, :ash_quick_list)
+        forbid_if context_equals(:action_source, :ash_quick_form)
         authorize_if MyApp.Checks.ActorIsAdmin
       end
 
@@ -741,7 +744,9 @@ defmodule AshQuick do
   def surface_sources, do: @surface_sources
 
   @doc """
-  The `action_source` stamped on a QuickView create/update form submit.
+  The `action_source` stamped on every action a QuickView runs: a create, an
+  update or a destroy, submitted from its modal whether it took input or only
+  a confirmation.
 
   Deliberately **not** one of `surface_sources/0`: a form submit records its
   provenance in the audit log, but must not count as a visibility surface. A

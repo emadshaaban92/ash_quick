@@ -187,13 +187,9 @@ defmodule AshQuick.LiveView.Components.DetailsView do
   end
 
   defp featured_action(assigns) do
-    data_confirm = action_data_confirm(assigns.resource, assigns.action.name)
-    assigns = assigns |> assign(data_confirm: data_confirm)
-
     ~H"""
     <button
       phx-click={JS.push("row_action_click", value: %{id: @row.id, action_name: @action.name})}
-      data-confirm={@data_confirm}
       class={[
         "btn btn-sm",
         if(@action.type == :destroy, do: "btn-error", else: "btn-primary")
@@ -223,26 +219,12 @@ defmodule AshQuick.LiveView.Components.DetailsView do
   end
 
   defp overflow_action_item(assigns) do
-    data_confirm = action_data_confirm(assigns.resource, assigns.action.name)
-    assigns = assigns |> assign(data_confirm: data_confirm)
-
     ~H"""
-    <.link
-      phx-click={JS.push("row_action_click", value: %{id: @record.id, action_name: @action.name})}
-      data-confirm={@data_confirm}
-    >
+    <.link phx-click={
+      JS.push("row_action_click", value: %{id: @record.id, action_name: @action.name})
+    }>
       {Utils.humanize(@action.name)}
     </.link>
     """
-  end
-
-  defp action_data_confirm(resource, action_name) do
-    resource
-    |> Ash.Resource.Info.action_inputs(action_name)
-    |> Enum.to_list()
-    |> case do
-      [] -> gettext("Are you sure?")
-      _ -> nil
-    end
   end
 end

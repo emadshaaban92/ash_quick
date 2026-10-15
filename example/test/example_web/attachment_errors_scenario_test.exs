@@ -89,7 +89,7 @@ defmodule ExampleWeb.AttachmentErrorsScenarioTest do
     content = "%PDF-1.4\n%%EOF\n"
 
     view
-    |> file_input("form", "form[documents]_upload", [
+    |> file_input("form[phx-submit=save]", "form[documents]_upload", [
       %{name: filename, content: content, type: "application/pdf", size: byte_size(content)}
     ])
     |> render_upload(filename)

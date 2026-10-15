@@ -71,12 +71,13 @@ defmodule Example.Accounts.User do
     # Impersonation is an admin's, and only from `/browser_sessions`. Starting
     # one means minting the tab's token and pushing it to the browser, which
     # `AshQuick.LiveView.BrowserSessionsLive` does and a QuickView has no hook
-    # to do: `:impersonate` takes no input, so a row action runs it inline and
-    # the page moves on. Offered on a QuickView the button would write an audit
-    # entry for an impersonation that never happened, and then nothing else —
-    # so no QuickView surface is allowed to reach it.
+    # to do: a QuickView runs the action from its modal and the page moves on.
+    # Offered on a QuickView the button would write an audit entry for an
+    # impersonation that never happened, and then nothing else — so no
+    # QuickView surface is allowed to reach it, and neither is the modal a
+    # pushed event or a typed URL would open.
     #
-    # All three of them, not just the two a button is drawn on. `:impersonate`
+    # All three surfaces, not just the two a button is drawn on. `:impersonate`
     # takes no input, which is exactly what `ListUtils.resource_bulk_actions/3`
     # derives a bulk action from, so the list's bulk menu would offer it over a
     # selection as well. That menu is probed under `:ash_quick_list_bulk`, so
@@ -90,6 +91,7 @@ defmodule Example.Accounts.User do
       forbid_if context_equals(:action_source, :ash_quick_list)
       forbid_if context_equals(:action_source, :ash_quick_details)
       forbid_if context_equals(:action_source, :ash_quick_list_bulk)
+      forbid_if context_equals(:action_source, :ash_quick_form)
       forbid_if expr(id == ^actor(:id))
       authorize_if Example.Checks.ActorIsAdmin
     end

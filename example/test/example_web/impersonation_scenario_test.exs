@@ -318,8 +318,12 @@ defmodule ExampleWeb.ImpersonationScenarioTest do
       |> refute_has("a[id='#{editor.id}-action-impersonate']")
       |> assert_has("a[id='#{editor.id}-action-update']")
 
-      # Forged from the list anyway, it is refused rather than merely unoffered.
+      # Forged from the list anyway, it is refused rather than merely unoffered:
+      # the modal the event opens asks as the form the run is stamped with, so
+      # it shows the refusal instead of a confirmation the run would refuse.
       |> force_row_action(editor.id, :impersonate)
+      |> assert_has("#ash-quick-action-modal", text: "Access Forbidden")
+      |> refute_has("#ash-quick-action-modal button", text: "Confirm")
 
       assert impersonations_of(editor.id) == []
     end

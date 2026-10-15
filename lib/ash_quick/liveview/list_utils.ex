@@ -375,17 +375,19 @@ defmodule AshQuick.LiveView.ListUtils do
     end
   end
 
-  defp row_action(id, action, socket, options) do
-    case Ash.Resource.Info.action_inputs(options.resource, action.name) |> Enum.to_list() do
-      [] ->
-        do_action(id, action, socket, options)
-
-      _ ->
-        params =
-          socket.assigns.params
-          |> URLParams.to_action_params(action.name, id: id)
-
-        push_patch(socket, to: URLParams.full_path(socket.assigns.path, params))
+  # Every action opens at its own URL, over this list, and runs from there: a
+  # form for one that takes input, a confirmation for one that does not. What
+  # may open and run it is the modal's to decide, as it is for a typed URL.
+  #
+  # The list is read through the actor's scope, so an id that is not in it is
+  # one the actor may not read (or that does not exist) — no row was drawn for
+  # it. A hand-pushed event still names it: refuse rather than open it.
+  defp row_action(id, action, socket, _options) do
+    if Enum.any?(socket.assigns.data.results, &(&1.id == id)) do
+      params = socket.assigns.params |> URLParams.to_action_params(action.name, id: id)
+      push_patch(socket, to: URLParams.full_path(socket.assigns.path, params))
+    else
+      refuse_action(socket)
     end
   end
 
@@ -407,52 +409,8 @@ defmodule AshQuick.LiveView.ListUtils do
 
   defp handle_list_info(_, socket, _options), do: {:cont, socket}
 
-  defp do_action(id, action, socket, options) do
-    case socket.assigns.data.results |> Enum.find(&(&1.id == id)) do
-      nil -> refuse_action(socket)
-      record -> run_and_reload(record, action, socket, options)
-    end
-  end
-
-  # The list is read through the actor's scope, so an id that is not in it is
-  # one the actor may not read (or that does not exist) — no row was drawn for
-  # it. A hand-pushed event still names it: refuse rather than act on nil.
   defp refuse_action(socket) do
     socket |> put_flash(:error, AshQuick.LiveView.ActionErrors.forbidden_message())
-  end
-
-  defp run_and_reload(record, action, socket, options) do
-    result = run_action(record, action, socket)
-    socket = PrintUtils.print(socket, result)
-
-    case result do
-      {:error, error} ->
-        socket |> put_flash(:error, AshQuick.LiveView.ActionErrors.user_facing_message(error))
-
-      _ ->
-        socket
-        |> assign(data: load_data!(socket, socket.assigns.params, options))
-        |> Liveness.resync(:data, options)
-        |> refresh_row_actions(options)
-    end
-  end
-
-  defp run_action(record, %Actions.Update{} = action, socket) do
-    record
-    |> Ash.update(
-      action: action,
-      scope: socket.assigns.scope,
-      context: %{action_source: :ash_quick_list}
-    )
-  end
-
-  defp run_action(record, %Actions.Destroy{} = action, socket) do
-    record
-    |> Ash.destroy(
-      action: action,
-      scope: socket.assigns.scope,
-      context: %{action_source: :ash_quick_list}
-    )
   end
 
   defp run_bulk_action(records, %Actions.Update{} = action, socket) do
