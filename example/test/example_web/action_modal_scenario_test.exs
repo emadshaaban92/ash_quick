@@ -58,7 +58,7 @@ defmodule ExampleWeb.ActionModalScenarioTest do
     assert Money.to_string!(Ash.reload!(product, authorize?: false).price) =~ "149"
   end
 
-  test "closing an action leaves the record as it was and the list where it was", ctx do
+  test "cancelling an action leaves the record as it was and the list where it was", ctx do
     %{conn: conn, admin: admin, product: product} = ctx
     search = product.name
 
@@ -72,7 +72,7 @@ defmodule ExampleWeb.ActionModalScenarioTest do
     |> form("#{@modal} form[phx-submit=save]", %{"form" => %{"name" => "Never saved"}})
     |> render_change()
 
-    view |> element("#{@modal} a[aria-label=Close]") |> render_click()
+    view |> element("#{@modal} a", "Cancel") |> render_click()
 
     assert_patch(view, ~p"/products?search=#{search}")
     refute has_element?(view, @modal)

@@ -20,6 +20,7 @@ defmodule AshQuick.LiveView.Components.FormView do
     assigns =
       assigns
       |> assign_new(:uploads, fn -> nil end)
+      |> assign_new(:ash_quick_background, fn -> nil end)
       |> assign(:forbidden?, forbidden?)
       |> assign(:confirm?, not forbidden? and Enum.empty?(fields(assigns.form, assigns.scope)))
 
@@ -41,6 +42,9 @@ defmodule AshQuick.LiveView.Components.FormView do
           widgets={@options.form_widgets}
           title={nil}
         />
+        <:actions>
+          <.cancel_link background={@ash_quick_background} class="mt-4 sm:mt-6 ml-2" />
+        </:actions>
       </.simple_form>
       <.forbidden_action :if={@forbidden?} base_path={@base_path} params={@params} />
     </section>
@@ -69,9 +73,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       </p>
       <p class="text-base-content/70">{gettext("Are you sure?")}</p>
       <div class="flex justify-end gap-2">
-        <.link :if={@ash_quick_background} patch={@ash_quick_background.path} class="btn btn-ghost">
-          {gettext("Cancel")}
-        </.link>
+        <.cancel_link background={@ash_quick_background} />
         <button
           type="submit"
           class={[
@@ -83,6 +85,18 @@ defmodule AshQuick.LiveView.Components.FormView do
         </button>
       </div>
     </.form>
+    """
+  end
+
+  attr :background, :map, default: nil
+  attr :class, :string, default: nil
+
+  # Back to the page the modal opened over, without running anything.
+  defp cancel_link(assigns) do
+    ~H"""
+    <.link :if={@background} patch={@background.path} class={["btn btn-ghost", @class]}>
+      {gettext("Cancel")}
+    </.link>
     """
   end
 
@@ -104,12 +118,17 @@ defmodule AshQuick.LiveView.Components.FormView do
     do: true
 
   # A create form has no record by nature — fall back to a record-less check.
-  defp forbidden?(action, nil, resource, scope) do
-    not Ash.can?({resource, action}, scope, log_policy_breakdown?: false)
-  end
+  defp forbidden?(action, nil, resource, scope), do: not can_run?({resource, action}, scope)
 
-  defp forbidden?(action, record, _resource, scope) do
-    not Ash.can?({record, action}, scope, log_policy_breakdown?: false)
+  defp forbidden?(action, record, _resource, scope), do: not can_run?({record, action}, scope)
+
+  # Asked as the run will be stamped, so a policy refusing the form source
+  # shows the forbidden panel here rather than a form whose submit it refuses.
+  defp can_run?(target, scope) do
+    Ash.can?(target, scope,
+      log_policy_breakdown?: false,
+      context: %{action_source: AshQuick.form_source()}
+    )
   end
 
   def form_fields(%{form: form, scope: scope} = assigns) do

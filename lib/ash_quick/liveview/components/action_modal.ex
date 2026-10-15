@@ -4,21 +4,18 @@ defmodule AshQuick.LiveView.Components.ActionModal do
   use Gettext, backend: AshQuick.Gettext
   import AshQuick.Components
 
-  alias Phoenix.LiveView.JS
-
   attr :close, :string, required: true, doc: "the path of the page the modal opened over"
   slot :inner_block, required: true
 
   # Closing is a patch back to the page underneath, which reloads it: whatever
   # the action changed is on it when the modal goes.
+  #
+  # Only ✕ and Cancel close it. Escape would also reach it from inside a
+  # dropdown that closes on Escape, and a tap outside is easy to make by
+  # accident on a phone: both would throw away what was typed.
   def action_modal(assigns) do
     ~H"""
-    <dialog
-      id="ash-quick-action-modal"
-      class="modal modal-open"
-      phx-window-keydown={JS.patch(@close)}
-      phx-key="Escape"
-    >
+    <dialog id="ash-quick-action-modal" class="modal modal-open">
       <div class="modal-box w-11/12 max-w-5xl p-0">
         <.link
           patch={@close}
@@ -29,7 +26,6 @@ defmodule AshQuick.LiveView.Components.ActionModal do
         </.link>
         {render_slot(@inner_block)}
       </div>
-      <.link patch={@close} class="modal-backdrop">{gettext("close")}</.link>
     </dialog>
     """
   end

@@ -275,7 +275,7 @@ is no `data-confirm` and no browser dialog anywhere.
   rendered `inert`, at its search, filters and page. A URL reached with nothing
   before it (a link, a refresh) opens over the record's details, or the list for
   a create.
-- Closing (✕, Cancel, the backdrop, Escape) patches back to that page. Running
+- Closing (✕ or Cancel) patches back to that page. Running
   the action does too, except that a create goes to the record it made and a
   destroy opened over the record it destroyed goes to the list.
 - A custom `action_<name>.html.heex` for a form renders inside the modal; a
