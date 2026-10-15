@@ -353,7 +353,10 @@ defmodule ExampleWeb.FormScenarioTest do
       assert log =~ "code"
       assert log =~ "name"
       refute log =~ code
-      refute log =~ "AshPhoenix.Form"
+      # capture_log also catches concurrent async tests, whose AshPhoenix
+      # warnings name the `AshPhoenix.FormData.Error` protocol; only a dumped
+      # form struct is a leak.
+      refute log =~ ~r/AshPhoenix\.Form(?!Data)/
     end
 
     test "names a single refused attribute, not its value", ctx do

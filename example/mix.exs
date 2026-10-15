@@ -58,7 +58,7 @@ defmodule Example.MixProject do
       {:phoenix_live_view, "~> 1.2"},
       {:phoenix_live_reload, "~> 1.7", only: :dev},
       {:phoenix_live_dashboard, "~> 0.9"},
-      {:bandit, "~> 1.12"},
+      {:bandit, "~> 1.13"},
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.4"},
       {:live_select, "~> 1.7"},
