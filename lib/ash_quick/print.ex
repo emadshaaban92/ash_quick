@@ -1,21 +1,22 @@
 defmodule AshQuick.Print do
   @moduledoc """
-  Makes an update action print: run from a QuickView — a row or bulk action,
-  the details page, or an action form — what it wrote is rendered through a
-  print template and sent to the browser.
+  Makes an action print: run from a QuickView — a row or bulk action, the
+  details page, or an action form — what it wrote is rendered through a print
+  template and sent to the browser.
 
       update :print do
         change {AshQuick.Print, template: MyApp.LetterTemplate, delivery: :print}
       end
 
-  The action, the render and the PDF are one transaction: a render that fails
-  rolls the action back, so nothing is recorded without its print. A bulk run
-  renders every record it wrote in one call to the template, in the order the
-  records were selected.
+  The render happens after the action has committed, so the action's
+  transaction holds its locks only for its own writes. A render that fails
+  leaves what the action recorded in place and says so; printing it again is
+  the action's to offer. A bulk run renders every record it wrote in one call
+  to the template, in the order the records were selected.
 
-  The change itself does nothing to the changeset: AshQuick reads it off the
-  action, so an action called from anywhere else (a seed, another action)
-  simply runs.
+  The change marks the records the action returns (`:ash_quick_print` in their
+  metadata); only a QuickView reads the mark, so an action called from
+  anywhere else (a seed, another action) simply runs.
 
   Options:
 
@@ -40,25 +41,12 @@ defmodule AshQuick.Print do
   end
 
   @impl true
-  def change(changeset, _opts, _context), do: changeset
+  def change(changeset, opts, _context) do
+    Ash.Changeset.after_action(changeset, fn _changeset, record ->
+      {:ok, Ash.Resource.put_metadata(record, :ash_quick_print, Map.new(opts))}
+    end)
+  end
 
   @impl true
-  def atomic(changeset, _opts, _context), do: {:ok, changeset}
-
-  @doc """
-  The template and delivery `resource`'s `action_name` prints with, or `nil`
-  when it does not print.
-  """
-  def of(resource, action_name) do
-    case Ash.Resource.Info.action(resource, action_name) do
-      %{changes: changes} ->
-        Enum.find_value(changes, fn
-          %Ash.Resource.Change{change: {__MODULE__, opts}} -> Map.new(opts)
-          _other -> nil
-        end)
-
-      _no_action ->
-        nil
-    end
-  end
+  def atomic(changeset, opts, context), do: {:ok, change(changeset, opts, context)}
 end

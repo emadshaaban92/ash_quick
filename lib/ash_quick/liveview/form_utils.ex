@@ -585,20 +585,18 @@ defmodule AshQuick.LiveView.FormUtils do
   defp handle_form_events(_, _, socket, _options), do: {:cont, socket}
 
   defp submit_form(form, params, socket) do
-    params =
-      params
-      |> maybe_put_nested_params(form)
-      |> maybe_put_has_many(form)
-      |> upload_images(socket, form)
+    result =
+      AshPhoenix.Form.submit(form,
+        params:
+          params
+          |> maybe_put_nested_params(form)
+          |> maybe_put_has_many(form)
+          |> upload_images(socket, form),
+        before_submit: &reference_attachments(&1, Map.get(socket.assigns, :scope)),
+        action_opts: [context: %{action_source: AshQuick.form_source()}]
+      )
 
-    {result, socket} =
-      PrintUtils.run(socket, form.resource, socket.assigns.ash_action.name, fn opts ->
-        AshPhoenix.Form.submit(form,
-          params: params,
-          before_submit: &reference_attachments(&1, Map.get(socket.assigns, :scope)),
-          action_opts: [context: %{action_source: AshQuick.form_source()}] ++ opts
-        )
-      end)
+    socket = PrintUtils.print(socket, result)
 
     case result do
       {:ok, rec} ->

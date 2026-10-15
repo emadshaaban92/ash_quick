@@ -1,71 +1,56 @@
 defmodule AshQuick.LiveView.PrintUtils do
   @moduledoc """
-  Runs an action from a QuickView surface and, when the action prints
-  (`AshQuick.Print`), renders what it wrote with ChromicPDF and pushes the PDF
-  to the browser — all inside the action's transaction, so a render that fails
-  records nothing.
+  Prints what an action wrote, when the action carries `AshQuick.Print`:
+  renders it with ChromicPDF and pushes the PDF to the browser. Runs after the
+  action has committed, so a render that fails leaves the action's writes in
+  place and flashes that the PDF could not be produced.
 
   The PDF travels over the LiveView socket as an `"ash_quick:pdf"` event, which
   `assets/js/print.js` saves or prints. Nothing is stored and no link is
   handed out: only the tab that ran the action gets it.
   """
 
-  import Phoenix.LiveView, only: [push_event: 3]
+  require Logger
+  import Phoenix.LiveView, only: [push_event: 3, put_flash: 3]
 
-  # The render runs inside the transaction, holding whatever the action locked.
-  @timeout :timer.minutes(1)
+  @render_failed "It was recorded, but its PDF could not be produced. Print it again."
 
   @doc """
-  Runs `run`, which runs `action_name` on `resource` with the options it is
-  given added to its own, and returns what it returned — `{:ok, record}`, an
-  `Ash.BulkResult` or what `AshPhoenix.Form.submit/2` returns — with the
-  socket, which carries the PDF when the action printed.
+  Prints `result` — what an action returned: `{:ok, record}`, an
+  `Ash.BulkResult` or what `AshPhoenix.Form.submit/2` returns — when its
+  records carry a print. Anything else leaves the socket as it was.
   """
-  def run(socket, resource, action_name, run) do
-    case AshQuick.Print.of(resource, action_name) do
-      nil -> {run.([]), socket}
-      print -> run_and_print(socket, resource, print, run)
-    end
-  end
-
-  defp run_and_print(socket, resource, print, run) do
-    scope = socket.assigns.scope
-
-    resource
-    |> Ash.transact(
-      fn ->
-        # The transaction is ours to roll back: an action rolling it back itself
-        # would throw past the surface, which then has no result to show.
-        result = run.(rollback_on_error?: false)
-
-        case written(result) do
-          # `Ash.transact/3` wraps what this returns in `{:ok, _}` itself.
-          {:ok, records} -> {result, render!(print.template, resource, records, scope)}
-          :error -> {:error, {:not_written, result}}
-        end
-      end,
-      timeout: @timeout
-    )
-    |> case do
-      {:ok, {result, {filename, pdf}}} ->
-        {result,
-         push_event(socket, "ash_quick:pdf", %{
-           data: pdf,
-           filename: filename,
-           delivery: print.delivery
-         })}
-
-      {:error, {:not_written, result}} ->
-        {result, socket}
+  def print(socket, result) do
+    case printed(result) do
+      nil -> socket
+      {print, records} -> deliver(socket, print, records)
     end
   end
 
   # A bulk run that wrote nothing (every row stale) prints nothing either.
-  defp written({:ok, %_{} = record}), do: {:ok, [record]}
-  defp written(%Ash.BulkResult{status: :success, records: [_ | _] = records}), do: {:ok, records}
-  defp written(_not_written), do: :error
+  defp printed({:ok, %_{} = record}), do: marked([record])
+  defp printed(%Ash.BulkResult{status: :success, records: [_ | _] = records}), do: marked(records)
+  defp printed(_not_written), do: nil
 
-  defp render!(template, resource, records, scope) do
+  # Every record came from the same action, so the first one's mark is theirs.
+  defp marked([%{__metadata__: %{ash_quick_print: print}} | _] = records), do: {print, records}
+  defp marked(_records), do: nil
+
+  defp deliver(socket, print, records) do
+    {filename, pdf} = render!(print.template, records, socket.assigns.scope)
+
+    push_event(socket, "ash_quick:pdf", %{data: pdf, filename: filename, delivery: print.delivery})
+  rescue
+    exception ->
+      Logger.error(
+        "printing #{inspect(print.template)} failed after its action was recorded\n" <>
+          Exception.format(:error, exception, __STACKTRACE__)
+      )
+
+      put_flash(socket, :error, @render_failed)
+  end
+
+  defp render!(template, [%resource{} | _] = records, scope) do
     records =
       Ash.load!(records, [AshQuick.Info.display_label(resource) | template.load_opts()],
         scope: scope

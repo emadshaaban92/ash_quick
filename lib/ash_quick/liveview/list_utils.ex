@@ -347,10 +347,8 @@ defmodule AshQuick.LiveView.ListUtils do
 
     records = socket.assigns.data.results |> Enum.filter(&(&1.id in selected_ids))
 
-    {result, socket} =
-      PrintUtils.run(socket, options.resource, action.name, fn opts ->
-        records |> run_bulk_action(action, socket, opts) |> in_selection_order(records)
-      end)
+    result = records |> run_bulk_action(action, socket) |> in_selection_order(records)
+    socket = PrintUtils.print(socket, result)
 
     case result do
       %{status: :error, errors: [%{errors: [%{message: message}]}]} ->
@@ -424,13 +422,8 @@ defmodule AshQuick.LiveView.ListUtils do
   end
 
   defp run_and_reload(record, action, socket, options) do
-    {result, socket} =
-      PrintUtils.run(
-        socket,
-        options.resource,
-        action.name,
-        &run_action(record, action, socket, &1)
-      )
+    result = run_action(record, action, socket)
+    socket = PrintUtils.print(socket, result)
 
     case result do
       {:error, error} ->
@@ -444,67 +437,55 @@ defmodule AshQuick.LiveView.ListUtils do
     end
   end
 
-  defp run_action(record, %Actions.Update{} = action, socket, opts) do
+  defp run_action(record, %Actions.Update{} = action, socket) do
     record
     |> Ash.update(
-      [
-        action: action,
-        scope: socket.assigns.scope,
-        context: %{action_source: :ash_quick_list}
-      ] ++ opts
+      action: action,
+      scope: socket.assigns.scope,
+      context: %{action_source: :ash_quick_list}
     )
   end
 
-  defp run_action(record, %Actions.Destroy{} = action, socket, opts) do
+  defp run_action(record, %Actions.Destroy{} = action, socket) do
     record
     |> Ash.destroy(
-      [
-        action: action,
-        scope: socket.assigns.scope,
-        context: %{action_source: :ash_quick_list}
-      ] ++ opts
+      action: action,
+      scope: socket.assigns.scope,
+      context: %{action_source: :ash_quick_list}
     )
   end
 
-  defp run_bulk_action(records, %Actions.Update{} = action, socket, opts) do
+  defp run_bulk_action(records, %Actions.Update{} = action, socket) do
     records
-    |> Ash.bulk_update(
-      action.name,
-      %{},
-      [
-        scope: socket.assigns.scope,
-        context: %{action_source: :ash_quick_list_bulk},
-        # We shouldn't need this, but it seems to be required for some reason
-        authorize?: true,
-        strategy: :stream,
-        transaction: :all,
-        stop_on_error?: true,
-        return_records?: true,
-        # One publication per row written, so a page holding a row hears about a
-        # bulk write as it does a row action's. A batch that errors is rolled back
-        # whole by `transaction: :all` and publishes nothing, so nothing is
-        # announced that was then undone.
-        notify?: true
-      ] ++ opts
+    |> Ash.bulk_update(action.name, %{},
+      scope: socket.assigns.scope,
+      context: %{action_source: :ash_quick_list_bulk},
+      # We shouldn't need this, but it seems to be required for some reason
+      authorize?: true,
+      strategy: :stream,
+      transaction: :all,
+      stop_on_error?: true,
+      return_records?: true,
+      # One publication per row written, so a page holding a row hears about a
+      # bulk write as it does a row action's. A batch that errors is rolled back
+      # whole by `transaction: :all` and publishes nothing, so nothing is
+      # announced that was then undone.
+      notify?: true
     )
   end
 
-  defp run_bulk_action(records, %Actions.Destroy{} = action, socket, opts) do
+  defp run_bulk_action(records, %Actions.Destroy{} = action, socket) do
     records
-    |> Ash.bulk_destroy(
-      action.name,
-      %{},
-      [
-        scope: socket.assigns.scope,
-        context: %{action_source: :ash_quick_list_bulk},
-        # We shouldn't need this, but it seems to be required for some reason
-        authorize?: true,
-        strategy: :stream,
-        transaction: :all,
-        stop_on_error?: true,
-        return_records?: true,
-        notify?: true
-      ] ++ opts
+    |> Ash.bulk_destroy(action.name, %{},
+      scope: socket.assigns.scope,
+      context: %{action_source: :ash_quick_list_bulk},
+      # We shouldn't need this, but it seems to be required for some reason
+      authorize?: true,
+      strategy: :stream,
+      transaction: :all,
+      stop_on_error?: true,
+      return_records?: true,
+      notify?: true
     )
   end
 

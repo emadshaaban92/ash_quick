@@ -156,13 +156,8 @@ defmodule AshQuick.LiveView.DetailsUtils do
   defp do_action(_id, action, socket, options) do
     record = socket.assigns.record
 
-    {result, socket} =
-      PrintUtils.run(
-        socket,
-        options.resource,
-        action.name,
-        &run_action(record, action, socket, &1)
-      )
+    result = run_action(record, action, socket)
+    socket = PrintUtils.print(socket, result)
 
     case result do
       {:error, error} ->
@@ -175,25 +170,21 @@ defmodule AshQuick.LiveView.DetailsUtils do
     end
   end
 
-  defp run_action(record, %Actions.Update{} = action, socket, opts) do
+  defp run_action(record, %Actions.Update{} = action, socket) do
     record
     |> Ash.update(
-      [
-        action: action,
-        scope: socket.assigns.scope,
-        context: %{action_source: :ash_quick_details}
-      ] ++ opts
+      action: action,
+      scope: socket.assigns.scope,
+      context: %{action_source: :ash_quick_details}
     )
   end
 
-  defp run_action(record, %Actions.Destroy{} = action, socket, opts) do
+  defp run_action(record, %Actions.Destroy{} = action, socket) do
     record
     |> Ash.destroy(
-      [
-        action: action,
-        scope: socket.assigns.scope,
-        context: %{action_source: :ash_quick_details}
-      ] ++ opts
+      action: action,
+      scope: socket.assigns.scope,
+      context: %{action_source: :ash_quick_details}
     )
   end
 end

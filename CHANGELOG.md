@@ -5,11 +5,13 @@
 ### Features
 
 - **An action prints.** `change {AshQuick.Print, template: MyTemplate,
-  delivery: :print}` on an update action makes it print wherever AshQuick runs
-  it: a row action, a bulk selection, the details page or the action's form.
-  What it wrote goes to the template's `render/1` in one call, in the order the
-  rows were selected, and the action, the render and the PDF are one
-  transaction, so a render that fails records nothing. The PDF reaches the
+  delivery: :print}` on an action makes it print wherever AshQuick runs it: a
+  row action, a bulk selection, the details page or the action's form. The
+  change marks the records the action returns; what it wrote goes to the
+  template's `render/1` in one call, in the order the rows were selected. The
+  render runs after the action has committed, so the action's transaction
+  holds its locks only for its own writes; a render that fails keeps what the
+  action recorded and flashes that the PDF could not be produced. The PDF reaches the
   browser over the LiveView socket: `delivery: :print` opens the print dialog
   on it from an off-screen frame, `:download` (the default) saves it. Nothing
   is uploaded and no link is handed out. The host calls `initPrinting()` from
