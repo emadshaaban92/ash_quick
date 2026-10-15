@@ -366,7 +366,7 @@ defmodule ExampleWeb.HostileParamsTest do
 
       {:ok, view, _html} = live(conn, ~p"/products?action=read")
 
-      assert render(view) =~ "404"
+      assert has_element?(view, "h1", "404")
       # The same answer a name the resource does not define gets.
       assert page_action(view) == nil
     end
@@ -408,7 +408,7 @@ defmodule ExampleWeb.HostileParamsTest do
           ] do
         {:ok, view, _html} = live(conn, url)
 
-        assert render(view) =~ "404"
+        assert has_element?(view, "h1", "404")
         assert page_action(view) == nil
       end
     end
