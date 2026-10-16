@@ -37,6 +37,11 @@ defmodule AshQuick.Config do
     object-store client points this at it, and `:s3_bucket` / `:s3_host`
     below go unread.
 
+  * `:pdf_renderer` — A module implementing `AshQuick.PdfRenderer`, which
+    turns a print template's output into the PDF an action's print delivers.
+    Defaults to `AshQuick.PdfRenderer.ChromicPDF`. A test suite with no Chrome
+    names one that hands back the template's HTML, to read what a print says.
+
   * `:s3_bucket` — The S3 bucket name `AshQuick.Storage.S3` uses for
     uploads (image uploads, exports, prints).
 
@@ -335,6 +340,14 @@ defmodule AshQuick.Config do
   end
 
   @doc """
+  Returns the configured `AshQuick.PdfRenderer`, `AshQuick.PdfRenderer.ChromicPDF`
+  by default.
+  """
+  def pdf_renderer do
+    get(:pdf_renderer, AshQuick.PdfRenderer.ChromicPDF)
+  end
+
+  @doc """
   Returns the configured S3 bucket name.
   """
   def s3_bucket do
@@ -480,12 +493,11 @@ defmodule AshQuick.Config do
   end
 
   @doc """
-  Returns `true` if PDF print dependencies are available.
-
-  Checks for `ChromicPDF` at runtime.
+  Returns `true` if a print can be rendered: the host names its own
+  `:pdf_renderer`, or has `ChromicPDF` for the default one.
   """
   def print_enabled? do
-    Code.ensure_loaded?(ChromicPDF)
+    pdf_renderer() != AshQuick.PdfRenderer.ChromicPDF or Code.ensure_loaded?(ChromicPDF)
   end
 
   defp get(key, default \\ nil) do

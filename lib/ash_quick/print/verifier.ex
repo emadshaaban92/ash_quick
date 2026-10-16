@@ -79,7 +79,8 @@ defmodule AshQuick.Print.Verifier do
     """
     `AshQuick.Print` renders its PDF with ChromicPDF, which this application \
     does not have. Add `{:chromic_pdf, "~> 1.17"}` to its dependencies, and \
-    `{:merge_pdf, "~> 0.5"}` too if a template returns more than one source.
+    `{:merge_pdf, "~> 0.5"}` too if a template returns more than one source, \
+    or name an `AshQuick.PdfRenderer` of its own as `:pdf_renderer`.
     """
   end
 end

@@ -4,6 +4,14 @@
 
 ### Features
 
+- **A print renders through a renderer the host may replace.**
+  `config :ash_quick, pdf_renderer: MyApp.PdfRenderer` names an
+  `AshQuick.PdfRenderer` that turns a print template's output into the PDF
+  the browser gets; `AshQuick.PdfRenderer.ChromicPDF` is the default. A test
+  suite with no Chrome names one that hands back the template's HTML and reads
+  what each print says off the pushed `"ash_quick:pdf"` event. A host naming
+  its own renderer does not need ChromicPDF for its prints to compile.
+
 - **Bulk actions run through the action modal.** A bulk action opens the
   modal over the list, which keeps its selection: an action that takes no
   input asks for confirmation, naming how many rows it applies to; one that

@@ -1,7 +1,8 @@
 defmodule AshQuick.LiveView.PrintUtils do
   @moduledoc """
   Prints what an action wrote, when the action carries `AshQuick.Print`:
-  renders it with ChromicPDF and pushes the PDF to the browser. Runs after the
+  renders it with the configured `AshQuick.PdfRenderer` (ChromicPDF unless
+  the host names another) and pushes the PDF to the browser. Runs after the
   action has committed, so a render that fails leaves the action's writes in
   place and flashes that the PDF could not be produced.
 
@@ -56,30 +57,8 @@ defmodule AshQuick.LiveView.PrintUtils do
         scope: scope
       )
 
-    {filename(template, resource, records), render_pdf!(template.render(records))}
-  end
-
-  # ChromicPDF hands back base64, which is what the event carries.
-  defp render_pdf!(html) when is_binary(html) do
-    {:ok, pdf} = ChromicPDF.print_to_pdf({:html, html}, print_to_pdf: %{preferCSSPageSize: true})
-    pdf
-  end
-
-  defp render_pdf!(%{source: source, opts: opts}) do
-    {:ok, pdf} = ChromicPDF.print_to_pdf(source, opts)
-    pdf
-  end
-
-  # Each source rendered on its own keeps Chrome's headers, footers and page
-  # numbers; MergePdf joins the pages without re-processing fonts, which
-  # Ghostscript's pdfwrite mangles.
-  defp render_pdf!(sources) when is_list(sources) do
-    {:ok, merged} =
-      sources
-      |> Enum.map(&(&1 |> render_pdf!() |> Base.decode64!()))
-      |> MergePdf.merge_binaries()
-
-    Base.encode64(merged)
+    {filename(template, resource, records),
+     AshQuick.Config.pdf_renderer().render(template.render(records))}
   end
 
   defp filename(template, resource, records) do

@@ -555,7 +555,9 @@ broken.
 Export is feature-detected at runtime — `AshQuick.Config.exports_enabled?/0` —
 so its control simply does not appear. Printing has no control of its own: an
 action that carries `AshQuick.Print` needs ChromicPDF, and a resource with the
-`AshQuick` extension does not compile with such an action until it is there.
+`AshQuick` extension does not compile with such an action until it is there,
+unless the host names its own `AshQuick.PdfRenderer` as `:pdf_renderer` (a
+test suite with no Chrome does, to read what a print says).
 A host that points `:storage` at its own
 object store never loads the ExAws ones.
 
