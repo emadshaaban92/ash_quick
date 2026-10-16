@@ -23,6 +23,7 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/example"
+import {hooks as ashQuickHooks} from "phoenix-colocated/ash_quick"
 import topbar from "../vendor/topbar"
 import live_select from "live_select"
 // A tab mints its own id and replays it on every connect — the unit
@@ -40,7 +41,7 @@ const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   // A function, so every reconnect re-reads the tab's identity.
   params: () => ({_csrf_token: csrfToken, ...browserSessionParams()}),
-  hooks: {...colocatedHooks, ...live_select},
+  hooks: {...colocatedHooks, ...ashQuickHooks, ...live_select},
 })
 
 initBrowserSession(liveSocket)

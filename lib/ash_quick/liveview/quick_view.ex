@@ -181,6 +181,27 @@ defmodule AshQuick.LiveView.QuickView do
   with two exceptions: a create goes on to the record it made, and a destroy
   opened over the record it destroyed goes to the list.
 
+  While the action runs, the button that ran it shows a spinner and the modal
+  can be neither left nor edited until the answer comes back: the ✕, Cancel
+  and every other button are disabled, text is read-only, the remaining
+  controls ignore the pointer, and the form's `AshQuick.Components.SubmitLock`
+  hook refuses the clicks and keys that would change a checkbox, a radio, a
+  select or a searchable dropdown. A refused run leaves the modal usable again,
+  values kept. The hook is a colocated one, which the host registers from
+  `phoenix-colocated/ash_quick` (see the README).
+
+  A custom `action_<name>.html.heex` gets the ✕'s part for free, whatever its
+  form. The controls are the components' part: `simple_form/1` (given an `id`)
+  carries the hook and the Save spinner, `input/1` and `attachment_dropzone/1`
+  ignore the pointer themselves, and LiveView disables every `<button>` of a
+  submitting form and makes its text inputs read-only. A template rendering
+  its own `<.form>` opts in to the hook with an `id` and
+  `phx-hook="AshQuick.Components.SubmitLock"`. Markup of its own opts in too:
+  put `phx-submit-loading:pointer-events-none` on what a click could change,
+  and make an in-form link that leaves or changes the form a `<button
+  type="button">`, which LiveView then disables — a link stays reachable from
+  the keyboard.
+
   The surfaces decide what is offered: a control is drawn where
   `AshQuick.can?/4` allows it. Whatever opens the modal — the control, a
   hand-pushed event, a typed URL — the action then runs stamped with

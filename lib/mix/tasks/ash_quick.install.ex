@@ -90,6 +90,9 @@ if Code.ensure_loaded?(Igniter) do
 
     @css_path "assets/css/app.css"
     @css_source ~s|@source "../../deps/ash_quick/lib/**/*.*ex";|
+    @css_submit_loading ~s|@custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);|
+    @js_path "assets/js/app.js"
+    @js_hooks_import ~s|import { hooks as ashQuickHooks } from "phoenix-colocated/ash_quick"|
 
     @impl Igniter.Mix.Task
     def info(_argv, _parent) do
@@ -143,6 +146,7 @@ if Code.ensure_loaded?(Igniter) do
         after: [Phoenix.PubSub]
       )
       |> source_library_classes()
+      |> import_library_hooks()
       |> Ash.Igniter.codegen("install_ash_quick")
       |> Igniter.add_notice(client_notice())
     end
@@ -394,6 +398,7 @@ if Code.ensure_loaded?(Igniter) do
         wherever this project's CSS entrypoint lives:
 
             #{@css_source}
+            #{@css_submit_loading}
         """)
       end
     end
@@ -401,20 +406,94 @@ if Code.ensure_loaded?(Igniter) do
     defp append_source(source) do
       content = Rewrite.Source.get(source, :content)
 
-      if String.contains?(content, "deps/ash_quick") do
+      additions =
+        [
+          {"deps/ash_quick",
+           """
+           /* AshQuick's classes live in its own lib/, which this build would not scan. */
+           #{@css_source}
+           """},
+          # A new Phoenix app defines this already. Without it an action modal
+          # shows no spinner and its controls stay live while the action runs.
+          {"@custom-variant phx-submit-loading",
+           """
+           /* Styles a form, and what is in it, while LiveView waits on its submit. */
+           #{@css_submit_loading}
+           """}
+        ]
+        |> Enum.reject(fn {present, _addition} -> String.contains?(content, present) end)
+        |> Enum.map(fn {_present, addition} -> addition end)
+
+      if additions == [] do
         source
       else
         Rewrite.Source.update(
           source,
           :content,
-          """
-          #{String.trim_trailing(content)}
-
-          /* AshQuick's classes live in its own lib/, which this build would not scan. */
-          #{@css_source}
-          """
+          Enum.join([String.trim_trailing(content) <> "\n" | additions], "\n")
         )
       end
+    end
+
+    # A dependency's colocated hooks are not in the host's own colocated bundle,
+    # so the host imports them by name. Without them the action modal's
+    # controls still answer the keyboard while an action runs.
+    defp import_library_hooks(igniter) do
+      if Igniter.exists?(igniter, @js_path) do
+        Igniter.update_file(igniter, @js_path, &add_library_hooks/1)
+      else
+        Igniter.add_warning(igniter, hooks_instructions("#{@js_path} was not found"))
+      end
+    end
+
+    defp add_library_hooks(source) do
+      content = Rewrite.Source.get(source, :content)
+      # A whole import statement: one spread over several lines ends at its
+      # module specifier, the first quoted string after the keyword.
+      imports = Regex.scan(~r/^import\b[^"'`]*["'][^"'\n]*["']/m, content, return: :index)
+
+      cond do
+        String.contains?(content, "phoenix-colocated/ash_quick") ->
+          source
+
+        imports == [] or not Regex.match?(~r/hooks:\s*\{/, content) ->
+          {:warning, hooks_instructions("#{@js_path} has no `hooks: {...}` to add them to")}
+
+        true ->
+          [{start, length}] = List.last(imports)
+          at = after_line(content, start + length)
+          <<head::binary-size(^at), rest::binary>> = content
+
+          content =
+            (head <> "\n" <> @js_hooks_import <> rest)
+            |> String.replace(~r/hooks:\s*\{/, "hooks: {...ashQuickHooks, ", global: false)
+
+          Rewrite.Source.update(source, :content, content)
+      end
+    end
+
+    # Where the line holding `offset` ends, so a comment trailing the last
+    # import stays on its line. Byte offsets, as `Regex.scan/3` returns them.
+    defp after_line(content, offset) do
+      <<_::binary-size(^offset), rest::binary>> = content
+
+      case :binary.match(rest, "\n") do
+        {newline, _} -> offset + newline
+        :nomatch -> byte_size(content)
+      end
+    end
+
+    defp hooks_instructions(reason) do
+      """
+      #{reason}, so AshQuick's hooks are not registered. Without them the action \
+      modal's controls still answer the keyboard while an action runs. Add:
+
+          #{@js_hooks_import}
+
+          let liveSocket = new LiveSocket("/live", Socket, {
+            hooks: {...ashQuickHooks}
+          })
+      """
     end
 
     defp select_actor_resource(igniter, options) do

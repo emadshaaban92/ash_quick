@@ -277,7 +277,15 @@ is no `data-confirm` and no browser dialog anywhere.
   a create.
 - Closing (✕ or Cancel) patches back to that page. Running
   the action does too, except that a create goes to the record it made and a
-  destroy opened over the record it destroyed goes to the list.
+  destroy opened over the record it destroyed goes to the list. While the
+  action runs it can't be closed: ✕ and Cancel are disabled, Save or Confirm
+  shows a spinner, and the form's controls are locked until the reply. The
+  keyboard half of the lock is the colocated hook
+  `AshQuick.Components.SubmitLock`: the host spreads
+  `import { hooks as ashQuickHooks } from "phoenix-colocated/ash_quick"` into
+  its LiveSocket `hooks`. A custom template that renders its own `<.form>`
+  rather than `simple_form/1` opts in with an `id` and
+  `phx-hook="AshQuick.Components.SubmitLock"`.
 - A custom `action_<name>.html.heex` for a form renders inside the modal; a
   custom read template renders as the page underneath.
 - A control is drawn where `AshQuick.can?/4` allows it on its surface. A click

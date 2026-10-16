@@ -72,7 +72,7 @@ defmodule ExampleWeb.ActionModalScenarioTest do
     |> form("#{@modal} form[phx-submit=save]", %{"form" => %{"name" => "Never saved"}})
     |> render_change()
 
-    view |> element("#{@modal} a", "Cancel") |> render_click()
+    view |> element("#{@modal} form button", "Cancel") |> render_click()
 
     assert_patch(view, ~p"/products?search=#{search}")
     refute has_element?(view, @modal)
@@ -150,6 +150,58 @@ defmodule ExampleWeb.ActionModalScenarioTest do
     refute has_element?(view, @modal)
   end
 
+  # LiveView disables the buttons of a form it is waiting on, and nothing
+  # outside it. So both ways out sit where a running submit reaches them:
+  # Cancel inside the form, and the ✕, which is outside, beside a disabled
+  # twin that stands in for it while a form in the modal loads.
+  test "neither way out of the modal is left live while the action runs", ctx do
+    %{conn: conn, admin: admin, product: product} = ctx
+
+    conn = log_in(conn, admin)
+
+    {:ok, view, _html} = live(conn, ~p"/products/#{product.id}/update")
+    assert_leaving_waits_on_the_submit(view)
+
+    {:ok, view, _html} = live(conn, ~p"/products/#{product.id}/deactivate")
+    assert_leaving_waits_on_the_submit(view)
+  end
+
+  defp assert_leaving_waits_on_the_submit(view) do
+    assert has_element?(view, "#{@modal} form[phx-submit=save] button[type=button]", "Cancel")
+    refute has_element?(view, "#{@modal} a", "Cancel")
+    assert has_element?(view, "#{@modal} button[disabled][aria-label=Close]")
+  end
+
+  # The keys and clicks a read-only control still answers are refused by a
+  # hook bundled into the host's app.js. An inline handler would be refused
+  # instead, by any CSP that does not allow inline script.
+  test "the controls are locked by the form's hook, not by inline script", ctx do
+    %{conn: conn, admin: admin, product: product} = ctx
+    conn = log_in(conn, admin)
+
+    {:ok, view, _html} = live(conn, ~p"/products/#{product.id}/update")
+
+    # An image entry, for its "featured" checkbox.
+    view
+    |> element("#{@modal} [phx-click=add-form][phx-value-path='form[images]']")
+    |> render_click()
+
+    assert has_element?(view, "#{@modal} input[type=checkbox]")
+    assert_locked_by_the_hook(view)
+
+    {:ok, view, _html} = live(conn, ~p"/products/#{product.id}/deactivate")
+    assert_locked_by_the_hook(view)
+  end
+
+  defp assert_locked_by_the_hook(view) do
+    assert has_element?(
+             view,
+             "#{@modal} form[phx-submit=save][id][phx-hook='AshQuick.Components.SubmitLock']"
+           )
+
+    refute has_element?(view, "#{@modal} [onclick]")
+  end
+
   describe "an action that asks for nothing" do
     test "is confirmed in the modal, and cancelling it changes nothing", ctx do
       %{conn: conn, admin: admin, product: product} = ctx
@@ -165,7 +217,7 @@ defmodule ExampleWeb.ActionModalScenarioTest do
       assert has_element?(view, "#{@modal} p", "Are you sure?")
       refute has_element?(view, "#{@modal} input[name^='form[']")
 
-      view |> element("#{@modal} a", "Cancel") |> render_click()
+      view |> element("#{@modal} form button", "Cancel") |> render_click()
 
       assert_patch(view, ~p"/products/#{product.id}")
       refute has_element?(view, @modal)

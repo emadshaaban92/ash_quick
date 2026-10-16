@@ -282,7 +282,7 @@ defmodule AshQuick.Components do
 
   def attachment_dropzone(assigns) do
     ~H"""
-    <div data-attachment-dropzone>
+    <div data-attachment-dropzone class="phx-submit-loading:pointer-events-none">
       <label
         for={@upload.ref}
         class="flex flex-col items-center gap-1 p-5 text-center border-2 border-dashed border-base-300 rounded-box cursor-pointer hover:border-primary focus-within:border-primary"
@@ -464,7 +464,10 @@ defmodule AshQuick.Components do
 
   attr :rest, :global,
     include: ~w(autocomplete name rel action enctype method novalidate target multipart),
-    doc: "the arbitrary HTML attributes to apply to the form tag"
+    doc: """
+    the arbitrary HTML attributes to apply to the form tag. Give it an `id`: the
+    hook that locks the form's controls while it submits needs one
+    """
 
   attr :form_title, :string, default: nil
 
@@ -479,21 +482,69 @@ defmodule AshQuick.Components do
         <h2 :if={@form_title} class="mb-4 text-xl font-bold text-base-content">
           {@form_title}
         </h2>
-        <.form :let={f} for={@for} as={@as} {@rest}>
+        <.form
+          :let={f}
+          for={@for}
+          as={@as}
+          phx-hook={@rest[:id] && "AshQuick.Components.SubmitLock"}
+          {@rest}
+        >
           <div class="grid gap-4 sm:grid-cols-2 sm:gap-6">
             {render_slot(@inner_block, f)}
           </div>
 
+          <%!-- The label stays, unseen, so the button keeps its width under the
+          spinner and its accessible name. It keeps its colour too, which
+          daisyUI would grey out once LiveView disables it: it reads as working,
+          not as unavailable. --%>
           <button
             type="submit"
-            class="btn btn-primary mt-4 sm:mt-6 phx-submit-loading:opacity-75"
+            class="btn btn-primary mt-4 sm:mt-6 phx-submit-loading:bg-(--btn-color) phx-submit-loading:text-(--btn-fg)"
           >
-            {@submit_label || gettext("Save")}
+            <span class="phx-submit-loading:opacity-0">{@submit_label || gettext("Save")}</span>
+            <span
+              class="loading loading-spinner loading-sm absolute hidden phx-submit-loading:inline-block"
+              aria-hidden="true"
+            />
           </button>
           {render_slot(@actions)}
         </.form>
       </div>
     </section>
+    <%!-- LiveView makes a submitting form's inputs read-only, which a browser
+    ignores for a checkbox, a radio or a select, and skips LiveSelect's input,
+    which sits under `phx-update="ignore"`. A value changed now would be
+    validated after a successful run has closed the modal, so while the form
+    loads this refuses what would change one. Bundled into the host's app.js
+    rather than inline, so a strict CSP lets it run. --%>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".SubmitLock">
+      const loading = form => form.classList.contains("phx-submit-loading")
+      const toggle = el => el instanceof HTMLInputElement && (el.type === "checkbox" || el.type === "radio")
+      const picker = el => el instanceof HTMLSelectElement || !!el.closest?.("[phx-hook=LiveSelect]")
+
+      export default {
+        mounted() {
+          this.onClick = e => {
+            if (loading(this.el) && toggle(e.target)) e.preventDefault()
+          }
+
+          // Tab still moves on; every other key would change the value.
+          this.onKeydown = e => {
+            if (!loading(this.el) || e.key === "Tab") return
+            if (!toggle(e.target) && !picker(e.target)) return
+            e.preventDefault()
+            e.stopPropagation()
+          }
+
+          this.el.addEventListener("click", this.onClick, true)
+          this.el.addEventListener("keydown", this.onKeydown, true)
+        },
+        destroyed() {
+          this.el.removeEventListener("click", this.onClick, true)
+          this.el.removeEventListener("keydown", this.onKeydown, true)
+        }
+      }
+    </script>
     """
   end
 
@@ -556,9 +607,11 @@ defmodule AshQuick.Components do
     assigns =
       assign_new(assigns, :checked, fn -> Phoenix.HTML.Form.normalize_value("checkbox", value) end)
 
+    # The form's submit lock refuses the click and Space. The pointer-events
+    # variant holds the mouse off for a host that has not imported the hook.
     ~H"""
     <div>
-      <label class="flex items-center gap-4 text-sm leading-6 cursor-pointer">
+      <label class="flex items-center gap-4 text-sm leading-6 cursor-pointer phx-submit-loading:pointer-events-none">
         <input type="hidden" name={@name} value="false" />
         <input
           type="checkbox"
@@ -585,7 +638,7 @@ defmodule AshQuick.Components do
         id={@id}
         name={@name}
         class={[
-          "select w-full",
+          "select w-full phx-submit-loading:pointer-events-none",
           @errors != [] && "select-error"
         ]}
         multiple={@multiple}
@@ -629,7 +682,7 @@ defmodule AshQuick.Components do
         id={@id}
         value={Phoenix.HTML.Form.normalize_value(@type, @value)}
         class={[
-          "input w-full",
+          "input w-full phx-submit-loading:pointer-events-none",
           @errors != [] && "input-error"
         ]}
         {@rest}

@@ -66,7 +66,13 @@ defmodule AshQuick.LiveView.Components.FormView do
       |> assign_new(:ash_quick_background, fn -> nil end)
 
     ~H"""
-    <.form for={@form} id={@id} phx-submit="save" class="flex flex-col gap-4">
+    <.form
+      for={@form}
+      id={@id}
+      phx-submit="save"
+      phx-hook="AshQuick.Components.SubmitLock"
+      class="flex flex-col gap-4"
+    >
       <h3 class="text-lg font-semibold">{Utils.humanize(@ash_action.name)}</h3>
       <p :if={@ash_action.type != :create and @record} class="font-medium">
         {AshQuick.Info.display_value(@record)}
@@ -77,11 +83,15 @@ defmodule AshQuick.LiveView.Components.FormView do
         <button
           type="submit"
           class={[
-            "btn phx-submit-loading:opacity-75",
+            "btn phx-submit-loading:bg-(--btn-color) phx-submit-loading:text-(--btn-fg)",
             if(@ash_action.type == :destroy, do: "btn-error", else: "btn-primary")
           ]}
         >
-          {gettext("Confirm")}
+          <span class="phx-submit-loading:opacity-0">{gettext("Confirm")}</span>
+          <span
+            class="loading loading-spinner loading-sm absolute hidden phx-submit-loading:inline-block"
+            aria-hidden="true"
+          />
         </button>
       </div>
     </.form>
@@ -91,12 +101,19 @@ defmodule AshQuick.LiveView.Components.FormView do
   attr :background, :map, default: nil
   attr :class, :string, default: nil
 
-  # Back to the page the modal opened over, without running anything.
+  # Back to the page the modal opened over, without running anything. A
+  # button rather than a link, so LiveView disables it with the rest of the
+  # form while the action runs: a link would stay live to the keyboard.
   defp cancel_link(assigns) do
     ~H"""
-    <.link :if={@background} patch={@background.path} class={["btn btn-ghost", @class]}>
+    <button
+      :if={@background}
+      type="button"
+      phx-click={JS.patch(@background.path)}
+      class={["btn btn-ghost", @class]}
+    >
       {gettext("Cancel")}
-    </.link>
+    </button>
     """
   end
 
@@ -284,7 +301,7 @@ defmodule AshQuick.LiveView.Components.FormView do
     <section
       phx-drop-target={@upload.ref}
       data-attachment-field={@field.name}
-      class="flex flex-col gap-2 sm:col-span-4 card bg-base-100 p-5 my-3"
+      class="flex flex-col gap-2 sm:col-span-4 card bg-base-100 p-5 my-3 phx-submit-loading:pointer-events-none"
     >
       <h3 class="font-semibold">{Utils.humanize(@field.name)}</h3>
       <ul :if={@rows != []} class="divide-y divide-base-300">
@@ -326,7 +343,7 @@ defmodule AshQuick.LiveView.Components.FormView do
     <section
       phx-drop-target={@uploads[@upload_name].ref}
       data-attachment-field={@field.name}
-      class="flex flex-col sm:col-span-2 card bg-base-100 p-5 my-3"
+      class="flex flex-col sm:col-span-2 card bg-base-100 p-5 my-3 phx-submit-loading:pointer-events-none"
     >
       <div class="flex justify-between">
         <label for={@uploads[@upload_name].ref}>
@@ -414,23 +431,25 @@ defmodule AshQuick.LiveView.Components.FormView do
               title={nil}
             />
           </div>
-          <.link
+          <button
+            type="button"
             phx-click="remove-form"
             phx-value-path={nested_phx_form.name}
             class="btn btn-ghost btn-sm btn-square"
           >
             <.icon name="hero-x-mark" />
-          </.link>
+          </button>
         </div>
       </.inputs_for>
 
-      <.link
+      <button
+        type="button"
         phx-click="add-form"
         phx-value-path={@form.name <> "[#{@field.name}]"}
         class="btn btn-ghost btn-sm"
       >
         <.icon name="hero-plus" /> {gettext("Add")}
-      </.link>
+      </button>
 
       <.error :for={msg <- @errors}>{msg}</.error>
     </section>

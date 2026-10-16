@@ -21,7 +21,7 @@ defmodule Example.Test.RequiredEntries do
   A create that needs at least one nested entry, and a page over it.
 
   The entries are an array of embeds, so the form renders them as sub-forms
-  under an "Add" link rather than as an input. A save with none added posts
+  under an "Add" button rather than as an input. A save with none added posts
   nothing under the field, and the error the action refuses it with has to
   show in the field's section all the same.
 
