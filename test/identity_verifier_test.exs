@@ -11,13 +11,8 @@ defmodule AshQuick.IdentityVerifierTest do
   the extension, which puts a composite-keyed join resource one ordinary PR
   away from a page whose rows all share the same element ids.
 
-  Verifiers run in `@after_verify`, which the compiler executes in its own
-  checker process — so the error is reported there and never propagates out of
-  `Code.compile_string/1` for a test to catch. `__verify_spark_dsl__/1` is that
-  hook; calling it here runs the identical verifier list against the identical
-  DSL state, and `Spark.Dsl`'s `:test_collector` (a pid in the *calling*
-  process's dictionary, which is why the compiler's own run cannot use it) hands
-  back the errors it would otherwise raise.
+  Each probe is verified by hand through `AshQuick.Test.VerifierErrors`, which
+  says why the compiler's own run cannot hand its errors to a test.
 
   `async: false` because suppressing the compiler's own report means swapping the
   global `:standard_error` device.
@@ -25,6 +20,8 @@ defmodule AshQuick.IdentityVerifierTest do
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureIO
+
+  alias AshQuick.Test.VerifierErrors
 
   defmodule Domain do
     @moduledoc false
@@ -71,17 +68,7 @@ defmodule AshQuick.IdentityVerifierTest do
   end
 
   # The errors the compiler would have raised for that probe.
-  defp verifier_errors(body) do
-    module = probe(body)
-    Process.put({Spark.Dsl, :test_collector}, self())
-    module.__verify_spark_dsl__(module)
-
-    receive do
-      {Spark.Dsl, :verifier_errors, ^module, errors} -> errors
-    after
-      0 -> []
-    end
-  end
+  defp verifier_errors(body), do: VerifierErrors.errors(probe(body))
 
   defp message(body) do
     assert [%Spark.Error.DslError{} = error] = verifier_errors(body)

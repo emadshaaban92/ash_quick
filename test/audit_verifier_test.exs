@@ -16,13 +16,8 @@ defmodule AshQuick.AuditVerifierTest do
   section off and attaches `AshQuick.Audit.Change` to one of its actions is
   audited just as much as one that declares nothing.
 
-  Verifiers run in `@after_verify`, which the compiler executes in its own
-  checker process — so the error is reported there and never propagates out of
-  `Code.compile_string/1` for a test to catch. `__verify_spark_dsl__/1` is that
-  hook; calling it here runs the identical verifier list against the identical
-  DSL state, and `Spark.Dsl`'s `:test_collector` (a pid in the *calling*
-  process's dictionary, which is why the compiler's own run cannot use it) hands
-  back the errors it would otherwise raise.
+  Each probe is verified by hand through `AshQuick.Test.VerifierErrors`, which
+  says why the compiler's own run cannot hand its errors to a test.
 
   `async: false` because suppressing the compiler's own report means swapping
   the global `:standard_error` device, and every test here swaps the
@@ -48,6 +43,7 @@ defmodule AshQuick.AuditVerifierTest do
   alias AshQuick.Test.RequiredActorRelationshipAuditStore
   alias AshQuick.Test.RequiredRealActorAuditStore
   alias AshQuick.Test.UnacceptedChangesStore
+  alias AshQuick.Test.VerifierErrors
 
   defmodule NotAStore do
     @moduledoc false
@@ -115,18 +111,7 @@ defmodule AshQuick.AuditVerifierTest do
   defp name, do: "AuditProbe#{:erlang.unique_integer([:positive])}"
 
   # The errors the compiler would have raised, for a resource built from `body`.
-  defp verifier_errors(body) do
-    module = probe(name(), body)
-
-    Process.put({Spark.Dsl, :test_collector}, self())
-    module.__verify_spark_dsl__(module)
-
-    receive do
-      {Spark.Dsl, :verifier_errors, ^module, errors} -> errors
-    after
-      0 -> []
-    end
-  end
+  defp verifier_errors(body), do: VerifierErrors.errors(probe(name(), body))
 
   defp message(body) do
     assert [%Spark.Error.DslError{} = error] = verifier_errors(body)
