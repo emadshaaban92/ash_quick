@@ -160,6 +160,13 @@
   nothing has to change on upgrade. List and details widgets now receive
   `@scope` in their assigns.
 
+- **`extensions: [AshQuick]` is enough to write a `pub_sub` block.** The
+  extension brings `Ash.Notifier.PubSub`'s DSL in with it, so a resource that
+  adds a publication of its own no longer has to list
+  `notifiers: [Ash.Notifier.PubSub]` as well. Host-visible but not breaking: a
+  resource that already lists it keeps compiling, and the notifier still runs
+  once per write.
+
 ### Bug fixes
 
 - **A bulk print behind a `where:` prints exactly the rows it marked.**

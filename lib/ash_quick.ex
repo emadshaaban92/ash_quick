@@ -32,18 +32,12 @@ defmodule AshQuick do
   are appended to it and nothing in it is removed. Only the prefix is AshQuick's
   to set, since the subscribe side has no other way to know it.
 
-  To write that block, though, the resource also needs
-  `notifiers: [Ash.Notifier.PubSub]` — `notifiers:` is a Spark *extension kind*,
-  so it is what makes the `pub_sub` DSL macro available (and runs
-  `Ash.Notifier.PubSub`'s own verifiers over what you wrote). AshQuick attaches
-  the notifier through `:simple_notifiers` instead, which dispatches identically
-  but contributes no DSL — a transformer cannot add an extension, and
-  `extensions: [AshQuick]` being the only line a resource needs is the point. A
-  resource with a publication of its own therefore declares both:
+  The `AshQuick` extension brings `Ash.Notifier.PubSub`'s DSL in with it, so
+  `extensions: [AshQuick]` alone is enough to write that block (and to have
+  `Ash.Notifier.PubSub`'s own verifiers check it). A resource that already lists
+  `notifiers: [Ash.Notifier.PubSub]` keeps working; the line is just redundant.
 
-      use Ash.Resource,
-        extensions: [AshQuick],
-        notifiers: [Ash.Notifier.PubSub]
+      use Ash.Resource, extensions: [AshQuick]
 
       pub_sub do
         # Restated because Spark validates a section's required options when the
@@ -712,6 +706,7 @@ defmodule AshQuick do
 
   use Spark.Dsl.Extension,
     sections: [@ash_quick],
+    add_extensions: [Ash.Notifier.PubSub],
     transformers: [
       AshQuick.Audit.Transformer,
       AshQuick.Impersonation.Transformer,
