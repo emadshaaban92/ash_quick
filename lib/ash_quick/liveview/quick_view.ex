@@ -233,9 +233,10 @@ defmodule AshQuick.LiveView.QuickView do
   Nothing in a query string is refused — `AshQuick.LiveView.URLParams` falls
   back to a value the page can render for anything that will not parse. At the
   first render the URL is then corrected to say what the page actually did, so
-  a visitor holding `?limit=100000` lands on `?limit=250` rather than reading a
-  URL that claims a page size they did not get. The patch uses `replace: true`,
-  so Back still leads where they came from.
+  a visitor holding `?limit=100000` lands on the list action's `max_page_size`
+  (`?limit=250` under Ash's default) rather than reading a URL that claims a
+  page size they did not get. The patch uses `replace: true`, so Back still
+  leads where they came from.
 
   Only the keys `URLParams` models survive it, so a query param of your own is
   dropped from the URL. This is what every control has always done — they
@@ -770,6 +771,8 @@ defmodule AshQuick.LiveView.QuickView do
       params |> action_from_params(options, nil) |> then(&resolve_parent(options, &1, params))
 
     if parent_action do
+      params = clamp_limit(params, parent_action)
+
       parent =
         socket
         |> assign(params: params, ash_action: parent_action)
@@ -966,8 +969,15 @@ defmodule AshQuick.LiveView.QuickView do
       if reachable?(options, action_name),
         do: resolved_action(options.resource, action_name, params)
 
-    {params, action}
+    {clamp_limit(params, action), action}
   end
+
+  # A list reads at most its action's `max_page_size`, so that is the most its
+  # page may say it reads. See `URLParams.clamp_limit/2`.
+  defp clamp_limit(%URLParams{id: nil} = params, %Actions.Read{pagination: %{} = pagination}),
+    do: URLParams.clamp_limit(params, pagination.max_page_size)
+
+  defp clamp_limit(params, _action), do: params
 
   # A URL names actions on the visitor's behalf, so it reaches only public
   # ones. See `AshQuick.LiveView.Utils.record_actions/1` for what a private

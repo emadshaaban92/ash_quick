@@ -10,6 +10,7 @@ for resource <- [
       Example.Test.RequiredAttachments,
       Example.Test.RequiredEntries,
       Example.Test.RequiredPicks,
+      Example.Test.SmallPages,
       Example.Test.WordedPolicy
     ] do
   {:ok, _table} = Ash.DataLayer.Ets.TableManager.start(resource, nil)

@@ -104,6 +104,7 @@ defmodule ExampleWeb.Router do
         quick_view "/required_attachments", Example.Test.RequiredAttachmentsLive.Quick
         quick_view "/required_entries", Example.Test.RequiredEntriesLive.Quick
         quick_view "/required_picks", Example.Test.RequiredPicksLive.Quick
+        quick_view "/small_pages", Example.Test.SmallPagesLive.Quick
         quick_view "/worded_policy", Example.Test.WordedPolicyLive.Quick
       end
     end

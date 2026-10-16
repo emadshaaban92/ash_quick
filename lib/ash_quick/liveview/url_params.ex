@@ -1,6 +1,5 @@
 defmodule AshQuick.LiveView.URLParams do
   @moduledoc false
-  alias AshQuick.Config
   alias AshQuick.LiveView.CustomFilter
 
   @default_limit 20
@@ -13,7 +12,8 @@ defmodule AshQuick.LiveView.URLParams do
             selected_filters: [],
             custom_filter: nil,
             read_args: %{},
-            show_custom_filter: false
+            show_custom_filter: false,
+            limit_ceiling: nil
 
   @doc """
   Reads a QuickView's state out of the query string.
@@ -24,13 +24,11 @@ defmodule AshQuick.LiveView.URLParams do
   one that will parse is still held to what it may say.
   """
   def from_url_params(params) do
-    limit = params |> Map.get("limit") |> parse_limit()
-
     %__MODULE__{
       id: Map.get(params, "id"),
       action: params |> Map.get("action") |> parse_action(),
-      limit: limit,
-      page: params |> Map.get("page") |> parse_page(limit),
+      limit: params |> Map.get("limit") |> parse_limit(),
+      page: params |> Map.get("page") |> parse_page(),
       search: params |> Map.get("search") |> parse_search(),
       selected_filters: params |> Map.get("selected_filters") |> parse_selected_filters(),
       custom_filter: params |> Map.get("custom_filter") |> decode_custom_filter(),
@@ -51,39 +49,68 @@ defmodule AshQuick.LiveView.URLParams do
   # `?action[]=x` arrives as a list, which is as much a missing action as `nil`.
   defp parse_action(_), do: nil
 
-  # Clamped, not refused: raising the page size by hand is supported (the row
-  # actions menu resolves lazily so it stays cheap), but how far is the host's
-  # answer rather than the visitor's.
-  #
-  # The clamp is not what bounds the read; it is what keeps the count and the
-  # pager honest about it. See `AshQuick.Config.max_page_size/0`.
+  # Not clamped here: nothing here knows the list action, whose
+  # `pagination.max_page_size` is the ceiling. See `clamp_limit/2`.
   defp parse_limit(limit) when is_binary(limit) do
     case Integer.parse(limit) do
-      {limit, ""} -> limit |> max(1) |> min(Config.max_page_size())
-      _ -> default_limit()
+      {limit, ""} -> max(limit, 1)
+      _ -> @default_limit
     end
   end
 
-  defp parse_limit(_), do: default_limit()
+  defp parse_limit(_), do: @default_limit
+
+  @doc """
+  Holds the limit to a list action's `pagination.max_page_size`.
+
+  Clamped, not refused: raising the page size by hand is supported (the row
+  actions menu resolves lazily so it stays cheap), but how far is the action's
+  answer rather than the visitor's.
+
+  Ash clamps the read to the same number, so this is not what bounds it. It is
+  what keeps the page honest about it: the offset is `page` times this limit,
+  and the count and the pager reason about it too, so unclamped `?limit=100000`
+  against a 250-row action would read the wrong offset under a footer claiming
+  4,166 pages.
+
+  The page is bounded here too, against the limit the list reads at, rather
+  than while parsing against the one the URL asked for: that one can only be
+  larger, and would cut the page short.
+  """
+  def clamp_limit(%__MODULE__{} = params, ceiling) when is_integer(ceiling) do
+    limit = min(params.limit, ceiling)
+
+    %__MODULE__{
+      params
+      | limit: limit,
+        page: min(params.page, max_page(limit)),
+        limit_ceiling: ceiling
+    }
+  end
 
   # A lowered ceiling is a smaller page, and the request nobody typed a limit
-  # into is a request like any other.
-  defp default_limit, do: min(@default_limit, Config.max_page_size())
+  # into is a request like any other: its limit is the clamped default.
+  defp default_limit(%__MODULE__{limit_ceiling: nil}), do: @default_limit
+  defp default_limit(%__MODULE__{limit_ceiling: ceiling}), do: min(@default_limit, ceiling)
 
   # Bounded against the limit rather than on its own, because a page is only
   # read as an offset: `ListUtils.get_offset/2` multiplies the two, and the data
   # layer refuses a product outside a 64-bit integer. Nothing real is lost — a
   # page past the end of the data lists nothing at any depth.
+  #
+  # Parsed against a page of one row, the most any limit allows; `clamp_limit/2`
+  # bounds it against the limit the list reads at, which is the only read that
+  # turns a page into an offset.
   @max_offset 1_000_000_000
 
-  defp parse_page(page, limit) when is_binary(page) do
+  defp parse_page(page) when is_binary(page) do
     case Integer.parse(page) do
-      {page, ""} when page > 0 -> min(page, max_page(limit))
+      {page, ""} when page > 0 -> min(page, max_page(1))
       _ -> 1
     end
   end
 
-  defp parse_page(_, _), do: 1
+  defp parse_page(_), do: 1
 
   defp max_page(limit), do: div(@max_offset, limit) + 1
 
@@ -192,8 +219,8 @@ defmodule AshQuick.LiveView.URLParams do
   # Against the effective default rather than the literal one: under a lowered
   # ceiling the limit a bare path reads is the clamped one, so that is the
   # limit a path may leave unsaid.
-  defp maybe_put_limit(params_for_path, %{limit: limit}) do
-    if limit == default_limit() do
+  defp maybe_put_limit(params_for_path, %{limit: limit} = params) do
+    if limit == default_limit(params) do
       params_for_path
     else
       Map.put(params_for_path, "limit", limit)
