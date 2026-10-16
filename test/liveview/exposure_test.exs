@@ -20,8 +20,8 @@ defmodule AshQuick.LiveView.ExposureTest do
 
   import Phoenix.LiveViewTest, only: [render_component: 2, rendered_to_string: 1]
 
+  alias AshQuick.LiveView.BulkActions
   alias AshQuick.LiveView.Components.{DetailsView, FieldValue, ListView}
-  alias AshQuick.LiveView.ListUtils
   alias AshQuick.LiveView.QuickField
   alias AshQuick.LiveView.QuickView
   alias AshQuick.LiveView.QuickView.Options
@@ -67,7 +67,7 @@ defmodule AshQuick.LiveView.ExposureTest do
     test "are not derived into the bulk menu" do
       titles =
         Payslip
-        |> ListUtils.resource_bulk_actions(@actor, options())
+        |> BulkActions.derived(@actor)
         |> Enum.map(& &1.title)
 
       # `:update` takes input, so it was never derivable; `:destroy` is the one

@@ -9,12 +9,15 @@ defmodule ExampleWeb.ProductLive.Quick do
   the resource defines it and the actor's policy allows it.
 
   `:bulk_actions` is the one thing here that *is* told, and it is worth reading
-  for why. Every input-less update and every destroy the actor may run is
-  already offered over a selection, derived from the resource — `Activate`,
-  `Deactivate` and `Delete` appear on this page without being named. What
-  cannot be derived is an operation needing a value nobody has been asked for.
-  `:reprice` takes a price, so it is not in the automatic list; "Discount 10%"
-  below supplies one and runs it over the selection.
+  for why. Left out, the menu over a selection would be derived: every public
+  update and destroy that takes no input — `Activate`, `Deactivate` and
+  `Delete` here. An action that takes input is never derived, because only the
+  page knows whether one value makes sense for every selected row. One price
+  for a whole range does, so this page names `:reprice`, which opens its form
+  in the modal and applies the price to every selected row. Naming anything
+  means naming everything, so the three defaults are named too, in the order
+  the menu shows them. "Discount 10%" is the other kind of entry: a custom item
+  whose event this module handles itself.
   """
   require Ash.Expr
 
@@ -67,19 +70,22 @@ defmodule ExampleWeb.ProductLive.Quick do
   @discount Decimal.new("0.9")
 
   @doc """
-  The bulk actions this page adds to the ones derived from the resource.
+  This page's bulk menu, in order.
 
-  Taken as a function of the socket rather than as a list, so the offer can
-  depend on who is reading: `:reprice` is an admin's, and an editor is shown
-  nothing they would only be refused. The record-less `Ash.can?/3` here is the
-  same question the derived actions are filtered by.
+  Action names need no guard: each is offered only to an actor whose policy
+  allows it, so an editor's menu has no `Reprice`. A custom item is the host's
+  to guard, which is why this is a function of the socket rather than a list.
+
+  "Discount 10%" stays beside `Reprice` because it does what one set of inputs
+  cannot: each row's new price comes from its own old one. `Reprice` sets the
+  same price on every row.
   """
   def bulk_actions(socket) do
-    if Ash.can?({Product, :reprice}, socket.assigns.scope, log_policy_breakdown?: false) do
-      [%{title: "Discount 10%", func: JS.push("discount")}]
-    else
-      []
-    end
+    discount =
+      if Ash.can?({Product, :reprice}, socket.assigns.scope, log_policy_breakdown?: false),
+        do: %{title: "Discount 10%", func: JS.push("discount")}
+
+    [:reprice, discount, :activate, :deactivate, :destroy]
   end
 
   @doc """

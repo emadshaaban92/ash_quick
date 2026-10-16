@@ -104,8 +104,17 @@ defmodule AshQuick.LiveView.QuickView do
       `pagination`.
     * `:new_action_label` — Label for the "Create" button (e.g. `"Add Product"`).
       When `nil`, the button is still shown but with a default label.
-    * `:bulk_actions` — A function `(socket -> list)` returning custom bulk
-      action definitions for the actions dropdown.
+    * `:bulk_actions` — The actions menu over a selection: a list, or a
+      function `(socket -> list)` for one that depends on the visitor. Each
+      item is either an action name — a public update or destroy, run over
+      every selected row — or a custom item, `%{title: ..., func: %JS{}}` or
+      `%{title: ..., link: path}`. Given, the menu is exactly this list in
+      this order, a named action shown where `AshQuick.can?/4` allows it under
+      `:ash_quick_list_bulk`. Not given, the menu is every public update and
+      destroy that takes no input. A list is checked when the QuickView
+      compiles, a function's result when the menu is built: a name that is no
+      public update or destroy, or one whose action takes an upload (which
+      belongs to one record), is refused.
 
   ### Details options (under `:details`)
 
@@ -208,6 +217,15 @@ defmodule AshQuick.LiveView.QuickView do
   `AshQuick.form_source/0`. A policy scoped to a surface hides a control; one
   that must refuse the run says so for the form source, or leaves it to a
   validation.
+
+  A bulk action opens the same modal over the list, keeping the selection: a
+  confirmation naming how many rows it applies to, or a form whose values
+  apply to every selected row. The form checks the values themselves — each
+  cast to its type, each required one present — and leaves what depends on a
+  record to the run. Closing it (✕ or Cancel) leaves the list and its
+  selection as they were. The run takes the selected rows the list still
+  holds, stamped `AshQuick.form_source/0`; a row it did not write stays
+  selected and is reported.
 
   ## URL canonicalization
 
@@ -537,7 +555,14 @@ defmodule AshQuick.LiveView.QuickView do
           """
         end
 
-        def render(assigns), do: __ash_quick_render__(assigns)
+        # A bulk action opens over the list without leaving it, so the list
+        # stays live underneath, and the selection it acts on stays put.
+        def render(assigns) do
+          AshQuick.LiveView.Components.BulkActionView.with_page(
+            assigns,
+            __ash_quick_render__(assigns)
+          )
+        end
 
         @doc false
         # sobelow_skip ["DOS.StringToAtom"]
@@ -783,16 +808,15 @@ defmodule AshQuick.LiveView.QuickView do
     # view is what knows it wants the width, and the layout is what wraps it.
     |> assign(:sidebar, options.sidebar)
     |> assign(:filters, options.filters)
-    |> assign(:bulk_actions, options.bulk_actions && options.bulk_actions.(socket))
-    |> assign(
-      :resource_bulk_actions,
-      ListUtils.resource_bulk_actions(options.resource, socket.assigns.scope, options)
-    )
+    # Once: a record-less `Ash.can?` answers from the scope alone.
+    |> assign(:bulk_actions, AshQuick.LiveView.BulkActions.menu(options, socket))
+    |> assign(:ash_quick_bulk, nil)
     |> assign(:action_running, false)
   end
 
   def do_handle_params(socket, params, ash_action, %Options{} = options) do
     socket
+    |> assign(:ash_quick_bulk, nil)
     |> load_params(params, ash_action, options)
     |> prepare_assigns(ash_action, options)
   end
@@ -850,11 +874,6 @@ defmodule AshQuick.LiveView.QuickView do
          %Actions.Read{get?: false} = action,
          %Options{} = options
        ) do
-    # Computed once at mount (do_mount) — record-less Ash.can? is scope-dependent
-    # only, so it must not be re-filtered on every navigation.
-    resource_actions = socket.assigns[:resource_bulk_actions] || []
-    custom_actions = socket.assigns[:bulk_actions] || []
-
     %{path: path, params: params} = socket.assigns
 
     socket
@@ -862,7 +881,7 @@ defmodule AshQuick.LiveView.QuickView do
     |> assign(:fields, visible_fields(socket, options.list_fields, action, options))
     |> assign(:new_action_label, options.new_action_label)
     |> assign(:new_click, fn -> JS.push("new_click") end)
-    |> assign(:actions, custom_actions ++ resource_actions)
+    |> assign(:actions, socket.assigns[:bulk_actions] || [])
     |> assign(:path_for_page, &URLParams.path_for_page(path, params, &1))
   end
 

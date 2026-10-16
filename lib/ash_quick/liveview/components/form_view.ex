@@ -57,19 +57,24 @@ defmodule AshQuick.LiveView.Components.FormView do
     Map.take(assigns, [:form, :id, :ash_action, :record, :ash_quick_background])
   end
 
-  # An action that asks for nothing is a confirmation rather than a form: the
-  # action and the record it acts on, and the one button that runs it.
-  defp confirm_form(assigns) do
-    assigns =
-      assigns
-      |> assign_new(:record, fn -> nil end)
-      |> assign_new(:ash_quick_background, fn -> nil end)
+  attr :form, :any, default: nil
+  attr :id, :string, required: true
+  attr :ash_action, :map, required: true
+  attr :record, :any, default: nil
+  attr :ash_quick_background, :map, default: nil
+  attr :close, :any, default: nil, doc: "closes the modal instead of `ash_quick_background`"
+  attr :submit, :string, default: "save"
+  attr :applies_to, :integer, default: nil, doc: "how many selected rows a bulk run writes"
 
+  # An action that asks for nothing is a confirmation rather than a form: the
+  # action and what it acts on, and the one button that runs it.
+  @doc false
+  def confirm_form(assigns) do
     ~H"""
     <.form
-      for={@form}
+      for={@form || %{}}
       id={@id}
-      phx-submit="save"
+      phx-submit={@submit}
       phx-hook="AshQuick.Components.SubmitLock"
       class="flex flex-col gap-4"
     >
@@ -77,9 +82,16 @@ defmodule AshQuick.LiveView.Components.FormView do
       <p :if={@ash_action.type != :create and @record} class="font-medium">
         {AshQuick.Info.display_value(@record)}
       </p>
+      <p :if={@applies_to} class="font-medium">
+        {ngettext(
+          "Applies to 1 selected row.",
+          "Applies to %{count} selected rows.",
+          @applies_to
+        )}
+      </p>
       <p class="text-base-content/70">{gettext("Are you sure?")}</p>
       <div class="flex justify-end gap-2">
-        <.cancel_link background={@ash_quick_background} />
+        <.cancel_link background={@ash_quick_background} close={@close} />
         <button
           type="submit"
           class={[
@@ -99,17 +111,22 @@ defmodule AshQuick.LiveView.Components.FormView do
   end
 
   attr :background, :map, default: nil
+  attr :close, :any, default: nil, doc: "a path or a `JS` command, in place of `background`"
   attr :class, :string, default: nil
 
   # Back to the page the modal opened over, without running anything. A
   # button rather than a link, so LiveView disables it with the rest of the
   # form while the action runs: a link would stay live to the keyboard.
-  defp cancel_link(assigns) do
+  @doc false
+  def cancel_link(assigns) do
+    assigns =
+      assign(assigns, :close, assigns.close || (assigns.background && assigns.background.path))
+
     ~H"""
     <button
-      :if={@background}
+      :if={@close}
       type="button"
-      phx-click={JS.patch(@background.path)}
+      phx-click={AshQuick.LiveView.Components.ActionModal.close_js(@close)}
       class={["btn btn-ghost", @class]}
     >
       {gettext("Cancel")}

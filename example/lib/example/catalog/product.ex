@@ -87,6 +87,15 @@ defmodule Example.Catalog.Product do
 
       change set_attribute(:price, arg(:price))
 
+      # Judged against the row, so a bulk reprice form cannot ask it while the
+      # price is typed: one inactive row refuses the run, and the whole run
+      # with it.
+      validate fn changeset, _context ->
+        if changeset.data.active,
+          do: :ok,
+          else: {:error, "Only an active product can be repriced."}
+      end
+
       change fn changeset, context ->
         Ash.Changeset.after_action(changeset, fn changeset, product ->
           Example.Catalog.PriceChange.create(

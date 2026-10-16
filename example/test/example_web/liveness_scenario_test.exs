@@ -32,6 +32,7 @@ defmodule ExampleWeb.LivenessScenarioTest do
   # The bulk menu shares its labels with the row menu, so a bulk action is
   # addressed by the event it pushes rather than by its text.
   @bulk "a[phx-click*='bulk_action']"
+  @modal "#ash-quick-action-modal"
 
   setup do
     # Deleted rather than restored as `nil` on the way out: the key is not in
@@ -139,6 +140,7 @@ defmodule ExampleWeb.LivenessScenarioTest do
       |> visit(~p"/products")
       |> tick_rows([first.id, second.id])
       |> click_link(@bulk, "Deactivate")
+      |> click_button("#{@modal} button", "Confirm")
       |> assert_has("tr[id='#{first.id}'].opacity-50")
 
       # One publication per row written, the same as a row action's — a bulk
@@ -166,26 +168,24 @@ defmodule ExampleWeb.LivenessScenarioTest do
       |> visit(~p"/products")
       |> tick_rows([first.id, second.id])
       |> click_link(@bulk, "Delete")
+      |> click_button("#{@modal} button", "Confirm")
       |> refute_has("td", text: "First")
 
       assert_receive %Broadcast{topic: ^first_topic, payload: %Ash.Notifier.Notification{}}
       assert_receive %Broadcast{topic: ^second_topic, payload: %Ash.Notifier.Notification{}}
     end
 
-    # The failure below is a forged `:reprice` rather than the optimistic lock,
-    # and that is a finding rather than a convenience. A selected row that moved
-    # behind the page does not fail a bulk update at all — see the test after
-    # these two. So the only way to watch this clause *fail* is an action that
-    # cannot be built: `:reprice` needs a price, and the bulk endpoint takes
-    # `%{}`. It fails before any row is written, which is the shape every
-    # failure of a derived bulk action has here — a derived action is input-less
-    # and its policy is actor-wide, so nothing refuses row two after row one
-    # went through.
+    # The failure below is `:reprice` refusing an inactive row rather than the
+    # optimistic lock, and that is a finding rather than a convenience. A
+    # selected row that moved behind the page does not fail a bulk update at
+    # all — see the test after these two. A row the action itself refuses does,
+    # and it fails the whole run: `transaction: :all` rolls back the rows that
+    # went through before it.
     test "that fails writes nothing and tells nobody", ctx do
       %{conn: conn, admin: admin} = ctx
 
       first = product(name: "First", actor: admin)
-      second = product(name: "Second", actor: admin)
+      second = product(name: "Second", actor: admin) |> deactivated(admin)
 
       first_topic = watch(first)
       second_topic = watch(second)
@@ -196,12 +196,8 @@ defmodule ExampleWeb.LivenessScenarioTest do
           |> log_in(admin)
           |> visit(~p"/products")
           |> tick_rows([first.id, second.id])
-          |> force_bulk_action(:reprice)
-          # "Unknown Error" is what this clause's existing error handling puts
-          # in the flash — `run_bulk_action/3` passes no `return_errors?`, so
-          # the result carries no errors to describe. Untouched here; the
-          # assertion is that an error flash is shown at all.
-          |> assert_has("#flash-error", text: "Unknown Error")
+          |> reprice_selection("5.00")
+          |> assert_has("#flash-error", text: "Only an active product can be repriced.")
         end)
 
       # `:reprice` writes a `PriceChange` beside the product, so "nothing was
@@ -223,7 +219,7 @@ defmodule ExampleWeb.LivenessScenarioTest do
       %{conn: conn, admin: admin} = ctx
 
       first = product(name: "First", actor: admin)
-      second = product(name: "Second", actor: admin)
+      second = product(name: "Second", actor: admin) |> deactivated(admin)
       unrelated = product(name: "Unrelated", actor: admin)
 
       first_topic = watch(first)
@@ -236,8 +232,8 @@ defmodule ExampleWeb.LivenessScenarioTest do
           |> log_in(admin)
           |> visit(~p"/products")
           |> tick_rows([first.id, second.id])
-          |> force_bulk_action(:reprice)
-          |> assert_has("#flash-error", text: "Unknown Error")
+          |> reprice_selection("5.00")
+          |> assert_has("#flash-error", text: "Only an active product can be repriced.")
           # A notification held back rather than dropped sits in the LiveView's
           # own state, and the next thing that process sends carries it out. So
           # the page goes on to do something that does publish.
@@ -278,6 +274,7 @@ defmodule ExampleWeb.LivenessScenarioTest do
 
       session
       |> click_link(@bulk, "Deactivate")
+      |> click_button("#{@modal} button", "Confirm")
       |> assert_has("#flash-error",
         text:
           "Deactivate applied to 1 of 2 selected rows. The other row was not changed " <>
@@ -442,5 +439,16 @@ defmodule ExampleWeb.LivenessScenarioTest do
   # invisible to the page, until something else makes it refetch.
   defp rename_behind_the_view(record) do
     Ash.Seed.update!(record, %{name: "Renamed behind the view #{unique("")}"})
+  end
+
+  defp deactivated(product, actor),
+    do: Ash.update!(product, %{}, action: :deactivate, actor: actor)
+
+  # Opens `:reprice` over the selection and saves `price` for every row.
+  defp reprice_selection(session, price) do
+    session
+    |> click_link(@bulk, "Reprice")
+    |> fill_in("#{@modal} input", "Price", with: price)
+    |> click_button("#{@modal} button", "Save")
   end
 end

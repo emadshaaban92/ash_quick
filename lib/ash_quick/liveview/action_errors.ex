@@ -147,6 +147,11 @@ defmodule AshQuick.LiveView.ActionErrors do
   defp field_sentences(%{fields: [_ | _] = fields}),
     do: Enum.map(fields, &invalid_field_sentence/1)
 
+  # A validation returning `{:error, "..."}` names no field, and AshPhoenix
+  # renders such an error to nothing at all. Its message is what it says.
+  defp field_sentences(%{message: message} = error) when is_binary(message) and message != "",
+    do: [interpolate(message, Map.get(error, :vars))]
+
   defp field_sentences(_), do: []
 
   defp invalid_field_sentence(field),

@@ -739,14 +739,15 @@ defmodule AshQuick do
   The `action_source` values AshQuick stamps for a *visibility surface* — one
   per place a control can be probed and shown: `:ash_quick_details`,
   `:ash_quick_list`, `:ash_quick_list_bulk`. A policy scoped to these hides a
-  control on that surface.
+  control on that surface, and never refuses the run, which is stamped
+  `form_source/0` — a bulk run included.
   """
   def surface_sources, do: @surface_sources
 
   @doc """
   The `action_source` stamped on every action a QuickView runs: a create, an
   update or a destroy, submitted from its modal whether it took input or only
-  a confirmation.
+  a confirmation, on one record or over a bulk selection.
 
   Deliberately **not** one of `surface_sources/0`: a form submit records its
   provenance in the audit log, but must not count as a visibility surface. A
