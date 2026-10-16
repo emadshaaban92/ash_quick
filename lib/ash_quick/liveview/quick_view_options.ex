@@ -149,7 +149,7 @@ defmodule AshQuick.LiveView.QuickView.Options do
   # Two kinds of reader are checked. The list action, which this page reads its
   # own rows and its export through; and every resource a dropdown on one of
   # this page's forms would search, which is a `belongs_to` this page can edit
-  # or a `many_to_many` behind an `_ids` argument.
+  # or a `many_to_many` an argument edits.
   defp validate_lookups!(%__MODULE__{} = options) do
     Contract.check!(
       options.resource,
@@ -184,15 +184,15 @@ defmodule AshQuick.LiveView.QuickView.Options do
         field <- Utils.action_fields(resource, action.name),
         not is_nil(field),
         not Map.has_key?(options.form_widgets, field.name),
-        destination = destination(field, resource),
+        destination = destination(field, resource, action),
         not is_nil(destination),
         uniq: true do
       destination
     end
   end
 
-  defp destination(field, resource) do
-    case Utils.argument_to_relationship(field, resource) do
+  defp destination(field, resource, action) do
+    case Utils.argument_to_relationship(field, resource, action) do
       %BelongsTo{destination: destination} -> destination
       %ManyToMany{destination: destination} -> destination
       _ -> nil

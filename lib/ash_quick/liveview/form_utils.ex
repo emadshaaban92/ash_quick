@@ -53,7 +53,7 @@ defmodule AshQuick.LiveView.FormUtils do
     # actually looking at is the one rendered as a UUID.
     fields =
       Utils.action_fields(options.resource, action_name)
-      |> Enum.map(&Utils.argument_to_relationship(&1, options.resource))
+      |> Enum.map(&Utils.argument_to_relationship(&1, options.resource, action_name))
       |> Enum.map(fn
         %Ash.Resource.Attribute{name: name} -> name
         %Ash.Resource.Relationships.BelongsTo{name: name} -> name
@@ -256,22 +256,16 @@ defmodule AshQuick.LiveView.FormUtils do
     end)
   end
 
-  defp prefill_form_has_many_arg(form, resource, %Argument{type: {:array, item_type}} = arg)
-       when item_type in [Type.UUID, Type.UUIDv7] do
-    relation_name = String.trim_trailing(arg.name |> to_string(), "_ids")
-
-    relationship =
-      Ash.Resource.Info.relationship(resource, relation_name)
-
-    if relationship && is_list(form.data |> Map.get(relationship.name)) do
-      value = form.data |> Map.get(relationship.name) |> Enum.map(& &1.id)
+  defp prefill_form_has_many_arg(form, resource, arg) do
+    with %{destination: _, name: name} <-
+           Utils.argument_to_relationship(arg, resource, form.action),
+         records when is_list(records) <- Map.get(form.data, name) do
+      value = Enum.map(records, & &1.id)
       form |> AshPhoenix.Form.update_params(&Map.put(&1, arg.name, value))
     else
-      form
+      _ -> form
     end
   end
-
-  defp prefill_form_has_many_arg(form, _resource, _arg), do: form
 
   # A change module on the action may seed an embedded attribute onto the
   # changeset before submission. AshPhoenix builds embedded sub-forms from the

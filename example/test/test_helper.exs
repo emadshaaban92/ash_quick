@@ -7,6 +7,9 @@ Ecto.Adapters.SQL.Sandbox.mode(Example.Repo, :manual)
 for resource <- [
       Example.Test.BulkGuarded,
       Example.Test.DigitsOnly,
+      Example.Test.PickedLabels,
+      Example.Test.PickedLabels.Label,
+      Example.Test.PickedLabels.Labelling,
       Example.Test.RequiredAttachments,
       Example.Test.RequiredEntries,
       Example.Test.RequiredPicks,

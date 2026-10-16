@@ -100,18 +100,41 @@ defmodule AshQuick.LiveView.Utils do
     end
   end
 
-  def argument_to_relationship(%Argument{type: {:array, item_type}, name: name} = arg, resource)
-      when item_type in [Ash.Type.UUID, Ash.Type.UUIDv7] do
-    relationship =
-      if String.ends_with?(name |> to_string(), "_ids") do
-        relation_name = String.trim_trailing(name |> to_string(), "_ids")
-        Ash.Resource.Info.relationship(resource, relation_name)
-      end
+  @doc """
+  The relationship an id-list argument of `action` edits, or the argument
+  itself when it edits none.
 
-    relationship || arg
+  The argument edits the relationship a `manage_relationship` change on the
+  action (or a global one covering it) names it for, whatever it is called.
+  With no such change, an argument named `<relationship>_ids` is still taken
+  to edit `<relationship>`.
+  """
+  def argument_to_relationship(%Argument{type: {:array, item_type}} = arg, resource, action)
+      when item_type in [Ash.Type.UUID, Ash.Type.UUIDv7] do
+    case managed_relationship(resource, action, arg.name) || ids_relationship(arg.name) do
+      nil -> arg
+      name -> Ash.Resource.Info.relationship(resource, name) || arg
+    end
   end
 
-  def argument_to_relationship(arg, _resource), do: arg
+  def argument_to_relationship(arg, _resource, _action), do: arg
+
+  defp managed_relationship(resource, action, argument) do
+    resource
+    |> Ash.Resource.Info.action_changes(action)
+    |> Enum.find_value(fn
+      %Ash.Resource.Change{change: {Ash.Resource.Change.ManageRelationship, opts}} ->
+        if opts[:argument] == argument, do: opts[:relationship]
+
+      _ ->
+        nil
+    end)
+  end
+
+  defp ids_relationship(argument) do
+    name = to_string(argument)
+    if String.ends_with?(name, "_ids"), do: String.trim_trailing(name, "_ids")
+  end
 
   @doc """
   The action input a search over `resource` is read with.
