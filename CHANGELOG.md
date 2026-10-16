@@ -322,16 +322,39 @@
 
 ### Breaking changes
 
+- **Every action runs through the action modal, stamped `:ash_quick_form`.**
+  A row or details action no longer runs on the click, stamped with its
+  surface: it opens the modal, and Confirm (or Save) runs it. A policy scoped
+  to `:ash_quick_list` or `:ash_quick_details` now only hides the control; one
+  that must refuse the run needs a validation, or
+  `forbid_if context_equals(:action_source, :ash_quick_form)`. See
+  "Actions open in a modal" above.
+
+  **Who is affected:** a host whose surface-scoped policy was the only thing
+  refusing an action without inputs, and tests that select an action's form
+  as `"form"` (select `"#ash-quick-action-modal form"`) or expect an
+  input-less action to run on the click (submit the modal's form after it).
+
+- **The action modal's keyboard lock is a colocated hook the host
+  registers.** Import `hooks as ashQuickHooks` from
+  `"phoenix-colocated/ash_quick"` and spread it into the LiveSocket's
+  `hooks`, and keep the `phx-submit-loading` Tailwind variant. Without them
+  the modal still works, but shows no spinner and its controls still answer
+  the keyboard while an action runs. The installer adds both.
+
 - **A bulk action asks before it runs.** Clicking it in the menu opens the
   modal; Confirm (or Save) runs it. Tests click the action, then submit
   `"#ash-quick-action-modal form"`.
+
 - **A bulk run is stamped `:ash_quick_form`**, not `:ash_quick_list_bulk`. A
   policy scoped to `:ash_quick_list_bulk` now only hides the menu item; one
   that must refuse the run needs a validation, or
   `forbid_if context_equals(:action_source, :ash_quick_form)`.
+
 - **A page passing `bulk_actions` gets exactly that menu.** The derived
   actions are no longer added to it; name them (`[:activate, :destroy, ...]`)
   to keep them.
+
 - **A destroy with arguments is no longer derived into the bulk menu**, as an
   update with inputs never was. Name it in `bulk_actions` to offer it.
 

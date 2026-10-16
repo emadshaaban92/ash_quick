@@ -38,6 +38,12 @@ if Code.ensure_loaded?(Igniter) do
       * Adds `:ash_quick` to `import_deps` and to Spark's `section_order`.
       * Supervises `AshQuick.BrowserSessionPresence`, and points the Tailwind
         build at the library's own classes.
+      * Adds the `phx-submit-loading` Tailwind variant when `app.css` lacks it,
+        which the action modal's spinner and lock hang on, and registers the
+        library's colocated hooks in `app.js`.
+
+    The rest of `app.js` (the tab's session params, the locale, and printing)
+    is stated in a notice rather than patched in.
 
     ## Options
 
@@ -586,6 +592,10 @@ if Code.ensure_loaded?(Igniter) do
       every connect — the unit `AshQuick.BrowserSessionPresence` registers, and
       the one an impersonation is revoked at. `initLocale` applies the `lang`
       and `dir` the connected mount pushes.
+
+      If an action prints (`AshQuick.Print`), also import `initPrinting` from
+      "../../deps/ash_quick/assets/js/print" and call it once: it receives the
+      PDF over the socket.
 
       Then put `AshQuick.LiveView.Mount` first in the `on_mount` of the
       live_session serving the QuickViews, and route one with

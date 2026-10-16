@@ -168,9 +168,10 @@ defmodule AshQuick.LiveView.QuickView do
 
     * `id: nil` + read action → **List view**
     * `id: <uuid>` + read action → **Details view**
-    * `id: nil` + create action → **Create form**
-    * `id: <uuid>` + update action → **Edit form**
-    * `id: <uuid>` + destroy action → **Delete confirmation**
+    * `id: nil` + create action → **Create modal**, over the list
+    * `id: <uuid>` + update or destroy action → **Action modal**, over the
+      record's page: a form when the action takes input, a confirmation when
+      it takes none (see "Actions open in a modal" below)
 
   The action is resolved from (in priority order):
   1. The `action` URL parameter
