@@ -45,7 +45,8 @@ config :ash_quick,
         "/test/printable",
         "/test/required_attachments",
         "/test/required_entries",
-        "/test/required_picks"
+        "/test/required_picks",
+        "/test/worded_policy"
       ],
       # Tower keeps its default reporter here on purpose: it is the one that
       # holds events in memory, and `Example.ActionErrorsTest` reads what was

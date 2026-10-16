@@ -43,7 +43,9 @@ if Code.ensure_loaded?(Igniter) do
         library's colocated hooks in `app.js`.
 
     The rest of `app.js` (the tab's session params, the locale, and printing)
-    is stated in a notice rather than patched in.
+    is stated in a notice rather than patched in, and so is copying Ash's error
+    messages into the host's Gettext catalogue (`mix ash.gen.gettext`), which
+    writes into `priv/gettext`.
 
     ## Options
 
@@ -223,9 +225,29 @@ if Code.ensure_loaded?(Igniter) do
         ]
         |> Enum.reject(fn {_path, value} -> is_nil(value) end)
 
-      Igniter.Project.Config.configure_group(igniter, "config.exs", :ash_quick, [], items,
+      igniter
+      |> Igniter.Project.Config.configure_group("config.exs", :ash_quick, [], items,
         comment: @config_comment
       )
+      |> maybe_add_gettext_notice(translator)
+    end
+
+    # Copying Ash's messages writes into the host's `priv/gettext`, which is
+    # theirs to run when they want it, so it is stated rather than run. Only
+    # with a translator: without one there is nothing to translate them through.
+    defp maybe_add_gettext_notice(igniter, nil), do: igniter
+
+    defp maybe_add_gettext_notice(igniter, {module, function}) do
+      Igniter.add_notice(igniter, """
+      To translate Ash's own error messages, copy them into your catalogue:
+
+          mix ash.gen.gettext --domain errors
+          mix gettext.merge priv/gettext
+
+      AshQuick renders them through `#{inspect(module)}.#{function}/1`, the
+      `:error_translator` written above, in a flash as well as next to an input;
+      `--domain errors` puts them where its `dgettext(..., "errors", ...)` looks.
+      """)
     end
 
     # There is no reporter to default to: each one that delivers anywhere is a

@@ -819,6 +819,17 @@ long after the resources were built against `nil`, with no runtime symptom: the
 pages are simply dead and the columns empty. `mix igniter.install ash_quick`
 writes this block in the right file; `AshQuick.Config` documents every key.
 
+`:error_translator` renders every Ash error message AshQuick shows, flash and
+form alike. Hosts put Ash's own messages in their catalogue with `mix
+ash.gen.gettext --domain errors` (the installer prints this, and changes no
+`priv/gettext` file). A form shows a field error under its input when it has
+one for that field, and flashes it as `Field: message` when it has not. A
+policy's `error_message` is what a run it refuses flashes, translated like any
+msgid (add it to the `errors` catalogue); without one, or when the
+`error_message` function returns its own exception, the flash is "You don't
+have permission to do that." Give a policy an `error_message` when the person
+refused can act on the reason.
+
 ## What the host application provides
 
 AshQuick reaches into the host through these and nothing else. `deps/ash_quick/README.md`
