@@ -5,6 +5,7 @@ defmodule AshQuick.LiveView.FormUtils do
   import Phoenix.LiveView
   import Phoenix.Component, only: [assign: 2]
   alias AshQuick.LiveView.ActionErrors
+  alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.FieldErrors
   alias AshQuick.LiveView.PrintUtils
   alias AshQuick.LiveView.URLParams
@@ -749,9 +750,8 @@ defmodule AshQuick.LiveView.FormUtils do
   def maybe_put_has_many(params, form) do
     AshPhoenix.Form.arguments(form)
     |> Enum.filter(fn
-      %Argument{type: {:array, item_type}} ->
-        item_type in [Type.UUID, Type.UUIDv7, Type.Atom] and
-          true
+      %Argument{type: {:array, item_type}} = argument ->
+        item_type in [Type.UUID, Type.UUIDv7] or EnumOptions.kind(argument) == :array
 
       _ ->
         false

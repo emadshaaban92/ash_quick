@@ -4,6 +4,19 @@
 
 ### Features
 
+- **A field with a fixed set of values is picked from a select.** That is an
+  `Ash.Type.Enum`, or an atom with `one_of`, or an `Ash.Type.NewType` over
+  either; an enum used to get a text input. One value is picked from a
+  select, a list of them from a multi-select; the list's filter offers the
+  field with `=` and `!=` over a select of its values; and the selects, the
+  filter, the list and the details page all show the same label for a value:
+  an enum's own `label/1`, string-valued enums included, or an atom's value
+  humanized. Typing into a select now matches the labels it lists, anywhere
+  in them and in any case, rather than the start of the stored value, so
+  `extra_` no longer finds `:extra_large` ("Extra Large"). An atom without
+  `one_of` gets a text input instead of a select with nothing to pick, which
+  raised.
+
 - **A refused run says why, in the policy's words.** A policy's
   `error_message` is now what a run it refuses flashes, from a form, a
   confirmation or a bulk action, translated through `:error_translator` like

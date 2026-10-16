@@ -3,6 +3,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
   use Phoenix.Component
   use Gettext, backend: AshQuick.Gettext
 
+  alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.Utils
 
   attr :value, :any, required: true
@@ -52,11 +53,30 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     """
   end
 
+  # Whether the field holds a fixed set of values decides how its value reads,
+  # and no guard can ask that, so it is asked once here, of the field the value
+  # came from. A nested `field_value/1` is handed a field of its own and asks
+  # again.
+  def field_value(assigns) when not is_map_key(assigns, :choice) do
+    assigns |> assign(:choice, EnumOptions.kind(assigns[:ash_field])) |> field_value()
+  end
+
+  # A value of a field with a fixed set reads as its label: an atom, or the
+  # string a string-valued `Ash.Type.Enum` holds.
+  def field_value(%{choice: choice, value: value} = assigns)
+      when choice != nil and (is_atom(value) or is_binary(value)) do
+    ~H"""
+    <span>{EnumOptions.label(@ash_field, @value)}</span>
+    """
+  end
+
+  # Each item is handed the list's field, so an item of a list of enum values
+  # reads its label.
   def field_value(%{value: value} = assigns) when is_list(value) do
     ~H"""
     <span :for={{item, i} <- Enum.with_index(@value)}>
       <span :if={i != 0}> - </span>
-      <.field_value value={item} path={@path} scope={@scope} />
+      <.field_value value={item} path={@path} ash_field={@ash_field} scope={@scope} />
     </span>
     """
   end
