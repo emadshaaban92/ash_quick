@@ -11,7 +11,7 @@ defmodule AshQuick.LiveView.Components.AtomInput do
       |> assign(:errors, AshQuick.LiveView.FieldErrors.for_select(field))
 
     ~H"""
-    <div phx-feedback-for={@field.name} class="sm:col-span-2">
+    <div phx-feedback-for={@field.name} class="sm:col-span-2 phx-submit-loading:pointer-events-none">
       <.label for={@field.id}>{@label}</.label>
       <span :if={@required} class="text-error"> &ast;</span>
       <LiveSelect.live_select

@@ -13,20 +13,38 @@ defmodule AshQuick.LiveView.Components.ActionModal do
   # Only ✕ and Cancel close it. Escape would also reach it from inside a
   # dropdown that closes on Escape, and a tap outside is easy to make by
   # accident on a phone: both would throw away what was typed.
+  #
+  # Nor does it close while a form in it submits: that patch would race the
+  # one a successful run makes, and reads as abandoning a run that goes on.
+  # LiveView disables only what is in the form, so the ✕ is swapped for a
+  # disabled twin while any form here loads, a custom template's included.
+  # Hidden, the live one is out of reach of the keyboard too, which
+  # pointer-events alone would leave it within.
   def action_modal(assigns) do
     ~H"""
     <dialog id="ash-quick-action-modal" class="modal modal-open">
-      <div class="modal-box w-11/12 max-w-5xl p-0">
+      <div class="modal-box group/modal w-11/12 max-w-5xl p-0">
         <.link
           patch={@close}
-          class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3 z-10"
+          class={[close_class(), "group-has-[form.phx-submit-loading]/modal:hidden"]}
           aria-label={gettext("Close")}
         >
           <.icon name="hero-x-mark" class="w-5 h-5" />
         </.link>
+        <button
+          type="button"
+          disabled
+          data-close-while-submitting
+          class={[close_class(), "hidden group-has-[form.phx-submit-loading]/modal:inline-flex"]}
+          aria-label={gettext("Close")}
+        >
+          <.icon name="hero-x-mark" class="w-5 h-5" />
+        </button>
         {render_slot(@inner_block)}
       </div>
     </dialog>
     """
   end
+
+  defp close_class, do: "btn btn-sm btn-circle btn-ghost absolute right-3 top-3 z-10"
 end

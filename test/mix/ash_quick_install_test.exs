@@ -119,6 +119,21 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
   @source "../js";
   """
 
+  @app_js """
+  import "phoenix_html"
+  import {Socket} from "phoenix"
+  import {LiveSocket} from "phoenix_live_view"
+  import {hooks as colocatedHooks} from "phoenix-colocated/test"
+  import topbar from "../vendor/topbar"
+
+  const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
+  const liveSocket = new LiveSocket("/live", Socket, {
+    longPollFallbackMs: 2500,
+    params: {_csrf_token: csrfToken},
+    hooks: {...colocatedHooks},
+  })
+  """
+
   defp project(extra) do
     test_project(
       files:
@@ -495,16 +510,91 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
       """)
     end
 
+    # The action modal's spinner, and its controls going still while the action
+    # runs, hang on it. A new Phoenix app has it; an older one may not.
+    test "defines the submit-loading variant when the stylesheet lacks it" do
+      assert_has_patch(install(), "assets/css/app.css", """
+      + |@custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
+      """)
+    end
+
     test "leaves the stylesheet alone on a second run" do
       igniter =
         install(%{
           "assets/css/app.css" => """
           @import "tailwindcss";
           @source "../../deps/ash_quick/lib/**/*.*ex";
+          @custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
           """
         })
 
       assert_unchanged(igniter, "assets/css/app.css")
+    end
+
+    # The submit lock in the action modal is a colocated hook, which a host's
+    # own colocated bundle does not carry.
+    test "registers the library's hooks in the LiveSocket" do
+      igniter = install(%{"assets/js/app.js" => @app_js})
+
+      assert_has_patch(igniter, "assets/js/app.js", """
+      + |import { hooks as ashQuickHooks } from "phoenix-colocated/ash_quick"
+      """)
+
+      assert_has_patch(igniter, "assets/js/app.js", """
+      - |  hooks: {...colocatedHooks},
+      + |  hooks: {...ashQuickHooks, ...colocatedHooks},
+      """)
+    end
+
+    # The last import spread over lines: its first line, `import {`, also opens
+    # earlier single-line imports, so only its position says where it ends.
+    test "puts the import after a last import spread over several lines" do
+      app_js = """
+      import {Socket} from "phoenix"
+      import {LiveSocket} from "phoenix_live_view"
+      import {
+        browserSessionParams,
+        initBrowserSession,
+      } from "../../deps/ash_quick/assets/js/browser_session" // the tab's id
+
+      const liveSocket = new LiveSocket("/live", Socket, {
+        hooks: {},
+      })
+      """
+
+      igniter = install(%{"assets/js/app.js" => app_js})
+
+      assert_content_equals(igniter, "assets/js/app.js", """
+      import {Socket} from "phoenix"
+      import {LiveSocket} from "phoenix_live_view"
+      import {
+        browserSessionParams,
+        initBrowserSession,
+      } from "../../deps/ash_quick/assets/js/browser_session" // the tab's id
+      import { hooks as ashQuickHooks } from "phoenix-colocated/ash_quick"
+
+      const liveSocket = new LiveSocket("/live", Socket, {
+        hooks: {...ashQuickHooks, },
+      })
+      """)
+    end
+
+    test "leaves the script alone on a second run" do
+      app_js =
+        String.replace(
+          @app_js,
+          ~s|import topbar|,
+          ~s|import { hooks as ashQuickHooks } from "phoenix-colocated/ash_quick"\nimport topbar|
+        )
+
+      assert_unchanged(install(%{"assets/js/app.js" => app_js}), "assets/js/app.js")
+    end
+
+    test "says how to register the hooks when it cannot find where they go" do
+      igniter = install(%{"assets/js/app.js" => ~s|import "phoenix_html"\n|})
+
+      assert_unchanged(igniter, "assets/js/app.js")
+      assert_has_warning(igniter, &(&1 =~ "phoenix-colocated/ash_quick"))
     end
 
     test "warns rather than half-patches when there is no stylesheet" do

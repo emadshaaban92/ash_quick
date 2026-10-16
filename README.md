@@ -96,15 +96,24 @@ not scan by default.
 @source "../../deps/ash_quick/lib/**/*.*ex";
 ```
 
+Keep the `phx-submit-loading` variant a new Phoenix app's `app.css` defines.
+The action modal's spinner hangs on it, and so does every control in the modal
+going still while the action runs. The installer adds it when it is missing.
+
+```css
+@custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
+```
+
 ```javascript
 // assets/js/app.js
 import { browserSessionParams, initBrowserSession } from "../../deps/ash_quick/assets/js/browser_session"
 import { initLocale } from "../../deps/ash_quick/assets/js/locale"
+import { hooks as ashQuickHooks } from "phoenix-colocated/ash_quick"
 
 let liveSocket = new LiveSocket("/live", Socket, {
   // A function, so every reconnect re-reads the tab's identity.
   params: () => ({ _csrf_token: csrfToken, ...browserSessionParams() }),
-  hooks: hooks
+  hooks: { ...colocatedHooks, ...ashQuickHooks }
 })
 
 initBrowserSession(liveSocket)
@@ -115,6 +124,12 @@ initLocale()
 connect — the unit `AshQuick.BrowserSessionPresence` registers, and the one its
 `revoke/1` cuts an impersonation off at. `initLocale` applies the `lang` and
 `dir` the connected mount pushes, which the dead render could not have known.
+`ashQuickHooks` are the library's colocated hooks. Compiling AshQuick writes
+them under `Mix.Project.build_path()`, which a Phoenix 1.8 app's esbuild
+`NODE_PATH` already includes. One of them keeps a checkbox, a radio, a select
+or a searchable dropdown in the action modal from being changed from the
+keyboard while the action runs. The installer adds the import and the spread
+when they are missing.
 
 ### Router and formatter
 

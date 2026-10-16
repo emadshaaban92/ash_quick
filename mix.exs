@@ -10,6 +10,9 @@ defmodule AshQuick.MixProject do
       version: @version,
       elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
+      # Writes the manifest of the colocated hooks, so a host's bundle can
+      # import them as `phoenix-colocated/ash_quick`.
+      compilers: [:phoenix_live_view] ++ Mix.compilers(),
       start_permanent: Mix.env() == :prod,
       # The suite defines Ash resources at compile time, and each one carries
       # its own `Inspect` implementation. Consolidated protocols would make

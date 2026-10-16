@@ -4,6 +4,25 @@
 
 ### Features
 
+- **The action modal shows the action running, and can't be left mid-run.**
+  From submit until the answer, Save or Confirm shows a spinner over its
+  label, the ✕ and Cancel are disabled, and the form's controls are locked:
+  LiveView disables its buttons and makes its text read-only, the library's
+  inputs, selects, checkboxes, dropdowns and drop zones ignore the pointer, and
+  a colocated hook on the form refuses the keys and clicks that would still
+  change a checkbox, a radio, a select or a searchable dropdown. A refused run
+  unlocks the modal with its values kept. Cancel, and a list field's Add and
+  ✕, are now buttons rather than links, so LiveView disables them and the
+  keyboard can't reach them either. A custom action template gets the ✕ for
+  free; its own `<.form>` and markup opt in, as the
+  `AshQuick.LiveView.QuickView` docs describe.
+
+  Hosts register the hook: `import { hooks as ashQuickHooks } from
+  "phoenix-colocated/ash_quick"` and spread `...ashQuickHooks` into the
+  LiveSocket's `hooks`. The styling hangs on the host's `phx-submit-loading`
+  Tailwind variant, which a new Phoenix app defines. The installer adds both
+  when they are missing.
+
 - **Actions open in a modal over the page they were opened from.** A create,
   an update or a destroy renders in a modal over the list or details the
   visitor was on, kept at its search, filters and page; a URL reached directly

@@ -3,7 +3,7 @@ defmodule ExampleWeb.NestedFormErrorsScenarioTest do
   A save refused for want of a nested entry, and where a person reads about it.
 
   `Example.Test.RequiredEntries.create` needs at least one entry in an array of
-  embeds. The form renders that field as sub-forms under an "Add" link, with
+  embeds. The form renders that field as sub-forms under an "Add" button, with
   no input of its own, so a save with none added posts nothing under it. The
   error belongs in the field's section once the form has been submitted, and
   not before.
@@ -29,12 +29,12 @@ defmodule ExampleWeb.NestedFormErrorsScenarioTest do
   end
 
   # The messages rendered inside the field's own section: the one holding its
-  # "Add" link.
+  # "Add" button.
   defp errors(view) do
     view
     |> render()
     |> LazyHTML.from_fragment()
-    |> LazyHTML.query("section:has(a[phx-value-path='form[entries]']) p.text-error")
+    |> LazyHTML.query("section:has(button[phx-value-path='form[entries]']) p.text-error")
     |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
   end
 end

@@ -14,7 +14,7 @@ defmodule AshQuick.LiveView.Components.BelongsToInput do
       |> assign(:placeholder, assigns[:placeholder] || "")
 
     ~H"""
-    <div phx-feedback-for={@field.name} class="sm:col-span-2">
+    <div phx-feedback-for={@field.name} class="sm:col-span-2 phx-submit-loading:pointer-events-none">
       <.label :if={@label} for={@field.id}>{@label}</.label>
       <span :if={@required} class="text-error"> &ast;</span>
       <LiveSelect.live_select
