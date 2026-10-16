@@ -122,6 +122,13 @@
 
 ### Bug fixes
 
+- **A bulk print behind a `where:` prints exactly the rows it marked.**
+  `change {AshQuick.Print, ...}, where: [...]` marks only the records that pass
+  the condition, but the page read the first record's mark and printed every
+  record the run wrote: a selection led by a row the condition excluded printed
+  nothing, and one led by a row it passed printed the excluded rows too. The
+  print is now of the marked records alone, in the order they were selected.
+
 - **A destroy over its record's details reached by an upper-cased UUID goes to
   the list.** Whether the modal opened over the record it destroyed was decided
   by comparing the id in the details page's URL with the destroyed record's,

@@ -3,7 +3,7 @@ defmodule AshQuick.Print.Verifier do
   # Refuses to compile a resource carrying `AshQuick.Print` where the print
   # could never be produced: on an action that hands back no record to print,
   # with options the change would refuse at run time, or in an application
-  # without ChromicPDF to render it.
+  # with neither ChromicPDF nor a `:pdf_renderer` of its own to render it.
   #
   # Ash calls a change's `init/1` only when the action runs, so this is where a
   # print that cannot work is caught before anyone clicks it. It only sees

@@ -5,7 +5,8 @@ defmodule AshQuick.PrintVerifierTest do
 
   This app leaves `chromic_pdf` out on purpose (see `mix.exs`), which makes it
   the one place that half of `AshQuick.Print.Verifier` can be pinned: the
-  library's own suite always has ChromicPDF.
+  library's own suite always has ChromicPDF. The test build names a renderer
+  for its own prints, so the test takes it away first.
   """
   use ExUnit.Case, async: false
 
@@ -18,6 +19,12 @@ defmodule AshQuick.PrintVerifierTest do
     resources do
       allow_unregistered? true
     end
+  end
+
+  setup do
+    renderer = Application.fetch_env!(:ash_quick, :pdf_renderer)
+    Application.delete_env(:ash_quick, :pdf_renderer)
+    on_exit(fn -> Application.put_env(:ash_quick, :pdf_renderer, renderer) end)
   end
 
   test "a print without ChromicPDF does not compile" do

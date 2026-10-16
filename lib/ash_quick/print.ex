@@ -11,8 +11,9 @@ defmodule AshQuick.Print do
   The render happens after the action has committed, so the action's
   transaction holds its locks only for its own writes. A render that fails
   leaves what the action recorded in place and says so; printing it again is
-  the action's to offer. A bulk run renders every record it wrote in one call
-  to the template, in the order the records were selected.
+  the action's to offer. A bulk run renders the records it marked in one call
+  to the template, in the order they were selected; behind a `where:`, the
+  change marks only the records that pass it, and only those print.
 
   The change marks the records the action returns (`:ash_quick_print` in their
   metadata); only a QuickView reads the mark, so an action called from
@@ -21,7 +22,8 @@ defmodule AshQuick.Print do
   It goes on a create or an update action: those return the record to print.
   On a resource carrying the `AshQuick` extension, a print that could not work
   does not compile: one on a destroy action, one with options it refuses, or
-  one in an application without ChromicPDF.
+  one in an application with neither ChromicPDF nor a `:pdf_renderer` of its
+  own (see `AshQuick.PdfRenderer`).
 
   Options:
 
