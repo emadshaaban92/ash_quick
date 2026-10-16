@@ -21,9 +21,10 @@ usage_rules: [
 
 Then `mix usage_rules.sync` writes it to `.claude/skills/ash-quick/SKILL.md`.
 It covers routing, navigation, view options, field and widget formats, loading,
-lifecycle hooks, custom action templates, control gating, filters, real-time
-updates, every `ash_quick do` section with its default, the conventions a
-resource must satisfy, configuration, the host seams, and the common mistakes.
+lifecycle hooks, the action modal, custom action templates, control gating,
+bulk actions, printing, filters, real-time updates, every `ash_quick do`
+section with its default, the conventions a resource must satisfy,
+configuration, the host seams, and the common mistakes.
 
 That file is the single source — this one deliberately does not restate it, so
 the two cannot drift. Read it directly if you are not using skills.

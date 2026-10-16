@@ -1,6 +1,6 @@
 ---
 name: ash-quick
-description: "Use this skill when working with AshQuick — the declarative CRUD LiveView system for Ash resources. Load it when a module has `use AshQuick.LiveView.QuickView`, when a resource carries `extensions: [AshQuick]` or an `ash_quick do` block, when a router uses `quick_view/3`, or when hitting `Ash.Error.Changes.StaleRecord` on an update. Covers QuickView configuration, field formats, widgets, lifecycle hooks, custom action templates, navigation, filters, bulk actions, real-time updates, and the conventions a resource must satisfy."
+description: "Use this skill when working with AshQuick — the declarative CRUD LiveView system for Ash resources. Load it when a module has `use AshQuick.LiveView.QuickView`, when a resource carries `extensions: [AshQuick]` or an `ash_quick do` block, when a router uses `quick_view/3`, or when hitting `Ash.Error.Changes.StaleRecord` on an update. Covers QuickView configuration, field formats, widgets, lifecycle hooks, the action modal, custom action templates, navigation, filters, bulk actions, printing, real-time updates, and the conventions a resource must satisfy."
 ---
 
 # AshQuick QuickView
@@ -121,11 +121,11 @@ Put a new route in a group, or it has no tile in the apps grid.
 `AshQuick.Nav.Verifier` catches only what the declaration answers on its own —
 a duplicate path, an empty group, a group naming a path no entry covers. It
 cannot read the router (the router compiles the views the nav names, so that
-would be a cycle) and it knows nothing of roles. So the host writes one test
-over the assembled application, reconciling router, nav and access control:
-a nav path no route serves, a granted route no entry renders, a granted route
-no group gives a tile, and a nav entry no role can reach should each fail there
-by name. Without that test those four are silent.
+would be a cycle) and it knows nothing of roles. The rest is
+`mix ash_quick.check`'s, over the assembled application: a nav path no route
+serves, a granted route the router does not serve, a granted route no entry
+renders, and a nav entry no role can reach (see "Checking the application"
+below). A route in no group is not reported; it simply has no tile.
 
 ## Options
 
@@ -260,9 +260,9 @@ use AshQuick.LiveView.QuickView,
 URL determines view type:
 - `id: nil` + read action -> **List view**
 - `id: <uuid>` + read action -> **Details view**
-- `id: nil` + create action -> **Create form**
-- `id: <uuid>` + update action -> **Edit form**
-- `id: <uuid>` + destroy action -> **Delete confirmation**
+- `id: nil` + create action -> **Create modal** over the list
+- `id: <uuid>` + update or destroy action -> **Action modal** over the record's
+  page: a form when the action takes input, a confirmation when it takes none
 
 Action resolved from (priority order):
 1. `action` URL parameter
@@ -439,13 +439,17 @@ Two things to know:
 - An action the resource does not define answers `false` rather than raising.
   Surfaces probe for actions they merely hope are there — the list view asks
   about `:create` before offering its button.
-- A form submit is stamped `:ash_quick_form`, deliberately **not** one of the
-  three surface sources. A policy scoped to those never fires at submit, so a
-  stale or forged submit routes to the action's own validation (409/422)
-  instead of a `Forbidden`. **A state gate therefore needs both**: the policy
-  hides the button, and an always-on validation refuses the write off-surface.
-  A policy alone leaves the action open to anyone posting the event; a
-  validation alone renders a button that always errors.
+- Every run is stamped `AshQuick.form_source/0` (`:ash_quick_form`) — a form
+  or a confirmation, one record or a bulk selection — and that is deliberately
+  **not** one of the three surface sources. A policy scoped to those never
+  fires at the run, so a stale or forged run routes to the action's own
+  validation (409/422) instead of a `Forbidden`. **A state gate therefore
+  needs both**: the policy hides the button, and an always-on validation
+  refuses the write. A policy alone leaves the action open to anyone typing
+  its URL or pushing the event; a validation alone renders a button that
+  always errors. Where QuickView must never run an action (one only a page of
+  your own can finish, like `:impersonate`), also
+  `forbid_if context_equals(:action_source, :ash_quick_form)`.
 
 ## Predefined filters
 
@@ -825,20 +829,35 @@ covers wiring them up.
   impersonation, request IP, timezone, locale.
 - **The audit store** — an Ash resource taking `resource_name`, `resource_id`,
   `action_type`, `action_name`, `attributes`, `arguments`, `context`,
-  `actor_id`, `real_actor_id`, `ip`, `tenant`.
+  `actor_id`, `real_actor_id`, `ip`, `tenant`, and optionally a `:map`
+  `changes` (what each attribute was and became).
 - `AshQuick.Storage` — object storage; defaults to `AshQuick.Storage.S3`.
 - `AshQuick.AccessControl` — which routes a scope may navigate to. Named on the
   nav. Deliberately **not** `Ash.can?`: a filter policy allows the action and
   returns no rows, so `can?` says yes for a page that would be empty.
 - `AshQuick.Nav` — the navigation registry (see Navigation above).
 - `AshQuick.PrintTemplate`, `AshQuick.FieldRestrictions.Check` — print
-  templates and field-level checks. An update action prints through a template
-  with `change {AshQuick.Print, template: MyTemplate, delivery: :print}`
+  templates and field-level checks. A create or update action prints through a
+  template with `change {AshQuick.Print, template: MyTemplate, delivery: :print}`
   (`:download` is the default): run from a row, a bulk selection, the details
-  page or its form, the PDF goes over the socket to `assets/js/print.js`'s
-  `initPrinting/0`, which the host's `app.js` calls once.
+  page or its form, the PDF is rendered after the action commits and goes over
+  the socket to `assets/js/print.js`'s `initPrinting/0`, which the host's
+  `app.js` calls once. On a resource carrying the `AshQuick` extension, a
+  print on a destroy, with bad options, or without `chromic_pdf` in the deps
+  does not compile (`AshQuick.Print.Verifier`); on any other resource the same
+  mistakes surface when the action runs. A template that writes nothing
+  prints from an update with
+  `manual fn changeset, _context -> {:ok, changeset.data} end`.
 - `AshQuick.BrowserSessionPresence` in the supervision tree, and
   `AshQuick.LiveView.Mount` **first** in the live session's `on_mount`.
+- In `app.js`: `browserSessionParams` / `initBrowserSession` and `initLocale`
+  from `deps/ash_quick/assets/js/`, and the library's colocated hooks
+  (`import { hooks as ashQuickHooks } from "phoenix-colocated/ash_quick"`,
+  spread into the LiveSocket's `hooks`). The hooks are written under
+  `Mix.Project.build_path()` when AshQuick compiles, so esbuild's `NODE_PATH`
+  must include it (a Phoenix 1.8 app's does) and `mix compile` must run before
+  the asset build. In `app.css`: the `@source` line for the library's classes
+  and the `phx-submit-loading` variant the modal's spinner and lock hang on.
 
 ## Checking the application
 
@@ -878,8 +897,8 @@ config :ash_quick,
 - Turning versioning off to escape the forced `require_atomic? false`, or
   rescuing `StaleRecord` instead of surfacing it.
 - Narrowing a `quick_view` past `:show` or `:action` while the page still
-  renders controls leading there. Rows link to `<base>/<id>`, and an update or
-  destroy taking inputs patches to `<base>/<id>/<action>`.
+  renders controls leading there. Rows link to `<base>/<id>`, and every update
+  or destroy, with inputs or without, opens at `<base>/<id>/<action>`.
 - Giving two resources the same liveness `prefix`. Their pages cross-wire, and
   no verifier can see it — `mix ash_quick.check` can.
 - Adding the extension without generating a migration for the new columns.
@@ -887,7 +906,11 @@ config :ash_quick,
 - A bare `Ash.can?/2` in a custom template, so the control ignores
   surface-scoped policies — or a record-less probe where a record exists.
 - Hiding a control with a policy and stopping there, with no validation behind
-  it.
+  it — a surface-scoped policy never refuses the run.
+- Selecting `"form"` in a LiveView test of an action. The page underneath the
+  modal is in the DOM too; select `"#ash-quick-action-modal form"`.
+- Adding a public function to `AshQuick.Components`: every QuickView imports
+  it, so it can collide with a host helper of the same name.
 - Declaring `:filters` as a map keyed by atoms. It is a **list of string-keyed
   maps**.
 - Putting the extension on a composite-keyed join resource.
@@ -900,8 +923,10 @@ config :ash_quick,
 - `deps/ash_quick/lib/ash_quick/liveview/list_utils.ex` — List view logic
 - `deps/ash_quick/lib/ash_quick/liveview/details_utils.ex` — Detail view logic
 - `deps/ash_quick/lib/ash_quick/liveview/form_utils.ex` — Form logic
-- `deps/ash_quick/lib/ash_quick/components.ex` — UI components (icon, label, button, header, simple_form, input)
-- `deps/ash_quick/lib/ash_quick/liveview/components/` — ListView, DetailsView, FormView, Sidebar, NavGrid, FilterForm
+- `deps/ash_quick/lib/ash_quick/liveview/bulk_actions.ex`, `bulk_form.ex` — the bulk menu and the record-less bulk form
+- `deps/ash_quick/lib/ash_quick/print.ex`, `print_template.ex`, `liveview/print_utils.ex` — printing
+- `deps/ash_quick/lib/ash_quick/components.ex` — UI components (icon, label, button, header, simple_form, input) and the `SubmitLock` hook
+- `deps/ash_quick/lib/ash_quick/liveview/components/` — ListView, DetailsView, FormView, ActionModal, BulkActionView, Sidebar, NavGrid, FilterForm
 - `deps/ash_quick/lib/ash_quick/nav.ex`, `deps/ash_quick/lib/ash_quick/nav/` — The nav DSL, its verifier, and the resolution the sidebar and grid render
 - `deps/ash_quick/lib/ash_quick/config.ex` — every `config :ash_quick` key, documented
 - `deps/ash_quick/lib/ash_quick/check.ex`, `deps/ash_quick/lib/ash_quick/check/` — every check `mix ash_quick.check` runs

@@ -108,6 +108,7 @@ going still while the action runs. The installer adds it when it is missing.
 // assets/js/app.js
 import { browserSessionParams, initBrowserSession } from "../../deps/ash_quick/assets/js/browser_session"
 import { initLocale } from "../../deps/ash_quick/assets/js/locale"
+import { initPrinting } from "../../deps/ash_quick/assets/js/print" // only if an action prints
 import { hooks as ashQuickHooks } from "phoenix-colocated/ash_quick"
 
 let liveSocket = new LiveSocket("/live", Socket, {
@@ -118,18 +119,22 @@ let liveSocket = new LiveSocket("/live", Socket, {
 
 initBrowserSession(liveSocket)
 initLocale()
+initPrinting()
 ```
 
 `browserSessionParams` is the id a tab mints for itself and replays on every
 connect — the unit `AshQuick.BrowserSessionPresence` registers, and the one its
 `revoke/1` cuts an impersonation off at. `initLocale` applies the `lang` and
 `dir` the connected mount pushes, which the dead render could not have known.
+`initPrinting` receives the PDF an action carrying `AshQuick.Print` sends over
+the socket, and saves it or opens the print dialog on it.
 `ashQuickHooks` are the library's colocated hooks. Compiling AshQuick writes
 them under `Mix.Project.build_path()`, which a Phoenix 1.8 app's esbuild
-`NODE_PATH` already includes. One of them keeps a checkbox, a radio, a select
-or a searchable dropdown in the action modal from being changed from the
-keyboard while the action runs. The installer adds the import and the spread
-when they are missing.
+`NODE_PATH` already includes; it has to be compiled before the assets are
+built, as a Phoenix 1.8 app's `assets.build` alias already does. One of them
+keeps a checkbox, a radio, a select or a searchable dropdown in the action
+modal from being changed from the keyboard while the action runs. The
+installer adds the import and the spread when they are missing.
 
 ### Router and formatter
 
@@ -436,7 +441,7 @@ reference.
 | `AshQuick.AccessControl` | Answers which routes a scope may navigate to. Named on the nav, and what every rendering of it filters through. Not `Ash.can?`: a filter policy allows the action and returns no rows, so `can?` says yes for a page that would be empty. |
 | `AshQuick.Nav` | The host's navigation registry — one declaration the sidebar and the apps grid are both rendered from. QuickViews are discovered from the declared router; the declaration adds only what the router cannot say: a better label, an icon, a group, a non-QuickView path. |
 | `AshQuick.BrowserSessionPresence` | The live register of signed-in tabs. Supervised, not implemented — listed here because the tree entry is the host's. `AshQuick.LiveView.BrowserSessionsLive` is the page that reads it. |
-| `AshQuick.PrintTemplate` | One module per print template: its label, what to load, and the HTML ChromicPDF renders. An update action prints through it with `change {AshQuick.Print, template: ..., delivery: :print \| :download}`; the PDF reaches the browser over the LiveView socket, so the host imports `initPrinting` from `assets/js/print.js`. |
+| `AshQuick.PrintTemplate` | One module per print template: its label, what to load, and the HTML ChromicPDF renders. A create or update action prints through it with `change {AshQuick.Print, template: ..., delivery: :print \| :download}`; the PDF is rendered after the action commits and reaches the browser over the LiveView socket, so the host imports `initPrinting` from `assets/js/print.js`. |
 | `AshQuick.FieldRestrictions.Check` | `match?/2` over an actor and tenant, deciding whether a restricted field is visible and writable. Hides the field in forms and strips it from the changeset. |
 
 ## Authorization on a surface
@@ -446,24 +451,38 @@ press is not rendered. `AshQuick.can?/4` is that probe, and it stamps
 `action_source` in the action's context, naming the surface doing the asking:
 `:ash_quick_details`, `:ash_quick_list` or `:ash_quick_list_bulk`.
 
-A policy can therefore be scoped to a single surface — hiding a control where
+A policy can therefore be scoped to a single surface, hiding a control where
 it is meaningless without that same policy firing for the JSON API, where the
 precondition should surface as a validation rather than a `Forbidden`:
 
 ```elixir
+policy action(:approve) do
+  forbid_if context_equals(:action_source, :ash_quick_list)
+  authorize_if MyApp.Checks.ActorIsReviewer
+end
+```
+
+A control only opens the action: every create, update and destroy, bulk ones
+included, runs in a modal over the page it was opened from, and the run is
+stamped `AshQuick.form_source/0` (`:ash_quick_form`) however the modal was
+reached, by the control, a hand-pushed event or a typed URL. That source is
+deliberately **not** a surface: a policy scoped to the three above never fires
+at the run, so a stale or forged run routes to the action's own validation (a
+409 or 422) instead of a `Forbidden`. A state gate therefore needs both a
+surface policy, which hides the button, and a validation, which refuses the
+write. Where QuickView must never run an action at all, forbid the form source
+too, as the `AshQuick` moduledoc does for `:impersonate`:
+
+```elixir
 policy action(:impersonate) do
   forbid_if context_equals(:action_source, :ash_quick_list)
+  forbid_if context_equals(:action_source, :ash_quick_form)
   authorize_if MyApp.Checks.ActorIsAdmin
 end
 ```
 
-Two things to know about it. An action the resource does not define answers
-`false` rather than raising — surfaces probe for actions they merely hope are
-there. And a form submit is stamped `:ash_quick_form`, which is deliberately
-**not** a surface source: a policy scoped to the three above never fires at
-submit, so a stale or forged submit routes to the action's own validation (a 409
-or 422) instead of a `Forbidden`. The button-hiding already happened at the
-probe.
+An action the resource does not define answers `false` rather than raising:
+surfaces probe for actions they merely hope are there.
 
 Custom QuickView templates should call `AshQuick.can?/4` rather than a bare
 `Ash.can?/2`, so their controls participate in the same policies.
@@ -555,9 +574,9 @@ $ mix setup
 $ mix phx.server   # http://localhost:4000, sign in at /login
 ```
 
-Three seeded users, one per role, so the sidebar, the apps grid and every
-button change with who you are. `example/README.md` has the rest, including
-which seam is wired where.
+Five seeded users across three roles and two shops, so the sidebar, the apps
+grid, every button and the rows themselves change with who you are.
+`example/README.md` has the rest, including which seam is wired where.
 
 ## Status
 
