@@ -58,10 +58,14 @@ defmodule ExampleWeb.HostConformanceTest do
     refute url =~ AshQuick.Config.s3_bucket()
   end
 
-  test "export is on and print is off, which is what this app's dependencies say" do
-    # `chromic_pdf` is deliberately not a dependency — see `mix.exs`. No action
-    # here prints, and `AshQuick.PrintVerifierTest` pins that one could not.
+  test "export is on, and print is on only through the test build's renderer" do
+    # `chromic_pdf` is deliberately not a dependency — see `mix.exs` — so the
+    # test build's prints (`Example.Test.Printable`) compile because
+    # `config/test.exs` names a renderer. `AshQuick.PrintVerifierTest` pins
+    # that without one they would not.
     assert AshQuick.Config.exports_enabled?()
-    refute AshQuick.Config.print_enabled?()
+    refute Code.ensure_loaded?(ChromicPDF)
+    assert AshQuick.Config.print_enabled?()
+    assert AshQuick.Config.pdf_renderer() == Example.Test.PdfRendererDouble
   end
 end

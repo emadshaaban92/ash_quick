@@ -86,8 +86,9 @@ defmodule Example.MixProject do
       #   * `ash_money` + `ex_money_sql` — a `Money` column rendered on a page.
       #
       # `chromic_pdf` is deliberately absent: printing would want a Chrome on
-      # the machine. No action here carries `AshQuick.Print`, and one that did
-      # would not compile without it.
+      # the machine. No action in the app carries `AshQuick.Print`, and one
+      # that did would not compile without it. The test build's
+      # `Example.Test.Printable` prints through the renderer `test.exs` names.
       {:exceed, "~> 0.7"},
       {:nimble_csv, "~> 1.3"},
       {:briefly, "~> 0.5"},

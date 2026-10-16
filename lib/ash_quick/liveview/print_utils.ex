@@ -33,9 +33,15 @@ defmodule AshQuick.LiveView.PrintUtils do
   defp printed(%Ash.BulkResult{status: :success, records: [_ | _] = records}), do: marked(records)
   defp printed(_not_written), do: nil
 
-  # Every record came from the same action, so the first one's mark is theirs.
-  defp marked([%{__metadata__: %{ash_quick_print: print}} | _] = records), do: {print, records}
-  defp marked(_records), do: nil
+  # A change behind a `where:` marks only the records that passed it, so the
+  # print is of those alone, in the order they came. Every mark came from the
+  # same action, so the first one's is theirs.
+  defp marked(records) do
+    case Enum.filter(records, &match?(%{__metadata__: %{ash_quick_print: _}}, &1)) do
+      [] -> nil
+      [%{__metadata__: %{ash_quick_print: print}} | _] = marked -> {print, marked}
+    end
+  end
 
   defp deliver(socket, print, records) do
     {filename, pdf} = render!(print.template, records, socket.assigns.scope)

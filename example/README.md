@@ -97,8 +97,10 @@ itself.
   `ExampleWeb.UserAuth` reads. Authentication is the host's problem and a real
   one would only obscure the seams this app is here to show.
 * **No `chromic_pdf`.** Printing would want a Chrome on the machine, so no
-  action here carries `AshQuick.Print`. Export *is* enabled (`exceed`,
-  `nimble_csv`, `briefly`), so every list has a working Excel/CSV menu.
+  action in the app carries `AshQuick.Print`. The test build prints, through
+  `Example.Test.Printable` and the renderer `config/test.exs` names, which
+  hands back the template's HTML. Export *is* enabled (`exceed`, `nimble_csv`,
+  `briefly`), so every list has a working Excel/CSV menu.
 * **Nothing releases a quarantined object on a schedule.** There is no worker
   and no scanner here; `Example.Uploads.ObjectStore.release!/1` is the seam a
   real host's pipeline would call.

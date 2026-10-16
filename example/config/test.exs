@@ -42,6 +42,7 @@ config :ash_quick,
         "/test/bulk_guarded",
         "/test/bulk_named",
         "/test/digits_only",
+        "/test/printable",
         "/test/required_attachments",
         "/test/required_entries",
         "/test/required_picks"
@@ -52,3 +53,9 @@ config :ash_quick,
       unconfigured_error_reporter: [:tower]
     ]
   ]
+
+# Prints come back as the template's HTML behind a PDF header, read off the
+# pushed event, rather than through a Chrome. Only the test build prints
+# (`Example.Test.Printable`), so only it names a renderer: elsewhere
+# `AshQuick.Print.Verifier` would refuse a print as its resource compiles.
+config :ash_quick, pdf_renderer: Example.Test.PdfRendererDouble
