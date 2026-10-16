@@ -4,9 +4,13 @@ defmodule AshQuick.LiveView.ListUtils do
   require Logger
   import Phoenix.LiveView
   import Phoenix.Component, only: [assign: 2, assign: 3]
-  alias Phoenix.LiveView.JS
 
   alias Ash.Resource.Actions
+  alias AshQuick.LiveView.ActionErrors
+  alias AshQuick.LiveView.BulkActions
+  alias AshQuick.LiveView.BulkForm
+  alias AshQuick.LiveView.FieldErrors
+  alias AshQuick.LiveView.FormUtils
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.CustomFilter
   alias AshQuick.LiveView.Components.FilterForm
@@ -20,6 +24,8 @@ defmodule AshQuick.LiveView.ListUtils do
   # typed the filter knows which one they typed, and a visitor who was handed
   # the link cannot act on the name either way.
   @refused_filter_message "That filter couldn't be applied to this list, so it was ignored."
+
+  @error_classes [Ash.Error.Invalid, Ash.Error.Forbidden, Ash.Error.Framework, Ash.Error.Unknown]
 
   def do_handle_params(
         socket,
@@ -286,10 +292,52 @@ defmodule AshQuick.LiveView.ListUtils do
   end
 
   defp handle_list_events("bulk_action", %{"action_name" => action_name}, socket, options) do
-    case options.resource |> Utils.record_actions() |> Utils.offered_action(action_name) do
+    case BulkActions.offered(socket.assigns[:bulk_actions], options.resource, action_name) do
       nil -> {:halt, refuse_action(socket)}
-      action -> {:halt, do_bulk_action(action, socket, options)}
+      action -> {:halt, open_bulk_action(action, socket, options)}
     end
+  end
+
+  # Nothing to validate or run: no bulk action is open, so the event was forged.
+  defp handle_list_events(event, _params, %{assigns: %{ash_quick_bulk: nil}} = socket, _options)
+       when event in ["bulk_validate", "bulk_save"] do
+    {:halt, refuse_action(socket)}
+  end
+
+  # A confirmation, or a form whose only inputs a field policy hides, posts
+  # nothing.
+  defp handle_list_events(event, params, socket, options)
+       when event in ["bulk_validate", "bulk_save"] and not is_map_key(params, "form") do
+    handle_list_events(event, Map.put(params, "form", %{}), socket, options)
+  end
+
+  defp handle_list_events("bulk_validate", %{"form" => params} = event, socket, _options) do
+    {:halt, update_bulk_form(socket, params, event["_target"])}
+  end
+
+  defp handle_list_events("bulk_save", %{"form" => params}, socket, options) do
+    socket = update_bulk_form(socket, params, nil)
+
+    case socket.assigns.ash_quick_bulk do
+      %{form: %AshPhoenix.Form{} = form} = bulk ->
+        if BulkForm.valid?(form),
+          do:
+            {:halt,
+             run_bulk_action(
+               bulk,
+               BulkForm.input(form, options.resource, bulk.action),
+               socket,
+               options
+             )},
+          else: {:halt, socket}
+
+      bulk ->
+        {:halt, run_bulk_action(bulk, %{}, socket, options)}
+    end
+  end
+
+  defp handle_list_events("bulk_close", _params, socket, _options) do
+    {:halt, assign(socket, :ash_quick_bulk, nil)}
   end
 
   # Resolved on open rather than on render — see `ListView.record_actions/1`. Only
@@ -342,38 +390,100 @@ defmodule AshQuick.LiveView.ListUtils do
 
   defp handle_list_events(_, _, socket, _options), do: {:cont, socket}
 
-  defp do_bulk_action(action, socket, options) do
-    selected_ids = socket.assigns.selected_rows |> Map.keys()
+  # Opened over the list rather than at a URL of its own: a patch would reset
+  # the selection it is about to act on. Who may run it is left to the run,
+  # which asks of each selected row: asked here of no row, a policy that only
+  # a row can answer would refuse a selection it allows.
+  defp open_bulk_action(action, socket, options) do
+    if selected_records(socket) == [] do
+      refuse_action(socket)
+    else
+      scope = socket.assigns.scope
 
-    records = socket.assigns.data.results |> Enum.filter(&(&1.id in selected_ids))
+      form =
+        if Utils.action_fields(options.resource, action.name, scope) != [],
+          do: BulkForm.new(options.resource, action, scope)
 
-    result = records |> run_bulk_action(action, socket) |> in_selection_order(records)
+      assign(socket, :ash_quick_bulk, %{action: action, form: form})
+    end
+  end
+
+  defp update_bulk_form(socket, params, target) do
+    case socket.assigns.ash_quick_bulk do
+      %{form: %AshPhoenix.Form{} = form, action: action} = bulk ->
+        params =
+          params
+          |> FieldErrors.mark_used(target)
+          |> FormUtils.put_emptied_selections()
+          |> FormUtils.maybe_put_has_many(form)
+
+        assign(socket, :ash_quick_bulk, %{bulk | form: BulkForm.validate(form, params, action)})
+
+      _confirmation ->
+        socket
+    end
+  end
+
+  defp selected_ids(socket) do
+    for {id, "on"} <- socket.assigns.selected_rows, id != "all", do: id
+  end
+
+  # Only rows the list is showing, read through the actor's scope: a selected id
+  # that is not among them is one the actor cannot read, or one that has left
+  # the list since it was ticked.
+  defp selected_records(socket) do
+    selected = selected_ids(socket)
+    Enum.filter(socket.assigns.data.results, &(&1.id in selected))
+  end
+
+  defp run_bulk_action(%{action: action}, input, socket, options) do
+    selected = selected_ids(socket)
+    records = selected_records(socket)
+
+    result = records |> bulk_run(action, input, socket) |> in_selection_order(records)
     socket = PrintUtils.print(socket, result)
 
     case result do
-      %{status: :error, errors: [%{errors: [%{message: message}]}]} ->
-        socket |> put_flash(:error, message)
-
+      # `transaction: :all` rolled every row back, so the modal stays as it was
+      # for the values to be corrected or the run abandoned.
       %{status: :error, errors: errors} ->
-        socket |> put_flash(:error, errors |> Ash.Error.error_descriptions())
-
-      %{status: :error} ->
-        socket |> put_flash(:error, "Unknown Error")
+        put_flash(socket, :error, bulk_error_message(errors))
 
       # A bulk write that matches no row (a stale one, say) is not an error, so
       # `:success` does not mean every selected row was written. The records it
       # returns are the ones that were; the rest are reported and kept selected.
       %{records: written} ->
-        skipped_ids = Enum.map(records, & &1.id) -- Enum.map(written, & &1.id)
+        skipped_ids = selected -- Enum.map(written || [], & &1.id)
+        data = load_data!(socket, socket.assigns.params, options)
+        shown = MapSet.new(data.results, & &1.id)
 
         socket
-        |> assign(data: load_data!(socket, socket.assigns.params, options))
-        |> assign(selected_rows: Map.take(socket.assigns.selected_rows, skipped_ids))
-        |> report_skipped_rows(action, length(records), skipped_ids)
+        |> assign(:ash_quick_bulk, nil)
+        |> assign(data: data)
+        |> assign(
+          selected_rows:
+            Map.take(socket.assigns.selected_rows, Enum.filter(skipped_ids, &(&1 in shown)))
+        )
+        |> report_skipped_rows(action, length(selected), skipped_ids)
         |> Liveness.resync(:data, options)
         |> refresh_row_actions(options)
     end
   end
+
+  # A bulk result holds an error class per failed batch. Unwrapped into one
+  # class, the errors inside are what `ActionErrors` words; left wrapped, a
+  # class inside a class reads as an error of ours.
+  defp bulk_error_message([_ | _] = errors) do
+    errors
+    |> Enum.flat_map(fn
+      %class{errors: [_ | _] = inner} when class in @error_classes -> inner
+      error -> [error]
+    end)
+    |> Ash.Error.to_error_class()
+    |> ActionErrors.user_facing_message()
+  end
+
+  defp bulk_error_message(_no_errors), do: ActionErrors.generic_message()
 
   # Every action opens at its own URL, over this list, and runs from there: a
   # form for one that takes input, a confirmation for one that does not. What
@@ -413,38 +523,35 @@ defmodule AshQuick.LiveView.ListUtils do
     socket |> put_flash(:error, AshQuick.LiveView.ActionErrors.forbidden_message())
   end
 
-  defp run_bulk_action(records, %Actions.Update{} = action, socket) do
-    records
-    |> Ash.bulk_update(action.name, %{},
+  # Stamped as every other run is, whatever surface offered it: a policy scoped
+  # to `:ash_quick_list_bulk` decides what the menu shows, not what runs.
+  defp bulk_run(records, %Actions.Update{} = action, input, socket) do
+    Ash.bulk_update(records, action.name, input, bulk_opts(socket))
+  end
+
+  defp bulk_run(records, %Actions.Destroy{} = action, input, socket) do
+    Ash.bulk_destroy(records, action.name, input, bulk_opts(socket))
+  end
+
+  defp bulk_opts(socket) do
+    [
       scope: socket.assigns.scope,
-      context: %{action_source: :ash_quick_list_bulk},
+      context: %{action_source: AshQuick.form_source()},
       # We shouldn't need this, but it seems to be required for some reason
       authorize?: true,
       strategy: :stream,
       transaction: :all,
       stop_on_error?: true,
       return_records?: true,
+      # A refused run is worded for the person who asked for it, which needs
+      # the error that refused it.
+      return_errors?: true,
       # One publication per row written, so a page holding a row hears about a
       # bulk write as it does a row action's. A batch that errors is rolled back
       # whole by `transaction: :all` and publishes nothing, so nothing is
       # announced that was then undone.
       notify?: true
-    )
-  end
-
-  defp run_bulk_action(records, %Actions.Destroy{} = action, socket) do
-    records
-    |> Ash.bulk_destroy(action.name, %{},
-      scope: socket.assigns.scope,
-      context: %{action_source: :ash_quick_list_bulk},
-      # We shouldn't need this, but it seems to be required for some reason
-      authorize?: true,
-      strategy: :stream,
-      transaction: :all,
-      stop_on_error?: true,
-      return_records?: true,
-      notify?: true
-    )
+    ]
   end
 
   # A print's pages follow the rows as the list showed them, whatever order the
@@ -506,24 +613,5 @@ defmodule AshQuick.LiveView.ListUtils do
     |> Utils.record_actions()
     |> Utils.reject_redundant_activation(record)
     |> Enum.filter(&AshQuick.can?({record, &1}, scope, :ash_quick_list))
-  end
-
-  def resource_bulk_actions(resource, scope, _options) do
-    actions =
-      resource
-      |> Utils.record_actions()
-      |> Enum.reject(
-        &(&1.type == :update and
-            not Enum.empty?(Ash.Resource.Info.action_inputs(resource, &1.name)))
-      )
-      |> Enum.filter(&AshQuick.can?({resource, &1.name}, scope, :ash_quick_list_bulk))
-      |> Enum.map(
-        &%{
-          title: &1.name |> Utils.humanize(),
-          func: JS.push("bulk_action", value: %{"action_name" => &1.name |> to_string})
-        }
-      )
-
-    actions
   end
 end

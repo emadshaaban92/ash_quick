@@ -729,7 +729,8 @@ defmodule AshQuick.LiveView.FormUtils do
   # the root form and on any sub-form.
   @empty_selection "_empty_selection"
 
-  defp put_emptied_selections(%{} = params) when not is_struct(params) do
+  @doc false
+  def put_emptied_selections(%{} = params) when not is_struct(params) do
     Enum.reduce(params, %{}, fn {key, value}, acc ->
       case String.split(key, @empty_selection) do
         [name, ""] when name != "" -> Map.put_new(acc, name, [])
@@ -738,9 +739,10 @@ defmodule AshQuick.LiveView.FormUtils do
     end)
   end
 
-  defp put_emptied_selections(value), do: value
+  def put_emptied_selections(value), do: value
 
-  defp maybe_put_has_many(params, form) do
+  @doc false
+  def maybe_put_has_many(params, form) do
     AshPhoenix.Form.arguments(form)
     |> Enum.filter(fn
       %Argument{type: {:array, item_type}} ->

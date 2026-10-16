@@ -227,6 +227,23 @@ defmodule AshQuick.LiveView.ActionErrorsTest do
                "Starts At is invalid.\nEnds At is invalid."
     end
 
+    # A validation returning `{:error, "..."}` refuses the change as a whole:
+    # `InvalidChanges` with no fields at all, which AshPhoenix renders to
+    # nothing. A bulk run that one row refuses arrives exactly like this.
+    test "says the message of an error that names no field" do
+      error =
+        Ash.Error.Invalid.exception(
+          errors: [
+            Ash.Error.Changes.InvalidChanges.exception(
+              message: "Only an active product can be repriced."
+            )
+          ]
+        )
+
+      assert ActionErrors.user_facing_message(error) ==
+               "Only an active product can be repriced."
+    end
+
     # The fallback above is for errors that describe *input*. It must not reach
     # a framework failure that happens to carry a field, and it must not take
     # the not-found path's place — both of those still answer with their own

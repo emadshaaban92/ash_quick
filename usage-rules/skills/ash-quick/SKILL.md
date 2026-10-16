@@ -156,7 +156,12 @@ The URL is not an option here — it is declared in the router with
 - `:load` — Extra loads for list queries only
 - `:default_action` — Read action for listing (default `:index`)
 - `:new_action_label` — Label for "Create" button
-- `:bulk_actions` — `fn socket -> [...] end` for custom bulk actions
+- `:bulk_actions` — the menu over a selection, a list or `fn socket -> [...] end`.
+  Items are action names (a public update or destroy) or custom items
+  (`%{title:, func:}` / `%{title:, link:}`). Given, the menu is exactly that
+  list, in order; not given, it is every public update and destroy without
+  inputs. Names are checked at compile time (a function's result when the menu
+  is built); an action taking an upload is refused
 
 ### Details options (`:details`)
 - `:fields` — Fields in the detail view
@@ -294,6 +299,13 @@ is no `data-confirm` and no browser dialog anywhere.
   hides a control and never refuses the run — pair it with a validation, as for
   any form, or forbid `:ash_quick_form` where QuickView must not run the action
   at all.
+- A bulk action opens the modal over the list and keeps the selection: a
+  confirmation ("Applies to N selected rows") or a form whose values apply to
+  every row. The form checks the inputs alone (types, constraints, required);
+  record-dependent validations run in the run. ✕ / Cancel close it without
+  running. The run (`Ash.bulk_update` / `Ash.bulk_destroy`) takes the selected
+  rows the list still shows, stamped `:ash_quick_form`; rows it did not write
+  stay selected and are reported. `:ash_quick_list_bulk` only hides a menu item.
 - In LiveView tests, target the modal: `form("#ash-quick-action-modal form")`,
   and submit it to confirm. The page underneath is in the DOM too, so a bare
   `"form"` selector matches its forms as well.

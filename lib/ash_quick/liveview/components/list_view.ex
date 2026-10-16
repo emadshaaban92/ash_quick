@@ -449,6 +449,7 @@ defmodule AshQuick.LiveView.Components.ListView do
         <.icon name="hero-chevron-down" class="w-4 h-4" /> {gettext("Actions")}
       </div>
       <ul
+        id="bulk-actions-menu"
         tabindex="0"
         class="dropdown-content menu bg-base-300 rounded-box z-10 w-44 p-2 shadow-[0_2px_15px_rgba(0,0,0,0.3)] border border-base-content/10"
       >

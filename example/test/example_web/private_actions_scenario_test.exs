@@ -90,6 +90,7 @@ defmodule ExampleWeb.PrivateActionsScenarioTest do
       |> visit(~p"/products")
       |> tick_rows([product.id])
       |> force_bulk_action(:reindex)
+      |> refute_has("#ash-quick-action-modal")
 
       assert reindexes_of(product.id) == []
     end

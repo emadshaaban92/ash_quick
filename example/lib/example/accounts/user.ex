@@ -78,12 +78,12 @@ defmodule Example.Accounts.User do
     # pushed event or a typed URL would open.
     #
     # All three surfaces, not just the two a button is drawn on. `:impersonate`
-    # takes no input, which is exactly what `ListUtils.resource_bulk_actions/3`
-    # derives a bulk action from, so the list's bulk menu would offer it over a
-    # selection as well. That menu is probed under `:ash_quick_list_bulk`, so
-    # the clause for it keeps the entry out of the menu — and refuses the event
-    # if it is pushed anyway, which is what stops the audit entry this policy
-    # exists to prevent from being written once per selected row.
+    # takes no input, which is exactly what a bulk menu derives an action from,
+    # so the list would offer it over a selection as well; the
+    # `:ash_quick_list_bulk` clause keeps it out of the menu. What refuses the
+    # run, from any modal and however it was opened, is the `:ash_quick_form`
+    # clause: every run is stamped with that source. Without it the audit entry
+    # this policy exists to prevent would be written once per selected row.
     #
     # Nobody stands in for themselves, which would be an entry for a session
     # that did not change hands.

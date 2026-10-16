@@ -4,6 +4,17 @@
 
 ### Features
 
+- **Bulk actions run through the action modal.** A bulk action opens the
+  modal over the list, which keeps its selection: an action that takes no
+  input asks for confirmation, naming how many rows it applies to; one that
+  takes input opens a form whose values apply to every selected row. The form
+  checks the values themselves as they are typed, and the run refuses what
+  depends on a record, keeping the modal open with what was typed and the
+  error worded as a form's is. A row the run did not write stays selected and
+  is reported. `list: [bulk_actions: ...]` now takes action names beside custom
+  items, as a list or a function of the socket; a list is checked when the
+  QuickView compiles.
+
 - **The action modal shows the action running, and can't be left mid-run.**
   From submit until the answer, Save or Confirm shows a spinner over its
   label, the ✕ and Cancel are disabled, and the form's controls are locked:
@@ -310,6 +321,19 @@
   default interpolation gets the same treatment.
 
 ### Breaking changes
+
+- **A bulk action asks before it runs.** Clicking it in the menu opens the
+  modal; Confirm (or Save) runs it. Tests click the action, then submit
+  `"#ash-quick-action-modal form"`.
+- **A bulk run is stamped `:ash_quick_form`**, not `:ash_quick_list_bulk`. A
+  policy scoped to `:ash_quick_list_bulk` now only hides the menu item; one
+  that must refuse the run needs a validation, or
+  `forbid_if context_equals(:action_source, :ash_quick_form)`.
+- **A page passing `bulk_actions` gets exactly that menu.** The derived
+  actions are no longer added to it; name them (`[:activate, :destroy, ...]`)
+  to keep them.
+- **A destroy with arguments is no longer derived into the bulk menu**, as an
+  update with inputs never was. Name it in `bulk_actions` to offer it.
 
 - **`:print_templates` is gone, with the print menu and its modal.** A
   template prints through an action instead: give the resource an update that

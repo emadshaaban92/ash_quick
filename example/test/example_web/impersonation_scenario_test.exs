@@ -335,17 +335,27 @@ defmodule ExampleWeb.ImpersonationScenarioTest do
     test "nor the bulk menu, which derives it without the page naming it", ctx do
       %{conn: conn, admin: admin, editor: editor} = ctx
 
-      # The third surface, and the one no button had to be drawn for.
-      # `ListUtils.resource_bulk_actions/3` takes every input-less update the
-      # actor may run and offers it over a selection — and `:impersonate` takes
-      # no input, so it arrives in that menu derived from the resource. It runs
-      # under its own `action_source`, which is why forbidding the two the row
-      # and details menus use is not enough.
-      conn
-      |> log_in(admin)
-      |> visit(~p"/users")
-      |> tick_rows([editor.id])
-      |> force_bulk_action(:impersonate)
+      # The third surface, and the one no button had to be drawn for. A page
+      # that names no bulk actions derives its menu from every input-less
+      # update the actor may run, and `:impersonate` takes no input. The
+      # `:ash_quick_list_bulk` clause keeps it out of that menu, so an event
+      # naming it is one the menu never offered: it opens nothing.
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/users")
+        |> tick_rows([editor.id])
+        |> refute_has("a[phx-click*='bulk_action']", text: "Impersonate")
+        |> force_bulk_action(:impersonate)
+        |> refute_has("#ash-quick-action-modal")
+        |> assert_has("#flash-error", text: AshQuick.LiveView.ActionErrors.forbidden_message())
+
+      # Nor does a run pushed without the modal: there is nothing open to run.
+      # Were it ever opened, the run is stamped with the form's source, which
+      # the `:ash_quick_form` clause refuses.
+      session
+      |> force_bulk_save()
+      |> assert_has("#flash-error", text: AshQuick.LiveView.ActionErrors.forbidden_message())
 
       assert impersonations_of(editor.id) == []
 

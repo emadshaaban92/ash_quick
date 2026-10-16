@@ -57,7 +57,7 @@ defmodule AshQuick.LiveView.QuickView.Options do
     load: [type: @load_type],
     default_action: [type: :atom],
     new_action_label: [type: :string],
-    bulk_actions: [type: {:fun, 1}]
+    bulk_actions: [type: {:or, [{:list, :any}, {:fun, 1}]}]
   ]
 
   @form_schema [
@@ -108,7 +108,17 @@ defmodule AshQuick.LiveView.QuickView.Options do
     |> put_details_options(details_opts, default_attrs)
     |> put_form_options(opts[:form] || [])
     |> validate_lookups!()
+    |> validate_bulk_actions!()
   end
+
+  # A function's list is only known once there is a socket to call it with, and
+  # `AshQuick.LiveView.BulkActions.menu/2` checks it then.
+  defp validate_bulk_actions!(%__MODULE__{bulk_actions: items} = options) when is_list(items) do
+    AshQuick.LiveView.BulkActions.check!(items, options.resource, options.module)
+    options
+  end
+
+  defp validate_bulk_actions!(options), do: options
 
   # Everything a QuickView asks of a resource it was not written against —
   # what a record is called, which fields a role may see, how a change reaches

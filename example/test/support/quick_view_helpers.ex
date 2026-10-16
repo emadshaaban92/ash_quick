@@ -96,6 +96,19 @@ defmodule ExampleWeb.QuickViewHelpers do
   end
 
   @doc """
+  Submits the bulk modal without pressing anything in it.
+
+  What a hand-made WebSocket frame would send: the run, whether or not the
+  modal drew a button for it. The policy behind the run is the boundary, and
+  only this asks it.
+  """
+  def force_bulk_save(session, params \\ %{}) do
+    PhoenixTest.unwrap(session, fn view ->
+      LiveViewTest.render_submit(view, "bulk_save", %{"form" => params})
+    end)
+  end
+
+  @doc """
   Toggles the saved filter labelled `label`.
 
   The binding is on the row rather than on a link, so `click_link/3` has
