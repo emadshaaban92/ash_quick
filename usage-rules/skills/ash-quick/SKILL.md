@@ -844,8 +844,12 @@ covers wiring them up.
   the socket to `assets/js/print.js`'s `initPrinting/0`, which the host's
   `app.js` calls once. On a resource carrying the `AshQuick` extension, a
   print on a destroy, with bad options, or without `chromic_pdf` in the deps
-  does not compile (`AshQuick.Print.Verifier`); on any other resource the same
-  mistakes surface when the action runs. A template that writes nothing
+  (and no `:pdf_renderer` of the host's own) does not compile
+  (`AshQuick.Print.Verifier`); on any other resource the same mistakes surface
+  when the action runs. `config :ash_quick, pdf_renderer:` names an
+  `AshQuick.PdfRenderer` to render with instead of ChromicPDF: a test suite
+  with no Chrome uses one that hands back the template's HTML, and asserts on
+  the `"ash_quick:pdf"` push event. A template that writes nothing
   prints from an update with
   `manual fn changeset, _context -> {:ok, changeset.data} end`.
 - `AshQuick.BrowserSessionPresence` in the supervision tree, and
