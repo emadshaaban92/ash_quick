@@ -4,6 +4,20 @@
 
 ### Features
 
+- **An action's change can tell a QuickView form being built, validated or
+  submitted.** Every changeset a QuickView form builds carries
+  `AshQuick.form_stage_key/0` (`:ash_quick_form_stage`) in its context:
+  `:build` once as the form opens, `:validate` on every `phx-change` or upload
+  after that, `:submit` when it is submitted, a bulk action's run included.
+  Read it with `AshQuick.form_stage/1`, and compare with
+  `AshQuick.form_build_stage/0`, `AshQuick.form_validate_stage/0` and
+  `AshQuick.form_submit_stage/0`. Any other caller leaves it unset, so a change
+  can seed an argument when the form opens without filling it in for a caller
+  that left it out, or again once the person cleared it. Whatever the build
+  sets on the action's inputs becomes the form's initial params. The run's
+  `action_source` is `AshQuick.form_source/0` as before, and building or
+  validating a form still carries none.
+
 - **A field with a fixed set of values is picked from a select.** That is an
   `Ash.Type.Enum`, or an atom with `one_of`, or an `Ash.Type.NewType` over
   either; an enum used to get a text input. One value is picked from a

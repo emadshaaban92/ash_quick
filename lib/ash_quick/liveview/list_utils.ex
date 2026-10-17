@@ -536,7 +536,10 @@ defmodule AshQuick.LiveView.ListUtils do
   defp bulk_opts(socket) do
     [
       scope: socket.assigns.scope,
-      context: %{action_source: AshQuick.form_source()},
+      context: %{
+        :action_source => AshQuick.form_source(),
+        AshQuick.form_stage_key() => AshQuick.form_submit_stage()
+      },
       # We shouldn't need this, but it seems to be required for some reason
       authorize?: true,
       strategy: :stream,

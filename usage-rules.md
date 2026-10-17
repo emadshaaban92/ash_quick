@@ -85,7 +85,8 @@ defects and never on advisories. Record a divergence you mean to keep with
 The moduledocs carry the reasoning, and are the place to check an exact
 signature or option:
 
-- `AshQuick` — every `ash_quick do` section, and `AshQuick.can?/4`
+- `AshQuick` — every `ash_quick do` section, `AshQuick.can?/4`, and the
+  context a form stamps (`form_source/0`, `form_stage/1`)
 - `AshQuick.LiveView.QuickView` — every view option
 - `AshQuick.LiveView.Router` — `quick_view/3` and the four route shapes
 - `AshQuick.Config` — every `config :ash_quick` key

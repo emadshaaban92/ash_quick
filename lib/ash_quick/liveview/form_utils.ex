@@ -81,9 +81,11 @@ defmodule AshQuick.LiveView.FormUtils do
         transform_params: &transform_nested_params/3,
         transform_errors: &ActionErrors.renderable_vars/2,
         scope: socket.assigns.scope,
-        actor: actor(socket)
+        actor: actor(socket),
+        context: stage_context(AshQuick.form_build_stage())
       )
       |> then(&add_nested_forms(&1, &1.form_keys))
+      |> opened()
 
     socket |> assign(form: form) |> assign_issued_attachment_keys()
   end
@@ -103,8 +105,10 @@ defmodule AshQuick.LiveView.FormUtils do
         transform_params: &transform_nested_params/3,
         transform_errors: &ActionErrors.renderable_vars/2,
         scope: socket.assigns.scope,
-        actor: actor(socket)
+        actor: actor(socket),
+        context: stage_context(AshQuick.form_build_stage())
       )
+      |> opened()
 
     socket |> assign(form: form) |> assign_issued_attachment_keys()
   end
@@ -115,14 +119,93 @@ defmodule AshQuick.LiveView.FormUtils do
         transform_params: &transform_nested_params/3,
         transform_errors: &ActionErrors.renderable_vars/2,
         scope: socket.assigns.scope,
-        actor: actor(socket)
+        actor: actor(socket),
+        context: stage_context(AshQuick.form_build_stage())
       )
       |> then(&add_nested_forms(&1, &1.form_keys))
       |> prefill_form_has_many_args(socket)
       |> prefill_changed_embedded_forms()
+      |> opened()
 
     socket |> assign(form: form) |> assign_issued_attachment_keys()
   end
+
+  # The form is open. Building it ran the action's changes once, under the
+  # build stage, prefills included, and nothing they set survives a rebuild:
+  # `AshPhoenix.Form.validate/3` builds a new changeset from `form.data`, the
+  # params and the form's options every time. So whatever the build set on the
+  # action's inputs becomes the form's initial params, and every validate from
+  # here on, a `phx-change` or this module's own (an upload's, which rebuilds
+  # from `raw_params`), runs under the validate stage and agrees with what the
+  # page shows. Nested forms carry their own params, and are left to them.
+  defp opened(form) do
+    built = built_input_params(form)
+    form = put_stage(form, AshQuick.form_validate_stage())
+
+    if map_size(built) == 0 do
+      form
+    else
+      AshPhoenix.Form.validate(form, Map.merge(form.raw_params || %{}, built), errors: false)
+    end
+  end
+
+  # Each input the action takes that the built changeset holds a value for and
+  # the params do not: an argument set to a value, or an accepted attribute the
+  # build changed. An input left at its static default, or an attribute at the
+  # record's own value, is what the form shows without any build, and stays
+  # out: such a value in the params would read as one the person posted. It is
+  # the value that decides, not `changeset.defaults`: a change that sets an
+  # attribute to its default (`[]` for an attachment list) is just as unposted,
+  # and in the params would read as a list emptied by its ✕.
+  defp built_input_params(form) do
+    held = form.raw_params || %{}
+    nested = form.form_keys |> Keyword.keys() |> MapSet.new(&to_string/1)
+
+    form.resource
+    |> Ash.Resource.Info.action_inputs(form.action)
+    |> MapSet.new(&to_string/1)
+    |> Enum.reject(&(MapSet.member?(nested, &1) or Map.has_key?(held, &1)))
+    |> Enum.flat_map(fn key ->
+      case built_value(form.source, key) do
+        {:ok, value} -> [{key, value}]
+        :error -> []
+      end
+    end)
+    |> Map.new()
+  end
+
+  defp built_value(changeset, key) do
+    argument = Enum.find(changeset.action.arguments, &(to_string(&1.name) == key))
+    attribute = Ash.Resource.Info.attribute(changeset.resource, key)
+
+    cond do
+      argument ->
+        changeset
+        |> Ash.Changeset.fetch_argument(argument.name)
+        |> unless_unbuilt([nil, static_default(argument)])
+
+      attribute && Ash.Changeset.changing_attribute?(changeset, attribute.name) ->
+        {:ok, Ash.Changeset.get_attribute(changeset, attribute.name)}
+        |> unless_unbuilt([unbuilt_value(changeset, attribute)])
+
+      true ->
+        :error
+    end
+  end
+
+  defp unless_unbuilt({:ok, value}, unbuilt),
+    do: if(value in unbuilt, do: :error, else: {:ok, value})
+
+  defp unless_unbuilt(:error, _unbuilt), do: :error
+
+  defp unbuilt_value(%{action_type: :create}, attribute), do: static_default(attribute)
+  defp unbuilt_value(changeset, attribute), do: Map.get(changeset.data, attribute.name)
+
+  defp static_default(%{default: default})
+       when not is_function(default) and not is_tuple(default),
+       do: default
+
+  defp static_default(_input), do: :no_static_default
 
   # The attachment keys this form will take from a post, per top-level field:
   # what the form held in that field when it was built, read off the form
@@ -600,7 +683,9 @@ defmodule AshQuick.LiveView.FormUtils do
 
   defp submit_form(form, params, socket) do
     result =
-      AshPhoenix.Form.submit(form,
+      form
+      |> put_stage(AshQuick.form_submit_stage())
+      |> AshPhoenix.Form.submit(
         params:
           params
           |> maybe_put_nested_params(form)
@@ -636,7 +721,9 @@ defmodule AshQuick.LiveView.FormUtils do
           [] ->
             {:halt, put_flash(socket, :error, ActionErrors.forbidden_message(form.source.errors))}
 
+          # The form stays open, so its next validate runs under the validate stage.
           _errors ->
+            form = put_stage(form, AshQuick.form_validate_stage())
             {:halt, socket |> assign(form: form) |> flash_unplaced_errors(form)}
         end
     end
@@ -645,9 +732,31 @@ defmodule AshQuick.LiveView.FormUtils do
   # A destroy hands back the record it destroyed only when asked to, and
   # everything after the submit — the print, where to go next — reads it.
   defp action_opts(%AshPhoenix.Form{type: :destroy}),
-    do: [context: %{action_source: AshQuick.form_source()}, return_destroyed?: true]
+    do: [context: run_context(), return_destroyed?: true]
 
-  defp action_opts(_form), do: [context: %{action_source: AshQuick.form_source()}]
+  defp action_opts(_form), do: [context: run_context()]
+
+  defp run_context do
+    AshQuick.form_submit_stage()
+    |> stage_context()
+    |> Map.put(:action_source, AshQuick.form_source())
+  end
+
+  defp stage_context(stage), do: %{AshQuick.form_stage_key() => stage}
+
+  # `AshPhoenix.Form.validate/3` rebuilds the changeset with the context the
+  # form was built with, and `submit/2` builds the one it runs the same way,
+  # running the action's changes there; the run's own `context` is merged in
+  # only after them. So the stage rides in the form's build options, which
+  # every changeset the form builds is given.
+  defp put_stage(form, stage) do
+    context = stage_context(stage)
+
+    AshPhoenix.Form.update_options(
+      form,
+      &Keyword.update(&1, :context, context, fn held -> Map.merge(held, context) end)
+    )
+  end
 
   # `JS.push/2` sends the position as a number, a `phx-value-index` as a string.
   defp attachment_position(index) when is_integer(index) and index >= 0, do: {:ok, index}

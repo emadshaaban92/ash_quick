@@ -310,6 +310,45 @@ is no `data-confirm` and no browser dialog anywhere.
   and submit it to confirm. The page underneath is in the DOM too, so a bare
   `"form"` selector matches its forms as well.
 
+## Custom actions: seeding a form
+
+A QuickView form tells an action's changes what it is doing, under
+`AshQuick.form_stage_key/0` (`:ash_quick_form_stage`) in the changeset's
+context. Read it with `AshQuick.form_stage/1`, never by the key or its atoms:
+
+- `AshQuick.form_build_stage/0` (`:build`): the form is being built, once, as
+  it opens (prefills included). Whatever the build sets on the action's
+  inputs, an argument or an accepted attribute, becomes the form's initial
+  params, so it holds until the person changes it. Only an input the form
+  shows carries a seed to the run: one the actor cannot see (a field
+  restriction hides it) is dropped at the first `phx-change`. Set such a value
+  at `form_submit_stage/0`, or in a change that runs at every stage.
+- `AshQuick.form_validate_stage/0` (`:validate`): the open form is validated,
+  on every `phx-change` and upload.
+- `AshQuick.form_submit_stage/0` (`:submit`): submitted from one, a bulk
+  action's run included. The run carries `action_source:
+  AshQuick.form_source/0` beside it, as before.
+- `nil`: any other caller (code, JSON API, `AshQuick.can?/4` probes, a form's
+  nested forms).
+
+So a change can fill an argument from a computed value when the form opens,
+without filling it in for a caller that simply left it out, or again after the
+person cleared it:
+
+```elixir
+def change(changeset, _opts, _context) do
+  if AshQuick.form_stage(changeset) == AshQuick.form_build_stage() do
+    Ash.Changeset.set_argument(changeset, :note, suggested_note(changeset))
+  else
+    changeset
+  end
+end
+```
+
+A change's `change/3` sees the stage, but not `action_source`: the run's own
+context is merged in after the changes ran. A hook (`before_action` and later)
+or a policy sees both.
+
 ## Custom action templates
 
 Place `action_<name>.html.heex` in the same directory as the QuickView module:
