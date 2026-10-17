@@ -21,6 +21,16 @@
   render (the `%Regex{}` a `match/2` error carries) reaches it already rendered
   through `inspect/1`.
 
+- **A form finds the relationship an id-list argument edits from its
+  `manage_relationship` change.** An `{:array, :uuid}` argument gets its
+  multi-select dropdown, its prefill on update and its loaded labels from the
+  relationship a `manage_relationship` change on the action, or failing that a
+  global one covering it, names for it, so it may be called anything. An
+  argument no such change names still edits the relationship its
+  `<relationship>_ids` name spells, as before.
+  `AshQuick.LiveView.Utils.argument_to_relationship/2` is now `/3`, taking the
+  action.
+
 - **A print renders through a renderer the host may replace.**
   `config :ash_quick, pdf_renderer: MyApp.PdfRenderer` names an
   `AshQuick.PdfRenderer` that turns a print template's output into the PDF

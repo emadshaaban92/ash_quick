@@ -207,7 +207,7 @@ defmodule AshQuick.LiveView.Components.FormView do
 
   defp field_input(%{field: %Argument{type: {:array, item_type}}} = assigns)
        when item_type in [Type.UUID, Type.UUIDv7] do
-    case Utils.argument_to_relationship(assigns.field, assigns.resource) do
+    case Utils.argument_to_relationship(assigns.field, assigns.resource, assigns.form.action) do
       %Ash.Resource.Relationships.ManyToMany{} = relationship ->
         assigns = assign(assigns, relationship: relationship)
 
