@@ -208,6 +208,19 @@ defmodule AshQuick.LiveView.ActionErrors do
   belongs to a nested form, which shows it.
   """
   def unplaced_message(errors, inputs) do
+    case unplaced_sentences(errors, inputs) do
+      [] -> nil
+      sentences -> Enum.join(sentences, "\n")
+    end
+  end
+
+  @doc """
+  The sentences `unplaced_message/2` joins, as a list, so a caller can say
+  where each belongs before joining them: a sub-form's errors are worded
+  against its own inputs, and the person still needs to read which item each
+  one is about.
+  """
+  def unplaced_sentences(errors, inputs) do
     errors
     |> List.wrap()
     |> case do
@@ -215,17 +228,13 @@ defmodule AshQuick.LiveView.ActionErrors do
       errors -> Ash.Error.to_error_class(errors).errors
     end
     |> Enum.filter(&(input_error?(&1) and Map.get(&1, :path, []) in [nil, []]))
-    |> Enum.flat_map(&unplaced_sentences(&1, inputs))
+    |> Enum.flat_map(&error_unplaced_sentences(&1, inputs))
     |> Enum.uniq()
-    |> case do
-      [] -> nil
-      sentences -> Enum.join(sentences, "\n")
-    end
   end
 
   # An error that says nothing has nothing to show under an input either, so it
   # is named by its field wherever that is, as `invalid_message/1` names it.
-  defp unplaced_sentences(error, inputs) do
+  defp error_unplaced_sentences(error, inputs) do
     error
     |> AshPhoenix.FormData.Error.to_form_error()
     |> List.wrap()

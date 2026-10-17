@@ -102,6 +102,8 @@ defmodule ExampleWeb.Router do
         quick_view "/digits_only", Example.Test.DigitsOnlyLive.Quick
         quick_view "/enum_picks", Example.Test.EnumPicksLive.Quick
         quick_view "/form_stages", Example.Test.FormStagesLive.Quick
+        quick_view "/hidden_address", Example.Test.HiddenAddressLive.Quick
+        quick_view "/nested_items", Example.Test.NestedItemsLive.Quick
         quick_view "/picked_labels", Example.Test.PickedLabelsLive.Quick
         quick_view "/printable", Example.Test.PrintableLive.Quick
         quick_view "/required_attachments", Example.Test.RequiredAttachmentsLive.Quick

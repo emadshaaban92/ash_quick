@@ -713,18 +713,21 @@ defmodule AshQuick.LiveView.FormUtils do
         {:halt, put_flash(socket, :error, ActionErrors.user_facing_message(error))}
 
       {:error, form} ->
-        log_failed_save(socket, fn -> describe_failed_save(form) end)
+        forms = form_tree(form, Map.get(socket.assigns, :scope))
+        log_failed_save(socket, fn -> describe_failed_save(forms) end)
 
-        case AshPhoenix.Form.errors(form) do
-          # A submit that failed with nothing to say about any input is the
-          # policy refusing it, in its own words when it has some.
+        case input_errors(forms) do
+          # Nothing to say about any input, on the form or any sub-form: the
+          # failure is said as every other surface says it. A policy refusing
+          # the save is worded as one, in the policy's own words when it has
+          # some, and nothing else is.
           [] ->
-            {:halt, put_flash(socket, :error, ActionErrors.forbidden_message(form.source.errors))}
+            {:halt, put_flash(socket, :error, failed_save_message(forms))}
 
           # The form stays open, so its next validate runs under the validate stage.
           _errors ->
             form = put_stage(form, AshQuick.form_validate_stage())
-            {:halt, socket |> assign(form: form) |> flash_unplaced_errors(form)}
+            {:halt, socket |> assign(form: form) |> flash_unplaced_errors(forms)}
         end
     end
   end
@@ -782,12 +785,12 @@ defmodule AshQuick.LiveView.FormUtils do
     end)
   end
 
-  defp describe_failed_save(form) do
-    case AshPhoenix.Form.errors(form) do
+  defp describe_failed_save(forms) do
+    case input_errors(forms) do
       [] ->
         modules =
-          form.source.errors
-          |> List.wrap()
+          forms
+          |> raw_errors()
           |> Enum.map_join(", ", fn
             %module{} -> inspect(module)
             _not_a_struct -> "an unstructured error"
@@ -796,7 +799,87 @@ defmodule AshQuick.LiveView.FormUtils do
         "no field errors, the action returned [#{modules}]"
 
       errors ->
-        "errors on fields #{errors |> Keyword.keys() |> Enum.uniq() |> Enum.join(", ")}"
+        "errors on fields #{errors |> Enum.map(&elem(&1, 0)) |> Enum.uniq() |> Enum.join(", ")}"
+    end
+  end
+
+  # The form and every sub-form under it, walked the way AshPhoenix walks them
+  # for their errors: an emptied slot (`nil` once `remove_form/2` takes a
+  # single sub-form, `[]` for a list) holds no form. Each is held with its path
+  # from the root and the inputs the page draws for it. A sub-form under a field
+  # this actor cannot see is still built, and can refuse the save, but the page
+  # draws none of its inputs, so it is held with none. The inputs are worked
+  # out once per resource and action, not once per item.
+  defp form_tree(form, scope) do
+    {forms, _inputs_by_action} = form_tree(form, [], true, scope, %{})
+    forms
+  end
+
+  defp form_tree(form, path, drawn?, scope, inputs_by_action) do
+    key = {form.resource, form.action}
+
+    {inputs, inputs_by_action} =
+      case inputs_by_action do
+        %{^key => inputs} -> {inputs, inputs_by_action}
+        _ -> input_names(form, scope) |> then(&{&1, Map.put(inputs_by_action, key, &1)})
+      end
+
+    held = %{form: form, path: path, inputs: if(drawn?, do: inputs, else: MapSet.new())}
+
+    {sub_forms, inputs_by_action} =
+      form.forms
+      |> Enum.sort_by(&elem(&1, 0))
+      |> Enum.flat_map(fn {field, slot} ->
+        slot |> sub_form_slots(path ++ [field]) |> Enum.map(&{&1, drawn? and field in inputs})
+      end)
+      |> Enum.flat_map_reduce(inputs_by_action, fn {{sub_form, sub_path}, drawn?}, acc ->
+        form_tree(sub_form, sub_path, drawn?, scope, acc)
+      end)
+
+    {[held | sub_forms], inputs_by_action}
+  end
+
+  defp sub_form_slots(nil, _path), do: []
+
+  defp sub_form_slots(forms, path) when is_list(forms),
+    do: forms |> Enum.with_index() |> Enum.map(fn {form, index} -> {form, path ++ [index]} end)
+
+  defp sub_form_slots(form, path), do: [{form, path}]
+
+  # Every input error on the form and its sub-forms, each named by its field
+  # under the path of the form it is on (`items[0].status`). An error a
+  # sub-form's changeset refuses is filed on that sub-form, never on the root,
+  # so `AshPhoenix.Form.errors/1` on the root alone misses it.
+  defp input_errors(forms) do
+    Enum.flat_map(forms, fn %{form: form, path: path} ->
+      form
+      |> AshPhoenix.Form.errors()
+      |> Enum.map(fn {field, message} -> {field_path(path, field), message} end)
+    end)
+  end
+
+  defp raw_errors(forms), do: Enum.flat_map(forms, &AshPhoenix.Form.raw_errors(&1.form))
+
+  defp field_path(path, field) do
+    path
+    |> Enum.reduce("", fn
+      index, acc when is_integer(index) -> acc <> "[#{index}]"
+      name, "" -> "#{name}"
+      name, acc -> acc <> ".#{name}"
+    end)
+    |> case do
+      "" -> field
+      prefix -> "#{prefix}.#{field}"
+    end
+  end
+
+  # The root holds what the action returned; a sub-form refused before the
+  # action ran holds its own refusal. No error anywhere explains nothing, so it
+  # is not put down to the policy either.
+  defp failed_save_message(forms) do
+    case raw_errors(forms) do
+      [] -> ActionErrors.generic_message()
+      errors -> errors |> Ash.Error.to_error_class() |> ActionErrors.user_facing_message()
     end
   end
 
@@ -807,14 +890,36 @@ defmodule AshQuick.LiveView.FormUtils do
   # (a change, an attribute it does not accept, a field restricted away). Those
   # are flashed, worded as `ActionErrors` words a field error, so the submit
   # never fails without saying why. Where an error shows depends on where it
-  # belongs, not on how many there are.
-  defp flash_unplaced_errors(socket, form) do
-    inputs = input_names(form, Map.get(socket.assigns, :scope))
-
-    case ActionErrors.unplaced_message(form.source.errors, inputs) do
-      nil -> socket
-      message -> put_flash(socket, :error, message)
+  # belongs, not on how many there are. A sub-form's errors are held to the
+  # inputs the page draws for it, and each flashed one says which item it is
+  # about: "Items 2 › Note: is hidden".
+  defp flash_unplaced_errors(socket, forms) do
+    forms
+    |> Enum.flat_map(fn %{form: form, path: path, inputs: inputs} ->
+      form
+      |> AshPhoenix.Form.raw_errors()
+      |> ActionErrors.unplaced_sentences(inputs)
+      |> Enum.map(&located(&1, path))
+    end)
+    |> Enum.uniq()
+    |> case do
+      [] -> socket
+      sentences -> put_flash(socket, :error, Enum.join(sentences, "\n"))
     end
+  end
+
+  defp located(sentence, []), do: sentence
+  defp located(sentence, path), do: "#{path_label(path)} › #{sentence}"
+
+  # People count items from one.
+  defp path_label(path) do
+    path
+    |> Enum.reduce([], fn
+      index, [field | labels] when is_integer(index) -> ["#{field} #{index + 1}" | labels]
+      field, labels -> [Utils.humanize(field) | labels]
+    end)
+    |> Enum.reverse()
+    |> Enum.join(" › ")
   end
 
   # A belongs_to is offered as its relationship, and its errors are filed under
