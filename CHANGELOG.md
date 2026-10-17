@@ -389,6 +389,14 @@
   `String.Chars` through `inspect/1`. `AshQuick.Components.translate_error/1`'s
   default interpolation gets the same treatment.
 
+- **A list opens at its action's `default_limit`.** A list nobody sized read
+  20 rows whatever its action declared, so `pagination default_limit: 50`
+  still opened at 20. It now reads the list action's `default_limit`, held to
+  its `max_page_size`, and 20 only for an action without one. A URL that
+  names `?limit=` still gets that size, and the URL leaves the action's
+  default unsaid. A list action whose `default_limit` is not 20 opens at a
+  different size than before.
+
 ### Breaking changes
 
 - **A list's page size is capped by its action, not by config.** `?limit=`

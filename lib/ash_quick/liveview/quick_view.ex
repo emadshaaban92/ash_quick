@@ -785,7 +785,7 @@ defmodule AshQuick.LiveView.QuickView do
       params |> action_from_params(options, nil) |> then(&resolve_parent(options, &1, params))
 
     if parent_action do
-      params = clamp_limit(params, parent_action)
+      params = apply_pagination(params, parent_action)
 
       parent =
         socket
@@ -983,15 +983,16 @@ defmodule AshQuick.LiveView.QuickView do
       if reachable?(options, action_name),
         do: resolved_action(options.resource, action_name, params)
 
-    {clamp_limit(params, action), action}
+    {apply_pagination(params, action), action}
   end
 
-  # A list reads at most its action's `max_page_size`, so that is the most its
-  # page may say it reads. See `URLParams.clamp_limit/2`.
-  defp clamp_limit(%URLParams{id: nil} = params, %Actions.Read{pagination: %{} = pagination}),
-    do: URLParams.clamp_limit(params, pagination.max_page_size)
+  # A list reads its action's `default_limit` unless the URL says otherwise, and
+  # at most its `max_page_size`, so that is the most its page may say it reads.
+  # See `URLParams.apply_pagination/2`.
+  defp apply_pagination(%URLParams{id: nil} = params, %Actions.Read{pagination: %{} = pagination}),
+       do: URLParams.apply_pagination(params, pagination)
 
-  defp clamp_limit(params, _action), do: params
+  defp apply_pagination(params, _action), do: params
 
   # A URL names actions on the visitor's behalf, so it reaches only public
   # ones. See `AshQuick.LiveView.Utils.record_actions/1` for what a private
