@@ -367,7 +367,9 @@ in a calculation.
 **A lookup action**, if anything searches the resource. One declaration stands
 behind three surfaces: the list page, the export, and every relationship
 dropdown pointing *at* this resource. The action has to exist, accept the
-search argument (including `nil`), and declare `pagination`.
+search argument (including `nil`), and declare `pagination`. A list page
+reads at most the action's `max_page_size` rows (Ash's default is 250),
+whatever `?limit=` asks for.
 
 ```elixir
 ash_quick do

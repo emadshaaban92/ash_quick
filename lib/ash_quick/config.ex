@@ -71,10 +71,6 @@ defmodule AshQuick.Config do
     refetches, including those caused by a PubSub notification. Defaults to
     5 seconds.
 
-  * `:max_page_size` — The largest page a QuickView list will read, whatever
-    `?limit=` asks for. Defaults to 250. Keeps the count and the pager honest
-    rather than bounding the read; see `max_page_size/0`.
-
   * `:actor_resource` — The resource a record's `inserted_by` / `updated_by`
     relationships point at, and that AshQuick loads an actor through when it
     has to name who wrote a record. `nil` when the host stamps no actor. Its
@@ -193,25 +189,6 @@ defmodule AshQuick.Config do
   """
   def refetch_window do
     get(:refetch_window, :timer.seconds(5))
-  end
-
-  @doc """
-  Returns the largest page size a QuickView list will read.
-
-  Defaults to 250, which is also Ash's own `max_page_size` default. A `?limit=`
-  above it is clamped rather than refused: raising the page size in the URL is
-  supported, but how far is the host's answer rather than the visitor's.
-
-  It is not what bounds the read — every list action declares `pagination`, and
-  Ash takes the minimum of its `max_page_size`, the page size and the query
-  limit. What the clamp fixes is what the page then *says* about that read:
-  unclamped, the count and the pager reason about the limit the view asked for
-  rather than the one Ash applied, so `?limit=100000` against a 250-row action
-  renders 251 rows under a footer claiming 4,166. Raising this above an
-  action's own `max_page_size` is inert.
-  """
-  def max_page_size do
-    get(:max_page_size, 250)
   end
 
   @doc """

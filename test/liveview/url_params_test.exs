@@ -31,10 +31,6 @@ defmodule AshQuick.LiveView.URLParamsTest do
       assert URLParams.from_url_params(%{"limit" => ["50"]}).limit == 20
     end
 
-    test "a page larger than the configured maximum is clamped to it" do
-      assert URLParams.from_url_params(%{"limit" => "100000"}).limit == 250
-    end
-
     test "a page of nothing is a page of one" do
       for limit <- ["0", "-5"] do
         assert URLParams.from_url_params(%{"limit" => limit}).limit == 1
@@ -60,18 +56,24 @@ defmodule AshQuick.LiveView.URLParamsTest do
     end
 
     # An offset out of the data layer's range raised, where a page past the end
-    # of the data merely lists nothing.
+    # of the data merely lists nothing. Bounded once the limit is: see
+    # `URLParamsCeilingTest`.
     test "a page deeper than any table is the deepest page there is" do
-      params = URLParams.from_url_params(%{"page" => "99999999999999999999"})
+      params =
+        %{"page" => "99999999999999999999"}
+        |> URLParams.from_url_params()
+        |> URLParams.clamp_limit(250)
 
       assert params.page == div(1_000_000_000, params.limit) + 1
     end
 
     test "the ceiling is measured in rows, so a larger page reaches it sooner" do
-      deep = "99999999999999999999"
+      deep = %{"page" => "99999999999999999999"}
 
-      assert URLParams.from_url_params(%{"page" => deep, "limit" => "250"}).page <
-               URLParams.from_url_params(%{"page" => deep, "limit" => "20"}).page
+      large = deep |> Map.put("limit", "250") |> URLParams.from_url_params()
+      small = deep |> Map.put("limit", "20") |> URLParams.from_url_params()
+
+      assert URLParams.clamp_limit(large, 250).page < URLParams.clamp_limit(small, 250).page
     end
 
     test "a page a real table can hold is taken as written" do
@@ -375,31 +377,50 @@ end
 
 defmodule AshQuick.LiveView.URLParamsCeilingTest do
   @moduledoc """
-  The cases that read `:max_page_size` back out of the application environment.
-
-  Kept apart so the rest of the parse cases, which mutate nothing, stay async.
+  The limit held to a list action's `max_page_size`. The page itself is driven
+  in the example app (`ExampleWeb.PageCeilingTest`).
   """
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
   alias AshQuick.LiveView.URLParams
 
-  setup do
-    Application.put_env(:ash_quick, :max_page_size, 10)
-    on_exit(fn -> Application.delete_env(:ash_quick, :max_page_size) end)
+  defp clamped(query, ceiling) do
+    query |> URLParams.from_url_params() |> URLParams.clamp_limit(ceiling)
   end
 
-  test "the ceiling is the host's to set" do
-    assert URLParams.from_url_params(%{"limit" => "100000"}).limit == 10
+  test "the parse alone leaves a large limit as asked" do
+    assert URLParams.from_url_params(%{"limit" => "100000"}).limit == 100_000
+  end
+
+  test "the ceiling is the action's to set" do
+    assert clamped(%{"limit" => "100000"}, 10).limit == 10
+  end
+
+  test "a limit under the ceiling is left alone" do
+    assert clamped(%{"limit" => "5"}, 10).limit == 5
   end
 
   test "and the page nobody asked for a size of is held to it too" do
-    assert URLParams.from_url_params(%{}).limit == 10
+    assert clamped(%{}, 10).limit == 10
+  end
+
+  # Bounded against the limit the URL asked for, `page=3` of a billion rows is
+  # cut to 2, and the list, clamped to 3 rows, reads rows 4-6 rather than 7.
+  test "the page is bounded against the limit the list reads at" do
+    assert clamped(%{"limit" => "1000000000", "page" => "3"}, 3).page == 3
   end
 
   test "so a path leaves the limit it actually reads unsaid" do
-    assert URLParams.full_path("/products", URLParams.from_url_params(%{})) == "/products"
+    assert URLParams.full_path("/products", clamped(%{}, 10)) == "/products"
+    assert URLParams.full_path("/products", clamped(%{"limit" => "100000"}, 10)) == "/products"
+    assert URLParams.full_path("/products", clamped(%{"limit" => "20"}, 10)) == "/products"
+    assert URLParams.full_path("/products", clamped(%{"limit" => "5"}, 10)) == "/products?limit=5"
+  end
 
-    assert URLParams.full_path("/products", URLParams.from_url_params(%{"limit" => "20"})) ==
-             "/products"
+  test "and above a default the ceiling does not lower, says only what differs" do
+    assert URLParams.full_path("/products", clamped(%{"limit" => "20"}, 250)) == "/products"
+
+    assert URLParams.full_path("/products", clamped(%{"limit" => "100000"}, 250)) ==
+             "/products?limit=250"
   end
 end

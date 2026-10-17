@@ -354,6 +354,16 @@
 
 ### Breaking changes
 
+- **A list's page size is capped by its action, not by config.** `?limit=`
+  is held to the list action's `pagination.max_page_size` (Ash's default is
+  250), the same number Ash clamps the read to, so the offset, the footer and
+  the pager agree with the rows. `config :ash_quick, max_page_size:` and
+  `AshQuick.Config.max_page_size/0` are gone.
+
+  **Who is affected:** a host that set `:max_page_size`. Drop the key and set
+  `max_page_size` in the `pagination` block of each list action instead; a
+  host that never set it sees no change, since both defaulted to 250.
+
 - **A form shows each field error where it belongs.** An error on a field
   the form has an input for shows under that input, and only there; one with
   no input to show it (a field set by a change, not accepted, or restricted
