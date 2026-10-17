@@ -66,6 +66,30 @@ that into a refusal to boot. Everything else is read at runtime and may move.
 `AshQuick.Config` documents every key, including the S3 ones,
 `:humanize_overrides`, `:refetch_window` and `:impersonation_max_age`.
 
+`:error_translator` is the function your forms translate errors with. AshQuick
+puts Ash's error messages through it everywhere it shows one, in a flash as well
+as next to an input. Ash marks its own messages for translation; to have them in
+the catalogue a Phoenix `translate_error/1` reads, run:
+
+```bash
+mix ash.gen.gettext --domain errors
+mix gettext.merge priv/gettext
+```
+
+A form shows a field error under its input. An error with no input to show it
+(a field set by a change, or not accepted) is flashed with its field in front,
+set off by a colon: `Ref: must match …`. Errors that name no field are flashed
+as written. A custom form template (`action_<name>.html.heex`) is assumed to
+render an input for every field the action offers; an error on a field it
+leaves out shows nowhere.
+
+A run a policy refuses shows that policy's `error_message` when it has one, and
+"You don't have permission to do that." when it has none. The message is a
+msgid like Ash's own, so it goes through `:error_translator` too: add it to
+your `errors` catalogue. Only the message is shown, never the policy breakdown.
+An `error_message` function that returns an exception of its own replaces the
+policy error, so the flash shows the fixed sentence instead.
+
 ### Error reporting
 
 An error a page cannot explain — anything but a validation, a stale record, a

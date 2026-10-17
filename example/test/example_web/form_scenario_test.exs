@@ -63,7 +63,8 @@ defmodule ExampleWeb.FormScenarioTest do
       |> visit(~p"/products/#{product.id}/update")
       |> fill_in("Sku", with: taken.sku)
       |> click_button("Save")
-      |> assert_has("*", text: "Sku has already been taken")
+      |> assert_has(".text-error", text: "has already been taken")
+      |> refute_has("#flash-error")
       |> refute_has("*", text: "Input Invalid")
       |> assert_has("form[id='#{product.id}-form']")
 
@@ -85,8 +86,9 @@ defmodule ExampleWeb.FormScenarioTest do
       |> fill_in("Code", with: "12ab")
       |> fill_in("Name", with: "Digits")
       |> click_button("Save")
-      |> assert_has("#flash-error", text: "Code must be digits")
+      # Under the input it is about, and only there.
       |> assert_has(".text-error", text: "must be digits")
+      |> refute_has("#flash-error")
       |> unwrap(fn view ->
         assert Process.alive?(view.pid)
         render(view)
@@ -111,16 +113,32 @@ defmodule ExampleWeb.FormScenarioTest do
       |> fill_in("Name", with: "Digits")
       |> fill_in("Ref", with: "abc")
       |> click_button("Save")
-      |> assert_has("#flash-error", text: "Ref must match ~r/^[A-Z]+$/")
+      |> assert_has(".text-error", text: "must match ~r/^[A-Z]+$/")
+      |> refute_has("#flash-error")
       |> unwrap(fn view ->
         assert Process.alive?(view.pid)
         render(view)
       end)
     end
 
-    # Refused twice in one submit, the errors take the form's own path rather
-    # than the single-attribute one: rendered beside their inputs, from vars
-    # AshPhoenix has already stripped of anything it cannot stringify.
+    # `:quick` sets `ref` itself, to a value the validation refuses, and offers
+    # no input for it: there is nowhere on the form to show the error, so it is
+    # flashed rather than the save failing without a word.
+    test "on a field the form has no input for is flashed", %{conn: conn, admin: admin} do
+      conn
+      |> log_in(admin)
+      |> visit(~p"/test/digits_only/create?action=quick")
+      |> refute_has("label", text: "Ref")
+      |> fill_in("Code", with: "123")
+      |> fill_in("Name", with: "Digits")
+      |> click_button("Save")
+      |> assert_has("#flash-error", text: "Ref: must match ~r/^[A-Z]+$/")
+      |> assert_has("button", text: "Save")
+    end
+
+    # Refused twice in one submit, both errors show beside their inputs, as one
+    # does: where an error shows depends on its field, not on how many there
+    # are.
     test "is shown beside another refusal in the same submit", %{conn: conn, admin: admin} do
       conn
       |> log_in(admin)
@@ -373,11 +391,11 @@ defmodule ExampleWeb.FormScenarioTest do
           |> fill_in("Code", with: code)
           |> fill_in("Name", with: name)
           |> click_button("Save")
-          |> assert_has("#flash-error", text: "Code must be digits")
+          |> assert_has(".text-error", text: "must be digits")
         end)
 
       assert log =~
-               "form save on Example.Test.DigitsOnly.create refused: invalid value for field code"
+               "form save on Example.Test.DigitsOnly.create refused: errors on fields code"
 
       refute log =~ code
       refute log =~ name

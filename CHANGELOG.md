@@ -4,6 +4,23 @@
 
 ### Features
 
+- **A refused run says why, in the policy's words.** A policy's
+  `error_message` is now what a run it refuses flashes, from a form, a
+  confirmation or a bulk action, translated through `:error_translator` like
+  Ash's own messages; a policy with none still says "You don't have permission
+  to do that." Only the message is shown, never the policy breakdown. An
+  `error_message` function that returns its own exception, and a refusal the
+  page can see coming (a hidden action, a forged event), keep the fixed
+  sentence.
+
+- **Ash's error messages in a flash are translated.** They go through
+  `:error_translator`, as the same messages next to an input already did,
+  instead of plain interpolation. `mix ash_quick.install` prints `mix
+  ash.gen.gettext --domain errors`, which copies Ash's messages into the
+  catalogue a Phoenix `translate_error/1` reads. A var a translator could not
+  render (the `%Regex{}` a `match/2` error carries) reaches it already rendered
+  through `inspect/1`.
+
 - **A print renders through a renderer the host may replace.**
   `config :ash_quick, pdf_renderer: MyApp.PdfRenderer` names an
   `AshQuick.PdfRenderer` that turns a print template's output into the PDF
@@ -336,6 +353,22 @@
   default interpolation gets the same treatment.
 
 ### Breaking changes
+
+- **A form shows each field error where it belongs.** An error on a field
+  the form has an input for shows under that input, and only there; one with
+  no input to show it (a field set by a change, not accepted, or restricted
+  away) or about the record as a whole is flashed, a field error as `Field:
+  message` ("Name: is required"). This used to depend on how many errors a
+  save had: a single one was flashed as well as shown under its input, two or
+  more showed under their inputs only, and one on a field with no input could
+  fail the save without a word. The field was also left off a message starting
+  with a capital letter, a guess that ran it into a sentence translated into a
+  script with no capitals. A host test asserting a form's field error in the
+  flash now finds it under the input. An error naming a var with no
+  `String.Chars` (`must match %{match}`) shows the value under the input too,
+  rather than its placeholder. An error with no message of its own reads
+  "Price: is invalid", in the same shape. A custom form template is assumed to
+  render an input for every field the action offers.
 
 - **Every action runs through the action modal, stamped `:ash_quick_form`.**
   A row or details action no longer runs on the click, stamped with its

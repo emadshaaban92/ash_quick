@@ -705,16 +705,8 @@ defmodule AshQuick.Components do
       config :ash_quick,
         error_translator: {MyAppWeb.CoreComponents, :translate_error}
   """
-  def translate_error({msg, opts}) do
-    case AshQuick.Config.error_translator() do
-      nil -> default_translate_error({msg, opts})
-      {mod, fun} -> apply(mod, fun, [{msg, opts}])
-    end
-  end
-
-  # Shared with the flash path, so a var with no `String.Chars` (the `%Regex{}`
-  # every `validate match/2` error carries) renders the same way in both places
-  # rather than crashing one of them.
-  defp default_translate_error({msg, opts}),
-    do: AshQuick.LiveView.ActionErrors.interpolate(msg, opts)
+  # Shared with the flash path, so a message reads the same next to an input and
+  # in a flash, and a var with no `String.Chars` (the `%Regex{}` every `validate
+  # match/2` error carries) crashes neither.
+  def translate_error({msg, opts}), do: AshQuick.LiveView.ActionErrors.translate(msg, opts)
 end

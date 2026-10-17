@@ -78,6 +78,7 @@ defmodule AshQuick.LiveView.FormUtils do
     form =
       AshPhoenix.Form.for_create(socket.assigns.resource, socket.assigns.ash_action.name,
         transform_params: &transform_nested_params/3,
+        transform_errors: &ActionErrors.renderable_vars/2,
         scope: socket.assigns.scope,
         actor: actor(socket)
       )
@@ -99,6 +100,7 @@ defmodule AshQuick.LiveView.FormUtils do
     form =
       AshPhoenix.Form.for_destroy(socket.assigns.record, socket.assigns.ash_action.name,
         transform_params: &transform_nested_params/3,
+        transform_errors: &ActionErrors.renderable_vars/2,
         scope: socket.assigns.scope,
         actor: actor(socket)
       )
@@ -110,6 +112,7 @@ defmodule AshQuick.LiveView.FormUtils do
     form =
       AshPhoenix.Form.for_update(socket.assigns.record, socket.assigns.ash_action.name,
         transform_params: &transform_nested_params/3,
+        transform_errors: &ActionErrors.renderable_vars/2,
         scope: socket.assigns.scope,
         actor: actor(socket)
       )
@@ -629,23 +632,17 @@ defmodule AshQuick.LiveView.FormUtils do
 
         {:halt, put_flash(socket, :error, ActionErrors.user_facing_message(error))}
 
-      {:error, %{source: %{errors: [%Ash.Error.Changes.InvalidAttribute{} = error]}} = form} ->
-        log_failed_save(socket, fn -> "invalid value for field #{error.field}" end)
-
-        # Wrapped in the class Ash would have raised it under, which is the
-        # shape `user_facing_message/1` renders sub-errors out of.
-        message = ActionErrors.user_facing_message(Ash.Error.to_error_class([error]))
-
-        {:halt, socket |> assign(form: form) |> put_flash(:error, message)}
-
       {:error, form} ->
         log_failed_save(socket, fn -> describe_failed_save(form) end)
 
         case AshPhoenix.Form.errors(form) do
           # A submit that failed with nothing to say about any input is the
-          # policy refusing it.
-          [] -> {:halt, put_flash(socket, :error, ActionErrors.forbidden_message())}
-          errors -> {:halt, socket |> assign(form: form) |> flash_form_errors(errors)}
+          # policy refusing it, in its own words when it has some.
+          [] ->
+            {:halt, put_flash(socket, :error, ActionErrors.forbidden_message(form.source.errors))}
+
+          _errors ->
+            {:halt, socket |> assign(form: form) |> flash_unplaced_errors(form)}
         end
     end
   end
@@ -699,20 +696,33 @@ defmodule AshQuick.LiveView.FormUtils do
     end
   end
 
-  # An error about the record as a whole names no input — `:_form` is the key
-  # `AshPhoenix.FormData.Error` files those under — so there is no field beside
-  # which it would render. Flashed instead: without this the submit fails and
-  # the page says nothing at all about why.
-  defp flash_form_errors(socket, errors) do
-    errors
-    |> Enum.flat_map(fn
-      {:_form, message} when is_binary(message) -> [message]
-      _named_input -> []
-    end)
-    |> case do
-      [] -> socket
-      messages -> put_flash(socket, :error, Enum.join(messages, "\n"))
+  # An error on a field the form renders an input for shows under that input,
+  # and only there. Anything else has nowhere on the page to show: an error
+  # about the record as a whole (`:_form`, the key `AshPhoenix.FormData.Error`
+  # files those under), or one on a field the action sets without offering it
+  # (a change, an attribute it does not accept, a field restricted away). Those
+  # are flashed, worded as `ActionErrors` words a field error, so the submit
+  # never fails without saying why. Where an error shows depends on where it
+  # belongs, not on how many there are.
+  defp flash_unplaced_errors(socket, form) do
+    inputs = input_names(form, Map.get(socket.assigns, :scope))
+
+    case ActionErrors.unplaced_message(form.source.errors, inputs) do
+      nil -> socket
+      message -> put_flash(socket, :error, message)
     end
+  end
+
+  # A belongs_to is offered as its relationship, and its errors are filed under
+  # the attribute behind it (`owner_id`), which the same input shows.
+  defp input_names(form, scope) do
+    form.resource
+    |> Utils.action_fields(form.action, scope)
+    |> Enum.flat_map(fn
+      %Ash.Resource.Relationships.BelongsTo{} = field -> [field.name, field.source_attribute]
+      field -> [field.name]
+    end)
+    |> MapSet.new()
   end
 
   defp maybe_put_nested_params(params, form) do

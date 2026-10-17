@@ -30,6 +30,13 @@ defmodule Example.Test.DigitsOnly do
     default_accept [:code, :name, :ref]
     defaults [:read, :create]
 
+    # Offers no `ref`, and sets one the validation below refuses: an error on
+    # a field the form has no input for.
+    create :quick do
+      accept [:code, :name]
+      change set_attribute(:ref, "abc")
+    end
+
     read :index do
       argument :search, :string
 

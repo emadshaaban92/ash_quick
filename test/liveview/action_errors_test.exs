@@ -21,13 +21,12 @@ defmodule AshQuick.LiveView.ActionErrorsTest do
           ]
         )
 
-      assert ActionErrors.user_facing_message(error) == "Name is required"
+      assert ActionErrors.user_facing_message(error) == "Name: is required"
     end
 
-    # Messages written for a specific situation are already sentences; putting
-    # the field in front of one ("Tracking number Transfer not found for...")
-    # would garble it.
-    test "leaves a message that is already a sentence alone" do
+    # A message written as a whole sentence still gets its field, set off by the
+    # colon: nothing in a message's text says whether it is a sentence.
+    test "puts the field in front of a message written as a whole sentence" do
       error =
         Ash.Error.Invalid.exception(
           errors: [
@@ -39,7 +38,7 @@ defmodule AshQuick.LiveView.ActionErrorsTest do
         )
 
       assert ActionErrors.user_facing_message(error) ==
-               "Transfer not found for tracking number: TN123"
+               "Tracking Number: Transfer not found for tracking number: TN123"
     end
 
     test "renders one line per thing that was wrong, without repeating itself" do
@@ -52,7 +51,7 @@ defmodule AshQuick.LiveView.ActionErrorsTest do
           ]
         )
 
-      assert ActionErrors.user_facing_message(error) == "Name is required\nCode is required"
+      assert ActionErrors.user_facing_message(error) == "Name: is required\nCode: is required"
     end
 
     test "interpolates the vars a message carries rather than showing the template" do
@@ -67,7 +66,7 @@ defmodule AshQuick.LiveView.ActionErrorsTest do
           ]
         )
 
-      assert ActionErrors.user_facing_message(error) == "Quantity must be less than 10"
+      assert ActionErrors.user_facing_message(error) == "Quantity: must be less than 10"
     end
 
     # An `:invalid` class is not a promise that the user did something wrong —
@@ -121,14 +120,11 @@ defmodule AshQuick.LiveView.ActionErrorsTest do
 
       message = ActionErrors.user_facing_message(error)
 
-      assert message == "Quantity must be greater than 0"
+      assert message == "Quantity: must be greater than 0"
       refute message == ActionErrors.not_found_message()
     end
 
-    # A message whose first character has no uppercase form — a digit here, but
-    # equally any uncased script — is not a sentence someone wrote for this
-    # situation, so it still needs its field in front.
-    test "names the field even when an interpolated message starts with a digit" do
+    test "names the field when an interpolated message starts with a digit" do
       error =
         Ash.Error.Invalid.exception(
           errors: [
@@ -141,7 +137,7 @@ defmodule AshQuick.LiveView.ActionErrorsTest do
         )
 
       assert ActionErrors.user_facing_message(error) ==
-               "Quantity 10 is the most you can order"
+               "Quantity: 10 is the most you can order"
     end
 
     # What `validate match(:code, ~r/^\d+$/), message: "must be digits"` raises:
@@ -160,7 +156,7 @@ defmodule AshQuick.LiveView.ActionErrorsTest do
           ]
         )
 
-      assert ActionErrors.user_facing_message(error) == "Code must be digits"
+      assert ActionErrors.user_facing_message(error) == "Code: must be digits"
     end
 
     # And when the message does name it, it is shown the way Ash itself would
@@ -177,7 +173,7 @@ defmodule AshQuick.LiveView.ActionErrorsTest do
           ]
         )
 
-      assert ActionErrors.user_facing_message(error) == ~S"Code must match ~r/^\d+$/"
+      assert ActionErrors.user_facing_message(error) == ~S"Code: must match ~r/^\d+$/"
     end
 
     test "reduces a stale-record conflict to the friendly reload message" do
@@ -196,6 +192,28 @@ defmodule AshQuick.LiveView.ActionErrorsTest do
       refute message =~ "%"
     end
 
+    # The policy breakdown on the same error describes the host's policies, so
+    # the message must be the policy's own words and nothing around them.
+    test "says the refusing policy's own message when it has one" do
+      error =
+        Ash.Error.Forbidden.exception(
+          errors: [
+            Ash.Error.Forbidden.Policy.exception(
+              custom_message: "Only a manager may close a store.",
+              policy_breakdown?: true
+            )
+          ]
+        )
+
+      assert ActionErrors.user_facing_message(error) == "Only a manager may close a store."
+    end
+
+    test "keeps the friendly forbidden message for a policy with none" do
+      error = Ash.Error.Forbidden.exception(errors: [Ash.Error.Forbidden.Policy.exception([])])
+
+      assert ActionErrors.user_facing_message(error) == ActionErrors.forbidden_message()
+    end
+
     # A validation is free to refuse a value without saying why —
     # `add_error(field: :price)` is one — and `to_form_error/1` then renders
     # nothing at all. Which field was refused is the whole of what the error
@@ -210,7 +228,7 @@ defmodule AshQuick.LiveView.ActionErrorsTest do
 
       message = ActionErrors.user_facing_message(error)
 
-      assert message == "Price is invalid."
+      assert message == "Price: is invalid"
       refute message == ActionErrors.generic_message()
     end
 
@@ -224,7 +242,7 @@ defmodule AshQuick.LiveView.ActionErrorsTest do
         )
 
       assert ActionErrors.user_facing_message(error) ==
-               "Starts At is invalid.\nEnds At is invalid."
+               "Starts At: is invalid\nEnds At: is invalid"
     end
 
     # A validation returning `{:error, "..."}` refuses the change as a whole:
@@ -264,6 +282,85 @@ defmodule AshQuick.LiveView.ActionErrorsTest do
       assert message == ActionErrors.generic_message()
       refute message =~ "secret internal detail"
       refute message =~ "RuntimeError"
+    end
+  end
+
+  describe "forbidden_message/1" do
+    # A failed form submit holds the policy error bare, not inside a class.
+    test "reads a policy error that is not wrapped in a Forbidden class" do
+      error = Ash.Error.Forbidden.Policy.exception(custom_message: "Closed on Fridays.")
+
+      assert ActionErrors.forbidden_message([error]) == "Closed on Fridays."
+    end
+
+    test "falls back to the fixed sentence for anything without a policy message" do
+      assert ActionErrors.forbidden_message([]) == ActionErrors.forbidden_message()
+      assert ActionErrors.forbidden_message(nil) == ActionErrors.forbidden_message()
+
+      assert ActionErrors.forbidden_message([%RuntimeError{message: "x"}]) ==
+               ActionErrors.forbidden_message()
+    end
+  end
+
+  describe "unplaced_message/2" do
+    defp invalid(field, message, vars \\ []),
+      do: Ash.Error.Changes.InvalidAttribute.exception(field: field, message: message, vars: vars)
+
+    test "leaves an error on a field the form has an input for to that input" do
+      assert ActionErrors.unplaced_message(
+               [invalid(:code, "must be digits")],
+               MapSet.new([:code])
+             ) ==
+               nil
+    end
+
+    test "words an error on a field the form has no input for" do
+      errors = [
+        invalid(:code, "must be digits"),
+        invalid(:ref, "must match %{match}", match: ~r/x/)
+      ]
+
+      assert ActionErrors.unplaced_message(errors, MapSet.new([:code])) == "Ref: must match ~r/x/"
+    end
+
+    test "words an error about the record as a whole as it is" do
+      error = Ash.Error.Changes.InvalidChanges.exception(message: "Pick a later date")
+
+      assert ActionErrors.unplaced_message([error], MapSet.new([:code])) == "Pick a later date"
+    end
+
+    # It would show nothing under its input, so it is named where it is seen.
+    test "names the field of an error that says nothing, input or not" do
+      error = Ash.Error.Changes.InvalidAttribute.exception(field: :price)
+
+      assert ActionErrors.unplaced_message([error], MapSet.new([:price])) == "Price: is invalid"
+    end
+
+    test "leaves an error a nested form shows to that form" do
+      error = %{invalid(:name, "is required") | path: [:entries, 0]}
+
+      assert ActionErrors.unplaced_message([error], MapSet.new()) == nil
+    end
+
+    test "says nothing of an error that is not about input" do
+      assert ActionErrors.unplaced_message([Ash.Error.Forbidden.exception([])], MapSet.new()) ==
+               nil
+
+      assert ActionErrors.unplaced_message([], MapSet.new()) == nil
+    end
+  end
+
+  describe "renderable_vars/2" do
+    test "renders a var with no String.Chars, and leaves the rest" do
+      error = invalid(:ref, "must match %{match}", match: ~r/x/, count: 3)
+
+      assert ActionErrors.renderable_vars(nil, error).vars == [match: "~r/x/", count: 3]
+    end
+
+    test "leaves an error with no vars alone" do
+      error = %RuntimeError{message: "x"}
+
+      assert ActionErrors.renderable_vars(nil, error) == error
     end
   end
 

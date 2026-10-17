@@ -191,6 +191,15 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
         })
 
       refute diff(igniter) =~ "error_translator"
+      refute_notice(igniter, "ash.gen.gettext")
+    end
+
+    # Stated, not run: it writes into the host's `priv/gettext`.
+    test "says how to put Ash's messages in the catalogue the translator reads" do
+      igniter = install()
+
+      assert_has_notice(igniter, &(&1 =~ "mix ash.gen.gettext --domain errors"))
+      refute diff(igniter) =~ "priv/gettext"
     end
 
     test "takes an actor resource and a timezone from the command line" do

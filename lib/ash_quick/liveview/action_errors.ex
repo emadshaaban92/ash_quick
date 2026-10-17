@@ -21,6 +21,45 @@ defmodule AshQuick.LiveView.ActionErrors do
   @doc "A friendly message for an authorization (`Forbidden`) failure."
   def forbidden_message, do: @forbidden_message
 
+  @doc """
+  The message for the authorization failure `error` describes: the
+  `error_message` of the policy that refused it, when that policy has one, else
+  `forbidden_message/0`.
+
+  The policy's message is a msgid like Ash's own, so it goes through
+  `translate/2`. Only that message is read, never the rest of the policy error:
+  its breakdown describes the host's policies, and is not for the person
+  refused. An `error_message` function that returns an exception of its own
+  replaces the policy error, so it has no message here and the fixed sentence is
+  shown.
+  """
+  def forbidden_message(error) do
+    case policy_messages(error) do
+      [message | _] -> translate(message, [])
+      [] -> @forbidden_message
+    end
+  end
+
+  # A policy's `error_message` arrives as `custom_message` on the
+  # `Forbidden.Policy` it raised, inside a `Forbidden` class or on its own. It
+  # may be built by a function in the policy, which can also hand back an
+  # exception of its own instead; only a message that is a string is said.
+  defp policy_messages(error) do
+    error
+    |> List.wrap()
+    |> Enum.flat_map(fn
+      %Ash.Error.Forbidden.Policy{custom_message: message}
+      when is_binary(message) and message != "" ->
+        [message]
+
+      %{errors: errors} when is_list(errors) ->
+        policy_messages(errors)
+
+      _other ->
+        []
+    end)
+  end
+
   @doc "A friendly message for a record that isn't there."
   def not_found_message, do: @not_found_message
 
@@ -65,8 +104,9 @@ defmodule AshQuick.LiveView.ActionErrors do
   flash or an error banner.
 
   - already-human strings pass through untouched;
-  - stale-record conflicts, authorization failures and missing records get their
-    friendly copy;
+  - stale-record conflicts and missing records get their friendly copy;
+  - authorization failures say the refusing policy's `error_message`, or the
+    friendly copy when it has none;
   - `Ash.Error.Invalid` is rendered from its sub-errors, one sentence per thing
     that was wrong with the input;
   - everything else is reported to Tower and reduced to `generic_message/0`.
@@ -76,7 +116,7 @@ defmodule AshQuick.LiveView.ActionErrors do
   def user_facing_message(error) do
     cond do
       stale_record?(error) -> @stale_message
-      forbidden?(error) -> @forbidden_message
+      forbidden?(error) -> forbidden_message(error)
       match?(%Ash.Error.Invalid{}, error) -> invalid_message(error)
       not_found?(error) -> @not_found_message
       true -> report_unexpected(error)
@@ -150,36 +190,118 @@ defmodule AshQuick.LiveView.ActionErrors do
   # A validation returning `{:error, "..."}` names no field, and AshPhoenix
   # renders such an error to nothing at all. Its message is what it says.
   defp field_sentences(%{message: message} = error) when is_binary(message) and message != "",
-    do: [interpolate(message, Map.get(error, :vars))]
+    do: [translate(message, Map.get(error, :vars))]
 
   defp field_sentences(_), do: []
 
   defp invalid_field_sentence(field),
-    do: "#{AshQuick.LiveView.Utils.humanize(field)} is invalid."
+    do: "#{AshQuick.LiveView.Utils.humanize(field)}: is invalid"
+
+  @doc """
+  Words the input errors among a form's `errors` that `inputs` (a set of field
+  names the form renders) has no input to show, one sentence per line, or `nil`
+  when there are none.
+
+  Read from the errors themselves rather than from `AshPhoenix.Form.errors/2`,
+  which drops every var with no `String.Chars` — the `%Regex{}` a message
+  naming `%{match}` needs. Only the form's own errors are read: one with a path
+  belongs to a nested form, which shows it.
+  """
+  def unplaced_message(errors, inputs) do
+    errors
+    |> List.wrap()
+    |> case do
+      [] -> []
+      errors -> Ash.Error.to_error_class(errors).errors
+    end
+    |> Enum.filter(&(input_error?(&1) and Map.get(&1, :path, []) in [nil, []]))
+    |> Enum.flat_map(&unplaced_sentences(&1, inputs))
+    |> Enum.uniq()
+    |> case do
+      [] -> nil
+      sentences -> Enum.join(sentences, "\n")
+    end
+  end
+
+  # An error that says nothing has nothing to show under an input either, so it
+  # is named by its field wherever that is, as `invalid_message/1` names it.
+  defp unplaced_sentences(error, inputs) do
+    error
+    |> AshPhoenix.FormData.Error.to_form_error()
+    |> List.wrap()
+    |> Enum.filter(fn {_field, message, _vars} -> is_binary(message) and message != "" end)
+    |> case do
+      [] ->
+        field_sentences(error)
+
+      said ->
+        said
+        |> Enum.reject(fn {field, _message, _vars} -> field in inputs end)
+        |> Enum.map(&sentence/1)
+        |> Enum.reject(&(&1 == ""))
+    end
+  end
 
   # `to_form_error/1` yields the fragment a form shows against an input, which
-  # has to stand on its own here. Ash's built-in messages are lowercase and
-  # field-relative ("is required"), so they get the field name in front; a
-  # message starting with a capital was written for this exact situation
-  # ("Transfer not found for tracking number: TN123") and prefixing it would
-  # only garble it.
+  # has to stand on its own here, so the field it is against goes in front:
+  # "Name: is required". Always, and set off by a colon, because whether a
+  # message is a fragment or a whole sentence is up to its author, and nothing
+  # in its text says which: a first capital letter is absent from Arabic, and a
+  # sentence may open with a digit or a fragment with an acronym. Translated
+  # first, so the field goes in front of the message the person reads.
   defp sentence({field, message, vars}) when is_binary(message) do
-    message = interpolate(message, vars)
+    message = translate(message, vars)
 
     cond do
       message == "" -> ""
       field in [nil, :_form] -> message
-      standalone_sentence?(message) -> message
-      true -> "#{AshQuick.LiveView.Utils.humanize(field)} #{message}"
+      true -> "#{AshQuick.LiveView.Utils.humanize(field)}: #{message}"
     end
   end
 
   defp sentence(_), do: ""
 
-  # An uppercase *letter*, specifically. Testing `upcase(first) == first` would
-  # also read a digit or an uncased script (Arabic) as a sentence, dropping the
-  # field name off a message that needed it.
-  defp standalone_sentence?(message), do: message =~ ~r/^\p{Lu}/u
+  @doc """
+  Renders an error's message through the host's `:error_translator`, the
+  function its forms translate field errors with, or through `interpolate/2`
+  when none is configured.
+
+  Ash marks its own messages for translation, so a host that copies them into
+  its catalogue (`mix ash.gen.gettext --domain errors`) has them translated in
+  a flash as well as next to an input.
+
+  A var with no `String.Chars` is handed over already rendered through
+  `inspect/1`: a translator interpolating it would raise, as `interpolate/2`
+  explains, and take the LiveView down with it.
+  """
+  def translate(message, vars) when is_binary(message) do
+    vars = Enum.map(vars || [], fn {key, value} -> {key, stringifiable_var(value)} end)
+
+    case AshQuick.Config.error_translator() do
+      nil -> interpolate(message, vars)
+      {mod, fun} -> apply(mod, fun, [{message, vars}])
+    end
+  end
+
+  @doc """
+  An error with each of its vars that has no `String.Chars` rendered through
+  `inspect/1`, for a form's `transform_errors`.
+
+  AshPhoenix drops such a var before a form shows its errors, so a message
+  naming it (`must match %{match}`) shows its placeholder under the input.
+  Rendered here, it shows the value, as the same message does in a flash.
+  """
+  def renderable_vars(_source, %{vars: vars} = error) when is_list(vars) or is_map(vars),
+    do: %{error | vars: Enum.map(vars, fn {key, value} -> {key, stringifiable_var(value)} end)}
+
+  def renderable_vars(_source, error), do: error
+
+  # Left as they are when they render, so a translator still gets the integer
+  # `:count` it picks a plural form by.
+  defp stringifiable_var(value) when is_list(value), do: var_to_string(value)
+
+  defp stringifiable_var(value),
+    do: if(String.Chars.impl_for(value), do: value, else: inspect(value))
 
   @doc """
   Substitutes an error's `vars` into the `%{key}` placeholders of its message.
