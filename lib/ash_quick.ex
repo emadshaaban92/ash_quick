@@ -734,6 +734,7 @@ defmodule AshQuick do
 
   @surface_sources [:ash_quick_details, :ash_quick_list, :ash_quick_list_bulk]
   @form_source :ash_quick_form
+  @form_stage_key :ash_quick_form_stage
 
   @doc """
   The `action_source` values AshQuick stamps for a *visibility surface* — one
@@ -756,6 +757,56 @@ defmodule AshQuick do
   not a `Forbidden` — the button-hiding happened at the row-action probe.
   """
   def form_source, do: @form_source
+
+  @doc """
+  The context key under which a QuickView form says what it is doing with an
+  action: `form_build_stage/0` while the form is built, `form_validate_stage/0`
+  while it is validated, and `form_submit_stage/0` when it is submitted. Read
+  it with `form_stage/1` rather than by this key.
+
+  Every changeset a QuickView form builds carries it, so an action's change
+  sees it in its `change/3`: when the form opens, on every `phx-change`, and
+  on the submit, whose run also carries it beside `form_source/0`. A bulk run
+  carries `form_submit_stage/0` too; its form never builds the action, so
+  nothing sees it built or validated. It is unset for any other caller,
+  including `can?/4` probes and the form's nested forms.
+  """
+  def form_stage_key, do: @form_stage_key
+
+  @doc """
+  The stage of a QuickView form being built: once, as it opens, prefills
+  included. Whatever the build sets on the action's inputs, an argument or an
+  accepted attribute, becomes the form's initial params, so it holds until the
+  person changes it. That holds only for an input the form shows: a seed on one
+  the actor cannot see (a field restriction hides it) is gone at the first
+  `phx-change` and never reaches the run. A value for such an input belongs at
+  `form_submit_stage/0`, or in a change that runs at every stage.
+  """
+  def form_build_stage, do: :build
+
+  @doc "The stage of an open QuickView form being validated, on a `phx-change` or an upload."
+  def form_validate_stage, do: :validate
+
+  @doc "The stage of a QuickView form that was submitted."
+  def form_submit_stage, do: :submit
+
+  @doc """
+  The stage a QuickView form stamped on `changeset` (or any value with a
+  `:context`, such as a query): `form_build_stage/0`, `form_validate_stage/0`,
+  `form_submit_stage/0`, or `nil` when no QuickView form built it.
+
+  A change that seeds a form's argument from a computed value when the form
+  opens, and never for a caller that left the argument out:
+
+      def change(changeset, _opts, _context) do
+        if AshQuick.form_stage(changeset) == AshQuick.form_build_stage() do
+          Ash.Changeset.set_argument(changeset, :note, suggested_note(changeset))
+        else
+          changeset
+        end
+      end
+  """
+  def form_stage(%{context: context}) when is_map(context), do: Map.get(context, @form_stage_key)
 
   @doc """
   `Ash.can?/3` stamped with a QuickView surface's `action_source`.

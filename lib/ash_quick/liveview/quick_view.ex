@@ -219,6 +219,20 @@ defmodule AshQuick.LiveView.QuickView do
   that must refuse the run says so for the form source, or leaves it to a
   validation.
 
+  The form also tells the action's changes what it is doing, under
+  `AshQuick.form_stage_key/0` in the changeset's context:
+  `AshQuick.form_build_stage/0` once, as the form opens;
+  `AshQuick.form_validate_stage/0` on every `phx-change` (and upload) after
+  that; and `AshQuick.form_submit_stage/0` when it is submitted. Any other
+  caller leaves it unset. `AshQuick.form_stage/1` reads it, so a change can
+  seed an argument from a computed value when the form opens, and leave what
+  the person does with it alone. Whatever the build sets on the action's
+  inputs becomes the form's initial params, so it holds until the person
+  changes it. Only an input the form shows carries a seed to the run: one the
+  actor cannot see (a field restriction hides it) is dropped at the first
+  `phx-change`, so its value belongs at `AshQuick.form_submit_stage/0`, or in
+  a change that runs at every stage.
+
   A bulk action opens the same modal over the list, keeping the selection: a
   confirmation naming how many rows it applies to, or a form whose values
   apply to every selected row. The form checks the values themselves — each
