@@ -74,6 +74,8 @@ defmodule AshQuick.Test.RelationshipArgs.Post do
     * `:legacy` has no `manage_relationship`: `:tags_ids` still edits `:tags`
       by its name, and `:legacy_ids` names no relationship at all.
     * `:everywhere` edits `:labels` through a global change.
+    * `:overridden` edits `:tags` through its own change, over a global one
+      naming `:labels` for the same argument.
   """
   use Ash.Resource,
     domain: AshQuick.Test.RelationshipArgs.Domain,
@@ -105,6 +107,9 @@ defmodule AshQuick.Test.RelationshipArgs.Post do
 
   changes do
     change manage_relationship(:everywhere, :labels, type: :append_and_remove),
+      on: [:update]
+
+    change manage_relationship(:overridden, :labels, type: :append_and_remove),
       on: [:update]
   end
 
@@ -142,6 +147,12 @@ defmodule AshQuick.Test.RelationshipArgs.Post do
     update :everywhere do
       require_atomic? false
       argument :everywhere, {:array, :uuid}
+    end
+
+    update :overridden do
+      require_atomic? false
+      argument :overridden, {:array, :uuid}
+      change manage_relationship(:overridden, :tags, type: :append_and_remove)
     end
   end
 

@@ -30,6 +30,10 @@ defmodule AshQuick.LiveView.RelationshipArgumentTest do
     assert %ManyToMany{name: :labels} = relationship(:everywhere, :everywhere)
   end
 
+  test "the action's own change wins over a global one for the same argument" do
+    assert %ManyToMany{name: :tags} = relationship(:overridden, :overridden)
+  end
+
   test "with no change, an _ids argument still edits the relationship it names" do
     assert %ManyToMany{name: :tags} = relationship(:legacy, :tags_ids)
   end
@@ -49,7 +53,9 @@ defmodule AshQuick.LiveView.RelationshipArgumentTest do
         assert_raise(ArgumentError, fn ->
           Options.new(__MODULE__.SomeQuickView, Post,
             resource: Post,
-            form: [widgets: Map.new([:picked, :everywhere, :tags_ids], &{&1, widget})]
+            form: [
+              widgets: Map.new([:picked, :everywhere, :overridden, :tags_ids], &{&1, widget})
+            ]
           )
         end)
       )

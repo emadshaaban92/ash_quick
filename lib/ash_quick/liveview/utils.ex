@@ -105,7 +105,9 @@ defmodule AshQuick.LiveView.Utils do
   itself when it edits none.
 
   The argument edits the relationship a `manage_relationship` change on the
-  action (or a global one covering it) names it for, whatever it is called.
+  action (or, failing that, a global one covering it) names it for, whatever
+  it is called. A change's `where:` is not consulted: it is judged against the
+  changeset on submit, so the form takes the change at its word.
   With no such change, an argument named `<relationship>_ids` is still taken
   to edit `<relationship>`.
   """
@@ -119,9 +121,12 @@ defmodule AshQuick.LiveView.Utils do
 
   def argument_to_relationship(arg, _resource, _action), do: arg
 
+  # `action_changes/2` puts global changes first; the action's own change is the
+  # more specific statement, so it is the one looked at first.
   defp managed_relationship(resource, action, argument) do
     resource
     |> Ash.Resource.Info.action_changes(action)
+    |> Enum.reverse()
     |> Enum.find_value(fn
       %Ash.Resource.Change{change: {Ash.Resource.Change.ManageRelationship, opts}} ->
         if opts[:argument] == argument, do: opts[:relationship]
