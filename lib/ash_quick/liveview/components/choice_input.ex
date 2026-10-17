@@ -1,8 +1,10 @@
-defmodule AshQuick.LiveView.Components.ArrayOfAtomInput do
+defmodule AshQuick.LiveView.Components.ChoiceInput do
   @moduledoc false
-  alias AshQuick.LiveView.Utils
+  # A field picked from a fixed set (`AshQuick.LiveView.EnumOptions`): an
+  # `Ash.Type.Enum`, or an atom with `one_of`. `multiple` picks a list of them.
   use Phoenix.LiveComponent
   import AshQuick.Components
+  alias AshQuick.LiveView.EnumOptions
 
   @impl true
   def render(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
@@ -14,10 +16,22 @@ defmodule AshQuick.LiveView.Components.ArrayOfAtomInput do
     <div phx-feedback-for={@field.name} class="sm:col-span-2 phx-submit-loading:pointer-events-none">
       <.label for={@field.id}>{@label}</.label>
       <span :if={@required} class="text-error"> &ast;</span>
+      <LiveSelect.live_select
+        :if={not @multiple}
+        field={@field}
+        style={:daisyui}
+        container_extra_class="w-full"
+        update_min_len={0}
+        allow_clear={true}
+        options={@default_options}
+        phx-target={@myself}
+        phx-focus="set-default"
+      />
       <%!-- The tag class is replaced rather than extended: daisyUI 5's badge is a
       fixed-height box with inline padding only, so live_select's preset adds
       vertical padding the line has no room for and the text spills out. --%>
       <LiveSelect.live_select
+        :if={@multiple}
         field={@field}
         style={:daisyui}
         container_extra_class="w-full"
@@ -66,25 +80,35 @@ defmodule AshQuick.LiveView.Components.ArrayOfAtomInput do
     {:noreply, socket}
   end
 
+  @impl true
+  def handle_event("set-default", %{"id" => live_select_id}, socket) do
+    send_update(LiveSelect.Component,
+      id: live_select_id,
+      options: get_options(socket)
+    )
+
+    {:noreply, socket}
+  end
+
+  # The stored value leads, so a value the type no longer lists still shows
+  # as picked; a search narrows only the values on offer.
   defp get_options(socket, search \\ nil) do
     %{form: form, attribute: attribute} = socket.assigns
 
-    default_options =
-      attribute.constraints[:items][:one_of]
-      |> Enum.filter(&String.starts_with?(to_string(&1), search || ""))
+    on_offer = attribute |> EnumOptions.options() |> EnumOptions.search(search)
 
     case Ash.Resource.loaded?(form.data, attribute.name) do
       true ->
         form.data
         |> Map.fetch!(attribute.name)
         |> List.wrap()
-        |> Enum.concat(default_options)
         |> Enum.reject(&is_nil/1)
-        |> Enum.uniq()
+        |> Enum.map(&{EnumOptions.label(attribute, &1), &1})
+        |> Enum.concat(on_offer)
+        |> Enum.uniq_by(&elem(&1, 1))
 
       false ->
-        default_options
+        on_offer
     end
-    |> Enum.map(&{&1 |> Utils.humanize(), &1})
   end
 end

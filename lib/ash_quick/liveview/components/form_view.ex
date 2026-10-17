@@ -9,6 +9,7 @@ defmodule AshQuick.LiveView.Components.FormView do
   alias Ash.Type
   alias Phoenix.LiveView.JS
 
+  alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.FieldErrors
   alias AshQuick.LiveView.FormUtils
   alias AshQuick.LiveView.Utils
@@ -188,6 +189,7 @@ defmodule AshQuick.LiveView.Components.FormView do
           uploads={@uploads}
           form_key_type={@form.form_keys[field.name][:type]}
           widget={Map.get(@widgets, field.name)}
+          choice={EnumOptions.kind(field)}
         />
       </div>
     </section>
@@ -244,26 +246,15 @@ defmodule AshQuick.LiveView.Components.FormView do
     """
   end
 
-  defp field_input(%{field: %{type: Type.Atom}} = assigns) do
+  # A value picked from a fixed set (`AshQuick.LiveView.EnumOptions`): an
+  # `Ash.Type.Enum`, or an atom with `one_of`, alone or in a list.
+  defp field_input(%{choice: choice} = assigns) when choice in [:single, :array] do
     ~H"""
     <.live_component
       id={"select-#{@field.name}"}
       required={not @field.allow_nil?}
-      module={AshQuick.LiveView.Components.AtomInput}
-      label={@field.name |> Utils.humanize()}
-      attribute={@field}
-      scope={@scope}
-      form={@form |> to_form()}
-    />
-    """
-  end
-
-  defp field_input(%{field: %{type: {:array, Type.Atom}}} = assigns) do
-    ~H"""
-    <.live_component
-      id={"select-#{@field.name}"}
-      required={not @field.allow_nil?}
-      module={AshQuick.LiveView.Components.ArrayOfAtomInput}
+      module={AshQuick.LiveView.Components.ChoiceInput}
+      multiple={@choice == :array}
       label={@field.name |> Utils.humanize()}
       attribute={@field}
       scope={@scope}

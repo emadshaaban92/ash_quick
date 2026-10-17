@@ -5,6 +5,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   import AshQuick.Components
 
   alias AshQuick.LiveView.CustomFilter
+  alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.Utils
 
   @supported_types [
@@ -157,6 +158,12 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     """
   end
 
+  # Whether the field is picked from a fixed set decides the input, and no
+  # guard can ask that, so it is asked once here.
+  defp filter_value(%{field: field} = assigns) when not is_map_key(assigns, :choice) do
+    assigns |> assign(:choice, EnumOptions.kind(field)) |> filter_value()
+  end
+
   defp filter_value(%{field: %{type: t}} = assigns)
        when t in [Ash.Type.DateTime, Ash.Type.UtcDatetimeUsec, Ash.Type.UtcDatetime] do
     ~H"""
@@ -195,22 +202,17 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     """
   end
 
-  defp filter_value(%{field: %{type: Ash.Type.Atom, constraints: constraints}} = assigns)
-       when constraints != [] do
-    atom_options =
-      (constraints[:one_of] || [])
-      |> Enum.map(&{&1 |> Utils.humanize(), &1})
-
-    assigns =
-      assigns
-      |> assign(:atom_options, [{"", nil} | atom_options])
+  # A value picked from a fixed set: an `Ash.Type.Enum`, or an atom with
+  # `one_of`. A plain atom is typed in, below.
+  defp filter_value(%{choice: :single} = assigns) do
+    assigns = assign(assigns, :options, [{"", nil} | EnumOptions.options(assigns.field)])
 
     ~H"""
     <select
       name={"value-#{@filter.uuid}"}
       class="select  select-sm min-w-0 flex-1"
     >
-      {Phoenix.HTML.Form.options_for_select(@atom_options, @filter.value)}
+      {Phoenix.HTML.Form.options_for_select(@options, @filter.value)}
     </select>
     """
   end
@@ -363,18 +365,27 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     resource
     |> Ash.Resource.Info.fields([:attributes, :aggregates, :calculations])
     |> Enum.reject(&(&1.name in belongs_to_source_attributes))
-    |> Enum.filter(&(&1.filterable? and &1.public? and &1.type in @supported_types))
+    |> Enum.filter(&(&1.filterable? and &1.public? and supported?(&1)))
   end
 
-  defp field_operators(%{type: t})
-       when t in [Ash.Type.UUID, Ash.Type.UUIDv7, Ash.Type.Atom, Ash.Type.Boolean] do
-    [
-      {"=", "equals"},
-      {"!=", "not_equals"}
-    ]
+  # A field with a fixed set of values is offered whatever its type: an
+  # `Ash.Type.Enum` is a module of its own, so no list of types could name it.
+  # An atom without `one_of` is offered too, and typed in.
+  defp supported?(field), do: EnumOptions.kind(field) == :single or field.type in @supported_types
+
+  @equality [{"=", "equals"}, {"!=", "not_equals"}]
+
+  # A field with a fixed set of values compares by value, whatever its type;
+  # anything else by what its type allows.
+  defp field_operators(field) do
+    if EnumOptions.kind(field) == :single, do: @equality, else: type_operators(field)
   end
 
-  defp field_operators(%{type: t}) when t in [Ash.Type.String, Ash.Type.CiString] do
+  defp type_operators(%{type: t})
+       when t in [Ash.Type.UUID, Ash.Type.UUIDv7, Ash.Type.Atom, Ash.Type.Boolean],
+       do: @equality
+
+  defp type_operators(%{type: t}) when t in [Ash.Type.String, Ash.Type.CiString] do
     [
       {"=", "equals"},
       {"!=", "not_equals"},
@@ -383,7 +394,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     ]
   end
 
-  defp field_operators(%{type: t})
+  defp type_operators(%{type: t})
        when t in [Ash.Type.Date, Ash.Type.Integer, Ash.Type.Decimal] do
     [
       {"=", "equals"},
@@ -395,7 +406,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     ]
   end
 
-  defp field_operators(%{type: t})
+  defp type_operators(%{type: t})
        when t in [
               Ash.Type.DateTime,
               Ash.Type.UtcDatetimeUsec,
@@ -410,7 +421,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     ]
   end
 
-  defp field_operators(_field), do: []
+  defp type_operators(_field), do: []
 
   defp notify_parent(msg), do: send(self(), {__MODULE__, msg})
 end
