@@ -596,7 +596,10 @@ and what to write.
 
   Prefixes must be unique across resources, or two resources cross-wire.
   A resource may still write its own `pub_sub` block — AshQuick appends to it
-  and removes nothing; only the prefix is AshQuick's to set.
+  and removes nothing; only the prefix is AshQuick's to set. The extension
+  brings the `pub_sub` DSL in, so no `notifiers: [Ash.Notifier.PubSub]` line
+  is needed (one already there is harmless). The block must still name its
+  `module`, since Spark checks required options before AshQuick fills them.
 - **An `:id` that addresses exactly one row** — **Required**, and checked by
   `AshQuick.Identity.Verifier`. List rows build their DOM ids from `record.id`
   and push it back over the socket to say which row was clicked; the details
