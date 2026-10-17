@@ -28,6 +28,8 @@ defmodule AshQuick.ImpersonationVerifierTest do
 
   import ExUnit.CaptureIO
 
+  alias AshQuick.Test.VerifierErrors
+
   defmodule Domain do
     @moduledoc false
     use Ash.Domain, validate_config_inclusion?: false
@@ -101,20 +103,8 @@ defmodule AshQuick.ImpersonationVerifierTest do
 
   defp name, do: "ImpersonationProbe#{:erlang.unique_integer([:positive])}"
 
-  # The errors the compiler would have raised, for a resource built from `body`.
-  defp verifier_errors(module) do
-    Process.put({Spark.Dsl, :test_collector}, self())
-    module.__verify_spark_dsl__(module)
-
-    receive do
-      {Spark.Dsl, :verifier_errors, ^module, errors} -> errors
-    after
-      0 -> []
-    end
-  end
-
   defp message(module) do
-    assert [%Spark.Error.DslError{} = error] = verifier_errors(module)
+    assert [%Spark.Error.DslError{} = error] = VerifierErrors.errors(module)
     Exception.message(error)
   end
 
@@ -150,7 +140,7 @@ defmodule AshQuick.ImpersonationVerifierTest do
                  Ash.Resource.Info.action(module, :impersonate)
 
         assert AshQuick.Impersonation.resource?(module)
-        assert verifier_errors(module) == []
+        assert VerifierErrors.errors(module) == []
       end)
     end
 
@@ -167,7 +157,7 @@ defmodule AshQuick.ImpersonationVerifierTest do
 
       refute AshQuick.Impersonation.resource?(module)
       assert is_nil(Ash.Resource.Info.action(module, :impersonate))
-      assert verifier_errors(module) == []
+      assert VerifierErrors.errors(module) == []
     end
 
     test "answers to the name the token and the register spell" do

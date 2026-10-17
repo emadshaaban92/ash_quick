@@ -8,13 +8,8 @@ defmodule AshQuick.NavVerifierTest do
   any role can reach it, are questions about other modules and are settled in
   `AshQuick.LiveView.RouterTest`.
 
-  Verifiers run in `@after_verify`, which the compiler executes in its own
-  checker process — so the error is reported there and never propagates out of
-  `Code.compile_string/1` for a test to catch. `__verify_spark_dsl__/1` is that
-  hook; calling it here runs the identical verifier against the identical DSL
-  state, and `Spark.Dsl`'s `:test_collector` (a pid in the *calling* process's
-  dictionary, which is why the compiler's own run cannot use it) hands back the
-  errors it would otherwise raise.
+  Each probe is verified by hand through `AshQuick.Test.VerifierErrors`, which
+  says why the compiler's own run cannot hand its errors to a test.
 
   `async: false` because suppressing the compiler's own report means swapping
   the global `:standard_error` device.
@@ -22,6 +17,8 @@ defmodule AshQuick.NavVerifierTest do
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureIO
+
+  alias AshQuick.Test.VerifierErrors
 
   defp probe(body) do
     name = "NavProbe#{:erlang.unique_integer([:positive])}"
@@ -43,18 +40,7 @@ defmodule AshQuick.NavVerifierTest do
   end
 
   defp message(body) do
-    module = probe(body)
-    Process.put({Spark.Dsl, :test_collector}, self())
-    module.__verify_spark_dsl__(module)
-
-    errors =
-      receive do
-        {Spark.Dsl, :verifier_errors, ^module, errors} -> errors
-      after
-        0 -> []
-      end
-
-    assert [%Spark.Error.DslError{} = error] = errors
+    assert [%Spark.Error.DslError{} = error] = VerifierErrors.errors(probe(body))
     Exception.message(error)
   end
 
@@ -99,10 +85,6 @@ defmodule AshQuick.NavVerifierTest do
   test "a group naming a path no entry declares still compiles" do
     # Most QuickViews are discovered rather than declared, so a group referring
     # to a path nothing declares is the ordinary case, not a mistake.
-    module = probe(~s|group "Catalog", ~w(/products)|)
-    Process.put({Spark.Dsl, :test_collector}, self())
-    module.__verify_spark_dsl__(module)
-
-    refute_received {Spark.Dsl, :verifier_errors, ^module, _errors}
+    assert VerifierErrors.errors(probe(~s|group "Catalog", ~w(/products)|)) == []
   end
 end

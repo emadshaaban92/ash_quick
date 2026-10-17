@@ -7,13 +7,14 @@ defmodule AshQuick.PrintVerifierTest do
   ChromicPDF, so every probe here is about the action; the example app, which
   leaves ChromicPDF out, pins the other half.
 
-  Probed the way `AshQuick.LookupVerifierTest` probes: `__verify_spark_dsl__/1`
-  with Spark's `:test_collector`, since a verifier's error is raised in the
-  compiler's own checker process and never reaches `Code.compile_string/1`.
+  Probed the way `AshQuick.LookupVerifierTest` probes, through
+  `AshQuick.Test.VerifierErrors`.
   """
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureIO
+
+  alias AshQuick.Test.VerifierErrors
 
   defmodule Domain do
     @moduledoc false
@@ -57,16 +58,7 @@ defmodule AshQuick.PrintVerifierTest do
     """
 
     capture_io(:stderr, fn -> Code.compile_string(source) end)
-    module = Module.concat([name])
-
-    Process.put({Spark.Dsl, :test_collector}, self())
-    module.__verify_spark_dsl__(module)
-
-    receive do
-      {Spark.Dsl, :verifier_errors, ^module, errors} -> errors
-    after
-      0 -> []
-    end
+    VerifierErrors.errors(Module.concat([name]))
   end
 
   defp message(body) do
