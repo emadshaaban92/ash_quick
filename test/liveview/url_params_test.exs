@@ -12,6 +12,7 @@ defmodule AshQuick.LiveView.URLParamsTest do
 
   alias AshQuick.LiveView.CustomFilter
   alias AshQuick.LiveView.QuickView
+  alias Ash.Resource.Actions.Read.Pagination
   alias AshQuick.LiveView.URLParams
 
   @base "/products"
@@ -62,7 +63,7 @@ defmodule AshQuick.LiveView.URLParamsTest do
       params =
         %{"page" => "99999999999999999999"}
         |> URLParams.from_url_params()
-        |> URLParams.clamp_limit(250)
+        |> URLParams.apply_pagination(struct(Pagination, max_page_size: 250))
 
       assert params.page == div(1_000_000_000, params.limit) + 1
     end
@@ -73,7 +74,8 @@ defmodule AshQuick.LiveView.URLParamsTest do
       large = deep |> Map.put("limit", "250") |> URLParams.from_url_params()
       small = deep |> Map.put("limit", "20") |> URLParams.from_url_params()
 
-      assert URLParams.clamp_limit(large, 250).page < URLParams.clamp_limit(small, 250).page
+      assert URLParams.apply_pagination(large, struct(Pagination, max_page_size: 250)).page <
+               URLParams.apply_pagination(small, struct(Pagination, max_page_size: 250)).page
     end
 
     test "a page a real table can hold is taken as written" do
@@ -377,15 +379,19 @@ end
 
 defmodule AshQuick.LiveView.URLParamsCeilingTest do
   @moduledoc """
-  The limit held to a list action's `max_page_size`. The page itself is driven
-  in the example app (`ExampleWeb.PageCeilingTest`).
+  The limit held to a list action's `max_page_size`, and the page nobody sized
+  read at its `default_limit`. The page itself is driven in the example app
+  (`ExampleWeb.PageCeilingTest`, `ExampleWeb.PageDefaultTest`).
   """
   use ExUnit.Case, async: true
 
+  alias Ash.Resource.Actions.Read.Pagination
   alias AshQuick.LiveView.URLParams
 
   defp clamped(query, ceiling) do
-    query |> URLParams.from_url_params() |> URLParams.clamp_limit(ceiling)
+    query
+    |> URLParams.from_url_params()
+    |> URLParams.apply_pagination(struct(Pagination, max_page_size: ceiling, default_limit: nil))
   end
 
   test "the parse alone leaves a large limit as asked" do
@@ -422,5 +428,58 @@ defmodule AshQuick.LiveView.URLParamsCeilingTest do
 
     assert URLParams.full_path("/products", clamped(%{"limit" => "100000"}, 250)) ==
              "/products?limit=250"
+  end
+
+  describe "the action's default_limit" do
+    defp paginated(query, pagination) do
+      query |> URLParams.from_url_params() |> URLParams.apply_pagination(pagination)
+    end
+
+    test "is the size of a page nobody sized" do
+      assert paginated(%{}, struct(Pagination, max_page_size: 250, default_limit: 50)).limit == 50
+    end
+
+    test "and of one whose limit does not parse" do
+      for limit <- ["abc", "", ["50"]] do
+        assert paginated(
+                 %{"limit" => limit},
+                 struct(Pagination, max_page_size: 250, default_limit: 50)
+               ).limit ==
+                 50
+      end
+    end
+
+    test "gives way to a limit the URL names, the old default included" do
+      assert paginated(
+               %{"limit" => "20"},
+               struct(Pagination, max_page_size: 250, default_limit: 50)
+             ).limit == 20
+
+      assert paginated(
+               %{"limit" => "5"},
+               struct(Pagination, max_page_size: 250, default_limit: 50)
+             ).limit == 5
+    end
+
+    test "is held to the ceiling like any other limit" do
+      assert paginated(%{}, struct(Pagination, max_page_size: 10, default_limit: 50)).limit == 10
+    end
+
+    test "falls back to 20 rows for a direct caller passing none" do
+      assert paginated(%{}, struct(Pagination, max_page_size: 250, default_limit: nil)).limit ==
+               20
+    end
+
+    test "is the limit a path leaves unsaid" do
+      pagination = struct(Pagination, max_page_size: 250, default_limit: 50)
+
+      assert URLParams.full_path("/products", paginated(%{}, pagination)) == "/products"
+
+      assert URLParams.full_path("/products", paginated(%{"limit" => "50"}, pagination)) ==
+               "/products"
+
+      assert URLParams.full_path("/products", paginated(%{"limit" => "20"}, pagination)) ==
+               "/products?limit=20"
+    end
   end
 end

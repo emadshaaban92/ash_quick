@@ -415,6 +415,17 @@
   `max_page_size` in the `pagination` block of each list action instead; a
   host that never set it sees no change, since both defaulted to 250.
 
+- **A list opens at its action's `default_limit`.** A list nobody sized read
+  20 rows whatever its action declared, so `pagination default_limit: 50`
+  still opened at 20. It now reads the list action's `default_limit`, held to
+  its `max_page_size`. A URL that names `?limit=` still gets that size, and
+  every link back to the list leaves the action's default unsaid.
+
+  **Who is affected:** a host whose list action's `default_limit` is not 20.
+  Its list opens at that size now, so a `default_limit 250` reads 250 rows.
+  Set `default_limit 20` in the action's `pagination` block to keep the old
+  page.
+
 - **A form shows each field error where it belongs.** An error on a field
   the form has an input for shows under that input, and only there; one with
   no input to show it (a field set by a change, not accepted, or restricted
