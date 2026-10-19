@@ -9,6 +9,8 @@ for resource <- [
       Example.Test.DefaultPages,
       Example.Test.DigitsOnly,
       Example.Test.HiddenAddress,
+      Example.Test.LookupItems,
+      Example.Test.LookupItems.Item,
       Example.Test.NestedItems,
       Example.Test.NestedItems.Item,
       Example.Test.PickedLabels,
