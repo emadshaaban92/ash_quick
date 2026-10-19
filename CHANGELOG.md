@@ -4,6 +4,16 @@
 
 ### Features
 
+- **A list's page size can be picked from the page.** A "Rows per page"
+  select beside the footer's count offers the list action's `default_limit`,
+  then each of 10, 25, 50, 100 and 250 that is at least twice it and within
+  its `max_page_size` (a default of 20 offers 20, 50, 100 and 250); a
+  `?limit=` that is none of those is listed too, so the select shows the size
+  the page reads at. Picking one writes `?limit=` and goes back to the first
+  page, and picking the default drops it from the URL. The select is left out
+  when no pick would change the page: the default is the only size, or every
+  row fits on the smallest one.
+
 - **An action's change can tell a QuickView form being built, validated or
   submitted.** Every changeset a QuickView form builds carries
   `AshQuick.form_stage_key/0` (`:ash_quick_form_stage`) in its context:

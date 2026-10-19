@@ -137,6 +137,28 @@ defmodule ExampleWeb.PageDefaultTest do
     assert render(view) =~ "Showing 1-4 of 7"
   end
 
+  # Two to five leaves no size on the ladder between them, so there is
+  # nothing to pick until the URL names one.
+  test "offers no page size select when the default is the only size", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/test/default_pages")
+    refute has_element?(view, "#page-size")
+
+    {:ok, view, _html} = live(conn, ~p"/test/default_pages?limit=4")
+    assert has_element?(view, "#page-size option[selected]", "4")
+
+    view |> element("#page-size-form") |> render_change(%{"limit" => "2"})
+    assert_patch(view, ~p"/test/default_pages")
+    refute has_element?(view, "#page-size")
+  end
+
+  test "a forged page size is held to the ceiling", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/test/default_pages?limit=4")
+
+    view |> element("#page-size-form") |> render_change(%{"limit" => "1000"})
+    assert_patch(view, ~p"/test/default_pages?limit=5")
+    assert render(view) =~ "Showing 1-5 of 7"
+  end
+
   # `render_patch/2` patches to the path itself first; what the page does
   # about it is the patch after that.
   defp navigate(view, path) do

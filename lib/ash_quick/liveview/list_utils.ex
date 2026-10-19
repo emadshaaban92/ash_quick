@@ -227,6 +227,12 @@ defmodule AshQuick.LiveView.ListUtils do
     {:halt, push_patch(socket, to: URLParams.full_path(socket.assigns.path, params))}
   end
 
+  defp handle_list_events("page_size", %{"limit" => limit}, socket, _options) do
+    params = URLParams.change_limit(socket.assigns.params, limit)
+
+    {:halt, push_patch(socket, to: URLParams.full_path(socket.assigns.path, params))}
+  end
+
   defp handle_list_events("new_click", _, socket, _) do
     params =
       socket.assigns.params

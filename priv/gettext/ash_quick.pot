@@ -328,6 +328,11 @@ msgstr ""
 
 #: lib/ash_quick/liveview/components/list_view.ex
 #, elixir-autogen, elixir-format
+msgid "Rows per page"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
 msgid "Showing %{from}-%{to} of %{count}"
 msgstr ""
 

@@ -17,7 +17,8 @@ defmodule AshQuick.LiveView.URLParams do
             limit_given?: false,
             # Unknown until `apply_pagination/2` reads the list's action, which
             # every page does before it writes a path.
-            default_limit: nil
+            default_limit: nil,
+            max_page_size: nil
 
   @doc """
   Reads a QuickView's state out of the query string.
@@ -109,8 +110,47 @@ defmodule AshQuick.LiveView.URLParams do
       params
       | limit: limit,
         page: min(params.page, max_page(limit)),
-        default_limit: default
+        default_limit: default,
+        max_page_size: ceiling
     }
+  end
+
+  # The sizes the list's page size select offers past the default.
+  @page_sizes [10, 25, 50, 100, 250]
+
+  @doc """
+  The page sizes a sized list offers: its default, then each of
+  #{inspect(@page_sizes)} at least twice it and within the action's
+  `max_page_size`. A size barely above the default barely changes the page,
+  so a default of 20 offers 50 next rather than 25.
+
+  A limit the URL holds that is none of those is offered too, in order, so
+  the select shows the size the page reads at rather than one it does not.
+  """
+  def page_size_options(%__MODULE__{limit: limit, default_limit: default, max_page_size: ceiling})
+      when is_integer(default) and is_integer(ceiling) do
+    [default, limit | Enum.filter(@page_sizes, &(&1 >= default * 2 and &1 <= ceiling))]
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
+  # Params no action sized, which only a direct caller renders, have no
+  # ceiling to climb to: the page offers the size it reads at and nothing else.
+  def page_size_options(%__MODULE__{limit: limit}), do: [limit]
+
+  @doc """
+  Reads the list at another page size, from its first page.
+
+  The value comes from the page size select, but an event can be forged, so
+  one that is not a number leaves the params as they were. Any number is
+  taken: `apply_pagination/2` holds it to the action's ceiling like a limit
+  typed into the URL.
+  """
+  def change_limit(%__MODULE__{} = params, limit) do
+    case parse_limit(limit) do
+      nil -> params
+      limit -> %__MODULE__{params | limit: limit, limit_given?: true, page: 1}
+    end
   end
 
   # Bounded against the limit rather than on its own, because a page is only

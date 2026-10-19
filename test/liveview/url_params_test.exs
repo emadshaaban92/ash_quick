@@ -490,4 +490,68 @@ defmodule AshQuick.LiveView.URLParamsCeilingTest do
                "/products?limit=20"
     end
   end
+
+  describe "the page sizes a list offers" do
+    defp options(query, default, ceiling) do
+      query
+      |> URLParams.from_url_params()
+      |> URLParams.apply_pagination(
+        struct(Pagination, max_page_size: ceiling, default_limit: default)
+      )
+      |> URLParams.page_size_options()
+    end
+
+    test "start at the default and climb the ladder from twice it up to the ceiling" do
+      assert options(%{}, 20, 250) == [20, 50, 100, 250]
+      assert options(%{}, 20, 60) == [20, 50]
+      assert options(%{}, 5, 30) == [5, 10, 25]
+    end
+
+    test "are only the default when the ladder has nothing between it and the ceiling" do
+      assert options(%{}, 2, 5) == [2]
+      assert options(%{}, 250, 250) == [250]
+    end
+
+    test "include a limit the URL holds that is not on the ladder, in order" do
+      assert options(%{"limit" => "40"}, 20, 250) == [20, 40, 50, 100, 250]
+      assert options(%{"limit" => "4"}, 20, 250) == [4, 20, 50, 100, 250]
+    end
+
+    test "are only the current size for params no action sized" do
+      assert %{"limit" => "40"} |> URLParams.from_url_params() |> URLParams.page_size_options() ==
+               [40]
+    end
+
+    test "include a clamped limit as the ceiling it was held to" do
+      assert options(%{"limit" => "100000"}, 20, 60) == [20, 50, 60]
+    end
+  end
+
+  describe "changing the page size" do
+    defp sized(query) do
+      query
+      |> URLParams.from_url_params()
+      |> URLParams.apply_pagination(struct(Pagination, max_page_size: 250, default_limit: 20))
+    end
+
+    test "reads the list from its first page at the new size" do
+      params = %{"page" => "3", "search" => "tent"} |> sized() |> URLParams.change_limit("50")
+
+      assert URLParams.full_path("/products", params) == "/products?limit=50&search=tent"
+    end
+
+    test "back to the default leaves the limit unsaid" do
+      params = %{"limit" => "50"} |> sized() |> URLParams.change_limit("20")
+
+      assert URLParams.full_path("/products", params) == "/products"
+    end
+
+    test "ignores a value that is not a number" do
+      params = sized(%{"limit" => "50", "page" => "2"})
+
+      for limit <- ["abc", "", nil, ["50"]] do
+        assert URLParams.change_limit(params, limit) == params
+      end
+    end
+  end
 end
