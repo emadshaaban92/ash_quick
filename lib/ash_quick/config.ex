@@ -257,7 +257,7 @@ defmodule AshQuick.Config do
     if Code.ensure_loaded?(Localize.DateTime) do
       Localize.DateTime.to_string!(value)
     else
-      Calendar.strftime(value, "%y-%m-%d-%H-%M-%S")
+      Calendar.strftime(value, "%Y-%m-%d %H:%M:%S")
     end
   end
 
@@ -303,7 +303,7 @@ defmodule AshQuick.Config do
     if Code.ensure_loaded?(Localize.Date) do
       Localize.Date.to_string!(value)
     else
-      Calendar.strftime(value, "%y-%m-%d")
+      Calendar.strftime(value, "%Y-%m-%d")
     end
   end
 
