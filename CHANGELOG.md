@@ -176,6 +176,20 @@
 
 ### Bug fixes
 
+- **A failed save says why, sub-forms included, and is called a refusal only
+  when it is one.** An error from a nested form, such as an item of a
+  `manage_relationship` argument whose own create refuses a value, is filed at
+  the item's path (`[:items, 0]`), and the form only looked at its root for
+  input errors. Finding none, it took the failure for a policy refusal and
+  flashed "You don't have permission to do that.", as it did for any failure
+  that named no input. The form now counts every sub-form's errors: each shows
+  under its own input, and one naming a field its sub-form has no input for,
+  or a sub-form under a field the actor cannot see, is flashed with the item it
+  is about: `Items 2 › Note: is hidden`. A failure naming no input is worded as
+  every other surface words it: a policy refusal in the policy's words, a
+  missing record as missing, anything unexpected as the generic sentence,
+  reported to Tower. (#78)
+
 - **A bulk print behind a `where:` prints exactly the rows it marked.**
   `change {AshQuick.Print, ...}, where: [...]` marks only the records that pass
   the condition, but the page read the first record's mark and printed every
