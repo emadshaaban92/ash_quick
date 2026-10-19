@@ -238,42 +238,53 @@ defmodule AshQuick.Config do
   end
 
   @doc """
-  Formats a `DateTime` for display.
+  Formats a `DateTime` or `NaiveDateTime` for display.
 
-  Shifts the datetime to the configured timezone and formats it using
-  `Localize.DateTime.to_string!/1` when available; otherwise falls back
-  to `Calendar.strftime/2`.
+  Shifts a `DateTime` to the configured timezone; a `NaiveDateTime` names no
+  zone, so it is formatted as it is. Formats with
+  `Localize.DateTime.to_string!/1` when available; otherwise falls back to
+  `Calendar.strftime/2`.
   """
   def format_datetime(nil), do: ""
 
   def format_datetime(%DateTime{} = value) do
-    shifted = DateTime.shift_zone!(value, timezone())
+    value |> DateTime.shift_zone!(timezone()) |> localize_datetime()
+  end
 
+  def format_datetime(%NaiveDateTime{} = value), do: localize_datetime(value)
+
+  defp localize_datetime(value) do
     if Code.ensure_loaded?(Localize.DateTime) do
-      Localize.DateTime.to_string!(shifted)
+      Localize.DateTime.to_string!(value)
     else
-      Calendar.strftime(shifted, "%y-%m-%d-%H-%M-%S")
+      Calendar.strftime(value, "%y-%m-%d-%H-%M-%S")
     end
   end
 
   @doc """
-  Formats the time-of-day part of a `DateTime` for display.
+  Formats a `Time`, or the time-of-day part of a `DateTime`, for display.
 
-  Shifts the datetime to the configured timezone. Defaults to a short time
-  (`"9:32 PM"`); pass `format: :medium` for second precision.
+  Shifts a `DateTime` to the configured timezone; a `Time` names no zone, so
+  it is formatted as it is. Defaults to a short time (`"9:32 PM"`); pass
+  `format: :medium` for second precision.
   """
   def format_time(value, opts \\ [])
 
   def format_time(nil, _opts), do: ""
 
   def format_time(%DateTime{} = value, opts) do
-    shifted = DateTime.shift_zone!(value, timezone())
+    value |> DateTime.shift_zone!(timezone()) |> localize_time(opts)
+  end
+
+  def format_time(%Time{} = value, opts), do: localize_time(value, opts)
+
+  defp localize_time(value, opts) do
     format = Keyword.get(opts, :format, :short)
 
     if Code.ensure_loaded?(Localize.Time) do
-      Localize.Time.to_string!(shifted, format: format)
+      Localize.Time.to_string!(value, format: format)
     else
-      Calendar.strftime(shifted, strftime_time_format(format))
+      Calendar.strftime(value, strftime_time_format(format))
     end
   end
 

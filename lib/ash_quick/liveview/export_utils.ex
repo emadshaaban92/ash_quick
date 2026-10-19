@@ -105,6 +105,14 @@ defmodule AshQuick.LiveView.ExportUtils do
     AshQuick.Config.format_date(value)
   end
 
+  defp field_export_value(%NaiveDateTime{} = value, _path) do
+    AshQuick.Config.format_datetime(value)
+  end
+
+  defp field_export_value(%Time{} = value, _path) do
+    AshQuick.Config.format_time(value, format: :medium)
+  end
+
   defp field_export_value(value, path) when is_list(value) do
     Enum.map_join(value, ", ", &field_export_value(&1, path))
   end

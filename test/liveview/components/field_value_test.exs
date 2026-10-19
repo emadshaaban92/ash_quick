@@ -69,6 +69,30 @@ defmodule AshQuick.LiveView.Components.FieldValueTest do
     end
   end
 
+  describe "field_value/1 on dates and times" do
+    # Each reads as `AshQuick.Config` formats it, the way a `DateTime` always
+    # has, and not as the ISO 8601 `Phoenix.HTML.Safe` would print.
+    for {label, value, formatted, iso} <- [
+          {"a date", quote(do: ~D[2026-10-19]), "Oct 19, 2026", "2026-10-19"},
+          {"a time", quote(do: ~T[19:54:10]), "7:54:10", "19:54:10"},
+          {"a naive datetime", quote(do: ~N[2026-10-19 19:54:10]), "Oct 19, 2026, 7:54:10",
+           "2026-10-19T19:54:10"},
+          {"a datetime", quote(do: ~U[2026-10-19 19:54:10.123456Z]), "Oct 19, 2026, 7:54:10",
+           "2026-10-19T19:54:10"}
+        ] do
+      test "#{label} reads as the configured format" do
+        html =
+          render_component(&FieldValue.field_value/1,
+            path: [],
+            value: unquote(value)
+          )
+
+        assert html =~ unquote(formatted)
+        refute html =~ unquote(iso)
+      end
+    end
+  end
+
   describe "attachment_preview/1" do
     test "renders an <img> for image attachments" do
       value = %Value{key: "public/products/abc.jpg", file_type: :image}
