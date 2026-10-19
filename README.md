@@ -369,7 +369,11 @@ behind three surfaces: the list page, the export, and every relationship
 dropdown pointing *at* this resource. The action has to exist, accept the
 search argument (including `nil`), and declare `pagination`. A list page
 opens at the action's `default_limit` and reads at most its `max_page_size`
-rows (Ash's default is 250), whatever `?limit=` asks for.
+rows (Ash's default is 250), whatever `?limit=` asks for. A "Rows per page"
+select beside the footer's count offers the default, then each of 10, 25, 50,
+100 and 250 that is at least twice the default and within `max_page_size`,
+and writes `?limit=`. It is left out when no pick would change the page: the
+default is the only size, or every row fits on the smallest one.
 
 ```elixir
 ash_quick do

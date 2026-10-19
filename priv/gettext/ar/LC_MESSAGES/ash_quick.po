@@ -332,6 +332,11 @@ msgstr "تحديد الصف"
 
 #: lib/ash_quick/liveview/components/list_view.ex
 #, elixir-autogen, elixir-format
+msgid "Rows per page"
+msgstr "عدد الصفوف في الصفحة"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
 msgid "Showing %{from}-%{to} of %{count}"
 msgstr "عرض %{from}-%{to} من %{count}"
 

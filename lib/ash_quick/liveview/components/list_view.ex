@@ -177,6 +177,7 @@ defmodule AshQuick.LiveView.Components.ListView do
           of them and draw `98` as though it were a page. --%>
           <.footer
             meta={@data}
+            params={@params}
             path_for_page={@path_for_page}
             current_page={min(@params.page, pages_count(@data))}
             pages_count={pages_count(@data)}
@@ -518,6 +519,33 @@ defmodule AshQuick.LiveView.Components.ListView do
 
   defp pages_count(%{count: count, limit: limit}), do: ceil(count / limit)
 
+  # Offered only when a pick would change the page: an action whose ceiling is
+  # its default has one page size, and a list that fits on the smallest size
+  # shows the same rows at every size. The smallest is never above the current
+  # limit, so a list read past its default can still go back to it.
+  defp page_size_form(assigns) do
+    assigns = assign(assigns, :options, URLParams.page_size_options(assigns.params))
+
+    ~H"""
+    <.form
+      :if={length(@options) > 1 and @meta.count > Enum.min(@options)}
+      for={%{}}
+      id="page-size-form"
+      phx-change="page_size"
+      class="flex items-center gap-2"
+    >
+      <label for="page-size" class="text-sm text-base-content/70">
+        {gettext("Rows per page")}
+      </label>
+      <select id="page-size" name="limit" class="select select-sm w-auto">
+        <option :for={size <- @options} value={size} selected={size == @params.limit}>
+          {size}
+        </option>
+      </select>
+    </.form>
+    """
+  end
+
   defp footer(assigns) do
     ~H"""
     <nav
@@ -529,17 +557,20 @@ defmodule AshQuick.LiveView.Components.ListView do
       survive being cut into fragments that no longer sit in that order. --%>
       <%!-- `min/2` clamps the arithmetic but nothing clamps the query, so a page
       past the last read "Showing 5-5 of 5" over an empty table. --%>
-      <span class="text-sm text-base-content/70">
-        {if @meta.results == [] and @meta.count > 0 do
-          gettext("No results on this page, of %{count} in total", count: @meta.count)
-        else
-          gettext("Showing %{from}-%{to} of %{count}",
-            from: min(@meta.offset + 1, @meta.count),
-            to: min(@meta.offset + @meta.limit, @meta.count),
-            count: @meta.count
-          )
-        end}
-      </span>
+      <div class="flex flex-wrap items-center gap-3">
+        <span class="text-sm text-base-content/70">
+          {if @meta.results == [] and @meta.count > 0 do
+            gettext("No results on this page, of %{count} in total", count: @meta.count)
+          else
+            gettext("Showing %{from}-%{to} of %{count}",
+              from: min(@meta.offset + 1, @meta.count),
+              to: min(@meta.offset + @meta.limit, @meta.count),
+              count: @meta.count
+            )
+          end}
+        </span>
+        <.page_size_form meta={@meta} params={@params} />
+      </div>
       <div :if={@meta.count > @meta.limit} class="join">
         <.link
           :if={@current_page > 1}

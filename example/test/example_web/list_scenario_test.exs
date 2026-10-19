@@ -193,6 +193,67 @@ defmodule ExampleWeb.ListScenarioTest do
       |> assert_has("*", text: "Showing 1-5 of 5")
       # No pager at all: it is drawn only when there is more than one page.
       |> refute_has("[aria-label='Previous page']")
+      # Nor a page size select, since every size shows the same five rows.
+      |> refute_has("#page-size")
+    end
+  end
+
+  describe "page size" do
+    setup %{admin: admin, brand: brand, category: category} do
+      for n <- 1..30 do
+        product(
+          name: "Tent #{String.pad_leading("#{n}", 2, "0")}",
+          brand: brand,
+          category: category,
+          actor: admin
+        )
+      end
+
+      :ok
+    end
+
+    test "opens at the action's default and offers larger pages", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      conn
+      |> log_in(admin)
+      |> visit(~p"/products")
+      |> assert_has("*", text: "Showing 1-20 of 30")
+      |> assert_has("#page-size option[selected]", text: "20")
+      |> assert_has("#page-size option", text: "250")
+      |> select("Rows per page", option: "50")
+      |> assert_path(~p"/products", query_params: %{"limit" => "50"})
+      |> assert_has("*", text: "Showing 1-30 of 30")
+      |> assert_has("td", text: "Tent 30")
+    end
+
+    # Every row fits at 50, but the default is smaller, so the select stays to
+    # go back to it.
+    test "stays on a list read past its default, to go back to it", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      conn
+      |> log_in(admin)
+      |> visit(~p"/products?limit=50")
+      |> assert_has("*", text: "Showing 1-30 of 30")
+      |> select("Rows per page", option: "20")
+      |> assert_path(~p"/products", query_params: %{})
+      |> assert_has("*", text: "Showing 1-20 of 30")
+    end
+
+    test "starts again from the first page, and the default drops from the URL", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      conn
+      |> log_in(admin)
+      |> visit(~p"/products?limit=10&page=3")
+      |> assert_has("*", text: "Showing 21-30 of 30")
+      |> select("Rows per page", option: "50")
+      |> assert_path(~p"/products", query_params: %{"limit" => "50"})
+      |> assert_has("*", text: "Showing 1-30 of 30")
+      |> select("Rows per page", option: "20")
+      |> assert_path(~p"/products", query_params: %{})
+      |> assert_has("*", text: "Showing 1-20 of 30")
     end
   end
 
