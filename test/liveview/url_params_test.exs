@@ -357,9 +357,9 @@ defmodule AshQuick.LiveView.URLParamsTest do
 
       {:patch, once} ->
         # Correct the query, never the path. A patch that moves the page is not
-        # a tidier URL, it is a navigation — `?action=` is the case that proves
-        # it, since `full_path/2` writes the action into the path and lands on
-        # `/:id`.
+        # a tidier URL, it is a navigation — `?action=` under `/create` is the
+        # case that proves it, since `full_path/2` rebuilds it over the base
+        # path.
         assert URI.parse(once).path == URI.parse(url).path,
                """
                canonicalizing #{inspect(url)} moved the page:

@@ -666,8 +666,8 @@ defmodule AshQuick.LiveView.QuickView do
   # Only where nothing in the query names an action: `?action=` is
   # priority 1 of the resolution order and the only way to reach a
   # second create-type action, so `/products/create?action=quick_add`
-  # still rebuilds as `/products/quick_add`, still disagrees with the
-  # path being served, and is still left exactly as it came in.
+  # rebuilds as `/products?action=quick_add`, disagrees with the path
+  # being served, and is left exactly as it came in.
   #
   # Last, and only over a socket nothing else has redirected, because
   # `push_patch/2` *raises* on a socket already set to redirect rather
@@ -708,8 +708,9 @@ defmodule AshQuick.LiveView.QuickView do
   #
   #   * `?action=` is priority 1 of the action resolution order, and
   #     `quick_view/3` serves no `/<action>` route, so it is the only way to
-  #     reach a second create-type action. `full_path/2` writes that action into
-  #     the path, where it lands on `/:id` and renders a record that is not there.
+  #     reach a second create-type action. `full_path/2` names it in the query
+  #     over the base path, so `/products/create?action=quick_add` rebuilds as
+  #     `/products?action=quick_add`, a different page.
   #   * An id the URL percent-encodes comes back raw from `full_path/2`, so the
   #     two never agree and the patch repeats forever.
   #

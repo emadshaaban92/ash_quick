@@ -327,9 +327,10 @@ defmodule ExampleWeb.HostileParamsTest do
     # so `?action=` is the only way to reach a second create-type action. It is
     # also priority 1 of the resolution order the moduledoc documents.
     #
-    # `full_path/2` writes that action into the *path*, where `/products/quick_add`
-    # matches `/:id` and renders a product that does not exist. Canonicalizing
-    # the path rather than the query turned a documented feature into a 404.
+    # `full_path/2` names that action in the query over the base path, as
+    # `/products?action=quick_add`, so it never agrees with the `/create` it was
+    # served at. Canonicalizing the path rather than the query would move the
+    # visitor off the page they asked for.
     test "a second create action is reached, not redirected into a missing record", %{
       conn: conn
     } do

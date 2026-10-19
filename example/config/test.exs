@@ -53,6 +53,7 @@ config :ash_quick,
         "/test/required_attachments",
         "/test/required_entries",
         "/test/required_picks",
+        "/test/second_lists",
         "/test/small_pages",
         "/test/worded_policy"
       ],
