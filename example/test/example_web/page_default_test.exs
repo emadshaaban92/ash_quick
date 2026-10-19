@@ -106,6 +106,37 @@ defmodule ExampleWeb.PageDefaultTest do
     assert_patch(view, ~p"/test/default_pages/create?limit=5")
   end
 
+  # A list other than the default sizes its own page, and a record opened from
+  # it links back to the default list, measured against that list's default.
+  test "a second list opens at its own default, and its records link back to the default list",
+       %{conn: conn} do
+    newest = DefaultPages |> Ash.Query.sort(code: :desc) |> Ash.read_first!(authorize?: false)
+
+    {:ok, view, html} = live(conn, ~p"/test/default_pages?action=newest_first")
+    assert html =~ "Showing 1-3 of 7"
+    assert has_element?(view, "td", "Default row 7")
+    refute has_element?(view, "td", "Default row 4")
+
+    # Its default is unsaid, so the record links back to the default list's.
+    view |> element(~s(a[href="/test/default_pages/#{newest.id}"])) |> render_click()
+    assert_patch(view, ~p"/test/default_pages/#{newest.id}")
+
+    view |> element("a:has(.hero-arrow-left)") |> render_click()
+    assert_patch(view, ~p"/test/default_pages")
+    assert render(view) =~ "Showing 1-2 of 7"
+
+    # A size the visitor chose there survives the round trip.
+    {:ok, view, html} = live(conn, ~p"/test/default_pages?action=newest_first&limit=4")
+    assert html =~ "Showing 1-4 of 7"
+
+    view |> element(~s(a[href="/test/default_pages/#{newest.id}?limit=4"])) |> render_click()
+    assert_patch(view, ~p"/test/default_pages/#{newest.id}?limit=4")
+
+    view |> element("a:has(.hero-arrow-left)") |> render_click()
+    assert_patch(view, ~p"/test/default_pages?limit=4")
+    assert render(view) =~ "Showing 1-4 of 7"
+  end
+
   # `render_patch/2` patches to the path itself first; what the page does
   # about it is the patch after that.
   defp navigate(view, path) do

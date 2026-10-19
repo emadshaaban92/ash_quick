@@ -15,7 +15,9 @@ defmodule AshQuick.LiveView.URLParams do
             read_args: %{},
             show_custom_filter: false,
             limit_given?: false,
-            default_limit: @default_limit
+            # Unknown until `apply_pagination/2` reads the list's action, which
+            # every page does before it writes a path.
+            default_limit: nil
 
   @doc """
   Reads a QuickView's state out of the query string.
@@ -236,8 +238,10 @@ defmodule AshQuick.LiveView.URLParams do
 
   # Against the effective default rather than the literal one: the limit a
   # bare path reads is the action's `default_limit`, clamped to its ceiling, so
-  # that is the limit a path may leave unsaid.
-  defp maybe_put_limit(params_for_path, %{limit: limit, default_limit: default}) do
+  # that is the limit a path may leave unsaid. Unsized params have no default
+  # to compare against, so they raise here rather than guess one.
+  defp maybe_put_limit(params_for_path, %{limit: limit, default_limit: default})
+       when is_integer(default) do
     if limit == default do
       params_for_path
     else

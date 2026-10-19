@@ -10,9 +10,9 @@ defmodule AshQuick.LiveView.URLParamsTest do
   """
   use ExUnit.Case, async: true
 
+  alias Ash.Resource.Actions.Read.Pagination
   alias AshQuick.LiveView.CustomFilter
   alias AshQuick.LiveView.QuickView
-  alias Ash.Resource.Actions.Read.Pagination
   alias AshQuick.LiveView.URLParams
 
   @base "/products"
@@ -119,7 +119,7 @@ defmodule AshQuick.LiveView.URLParamsTest do
         params = URLParams.from_url_params(%{"arg__search" => value})
 
         assert params.read_args == %{}
-        assert URLParams.full_path("/products", params) == "/products"
+        assert URLParams.full_path("/products", sized(params)) == "/products"
       end
     end
 
@@ -224,18 +224,18 @@ defmodule AshQuick.LiveView.URLParamsTest do
 
   describe "the path a QuickView writes back" do
     test "carries a raised limit, and leaves the default one unsaid" do
-      params = URLParams.from_url_params(%{"limit" => "50"})
+      params = sized(%{"limit" => "50"})
 
       assert URLParams.full_path("/products", params) == "/products?limit=50"
-      assert URLParams.full_path("/products", URLParams.from_url_params(%{})) == "/products"
+      assert URLParams.full_path("/products", sized(%{})) == "/products"
     end
 
     test "round-trips what it wrote" do
-      params = URLParams.from_url_params(%{"limit" => "50", "page" => "3", "search" => "widget"})
+      params = sized(%{"limit" => "50", "page" => "3", "search" => "widget"})
 
       "/products?" <> query = URLParams.full_path("/products", params)
 
-      assert query |> URI.decode_query() |> URLParams.from_url_params() == params
+      assert query |> URI.decode_query() |> sized() == params
     end
 
     # Canonicalizing from `handle_params/3` patches whenever the query it was
@@ -336,12 +336,20 @@ defmodule AshQuick.LiveView.URLParamsTest do
     end
   end
 
+  # A page writes a path only once its list sized it, here a list reading 20
+  # rows and at most 250.
+  defp sized(%URLParams{} = params) do
+    URLParams.apply_pagination(params, struct(Pagination, default_limit: 20, max_page_size: 250))
+  end
+
+  defp sized(query), do: query |> URLParams.from_url_params() |> sized()
+
   # One pass of what `handle_params/3` does, driven by a URL rather than a bare
   # params map, because the path is half of what is being decided.
   defp canonicalize(url) do
     uri = URI.parse(url)
     raw = Map.merge(route_params(uri.path), URI.decode_query(uri.query || ""))
-    canonical_path = URLParams.full_path(@base, URLParams.from_url_params(raw))
+    canonical_path = URLParams.full_path(@base, sized(raw))
 
     if QuickView.correctable_query?(uri, canonical_path) do
       {:patch, canonical_path}

@@ -39,7 +39,7 @@ defmodule AshQuick.LiveView.PrepareAssignsTest do
   defp rendered(socket), do: put_in(socket.assigns.__changed__, %{})
 
   test "the list's assigns are stored on the socket", %{options: options, action: action} do
-    socket = QuickView.prepare_assigns(socket(%URLParams{}), action, options)
+    socket = QuickView.prepare_assigns(socket(%URLParams{default_limit: 20}), action, options)
 
     assert socket.assigns.fields == options.list_fields
     assert socket.assigns.id =~ "-list"
@@ -50,7 +50,7 @@ defmodule AshQuick.LiveView.PrepareAssignsTest do
   test "preparing the same URL again marks nothing changed",
        %{options: options, action: action} do
     socket =
-      socket(%URLParams{})
+      socket(%URLParams{default_limit: 20})
       |> QuickView.prepare_assigns(action, options)
       |> rendered()
       |> QuickView.prepare_assigns(action, options)
@@ -61,12 +61,12 @@ defmodule AshQuick.LiveView.PrepareAssignsTest do
   test "moving to another page changes the pager, not the columns",
        %{options: options, action: action} do
     socket =
-      socket(%URLParams{})
+      socket(%URLParams{default_limit: 20})
       |> QuickView.prepare_assigns(action, options)
       |> rendered()
 
     socket =
-      %{socket | assigns: %{socket.assigns | params: %URLParams{page: 2}}}
+      %{socket | assigns: %{socket.assigns | params: %URLParams{page: 2, default_limit: 20}}}
       |> QuickView.prepare_assigns(action, options)
 
     assert Map.has_key?(socket.assigns.__changed__, :path_for_page)

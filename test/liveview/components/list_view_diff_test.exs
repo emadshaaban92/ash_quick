@@ -31,7 +31,7 @@ defmodule AshQuick.LiveView.Components.ListViewDiffTest do
       scope: nil,
       path: "/other_names",
       base_path: "/other_names",
-      params: %URLParams{},
+      params: %URLParams{default_limit: 20},
       routed_shapes: [],
       filters: nil,
       selected_rows: %{},
