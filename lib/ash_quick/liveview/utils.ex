@@ -51,8 +51,20 @@ defmodule AshQuick.LiveView.Utils do
     |> Enum.map_join(" ", &String.capitalize/1)
   end
 
+  # Only a create, update or destroy offers fields. A form can still be built
+  # for a read: AshPhoenix builds a sub-form for one where a relationship looks
+  # its records up (`on_lookup`), and the page draws none of it.
   def action_fields(resource, action_name) do
-    action = Ash.Resource.Info.action(resource, action_name)
+    case Ash.Resource.Info.action(resource, action_name) do
+      %{type: type} = action when type in [:create, :update, :destroy] ->
+        accepted_fields(resource, action)
+
+      _no_fields ->
+        []
+    end
+  end
+
+  defp accepted_fields(resource, action) do
     attributes = Ash.Resource.Info.attributes(resource)
     relationships = Ash.Resource.Info.relationships(resource)
 

@@ -65,6 +65,17 @@ defmodule ExampleWeb.NestedItemErrorsScenarioTest do
     refute flash(html) =~ ActionErrors.forbidden_message()
   end
 
+  # AshPhoenix keeps the error on the root at the item's path and copies it onto
+  # the item, so the save holds it twice.
+  test "an error the item's create returns on save, naming no field, is said once",
+       %{conn: conn} do
+    view = with_items(conn, 1)
+
+    html = save(view, unique("N"), %{"0" => %{"status" => "late_unnamed"}})
+
+    assert flash(html) == "Items can't be saved today"
+  end
+
   test "an item failing for no input's reason is not called a refusal", %{conn: conn} do
     view = with_items(conn, 1)
 

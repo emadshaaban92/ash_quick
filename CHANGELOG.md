@@ -190,6 +190,14 @@
   missing record as missing, anything unexpected as the generic sentence,
   reported to Tower. (#78)
 
+- **A form holding a sub-form built for a read no longer crashes its page.**
+  Where a `manage_relationship` looks its records up (`on_lookup`) with nothing
+  to create, AshPhoenix builds each item a post sends for the read action, and
+  every place that asked the item's action for its fields raised a `KeyError`
+  (a read accepts no attributes): drawing the form, folding uploads into a
+  save, and wording a failed save. A read now offers no fields, so the item
+  draws no inputs and its errors are flashed with the item. (#81)
+
 - **A bulk print behind a `where:` prints exactly the rows it marked.**
   `change {AshQuick.Print, ...}, where: [...]` marks only the records that pass
   the condition, but the page read the first record's mark and printed every

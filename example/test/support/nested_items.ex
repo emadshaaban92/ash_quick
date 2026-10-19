@@ -60,8 +60,9 @@ defmodule Example.Test.NestedItems.Item do
   `"blocked"` is refused against `status`, the item's input. `"hidden"` is
   refused against `note`, which the item's form offers no input for. `"late"`
   is refused against `status` only when the create runs, `"late_hidden"`
-  against `note` only then. `"broken"` fails with
-  an error that is about no input and is not a policy's.
+  against `note` only then, and `"late_unnamed"` there with a message that
+  names no field. `"broken"` fails with an error that is about no input and
+  is not a policy's.
   """
   use Ash.Resource,
     domain: Example.Test.NestedItems.Domain,
@@ -89,6 +90,7 @@ defmodule Example.Test.NestedItems.Item do
                  case Ash.Changeset.get_attribute(changeset, :status) do
                    "late" -> {:error, field: :status, message: "is refused on save"}
                    "late_hidden" -> {:error, field: :note, message: "is hidden on save"}
+                   "late_unnamed" -> {:error, "Items can't be saved today"}
                    _status -> :ok
                  end
                end,

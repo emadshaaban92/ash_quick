@@ -713,21 +713,20 @@ defmodule AshQuick.LiveView.FormUtils do
         {:halt, put_flash(socket, :error, ActionErrors.user_facing_message(error))}
 
       {:error, form} ->
-        forms = form_tree(form, Map.get(socket.assigns, :scope))
-        log_failed_save(socket, fn -> describe_failed_save(forms) end)
+        log_failed_save(socket, fn -> describe_failed_save(form) end)
 
-        case input_errors(forms) do
+        case input_errors(form) do
           # Nothing to say about any input, on the form or any sub-form: the
           # failure is said as every other surface says it. A policy refusing
           # the save is worded as one, in the policy's own words when it has
           # some, and nothing else is.
           [] ->
-            {:halt, put_flash(socket, :error, failed_save_message(forms))}
+            {:halt, put_flash(socket, :error, failed_save_message(form))}
 
           # The form stays open, so its next validate runs under the validate stage.
           _errors ->
-            form = put_stage(form, AshQuick.form_validate_stage())
-            {:halt, socket |> assign(form: form) |> flash_unplaced_errors(forms)}
+            socket = flash_unplaced_errors(socket, form, Map.get(socket.assigns, :scope))
+            {:halt, assign(socket, form: put_stage(form, AshQuick.form_validate_stage()))}
         end
     end
   end
@@ -785,11 +784,11 @@ defmodule AshQuick.LiveView.FormUtils do
     end)
   end
 
-  defp describe_failed_save(forms) do
-    case input_errors(forms) do
+  defp describe_failed_save(form) do
+    case input_errors(form) do
       [] ->
         modules =
-          forms
+          form
           |> raw_errors()
           |> Enum.map_join(", ", fn
             %module{} -> inspect(module)
@@ -803,62 +802,23 @@ defmodule AshQuick.LiveView.FormUtils do
     end
   end
 
-  # The form and every sub-form under it, walked the way AshPhoenix walks them
-  # for their errors: an emptied slot (`nil` once `remove_form/2` takes a
-  # single sub-form, `[]` for a list) holds no form. Each is held with its path
-  # from the root and the inputs the page draws for it. A sub-form under a field
-  # this actor cannot see is still built, and can refuse the save, but the page
-  # draws none of its inputs, so it is held with none. The inputs are worked
-  # out once per resource and action, not once per item.
-  defp form_tree(form, scope) do
-    {forms, _inputs_by_action} = form_tree(form, [], true, scope, %{})
-    forms
-  end
-
-  defp form_tree(form, path, drawn?, scope, inputs_by_action) do
-    key = {form.resource, form.action}
-
-    {inputs, inputs_by_action} =
-      case inputs_by_action do
-        %{^key => inputs} -> {inputs, inputs_by_action}
-        _ -> input_names(form, scope) |> then(&{&1, Map.put(inputs_by_action, key, &1)})
-      end
-
-    held = %{form: form, path: path, inputs: if(drawn?, do: inputs, else: MapSet.new())}
-
-    {sub_forms, inputs_by_action} =
-      form.forms
-      |> Enum.sort_by(&elem(&1, 0))
-      |> Enum.flat_map(fn {field, slot} ->
-        slot |> sub_form_slots(path ++ [field]) |> Enum.map(&{&1, drawn? and field in inputs})
-      end)
-      |> Enum.flat_map_reduce(inputs_by_action, fn {{sub_form, sub_path}, drawn?}, acc ->
-        form_tree(sub_form, sub_path, drawn?, scope, acc)
-      end)
-
-    {[held | sub_forms], inputs_by_action}
-  end
-
-  defp sub_form_slots(nil, _path), do: []
-
-  defp sub_form_slots(forms, path) when is_list(forms),
-    do: forms |> Enum.with_index() |> Enum.map(fn {form, index} -> {form, path ++ [index]} end)
-
-  defp sub_form_slots(form, path), do: [{form, path}]
-
   # Every input error on the form and its sub-forms, each named by its field
   # under the path of the form it is on (`items[0].status`). An error a
   # sub-form's changeset refuses is filed on that sub-form, never on the root,
-  # so `AshPhoenix.Form.errors/1` on the root alone misses it.
-  defp input_errors(forms) do
-    Enum.flat_map(forms, fn %{form: form, path: path} ->
-      form
-      |> AshPhoenix.Form.errors()
-      |> Enum.map(fn {field, message} -> {field_path(path, field), message} end)
+  # so the root's own errors miss it: AshPhoenix walks the whole tree for them.
+  defp input_errors(form) do
+    form
+    |> AshPhoenix.Form.errors(for_path: :all)
+    |> Enum.flat_map(fn {path, errors} ->
+      Enum.map(errors, fn {field, message} -> {field_path(path, field), message} end)
     end)
   end
 
-  defp raw_errors(forms), do: Enum.flat_map(forms, &AshPhoenix.Form.raw_errors(&1.form))
+  # An error AshPhoenix keeps on the root at a sub-form's path is also copied
+  # onto that sub-form, so the same error can be here twice. Each is worded
+  # the same either way, and every message below says a sentence once.
+  defp raw_errors(form),
+    do: form |> AshPhoenix.Form.raw_errors(for_path: :all) |> Map.values() |> List.flatten()
 
   defp field_path(path, field) do
     path
@@ -876,8 +836,8 @@ defmodule AshQuick.LiveView.FormUtils do
   # The root holds what the action returned; a sub-form refused before the
   # action ran holds its own refusal. No error anywhere explains nothing, so it
   # is not put down to the policy either.
-  defp failed_save_message(forms) do
-    case raw_errors(forms) do
+  defp failed_save_message(form) do
+    case raw_errors(form) do
       [] -> ActionErrors.generic_message()
       errors -> errors |> Ash.Error.to_error_class() |> ActionErrors.user_facing_message()
     end
@@ -893,12 +853,14 @@ defmodule AshQuick.LiveView.FormUtils do
   # belongs, not on how many there are. A sub-form's errors are held to the
   # inputs the page draws for it, and each flashed one says which item it is
   # about: "Items 2 › Note: is hidden".
-  defp flash_unplaced_errors(socket, forms) do
-    forms
-    |> Enum.flat_map(fn %{form: form, path: path, inputs: inputs} ->
-      form
-      |> AshPhoenix.Form.raw_errors()
-      |> ActionErrors.unplaced_sentences(inputs)
+  defp flash_unplaced_errors(socket, form, scope) do
+    form
+    |> AshPhoenix.Form.raw_errors(for_path: :all)
+    # A map past 32 keys iterates in hash order; the page reads top to bottom.
+    |> Enum.sort_by(&elem(&1, 0))
+    |> Enum.flat_map(fn {path, errors} ->
+      errors
+      |> ActionErrors.unplaced_sentences(drawn_inputs(form, path, scope))
       |> Enum.map(&located(&1, path))
     end)
     |> Enum.uniq()
@@ -920,6 +882,25 @@ defmodule AshQuick.LiveView.FormUtils do
     end)
     |> Enum.reverse()
     |> Enum.join(" › ")
+  end
+
+  # The inputs the page draws for the sub-form at `path`, a path as AshPhoenix
+  # files errors under: each field is a key of `form.forms`, followed by the
+  # item's index when it holds a list. A sub-form under a field this actor
+  # cannot see is still built, and can refuse the save, but the page draws none
+  # of its inputs.
+  defp drawn_inputs(form, [], scope), do: input_names(form, scope)
+
+  defp drawn_inputs(form, [field | path], scope) do
+    {sub_form, path} =
+      case {Map.fetch!(form.forms, field), path} do
+        {forms, [index | path]} when is_list(forms) -> {Enum.at(forms, index), path}
+        {sub_form, path} -> {sub_form, path}
+      end
+
+    if field in input_names(form, scope),
+      do: drawn_inputs(sub_form, path, scope),
+      else: MapSet.new()
   end
 
   # A belongs_to is offered as its relationship, and its errors are filed under
