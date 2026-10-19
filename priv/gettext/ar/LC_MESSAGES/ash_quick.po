@@ -57,12 +57,12 @@ msgstr "بحث متقدم"
 msgid "Apply Filters"
 msgstr "تطبيق البحث"
 
-#: lib/ash_quick/liveview/components/details_view.ex
-#: lib/ash_quick/liveview/components/list_view.ex
+#: lib/ash_quick/liveview/components/form_view.ex
 #, elixir-autogen, elixir-format
 msgid "Are you sure?"
 msgstr "هل أنت متأكد؟"
 
+#: lib/ash_quick/liveview/components/action_modal.ex
 #: lib/ash_quick/liveview/components/list_view.ex
 #, elixir-autogen, elixir-format
 msgid "Close"
@@ -108,11 +108,6 @@ msgstr "تم تصدير البيانات بنجاح!"
 msgid "Download"
 msgstr "تنزيل"
 
-#: lib/ash_quick/liveview/components/print_modal.ex
-#, elixir-autogen, elixir-format
-msgid "Download PDF"
-msgstr "تنزيل ملف PDF"
-
 #: lib/ash_quick/liveview/components/impersonation_banner.ex
 #, elixir-autogen, elixir-format
 msgid "End"
@@ -138,11 +133,6 @@ msgstr "تصدير"
 msgid "Failed to export"
 msgstr "تعذّر التصدير"
 
-#: lib/ash_quick/liveview/components/print_modal.ex
-#, elixir-autogen, elixir-format
-msgid "Failed to generate PDF"
-msgstr "تعذّر إنشاء ملف PDF"
-
 #: lib/ash_quick/liveview/components/list_view.ex
 #, elixir-autogen, elixir-format
 msgid "Filter"
@@ -152,11 +142,6 @@ msgstr "فلتر"
 #, elixir-autogen, elixir-format
 msgid "Generating Data ..."
 msgstr "جارٍ تجهيز البيانات..."
-
-#: lib/ash_quick/liveview/components/print_modal.ex
-#, elixir-autogen, elixir-format
-msgid "Generating PDF ..."
-msgstr "جارٍ إنشاء ملف PDF ..."
 
 #: lib/ash_quick/liveview/components/form_view.ex
 #, elixir-autogen, elixir-format
@@ -253,22 +238,10 @@ msgstr "أو"
 msgid "Open as them"
 msgstr "الدخول بحسابه"
 
-#: lib/ash_quick/liveview/components/print_modal.ex
-#, elixir-autogen, elixir-format
-msgid "PDF generated successfully!"
-msgstr "تم إنشاء ملف PDF بنجاح!"
-
 #: lib/ash_quick/liveview/components/list_view.ex
 #, elixir-autogen, elixir-format
 msgid "Previous page"
 msgstr "الصفحة السابقة"
-
-#: lib/ash_quick/liveview/components/details_view.ex
-#: lib/ash_quick/liveview/components/list_view.ex
-#: lib/ash_quick/liveview/components/print_modal.ex
-#, elixir-autogen, elixir-format
-msgid "Print"
-msgstr "طباعة"
 
 #: lib/ash_quick/components.ex
 #, elixir-autogen, elixir-format
@@ -407,7 +380,6 @@ msgid "cancel"
 msgstr "إلغاء"
 
 #: lib/ash_quick/liveview/components/list_view.ex
-#: lib/ash_quick/liveview/components/print_modal.ex
 #, elixir-autogen, elixir-format
 msgid "close"
 msgstr "إغلاق"
@@ -482,3 +454,25 @@ msgstr "أفلتها هنا أو"
 #, elixir-autogen, elixir-format
 msgid "Hidden"
 msgstr "مخفي"
+
+#: lib/ash_quick/liveview/components/bulk_action_view.ex
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Applies to 1 selected row."
+msgid_plural "Applies to %{count} selected rows."
+msgstr[0] "لا ينطبق على أي صف محدد."
+msgstr[1] "ينطبق على صف محدد واحد."
+msgstr[2] "ينطبق على صفين محددين."
+msgstr[3] "ينطبق على %{count} صفوف محددة."
+msgstr[4] "ينطبق على %{count} صفًا محددًا."
+msgstr[5] "ينطبق على %{count} صف محدد."
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Cancel"
+msgstr "إلغاء"
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Confirm"
+msgstr "تأكيد"

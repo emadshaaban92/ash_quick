@@ -53,12 +53,12 @@ msgstr ""
 msgid "Apply Filters"
 msgstr ""
 
-#: lib/ash_quick/liveview/components/details_view.ex
-#: lib/ash_quick/liveview/components/list_view.ex
+#: lib/ash_quick/liveview/components/form_view.ex
 #, elixir-autogen, elixir-format
 msgid "Are you sure?"
 msgstr ""
 
+#: lib/ash_quick/liveview/components/action_modal.ex
 #: lib/ash_quick/liveview/components/list_view.ex
 #, elixir-autogen, elixir-format
 msgid "Close"
@@ -104,11 +104,6 @@ msgstr ""
 msgid "Download"
 msgstr ""
 
-#: lib/ash_quick/liveview/components/print_modal.ex
-#, elixir-autogen, elixir-format
-msgid "Download PDF"
-msgstr ""
-
 #: lib/ash_quick/liveview/components/impersonation_banner.ex
 #, elixir-autogen, elixir-format
 msgid "End"
@@ -134,11 +129,6 @@ msgstr ""
 msgid "Failed to export"
 msgstr ""
 
-#: lib/ash_quick/liveview/components/print_modal.ex
-#, elixir-autogen, elixir-format
-msgid "Failed to generate PDF"
-msgstr ""
-
 #: lib/ash_quick/liveview/components/list_view.ex
 #, elixir-autogen, elixir-format
 msgid "Filter"
@@ -147,11 +137,6 @@ msgstr ""
 #: lib/ash_quick/liveview/components/list_view.ex
 #, elixir-autogen, elixir-format
 msgid "Generating Data ..."
-msgstr ""
-
-#: lib/ash_quick/liveview/components/print_modal.ex
-#, elixir-autogen, elixir-format
-msgid "Generating PDF ..."
 msgstr ""
 
 #: lib/ash_quick/liveview/components/form_view.ex
@@ -249,21 +234,9 @@ msgstr ""
 msgid "Open as them"
 msgstr ""
 
-#: lib/ash_quick/liveview/components/print_modal.ex
-#, elixir-autogen, elixir-format
-msgid "PDF generated successfully!"
-msgstr ""
-
 #: lib/ash_quick/liveview/components/list_view.ex
 #, elixir-autogen, elixir-format
 msgid "Previous page"
-msgstr ""
-
-#: lib/ash_quick/liveview/components/details_view.ex
-#: lib/ash_quick/liveview/components/list_view.ex
-#: lib/ash_quick/liveview/components/print_modal.ex
-#, elixir-autogen, elixir-format
-msgid "Print"
 msgstr ""
 
 #: lib/ash_quick/components.ex
@@ -403,7 +376,6 @@ msgid "cancel"
 msgstr ""
 
 #: lib/ash_quick/liveview/components/list_view.ex
-#: lib/ash_quick/liveview/components/print_modal.ex
 #, elixir-autogen, elixir-format
 msgid "close"
 msgstr ""
@@ -477,4 +449,22 @@ msgstr ""
 #: lib/ash_quick/liveview/components/field_value.ex
 #, elixir-autogen, elixir-format
 msgid "Hidden"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/bulk_action_view.ex
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Applies to 1 selected row."
+msgid_plural "Applies to %{count} selected rows."
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Cancel"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Confirm"
 msgstr ""
