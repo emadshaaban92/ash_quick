@@ -176,6 +176,16 @@
 
 ### Bug fixes
 
+- **Dates and times read as formatted on the list and the details page.** A
+  `:date`, `:time` or `:naive_datetime` field printed as ISO 8601
+  (`2026-10-19`) where a `:utc_datetime` read as `AshQuick.Config` formats it
+  (`Oct 19, 2026, 7:54:10 PM` with Localize). Each now reads the same way: a
+  date as `AshQuick.Config.format_date/1` (`Oct 19, 2026`), a time as
+  `format_time/2` with seconds, and a naive datetime as `format_datetime/1`,
+  which now takes one and leaves it unshifted, since it names no zone; so does
+  a `Time` passed to `format_time/2`. An export writes times and naive
+  datetimes the same way, as it already did dates and datetimes.
+
 - **A list reached through `?action=` keeps working past its first page.** A
   list other than the page's default, opened at `?action=<read>`, wrote its
   pager, search, filter and custom-filter links as `<base>/<read>`, which the

@@ -120,9 +120,30 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     """
   end
 
+  # Dates and times read the way `AshQuick.Config` formats them, the same as
+  # an export writes them. Left to `Phoenix.HTML.Safe`, a `Date`, `Time` or
+  # `NaiveDateTime` would print as ISO 8601 instead.
   def field_value(%{value: %DateTime{}} = assigns) do
     ~H"""
     <span>{AshQuick.Config.format_datetime(@value)}</span>
+    """
+  end
+
+  def field_value(%{value: %NaiveDateTime{}} = assigns) do
+    ~H"""
+    <span>{AshQuick.Config.format_datetime(@value)}</span>
+    """
+  end
+
+  def field_value(%{value: %Date{}} = assigns) do
+    ~H"""
+    <span>{AshQuick.Config.format_date(@value)}</span>
+    """
+  end
+
+  def field_value(%{value: %Time{}} = assigns) do
+    ~H"""
+    <span>{AshQuick.Config.format_time(@value, format: :medium)}</span>
     """
   end
 

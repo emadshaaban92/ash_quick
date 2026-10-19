@@ -41,6 +41,7 @@ config :ash_quick,
       unreachable_entry: [
         "/test/bulk_guarded",
         "/test/bulk_named",
+        "/test/dated_entries",
         "/test/default_pages",
         "/test/digits_only",
         "/test/enum_picks",
