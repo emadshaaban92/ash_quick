@@ -9,8 +9,8 @@ end
 
 defmodule Example.Test.DefaultPages do
   @moduledoc """
-  A resource whose list action opens at two rows and allows up to five, and a
-  page over it.
+  A resource whose list action opens at two rows and allows up to five, a
+  second list opening at three, and a page over it.
 
   A QuickView list nobody sized reads its action's `default_limit`. Every list
   in this application sets 20, the same number the page falls back to, so the
@@ -36,6 +36,20 @@ defmodule Example.Test.DefaultPages do
         keyset? true
         offset? true
         default_limit 2
+        max_page_size 5
+        countable :by_default
+      end
+    end
+
+    read :newest_first do
+      argument :search, :string
+
+      prepare build(sort: [code: :desc])
+
+      pagination do
+        keyset? true
+        offset? true
+        default_limit 3
         max_page_size 5
         countable :by_default
       end

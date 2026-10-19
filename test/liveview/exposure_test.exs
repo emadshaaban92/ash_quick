@@ -126,7 +126,7 @@ defmodule AshQuick.LiveView.ExposureTest do
           options: options,
           fields: options.details_fields,
           base_path: "/payslips",
-          params: %URLParams{}
+          params: %URLParams{default_limit: 20}
         }
         |> DetailsView.details_view()
         |> rendered_to_string()
@@ -205,7 +205,7 @@ defmodule AshQuick.LiveView.ExposureTest do
         scope: @actor,
         path: "/payslips",
         base_path: "/payslips",
-        params: %URLParams{},
+        params: %URLParams{default_limit: 20},
         routed_shapes: [],
         filters: nil,
         selected_rows: %{},
