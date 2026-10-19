@@ -1,5 +1,6 @@
 defmodule AshQuick.LiveView.URLParams do
   @moduledoc false
+  alias Ash.Resource.Actions.Read.Pagination
   alias AshQuick.LiveView.CustomFilter
 
   @default_limit 20
@@ -13,7 +14,8 @@ defmodule AshQuick.LiveView.URLParams do
             custom_filter: nil,
             read_args: %{},
             show_custom_filter: false,
-            limit_ceiling: nil
+            limit_given?: false,
+            default_limit: @default_limit
 
   @doc """
   Reads a QuickView's state out of the query string.
@@ -24,10 +26,13 @@ defmodule AshQuick.LiveView.URLParams do
   one that will parse is still held to what it may say.
   """
   def from_url_params(params) do
+    limit = params |> Map.get("limit") |> parse_limit()
+
     %__MODULE__{
       id: Map.get(params, "id"),
       action: params |> Map.get("action") |> parse_action(),
-      limit: params |> Map.get("limit") |> parse_limit(),
+      limit: limit || @default_limit,
+      limit_given?: limit != nil,
       page: params |> Map.get("page") |> parse_page(),
       search: params |> Map.get("search") |> parse_search(),
       selected_filters: params |> Map.get("selected_filters") |> parse_selected_filters(),
@@ -50,22 +55,33 @@ defmodule AshQuick.LiveView.URLParams do
   defp parse_action(_), do: nil
 
   # Not clamped here: nothing here knows the list action, whose
-  # `pagination.max_page_size` is the ceiling. See `clamp_limit/2`.
+  # `pagination.max_page_size` is the ceiling. See `apply_pagination/2`.
+  #
+  # `nil` is a URL that did not say: the page's default is the action's
+  # `default_limit`, which is not known here either, so the struct remembers
+  # that the limit it holds is a stand-in.
   defp parse_limit(limit) when is_binary(limit) do
     case Integer.parse(limit) do
       {limit, ""} -> max(limit, 1)
-      _ -> @default_limit
+      _ -> nil
     end
   end
 
-  defp parse_limit(_), do: @default_limit
+  defp parse_limit(_), do: nil
 
   @doc """
-  Holds the limit to a list action's `pagination.max_page_size`.
+  Sizes the page by a list action's `pagination`: a URL that names no limit
+  reads the action's `default_limit`, and every limit is held to its
+  `max_page_size`.
 
-  Clamped, not refused: raising the page size by hand is supported (the row
-  actions menu resolves lazily so it stays cheap), but how far is the action's
-  answer rather than the visitor's.
+  The default is held to the ceiling like any other limit. A QuickView only
+  lists through an action with a `default_limit` (`AshQuick.Lookup.Contract`
+  refuses one without), so the fallback to #{@default_limit} rows only guards a
+  direct caller passing pagination that has none.
+
+  The ceiling is clamped, not refused: raising the page size by hand is
+  supported (the row actions menu resolves lazily so it stays cheap), but how
+  far is the action's answer rather than the visitor's.
 
   Ash clamps the read to the same number, so this is not what bounds it. It is
   what keeps the page honest about it: the offset is `page` times this limit,
@@ -77,28 +93,30 @@ defmodule AshQuick.LiveView.URLParams do
   than while parsing against the one the URL asked for: that one can only be
   larger, and would cut the page short.
   """
-  def clamp_limit(%__MODULE__{} = params, ceiling) when is_integer(ceiling) do
-    limit = min(params.limit, ceiling)
+  def apply_pagination(
+        %__MODULE__{} = params,
+        %Pagination{max_page_size: ceiling, default_limit: default_limit}
+      )
+      when is_integer(ceiling) do
+    # A lowered ceiling is a smaller page, and the request nobody typed a limit
+    # into is a request like any other: its limit is the clamped default.
+    default = min(default_limit || @default_limit, ceiling)
+    limit = if params.limit_given?, do: min(params.limit, ceiling), else: default
 
     %__MODULE__{
       params
       | limit: limit,
         page: min(params.page, max_page(limit)),
-        limit_ceiling: ceiling
+        default_limit: default
     }
   end
-
-  # A lowered ceiling is a smaller page, and the request nobody typed a limit
-  # into is a request like any other: its limit is the clamped default.
-  defp default_limit(%__MODULE__{limit_ceiling: nil}), do: @default_limit
-  defp default_limit(%__MODULE__{limit_ceiling: ceiling}), do: min(@default_limit, ceiling)
 
   # Bounded against the limit rather than on its own, because a page is only
   # read as an offset: `ListUtils.get_offset/2` multiplies the two, and the data
   # layer refuses a product outside a 64-bit integer. Nothing real is lost — a
   # page past the end of the data lists nothing at any depth.
   #
-  # Parsed against a page of one row, the most any limit allows; `clamp_limit/2`
+  # Parsed against a page of one row, the most any limit allows; `apply_pagination/2`
   # bounds it against the limit the list reads at, which is the only read that
   # turns a page into an offset.
   @max_offset 1_000_000_000
@@ -216,11 +234,11 @@ defmodule AshQuick.LiveView.URLParams do
     |> maybe_put_show_custom_filter(params)
   end
 
-  # Against the effective default rather than the literal one: under a lowered
-  # ceiling the limit a bare path reads is the clamped one, so that is the
-  # limit a path may leave unsaid.
-  defp maybe_put_limit(params_for_path, %{limit: limit} = params) do
-    if limit == default_limit(params) do
+  # Against the effective default rather than the literal one: the limit a
+  # bare path reads is the action's `default_limit`, clamped to its ceiling, so
+  # that is the limit a path may leave unsaid.
+  defp maybe_put_limit(params_for_path, %{limit: limit, default_limit: default}) do
+    if limit == default do
       params_for_path
     else
       Map.put(params_for_path, "limit", limit)

@@ -99,6 +99,7 @@ defmodule ExampleWeb.Router do
         ] do
         quick_view "/bulk_guarded", Example.Test.BulkGuardedLive.Quick
         quick_view "/bulk_named", Example.Test.BulkNamedLive.Quick
+        quick_view "/default_pages", Example.Test.DefaultPagesLive.Quick
         quick_view "/digits_only", Example.Test.DigitsOnlyLive.Quick
         quick_view "/enum_picks", Example.Test.EnumPicksLive.Quick
         quick_view "/form_stages", Example.Test.FormStagesLive.Quick

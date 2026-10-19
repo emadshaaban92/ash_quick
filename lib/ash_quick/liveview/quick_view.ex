@@ -785,7 +785,7 @@ defmodule AshQuick.LiveView.QuickView do
       params |> action_from_params(options, nil) |> then(&resolve_parent(options, &1, params))
 
     if parent_action do
-      params = clamp_limit(params, parent_action)
+      params = apply_pagination(params, parent_action)
 
       parent =
         socket
@@ -983,15 +983,31 @@ defmodule AshQuick.LiveView.QuickView do
       if reachable?(options, action_name),
         do: resolved_action(options.resource, action_name, params)
 
-    {clamp_limit(params, action), action}
+    {paginate(params, action, options), action}
   end
 
-  # A list reads at most its action's `max_page_size`, so that is the most its
-  # page may say it reads. See `URLParams.clamp_limit/2`.
-  defp clamp_limit(%URLParams{id: nil} = params, %Actions.Read{pagination: %{} = pagination}),
-    do: URLParams.clamp_limit(params, pagination.max_page_size)
+  # Every page is sized by a list: a list page by its own action, and a record
+  # or create page by the list it links back to, which is the default one. So
+  # a record page holding `?limit=20` under a list whose default is 2 says so
+  # in every link back, rather than measuring it against a default no list has.
+  defp paginate(%URLParams{id: nil} = params, %Actions.Read{get?: false} = action, _options),
+    do: size_by(params, action)
 
-  defp clamp_limit(params, _action), do: params
+  defp paginate(params, _action, %Options{} = options),
+    do: size_by(params, Ash.Resource.Info.action(options.resource, options.list_default_action))
+
+  # The page behind a modal is sized only when it is a list. A record page
+  # behind an update keeps the size `paginate/3` gave it.
+  defp apply_pagination(%URLParams{id: nil} = params, action), do: size_by(params, action)
+  defp apply_pagination(params, _action), do: params
+
+  # A list reads its action's `default_limit` unless the URL says otherwise, and
+  # at most its `max_page_size`, so that is the most its page may say it reads.
+  # See `URLParams.apply_pagination/2`.
+  defp size_by(params, %Actions.Read{pagination: %{} = pagination}),
+    do: URLParams.apply_pagination(params, pagination)
+
+  defp size_by(params, _action), do: params
 
   # A URL names actions on the visitor's behalf, so it reaches only public
   # ones. See `AshQuick.LiveView.Utils.record_actions/1` for what a private
