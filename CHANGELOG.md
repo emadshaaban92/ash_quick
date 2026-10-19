@@ -176,6 +176,15 @@
 
 ### Bug fixes
 
+- **A list reached through `?action=` keeps working past its first page.** A
+  list other than the page's default, opened at `?action=<read>`, wrote its
+  pager, search, filter and custom-filter links as `<base>/<read>`, which the
+  router serves as a record page, so every one of them led to a 404. A link
+  for an action with no record id other than `:create` now names the action
+  in the query over the base path, `<base>?action=<read>&page=2`, and the list
+  stays the one named. A second create action, at
+  `<base>/create?action=<create>`, is reached as before.
+
 - **A failed save says why, sub-forms included, and is called a refusal only
   when it is one.** An error from a nested form, such as an item of a
   `manage_relationship` argument whose own create refuses a value, is filed at

@@ -179,10 +179,13 @@ defmodule AshQuick.LiveView.URLParams do
     |> String.trim_trailing("?")
   end
 
-  defp path_no_params(base_path, %__MODULE__{id: nil, action: nil}), do: base_path
+  # `/create` is the only route shape with no id, so any other action without
+  # one, a second list or a second create, is named in the query over the base
+  # path. See `maybe_put_action/2`.
+  defp path_no_params(base_path, %__MODULE__{id: nil, action: :create}),
+    do: "#{base_path}/create"
 
-  defp path_no_params(base_path, %__MODULE__{id: nil, action: action}) when action != nil,
-    do: "#{base_path}/#{action}"
+  defp path_no_params(base_path, %__MODULE__{id: nil}), do: base_path
 
   defp path_no_params(base_path, %__MODULE__{id: id, action: nil}) when id != nil,
     do: "#{base_path}/#{id}"
@@ -227,6 +230,7 @@ defmodule AshQuick.LiveView.URLParams do
 
   defp params_for_path(params) do
     %{}
+    |> maybe_put_action(params)
     |> maybe_put_limit(params)
     |> maybe_put_page(params)
     |> maybe_put_search(params)
@@ -235,6 +239,12 @@ defmodule AshQuick.LiveView.URLParams do
     |> maybe_put_read_args(params)
     |> maybe_put_show_custom_filter(params)
   end
+
+  defp maybe_put_action(params_for_path, %{id: nil, action: action})
+       when action not in [nil, :create],
+       do: Map.put(params_for_path, "action", action)
+
+  defp maybe_put_action(params_for_path, _params), do: params_for_path
 
   # Against the effective default rather than the literal one: the limit a
   # bare path reads is the action's `default_limit`, clamped to its ceiling, so
