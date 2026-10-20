@@ -4,6 +4,15 @@
 
 ### Features
 
+- **Each field on a details page names itself.** A details row carries
+  `data-field` with the field's path, `.`-joined for a relationship path
+  (`[vehicle: :chassis_number]` is `"vehicle.chassis_number"`), so a test can
+  assert on one field with
+  `assert_has(~s([data-field="name"] dd), text: value, exact: true)` instead
+  of matching rendered HTML. The name is
+  `AshQuick.LiveView.QuickField.data_field/1`, public for a custom details
+  template to put on its own rows.
+
 - **A list's page size can be picked from the page.** A "Rows per page"
   select beside the footer's count offers the list action's `default_limit`,
   then each of 10, 25, 50, 100 and 250 that is at least twice it and within

@@ -1,22 +1,35 @@
 defmodule AshQuick.LiveView.QuickField do
-  @moduledoc false
+  @moduledoc """
+  A field on a QuickView page: what a `:fields` entry under `:list` or
+  `:details` is normalized to before it is rendered.
+
+  Its struct is internal. What a host reaches for here is `data_field/1`, the
+  name the details page gives each of its rows, and `resolve_value/2`, the
+  value a widget is handed.
+  """
   alias AshQuick.LiveView.Utils
 
-  defstruct [:path, :label, :widget]
+  defstruct [:path, :label, :widget, :data_field]
 
-  def normalize(field) when is_atom(field) do
+  @doc false
+  def normalize(spec) do
+    field = build(spec)
+    %{field | data_field: path_name(field.path)}
+  end
+
+  defp build(field) when is_atom(field) do
     %__MODULE__{path: field, label: Utils.humanize(field)}
   end
 
-  def normalize([{_relationship, _nested}] = path) do
+  defp build([{_relationship, _nested}] = path) do
     %__MODULE__{path: path, label: label_from_path(path)}
   end
 
-  def normalize({path, label}) when is_binary(label) do
+  defp build({path, label}) when is_binary(label) do
     %__MODULE__{path: normalize_path(path), label: label}
   end
 
-  def normalize({path, opts}) when is_atom(path) and is_list(opts) do
+  defp build({path, opts}) when is_atom(path) and is_list(opts) do
     if Keyword.keyword?(opts) do
       %__MODULE__{
         path: path,
@@ -28,7 +41,7 @@ defmodule AshQuick.LiveView.QuickField do
     end
   end
 
-  def normalize({[{_, _}] = path, opts}) when is_list(opts) do
+  defp build({[{_, _}] = path, opts}) when is_list(opts) do
     if Keyword.keyword?(opts) do
       %__MODULE__{
         path: path,
@@ -60,6 +73,47 @@ defmodule AshQuick.LiveView.QuickField do
 
   defp normalize_path(path) when is_atom(path), do: path
   defp normalize_path([{_relationship, _nested}] = path), do: path
+
+  @doc """
+  The name of a field's path, as the details page puts it on the field's row in
+  a `data-field` attribute.
+
+  Takes a field as written under `:fields`, label and options included, and
+  reads it as the details page does. A relationship path joins every segment
+  with `.`:
+
+      iex> AshQuick.LiveView.QuickField.data_field(:licence_holder_name)
+      "licence_holder_name"
+
+      iex> AshQuick.LiveView.QuickField.data_field([vehicle: :chassis_number])
+      "vehicle.chassis_number"
+
+      iex> AshQuick.LiveView.QuickField.data_field([vehicle: [owner: :name]])
+      "vehicle.owner.name"
+
+      iex> AshQuick.LiveView.QuickField.data_field({:code, label: "Reference"})
+      "code"
+
+  The name comes from the path alone, so it does not move when a label is
+  reworded or translated. It is not unique on a page — one field can be listed
+  twice — which is why it is an attribute and not an `id`.
+
+  A custom details template that draws its own rows can put the same attribute
+  on them, so a test reads both pages the same way:
+
+      <div data-field={AshQuick.LiveView.QuickField.data_field(:licence_holder_name)}>
+  """
+  def data_field(%__MODULE__{data_field: name}) when is_binary(name), do: name
+  def data_field(%__MODULE__{path: path}), do: path_name(path)
+  def data_field(spec), do: normalize(spec).data_field
+
+  defp path_name(path), do: path |> segments() |> Enum.join(".")
+
+  # `[owner: []]` renders the related record itself, so its row is `"owner"`.
+  defp segments([]), do: []
+  defp segments(field) when is_atom(field), do: [Atom.to_string(field)]
+  defp segments([nested]), do: segments(nested)
+  defp segments({relationship, nested}), do: [Atom.to_string(relationship) | segments(nested)]
 
   defp label_from_path([{_relationship, nested}]) when is_atom(nested) do
     Utils.humanize(nested)

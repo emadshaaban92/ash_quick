@@ -517,6 +517,30 @@ surfaces probe for actions they merely hope are there.
 Custom QuickView templates should call `AshQuick.can?/4` rather than a bare
 `Ash.can?/2`, so their controls participate in the same policies.
 
+## Testing a details page
+
+Each row on a QuickView details page carries a `data-field` attribute naming
+the field's path: `:licence_holder_name` is `data-field="licence_holder_name"`,
+and a relationship path joins every segment with `.`, so
+`[vehicle: :chassis_number]` is `data-field="vehicle.chassis_number"`. The
+name comes from the path, not the label, so rewording or translating a label
+does not move it. A test asserts on one field's value with a plain selector:
+
+```elixir
+assert_has(session, ~s([data-field="licence_holder_name"] dd), text: value, exact: true)
+assert_has(session, ~s([data-field="vehicle.chassis_number"] dd), text: vin, exact: true)
+```
+
+Always quote the name in the selector: a `.` and the `?` or `!` that end many
+Ash attribute names (`active?`) are not valid in a bare CSS identifier.
+
+PhoenixTest compares the visible text, so a value holding `'` or `&` matches as
+it reads rather than as it is escaped in the HTML, and `exact: true` keeps the
+assertion to exactly that value. A field can be listed twice on a page, so the
+attribute is not an `id`. A custom details template that draws its own rows
+can put the same attribute on them with
+`AshQuick.LiveView.QuickField.data_field/1`.
+
 ## Checking a host in CI
 
 A Spark verifier sees one resource's DSL and refuses to compile it if something
