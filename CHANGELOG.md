@@ -192,6 +192,13 @@
   is extracted again (dropping the print modal's messages, whose component is
   gone), and CI now fails when it falls behind the code.
 
+- **Without Localize, dates and datetimes read as dates and times.** A host
+  without the optional `localize` dependency got `format_datetime/1` as
+  `26-03-04-05-06-07` and `format_date/1` as `26-03-04`: a two-digit year, and
+  a time whose fields read as more of the date. They now read
+  `2026-03-04 05:06:07` and `2026-03-04`. Export and print file names keep
+  their dashed stamp.
+
 - **Dates and times read as formatted on the list and the details page.** A
   `:date`, `:time` or `:naive_datetime` field printed as ISO 8601
   (`2026-10-19`) where a `:utc_datetime` read as `AshQuick.Config` formats it
