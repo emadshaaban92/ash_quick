@@ -54,8 +54,17 @@ defmodule Example.Uploads.FileObject do
     define :by_keys, action: :by_keys, args: [:keys]
   end
 
+  # Every write after custody is the pipeline's, run with `authorize?: false`:
+  # `public? false` keeps them off this read-only page, whose details view
+  # would otherwise offer each one as a button leading to
+  # `/file_objects/:id/<action>`, a route it does not serve.
   actions do
-    defaults [:read, :destroy]
+    defaults [:read]
+
+    destroy :destroy do
+      public? false
+      require_atomic? false
+    end
 
     read :index do
       argument :search, :string
@@ -113,6 +122,7 @@ defmodule Example.Uploads.FileObject do
     # `require_atomic? false` throughout: the audit change builds its row from
     # the changeset, which the atomic path never produces.
     update :release do
+      public? false
       accept []
       require_atomic? false
 
@@ -120,6 +130,7 @@ defmodule Example.Uploads.FileObject do
     end
 
     update :reject do
+      public? false
       accept []
       require_atomic? false
 
@@ -131,6 +142,7 @@ defmodule Example.Uploads.FileObject do
     # "was this ever attached to anything" is the question, and the first
     # answer settles it.
     update :reference do
+      public? false
       accept [:resource_name, :resource_id]
 
       require_atomic? false
@@ -150,12 +162,11 @@ defmodule Example.Uploads.FileObject do
   end
 
   policies do
-    # Stamped by `Example.Uploads.ObjectStore.object_referenced/4` with
-    # `authorize?: false`, and by nothing else. Left authorizable it renders as
-    # a button on the details page, and because it takes inputs that button
-    # patches to `/file_objects/:id/reference` — a route this read-only page
-    # does not serve. `mix ash_quick.check` reports exactly that.
-    policy action(:reference) do
+    # The writes after custody are the pipeline's, run with `authorize?:
+    # false`. `public? false` keeps them off the page, but authorizes nothing:
+    # without this, an admin actor calling `FileObject.reference/3` could stamp
+    # `referenced_at`, which the pipeline treats as settled once set.
+    policy action([:release, :reject, :reference, :destroy]) do
       forbid_if always()
     end
 

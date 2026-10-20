@@ -83,10 +83,7 @@ defmodule AshQuick.LiveView.Components.ListView do
             </div>
             <div class="w-full lg:w-auto flex flex-col sm:flex-row space-y-2 sm:space-y-0 items-stretch sm:items-center justify-end sm:space-x-3 shrink-0">
               <.new_button
-                :if={
-                  :create in @routed_shapes and
-                    AshQuick.can?({@resource, :create}, @scope, :ash_quick_list)
-                }
+                :if={:create in @routed_shapes and create_offered?(@resource, @scope)}
                 new_click={@new_click}
                 new_action_label={@new_action_label}
               />
@@ -341,6 +338,14 @@ defmodule AshQuick.LiveView.Components.ListView do
       </label>
     </.form>
     """
+  end
+
+  # The create page reaches only a public `:create` (see `reachable?/2` in
+  # QuickView), so a private one gets no button: it would open a page that
+  # refuses it.
+  defp create_offered?(resource, scope) do
+    Utils.public_action?(resource, :create) and
+      AshQuick.can?({resource, :create}, scope, :ash_quick_list)
   end
 
   defp new_button(assigns) do

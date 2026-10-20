@@ -1,5 +1,6 @@
 defmodule AshQuick.LiveView.QuickView.Options do
   @moduledoc false
+  alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.QuickField
   alias AshQuick.LiveView.Utils
   alias AshQuick.Lookup.Contract
@@ -108,6 +109,7 @@ defmodule AshQuick.LiveView.QuickView.Options do
     |> put_details_options(details_opts, default_attrs)
     |> put_form_options(opts[:form] || [])
     |> validate_lookups!()
+    |> validate_list_inputs!()
     |> validate_bulk_actions!()
   end
 
@@ -179,17 +181,130 @@ defmodule AshQuick.LiveView.QuickView.Options do
   # lookup action of it would refuse to compile a page over a search that
   # cannot happen.
   defp dropdown_destinations(%__MODULE__{resource: resource} = options) do
-    for action <- Ash.Resource.Info.public_actions(resource),
-        action.type in [:create, :update],
-        field <- Utils.action_fields(resource, action.name),
-        not is_nil(field),
-        not Map.has_key?(options.form_widgets, field.name),
+    for {action, field} <- form_fields(options, [:create, :update]),
         destination = destination(field, resource, action),
         not is_nil(destination),
         uniq: true do
       destination
     end
   end
+
+  # The fields this page's built-in inputs render on the public actions of
+  # `types`: a field a widget renders is the host's, and is never asked about.
+  defp form_fields(%__MODULE__{resource: resource} = options, types) do
+    for action <- Ash.Resource.Info.public_actions(resource),
+        action.type in types,
+        field <- Utils.action_fields(resource, action.name),
+        not is_nil(field),
+        not Map.has_key?(options.form_widgets, field.name),
+        do: {action, field}
+  end
+
+  # A form gives a list with no fixed set of values its generic text input
+  # (`FormView.field_input/1`'s last clause), which posts one string the list
+  # refuses: nothing on the form can save it, and an update form over a record
+  # already holding values cannot render them. Refused here rather than on the
+  # resource, because only the page knows which fields a widget renders.
+  #
+  # Every public create, update and destroy is walked, as for the dropdowns
+  # above: a QuickView reaches any of them through `?action=` or the modal.
+  defp validate_list_inputs!(%__MODULE__{resource: resource} = options) do
+    unsaveable =
+      for {action, field} <- form_fields(options, [:create, :update, :destroy]),
+          unsaveable_list?(field, resource, action),
+          do: {action.name, field}
+
+    if unsaveable != [] do
+      raise ArgumentError, """
+      #{inspect(options.module)}'s forms would offer #{inspect(resource)} lists \
+      they cannot save:
+
+      #{Enum.map_join(unsaveable, "\n", fn {action, field} -> "  * #{inspect(action)} takes #{inspect(field.name)}, #{inspect(field.type)}" end)}
+
+      A list with no fixed set of values to pick from gets a text input, which \
+      posts one string the list refuses. For each, name the values it may hold \
+      and it is picked from a select:
+
+          constraints: [items: [one_of: [:a, :b]]]
+
+      or type its items with an `Ash.Type.Enum`, render it with a form widget \
+      that posts a list:
+
+          form: [widgets: %{#{elem(hd(unsaveable), 1).name}: &__MODULE__.#{elem(hd(unsaveable), 1).name}_input/1}]
+
+      or leave it out of the action. A field restriction that hides it does not \
+      count: whether it hides the field depends on who opens the form, and the \
+      page is checked for anyone.
+      """
+    end
+
+    options
+  end
+
+  # The item types that reach the generic text input. An allowlist rather than
+  # "anything no other clause takes": embeds, unions and managed relationships
+  # get sub-forms from AshPhoenix, which is only known once a form is built.
+  # An id list argument is left out too: it is a relationship dropdown, or
+  # renders nothing at all.
+  @text_items [
+    Ash.Type.String,
+    Ash.Type.CiString,
+    Ash.Type.Atom,
+    Ash.Type.Module,
+    Ash.Type.Integer,
+    Ash.Type.Float,
+    Ash.Type.Decimal,
+    Ash.Type.Boolean,
+    Ash.Type.Date,
+    Ash.Type.Time,
+    Ash.Type.TimeUsec,
+    Ash.Type.DateTime,
+    Ash.Type.UtcDatetime,
+    Ash.Type.UtcDatetimeUsec,
+    Ash.Type.NaiveDatetime,
+    Ash.Type.Duration,
+    Ash.Type.UUID,
+    Ash.Type.UUIDv7,
+    Ash.Type.Binary,
+    Ash.Type.UrlEncodedBinary,
+    AshQuick.AshTypes.Text
+  ]
+
+  # Untyped items, which a text input cannot save either, unless the action
+  # manages a relationship through the argument: AshPhoenix then builds a
+  # sub-form for each.
+  @untyped_items [Ash.Type.Map, Ash.Type.Keyword, Ash.Type.Term]
+
+  defp unsaveable_list?(%Ash.Resource.Actions.Argument{type: {:array, item}}, _resource, _action)
+       when item in [Ash.Type.UUID, Ash.Type.UUIDv7],
+       do: false
+
+  defp unsaveable_list?(%{type: {:array, item}} = field, resource, action) do
+    cond do
+      not is_nil(EnumOptions.kind(field)) -> false
+      text_item?(item) -> true
+      untyped_item?(item) -> not Utils.managed_argument?(field, resource, action)
+      true -> false
+    end
+  end
+
+  defp unsaveable_list?(_field, _resource, _action), do: false
+
+  defp untyped_item?(item) when item in @untyped_items, do: true
+
+  defp untyped_item?(item) when is_atom(item) do
+    Ash.Type.NewType.new_type?(item) and untyped_item?(Ash.Type.NewType.subtype_of(item))
+  end
+
+  defp untyped_item?(_item), do: false
+
+  defp text_item?(item) when item in @text_items, do: true
+
+  defp text_item?(item) when is_atom(item) do
+    Ash.Type.NewType.new_type?(item) and text_item?(Ash.Type.NewType.subtype_of(item))
+  end
+
+  defp text_item?(_item), do: false
 
   defp destination(field, resource, action) do
     case Utils.argument_to_relationship(field, resource, action) do

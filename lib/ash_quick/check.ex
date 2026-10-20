@@ -46,9 +46,10 @@ defmodule AshQuick.Check do
     * `:stray_base_path` — a route served outside the base path it carries.
     * `:unroutable_show`, `:unroutable_action` — a control the page renders
       leading to a route `:only` or `:except` left out. Rows link to
-      `<base>/<id>` and a create redirects there; an action taking inputs
-      patches to `<base>/<id>/<action>` rather than running inline. Neither can
-      be fixed by hiding one control, so both are reported. (The New button
+      `<base>/<id>` and a create redirects there; every public update and
+      destroy, with inputs or without, opens in the action modal at
+      `<base>/<id>/<action>`. Neither can be fixed by hiding one control, so
+      both are reported. (The New button
       *is* gated on its route — see `AshQuick.LiveView.Router.served_shapes/2`
       — so there is nothing to report there.)
 

@@ -44,8 +44,8 @@ defmodule Example.Test.EnumPicks do
   Fields with a fixed set of values, and a page over them: an
   `Ash.Type.Enum`, a list of another, a string-valued one and a new type over
   a constrained atom. Each is picked from a select, filtered on and shown by
-  its labels. Beside them, an atom and a list of atoms without `one_of`,
-  which hold no fixed set and are typed in.
+  its labels. Beside them, an atom without `one_of`, which holds no fixed set
+  and is typed in, and a list of them, which no form takes.
   """
   use Ash.Resource,
     domain: Example.Test.EnumPicks.Domain,
@@ -61,11 +61,11 @@ defmodule Example.Test.EnumPicks do
       update: [:stage, :channels, :phase, :size]
     ]
 
-    # The atoms without `one_of` on a form of their own: a list of them is a
-    # text input that posts a string, which the list refuses, so a save
-    # through it would fail for a reason that is not this page's.
+    # The atom without `one_of`, typed in, on a form of its own. A list of
+    # them (`:marks`) has no input a form can save, so a QuickView offering it
+    # on any public action refuses to compile: it is only stored and shown.
     create :jot do
-      accept [:code, :stage, :mood, :marks]
+      accept [:code, :stage, :mood]
     end
 
     read :index do

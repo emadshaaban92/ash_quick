@@ -195,6 +195,27 @@
 
 ### Bug fixes
 
+- **A 404 details page wakes for its record however the URL spelled the id.**
+  A details page whose record was not found listens for it on the id from the
+  URL, which it used as typed, so `/products/<UPPER-CASED UUID>` listened on a
+  topic nothing publishes to and never noticed the record appear. The id is
+  now cast through the `:id` attribute's type first; one that does not cast
+  listens on nothing.
+
+- **A refused list filter is logged without its values.** The warning logged
+  when a URL's custom filter makes the read raise named the whole filter,
+  values included, and the data layer's error, which quotes the value back. A
+  filter on an email column put that email in the log, and an
+  `InvalidFilterValue` went on to inspect the whole query, the actor's email
+  included. It now names the filtered fields, and for each error its kind,
+  the start of its message on one line with the filter's values redacted, and
+  the frames it was raised at.
+
+- **A private `:create` gets no New button.** The list offered New whenever
+  `:create` was routed and its policies allowed it, but the create page only
+  reaches a public action, so a private `:create` led to a page that refused
+  it. The button now also asks that the action be public.
+
 - **A confirmation and a bulk action's row count read in Arabic.** "Cancel",
   "Confirm" and "Applies to %{count} selected rows." were missing from the
   gettext catalogue, so they showed in English in every locale. The catalogue
@@ -463,6 +484,31 @@
   default interpolation gets the same treatment.
 
 ### Breaking changes
+
+- **`mix ash_quick.check` reports every update and destroy a page cannot
+  route.** `:unroutable_action` looked only at actions taking inputs, but since
+  the action modal every public update and destroy, with inputs or without,
+  opens at `<base>/<id>/<action>`. An input-less action behind
+  `except: [:action]` or `only: [:index, :show]` showed a button leading to a
+  404, and the check said nothing.
+
+  **Who is affected:** a host running `mix ash_quick.check --strict` with a
+  QuickView that serves no `/:id/:action` over a resource with public updates
+  or destroys. Route `:action`, make the actions the page should not offer
+  `public? false`, or record the path under `exempt: [unroutable_action: ...]`.
+
+- **A QuickView refuses a form it could not save.** A list of scalars with no
+  fixed set of values (`{:array, :atom}` without `one_of`, `{:array, :string}`,
+  `{:array, :integer}`, ...) got one text input on the form, which posts a
+  string the list refuses: it could never be saved, and an update form over a
+  record already holding values crashed. A QuickView whose form would offer
+  one, on any public create, update or destroy, no longer compiles, and the
+  error lists every such field. A field a form widget renders is left alone.
+
+  **Who is affected:** a page whose resource's public action takes such a
+  field. Name its values with `constraints: [items: [one_of: [...]]]`, type its
+  items with an `Ash.Type.Enum`, give the page a form widget for it, or leave
+  it out of the action.
 
 - **A list's page size is capped by its action, not by config.** `?limit=`
   is held to the list action's `pagination.max_page_size` (Ash's default is

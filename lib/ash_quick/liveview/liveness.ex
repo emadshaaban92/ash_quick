@@ -23,12 +23,31 @@ defmodule AshQuick.LiveView.Liveness do
   A record that came back `nil` — absent, or unreadable for this actor — offers
   no id to scope by, but the id in the URL names the record the page is about
   either way, so the page still wakes up if the record becomes readable.
+
+  The URL's id is cast first, as the read casts it: a topic carries the id as
+  the resource publishes it, so an upper-cased UUID would otherwise listen on a
+  topic nothing publishes to. An id that does not cast names no record, and
+  listens on nothing.
   """
-  def details_options(%Options{} = options, %URLParams{id: id}) do
+  def details_options(%Options{resource: resource} = options, %URLParams{id: id}) do
+    # Cast once, and only for a page that will listen at all.
+    url_ids = if AshQuick.Topics.enabled?(resource), do: url_ids(resource, id), else: []
+
     build(options, fn
-      nil -> [id]
+      nil -> url_ids
       result -> record_ids(result)
     end)
+  end
+
+  # A resource without the extension may have no `:id` at all, and then the URL
+  # names nothing a topic could carry.
+  defp url_ids(resource, id) do
+    with %{type: type, constraints: constraints} <- Ash.Resource.Info.attribute(resource, :id),
+         {:ok, id} when not is_nil(id) <- Ash.Type.cast_input(type, id, constraints) do
+      [id]
+    else
+      _uncastable -> []
+    end
   end
 
   # Whether a view is live is the resource's call, not the view's: the

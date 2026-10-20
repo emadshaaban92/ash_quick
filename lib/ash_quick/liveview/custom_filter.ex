@@ -103,6 +103,34 @@ defmodule AshQuick.LiveView.CustomFilter do
     nil
   end
 
+  @doc """
+  The field names `filter` names anywhere in its tree, once each, without the
+  values it compares them with.
+  """
+  def field_names(%__MODULE__{} = filter),
+    do:
+      filter |> leaves() |> Enum.map(& &1.field_name) |> Enum.filter(&is_binary/1) |> Enum.uniq()
+
+  @doc """
+  The values `filter` compares its fields with, anywhere in its tree, as the
+  strings they were typed as.
+  """
+  def values(%__MODULE__{} = filter) do
+    for %{value: value} <- leaves(filter),
+        is_binary(value) or is_number(value),
+        value = to_string(value),
+        value != "",
+        uniq: true,
+        do: value
+  end
+
+  # A node with children is a group, and one without is a leaf, `children: []`
+  # included, as `build_ash_filter/1` reads it.
+  defp leaves(%__MODULE__{children: [_ | _] = children}),
+    do: Enum.flat_map(children, &leaves/1)
+
+  defp leaves(%__MODULE__{} = leaf), do: [leaf]
+
   def to_string!(%__MODULE__{} = filter),
     do: filter |> JSON.encode!() |> :base64.encode()
 

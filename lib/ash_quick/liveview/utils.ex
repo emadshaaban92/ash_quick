@@ -133,6 +133,22 @@ defmodule AshQuick.LiveView.Utils do
 
   def argument_to_relationship(arg, _resource, _action), do: arg
 
+  @doc """
+  Whether `action` manages a relationship through `field`, an argument, so that
+  AshPhoenix builds a sub-form for each item rather than one input for the list.
+  """
+  def managed_argument?(%Argument{name: name}, resource, action),
+    do: not is_nil(managed_relationship(resource, action, name))
+
+  def managed_argument?(_field, _resource, _action), do: false
+
+  @doc """
+  Whether `resource`'s `action_name` is a public action, which is all a page
+  may offer: see `record_actions/1` for why a private one is never reachable.
+  """
+  def public_action?(resource, action_name),
+    do: match?(%{public?: true}, Ash.Resource.Info.action(resource, action_name))
+
   # `action_changes/2` puts global changes first; the action's own change is the
   # more specific statement, so it is the one looked at first.
   defp managed_relationship(resource, action, argument) do

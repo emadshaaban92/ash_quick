@@ -110,6 +110,7 @@ defmodule ExampleWeb.Router do
         quick_view "/nested_items", Example.Test.NestedItemsLive.Quick
         quick_view "/picked_labels", Example.Test.PickedLabelsLive.Quick
         quick_view "/printable", Example.Test.PrintableLive.Quick
+        quick_view "/private_create", Example.Test.PrivateCreateLive.Quick
         quick_view "/required_attachments", Example.Test.RequiredAttachmentsLive.Quick
         quick_view "/required_entries", Example.Test.RequiredEntriesLive.Quick
         quick_view "/required_picks", Example.Test.RequiredPicksLive.Quick
