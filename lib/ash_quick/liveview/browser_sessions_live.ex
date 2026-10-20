@@ -74,7 +74,7 @@ defmodule AshQuick.LiveView.BrowserSessionsLive do
 
     {:ok,
      socket
-     |> assign(:page_title, "Live Users")
+     |> assign(:page_title, gettext("Live Users"))
      |> assign(:search, "")
      |> assign(:impersonations_only, false)
      |> assign(:actors, %{})
@@ -130,7 +130,7 @@ defmodule AshQuick.LiveView.BrowserSessionsLive do
       nil ->
         {:noreply,
          socket
-         |> put_flash(:error, "That session has already ended.")
+         |> put_flash(:error, gettext("That session has already ended."))
          |> assign_sessions()}
 
       session ->
@@ -141,13 +141,13 @@ defmodule AshQuick.LiveView.BrowserSessionsLive do
   defp revoke(%{id: id}, socket) do
     case BrowserSessionPresence.revoke(id) do
       :ok ->
-        {:noreply, put_flash(socket, :info, "Impersonation ended.")}
+        {:noreply, put_flash(socket, :info, gettext("Impersonation ended."))}
 
       # The tab went away between the lookup and the send.
       :error ->
         {:noreply,
          socket
-         |> put_flash(:error, "That session has already ended.")
+         |> put_flash(:error, gettext("That session has already ended."))
          |> assign_sessions()}
     end
   end

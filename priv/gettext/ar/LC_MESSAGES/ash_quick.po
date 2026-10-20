@@ -476,3 +476,110 @@ msgstr "إلغاء"
 #, elixir-autogen, elixir-format
 msgid "Confirm"
 msgstr "تأكيد"
+
+#: lib/ash_quick/liveview/list_utils.ex
+#, elixir-autogen, elixir-format
+msgid "%{action} applied to %{applied} of 1 selected row."
+msgid_plural "%{action} applied to %{applied} of %{count} selected rows."
+msgstr[0] "تم تطبيق «%{action}» على %{applied} من أصل %{count} صفوف محددة."
+msgstr[1] "تم تطبيق «%{action}» على %{applied} من أصل صف محدد واحد."
+msgstr[2] "تم تطبيق «%{action}» على %{applied} من أصل صفين محددين."
+msgstr[3] "تم تطبيق «%{action}» على %{applied} من أصل %{count} صفوف محددة."
+msgstr[4] "تم تطبيق «%{action}» على %{applied} من أصل %{count} صفًا محددًا."
+msgstr[5] "تم تطبيق «%{action}» على %{applied} من أصل %{count} صف محدد."
+
+#: lib/ash_quick/liveview/form_utils.ex
+#, elixir-autogen, elixir-format
+msgid "External Client Failure"
+msgstr "تعذّر الرفع إلى خدمة التخزين"
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Impersonation ended."
+msgstr "انتهى الدخول بحساب آخر."
+
+#: lib/ash_quick/liveview/print_utils.ex
+#, elixir-autogen, elixir-format
+msgid "It was recorded, but its PDF could not be produced. Print it again."
+msgstr "تم تسجيل العملية، لكن تعذّر إنشاء ملف PDF. اطبعه مرة أخرى."
+
+#: lib/ash_quick/liveview/form_utils.ex
+#, elixir-autogen, elixir-format
+msgid "Record deleted successfully"
+msgstr "تم حذف السجل بنجاح"
+
+#: lib/ash_quick/liveview/form_utils.ex
+#, elixir-autogen, elixir-format
+msgid "Record saved successfully"
+msgstr "تم حفظ السجل بنجاح"
+
+#: lib/ash_quick/liveview/action_errors.ex
+#, elixir-autogen, elixir-format
+msgid "Something went wrong on our end. Please try again, or contact support if it keeps happening."
+msgstr "حدث خطأ من جهتنا. حاول مرة أخرى، أو تواصل مع الدعم إذا تكرر ذلك."
+
+#: lib/ash_quick/liveview/list_utils.ex
+#, elixir-autogen, elixir-format
+msgid "That filter couldn't be applied to this list, so it was ignored."
+msgstr "تعذّر تطبيق هذا البحث على القائمة، لذا تم تجاهله."
+
+#: lib/ash_quick/liveview/action_errors.ex
+#, elixir-autogen, elixir-format
+msgid "That record no longer exists — it may have been deleted since you opened this page."
+msgstr "هذا السجل لم يعد موجودًا — ربما حُذف منذ أن فتحت هذه الصفحة."
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "That session has already ended."
+msgstr "انتهت هذه الجلسة بالفعل."
+
+#: lib/ash_quick/liveview/list_utils.ex
+#, elixir-autogen, elixir-format
+msgid "The other row was not changed and is still selected: check it and try again."
+msgid_plural "The other %{count} rows were not changed and are still selected: check them and try again."
+msgstr[0] "لم يتغير أي صف آخر."
+msgstr[1] "لم يتغير الصف الآخر وما زال محددًا: راجعه وحاول مرة أخرى."
+msgstr[2] "لم يتغير الصفان الآخران وما زالا محددين: راجعهما وحاول مرة أخرى."
+msgstr[3] "لم تتغير %{count} صفوف أخرى وما زالت محددة: راجعها وحاول مرة أخرى."
+msgstr[4] "لم يتغير %{count} صفًا آخر وما زالت محددة: راجعها وحاول مرة أخرى."
+msgstr[5] "لم يتغير %{count} صف آخر وما زالت محددة: راجعها وحاول مرة أخرى."
+
+#: lib/ash_quick/liveview/form_utils.ex
+#, elixir-autogen, elixir-format
+msgid "This file could not be uploaded"
+msgstr "تعذّر رفع هذا الملف"
+
+#: lib/ash_quick/liveview/form_utils.ex
+#, elixir-autogen, elixir-format
+msgid "This file was refused and has not been uploaded"
+msgstr "تم رفض هذا الملف ولم يُرفع"
+
+#: lib/ash_quick/liveview/action_errors.ex
+#, elixir-autogen, elixir-format
+msgid "This record changed since you opened it — reload to see the latest, then try again."
+msgstr "تغيّر هذا السجل منذ أن فتحته — أعد تحميل الصفحة لرؤية آخر نسخة، ثم حاول مرة أخرى."
+
+#: lib/ash_quick/liveview/form_utils.ex
+#, elixir-autogen, elixir-format
+msgid "Too large"
+msgstr "الملف كبير جدًا"
+
+#: lib/ash_quick/liveview/list_utils.ex
+#, elixir-autogen, elixir-format
+msgid "Unable to determine current user for export"
+msgstr "تعذّر تحديد المستخدم الحالي للتصدير"
+
+#: lib/ash_quick/liveview/action_errors.ex
+#, elixir-autogen, elixir-format
+msgid "You don't have permission to do that."
+msgstr "ليس لديك صلاحية للقيام بذلك."
+
+#: lib/ash_quick/liveview/form_utils.ex
+#, elixir-autogen, elixir-format
+msgid "You have selected an unacceptable file type"
+msgstr "نوع الملف الذي اخترته غير مقبول"
+
+#: lib/ash_quick/liveview/form_utils.ex
+#, elixir-autogen, elixir-format
+msgid "You have selected too many files"
+msgstr "لقد اخترت عددًا كبيرًا جدًا من الملفات"

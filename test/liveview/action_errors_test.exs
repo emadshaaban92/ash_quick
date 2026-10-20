@@ -300,6 +300,14 @@ defmodule AshQuick.LiveView.ActionErrorsTest do
       assert ActionErrors.forbidden_message([%RuntimeError{message: "x"}]) ==
                ActionErrors.forbidden_message()
     end
+
+    # Read when it is flashed, so in the locale of the page flashing it.
+    test "says the fixed sentence in the process's locale" do
+      assert Gettext.with_locale(AshQuick.Gettext, "ar", &ActionErrors.forbidden_message/0) ==
+               "ليس لديك صلاحية للقيام بذلك."
+
+      assert ActionErrors.forbidden_message() == "You don't have permission to do that."
+    end
   end
 
   describe "unplaced_message/2" do

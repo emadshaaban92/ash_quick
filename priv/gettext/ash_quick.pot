@@ -468,3 +468,102 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Confirm"
 msgstr ""
+
+#: lib/ash_quick/liveview/list_utils.ex
+#, elixir-autogen, elixir-format
+msgid "%{action} applied to %{applied} of 1 selected row."
+msgid_plural "%{action} applied to %{applied} of %{count} selected rows."
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/ash_quick/liveview/form_utils.ex
+#, elixir-autogen, elixir-format
+msgid "External Client Failure"
+msgstr ""
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "Impersonation ended."
+msgstr ""
+
+#: lib/ash_quick/liveview/print_utils.ex
+#, elixir-autogen, elixir-format
+msgid "It was recorded, but its PDF could not be produced. Print it again."
+msgstr ""
+
+#: lib/ash_quick/liveview/form_utils.ex
+#, elixir-autogen, elixir-format
+msgid "Record deleted successfully"
+msgstr ""
+
+#: lib/ash_quick/liveview/form_utils.ex
+#, elixir-autogen, elixir-format
+msgid "Record saved successfully"
+msgstr ""
+
+#: lib/ash_quick/liveview/action_errors.ex
+#, elixir-autogen, elixir-format
+msgid "Something went wrong on our end. Please try again, or contact support if it keeps happening."
+msgstr ""
+
+#: lib/ash_quick/liveview/list_utils.ex
+#, elixir-autogen, elixir-format
+msgid "That filter couldn't be applied to this list, so it was ignored."
+msgstr ""
+
+#: lib/ash_quick/liveview/action_errors.ex
+#, elixir-autogen, elixir-format
+msgid "That record no longer exists — it may have been deleted since you opened this page."
+msgstr ""
+
+#: lib/ash_quick/liveview/browser_sessions_live.ex
+#, elixir-autogen, elixir-format
+msgid "That session has already ended."
+msgstr ""
+
+#: lib/ash_quick/liveview/list_utils.ex
+#, elixir-autogen, elixir-format
+msgid "The other row was not changed and is still selected: check it and try again."
+msgid_plural "The other %{count} rows were not changed and are still selected: check them and try again."
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/ash_quick/liveview/form_utils.ex
+#, elixir-autogen, elixir-format
+msgid "This file could not be uploaded"
+msgstr ""
+
+#: lib/ash_quick/liveview/form_utils.ex
+#, elixir-autogen, elixir-format
+msgid "This file was refused and has not been uploaded"
+msgstr ""
+
+#: lib/ash_quick/liveview/action_errors.ex
+#, elixir-autogen, elixir-format
+msgid "This record changed since you opened it — reload to see the latest, then try again."
+msgstr ""
+
+#: lib/ash_quick/liveview/form_utils.ex
+#, elixir-autogen, elixir-format
+msgid "Too large"
+msgstr ""
+
+#: lib/ash_quick/liveview/list_utils.ex
+#, elixir-autogen, elixir-format
+msgid "Unable to determine current user for export"
+msgstr ""
+
+#: lib/ash_quick/liveview/action_errors.ex
+#, elixir-autogen, elixir-format
+msgid "You don't have permission to do that."
+msgstr ""
+
+#: lib/ash_quick/liveview/form_utils.ex
+#, elixir-autogen, elixir-format
+msgid "You have selected an unacceptable file type"
+msgstr ""
+
+#: lib/ash_quick/liveview/form_utils.ex
+#, elixir-autogen, elixir-format
+msgid "You have selected too many files"
+msgstr ""

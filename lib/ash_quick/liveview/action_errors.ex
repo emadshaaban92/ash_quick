@@ -10,16 +10,19 @@ defmodule AshQuick.LiveView.ActionErrors do
   # is reported to Tower (which fans out to the configured reporters) and reduced
   # to a generic sentence so internal structs never reach the user.
 
-  @stale_message "This record changed since you opened it — reload to see the latest, then try again."
-  @forbidden_message "You don't have permission to do that."
-  @not_found_message "That record no longer exists — it may have been deleted since you opened this page."
-  @generic_message "Something went wrong on our end. Please try again, or contact support if it keeps happening."
+  # The fixed sentences are AshQuick's own, so they go through its catalogue in
+  # the locale of the process that flashes them.
+  use Gettext, backend: AshQuick.Gettext
 
   @doc "A friendly message for an optimistic-lock (`StaleRecord`) conflict."
-  def stale_message, do: @stale_message
+  def stale_message,
+    do:
+      gettext(
+        "This record changed since you opened it — reload to see the latest, then try again."
+      )
 
   @doc "A friendly message for an authorization (`Forbidden`) failure."
-  def forbidden_message, do: @forbidden_message
+  def forbidden_message, do: gettext("You don't have permission to do that.")
 
   @doc """
   The message for the authorization failure `error` describes: the
@@ -36,7 +39,7 @@ defmodule AshQuick.LiveView.ActionErrors do
   def forbidden_message(error) do
     case policy_messages(error) do
       [message | _] -> translate(message, [])
-      [] -> @forbidden_message
+      [] -> forbidden_message()
     end
   end
 
@@ -61,10 +64,18 @@ defmodule AshQuick.LiveView.ActionErrors do
   end
 
   @doc "A friendly message for a record that isn't there."
-  def not_found_message, do: @not_found_message
+  def not_found_message,
+    do:
+      gettext(
+        "That record no longer exists — it may have been deleted since you opened this page."
+      )
 
   @doc "A friendly, non-leaking message for an unexpected failure."
-  def generic_message, do: @generic_message
+  def generic_message,
+    do:
+      gettext(
+        "Something went wrong on our end. Please try again, or contact support if it keeps happening."
+      )
 
   @doc """
   Whether `error` (or any error it wraps) is an `Ash.Error.Changes.StaleRecord` —
@@ -115,10 +126,10 @@ defmodule AshQuick.LiveView.ActionErrors do
 
   def user_facing_message(error) do
     cond do
-      stale_record?(error) -> @stale_message
+      stale_record?(error) -> stale_message()
       forbidden?(error) -> forbidden_message(error)
       match?(%Ash.Error.Invalid{}, error) -> invalid_message(error)
-      not_found?(error) -> @not_found_message
+      not_found?(error) -> not_found_message()
       true -> report_unexpected(error)
     end
   end
@@ -153,11 +164,11 @@ defmodule AshQuick.LiveView.ActionErrors do
         Enum.join(messages, "\n")
 
       not_found?(error) ->
-        @not_found_message
+        not_found_message()
 
       true ->
         report_error(error)
-        @generic_message
+        generic_message()
     end
   end
 
@@ -347,7 +358,7 @@ defmodule AshQuick.LiveView.ActionErrors do
 
   defp report_unexpected(error) do
     report_error(error)
-    @generic_message
+    generic_message()
   end
 
   defp report_error(error) do
