@@ -413,6 +413,22 @@ defmodule MyAppWeb.ExampleLive.Quick do
 end
 ```
 
+## Testing a details page
+
+Each details row carries `data-field` naming the field's path: `:holder_name`
+is `"holder_name"`, `[vehicle: :chassis_number]` is
+`"vehicle.chassis_number"`. Assert on a value by that name, not by matching
+rendered HTML (escaped `'` and `&` break that):
+
+```elixir
+assert_has(session, ~s([data-field="holder_name"] dd), text: value, exact: true)
+assert_has(session, ~s([data-field="vehicle.chassis_number"] dd), text: vin, exact: true)
+```
+
+Always quote the name: `.`, `?` and `!` break a bare selector. A custom
+details template puts the same attribute on its rows with
+`AshQuick.LiveView.QuickField.data_field/1`.
+
 ## Lifecycle hooks
 
 Two overridable hooks:

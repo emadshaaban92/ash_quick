@@ -296,6 +296,27 @@ defmodule AshQuick.LiveView.QuickView do
         use AshQuick.LiveView.QuickView, ...
       end
 
+  ## Testing a details page
+
+  Each row on the details page carries a `data-field` attribute naming the
+  field's path, so a test can read one field's value without matching on its
+  label. An atom path is its name (`data-field="licence_holder_name"`); a
+  relationship path joins every segment with `.`
+  (`[vehicle: :chassis_number]` is `data-field="vehicle.chassis_number"`). With
+  PhoenixTest:
+
+      assert_has(session, ~s([data-field="licence_holder_name"] dd), text: value, exact: true)
+      assert_has(session, ~s([data-field="vehicle.chassis_number"] dd), text: vin, exact: true)
+
+  Always quote the name in the selector: a `.` and the `?` or `!` that end
+  many Ash attribute names are not valid in a bare CSS identifier.
+
+  `assert_has/3` compares the row's visible text, so a value holding `'` or `&`
+  is matched as it reads rather than as it is escaped in the HTML, and
+  `exact: true` asserts the value is exactly that rather than contains it. A
+  custom details template can put the same attribute on its own rows with
+  `AshQuick.LiveView.QuickField.data_field/1`.
+
   ## Lifecycle hooks
 
   Two overridable hooks are available for customization:
