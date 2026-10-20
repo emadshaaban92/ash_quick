@@ -25,8 +25,9 @@ defmodule AshQuick.Test.Check.Widget do
   @moduledoc """
   The resource behind the fixture QuickView.
 
-  `:rename` takes an input, so its button patches to `/:id/rename` rather than
-  running inline — which is what the router below is missing a route for.
+  `:rename` takes an input and `:destroy` takes none, and both open in the
+  action modal at `/:id/<action>` — which is what the router below is missing a
+  route for. `:archive` is private, so no page offers it and it is not reported.
   """
   use Ash.Resource,
     domain: AshQuick.Test.Check.Domain,
@@ -59,6 +60,12 @@ defmodule AshQuick.Test.Check.Widget do
 
     update :rename do
       accept [:name]
+    end
+
+    # Private, so no page offers it and it needs no route.
+    update :archive do
+      public? false
+      accept []
     end
   end
 
@@ -93,7 +100,7 @@ defmodule AshQuick.Test.Check.Gizmo do
   Listed and nothing else: its QuickView is routed `only: [:index]`, so every
   row's details link leads to a route that is not there.
 
-  No `:create` and no input-taking update, so the list's other two controls have
+  No `:create` and no update or destroy, so the list's other two controls have
   nothing to say about it.
   """
   use Ash.Resource,

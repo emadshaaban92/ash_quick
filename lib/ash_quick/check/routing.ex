@@ -159,7 +159,7 @@ defmodule AshQuick.Check.Routing do
     if MapSet.member?(served, base <> "/:id/:action") do
       []
     else
-      Enum.map(input_taking_actions(resource), &unroutable_action(base, resource, &1))
+      Enum.map(record_actions(resource), &unroutable_action(base, resource, &1))
     end
   end
 
@@ -168,34 +168,31 @@ defmodule AshQuick.Check.Routing do
       check: :unroutable_action,
       subject: "#{base}/:id/#{action.name}",
       message: """
-      #{inspect(resource)}'s #{inspect(action.name)} takes inputs, and \
-      #{base} serves no `/:id/:action` route.
+      #{inspect(resource)}'s #{inspect(action.name)} is offered on #{base}'s \
+      records, and #{base} serves no `/:id/:action` route.
 
-      An update or destroy taking inputs needs a form, so its button patches to \
-      #{base}/:id/#{action.name} rather than running the action inline. The \
-      button renders as soon as the action's policies allow it — a policy that \
-      denies it today is all that is standing between this and a 404.
+      Every update and destroy, with inputs or without, opens in the action \
+      modal at #{base}/:id/#{action.name}: a form when it takes inputs, a \
+      confirmation when it takes none. The button renders as soon as the \
+      action's policies allow it — a policy that denies it today is all that is \
+      standing between this and a 404.
 
       Either widen the route set:
 
           quick_view "#{base}", TheLive.Quick
 
-      or, if this action is genuinely not meant to be taken from the UI, forbid \
-      it rather than leaving the router to hide it.
+      or, if this action is genuinely not meant to be taken from the UI, make \
+      it `public? false`: a private action is offered on no page. A policy \
+      that forbids it hides the button today, but this check does not read \
+      policies, so the action is still reported.
       """
     }
   end
 
-  defp input_taking_actions(nil), do: []
-
-  # Public only: a private action has no button on any page, so it needs no
-  # route to patch to.
-  defp input_taking_actions(resource) do
-    resource
-    |> Ash.Resource.Info.public_actions()
-    |> Enum.filter(&(&1.type in [:update, :destroy]))
-    |> Enum.reject(&Enum.empty?(Ash.Resource.Info.action_inputs(resource, &1.name)))
-  end
+  # The actions the page offers on a record, so the check reports exactly the
+  # buttons a page renders.
+  defp record_actions(nil), do: []
+  defp record_actions(resource), do: AshQuick.LiveView.Utils.record_actions(resource)
 
   @doc false
   # Every QuickView the router serves, as `{base_path, resource}` — one entry

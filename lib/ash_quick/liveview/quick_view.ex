@@ -1039,7 +1039,7 @@ defmodule AshQuick.LiveView.QuickView do
   # it is still what this page lists through.
   defp reachable?(%Options{} = options, action_name) do
     action_name in [options.list_default_action, options.details_default_action] or
-      match?(%{public?: true}, Ash.Resource.Info.action(options.resource, action_name))
+      AshQuick.LiveView.Utils.public_action?(options.resource, action_name)
   end
 
   # `/create` is the only shape `quick_view/3` declares with a `live_action`,

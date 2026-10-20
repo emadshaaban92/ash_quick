@@ -388,6 +388,23 @@ Nothing is generated for a resource that declares none — but a QuickView
 listing it, or a form whose dropdown points at it, refuses to compile without
 one. The error names the resource.
 
+A QuickView also refuses to compile a form it could not save. A field with a
+fixed set of values — an `Ash.Type.Enum`, or an atom with `one_of` — is picked
+from a select, and a scalar is typed in. A list of scalars with no fixed set
+(`{:array, :atom}`, `{:array, :string}`, ...) gets one text input, which posts
+a string the list refuses. A page whose form, on any public create, update or
+destroy, would offer one does not compile, and the error lists every such
+field. Name its values, type its items with an `Ash.Type.Enum`, render it with
+a form widget that posts a list, or leave it out of the action:
+
+```elixir
+attribute :marks, {:array, :atom}, constraints: [items: [one_of: [:red, :green]]]
+
+use AshQuick.LiveView.QuickView,
+  resource: MyApp.Item,
+  form: [widgets: %{tags: &__MODULE__.tags_input/1}]
+```
+
 ## Routing
 
 A QuickView is routed through `AshQuick.LiveView.Router.quick_view/3` and
@@ -561,8 +578,9 @@ of them. And, as an **advisory**, a resource carrying no extension at all.
 Over the router: a QuickView declared with a plain `live/3`, a non-QuickView
 carrying `ash_quick` metadata, a route served outside its base path, and a
 control leading to a route `:only` or `:except` left out — rows link to
-`<base>/<id>` and an action taking inputs patches to `<base>/<id>/<action>`,
-neither of which consults the router.
+`<base>/<id>` and every public update or destroy, with inputs or without, opens
+at `<base>/<id>/<action>`, neither of which consults the router. A private
+action is never offered, so it needs no route.
 
 Across the nav, the router and the access control: a nav path no route serves, a
 granted route the router does not serve, a granted route with no link, and an

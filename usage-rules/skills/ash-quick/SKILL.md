@@ -706,6 +706,17 @@ and what to write.
   rung asks for (a field, not an attribute):
   `calculate :display_name, :string, expr(string_join([order.name, product.name], " — "))`.
   See `AshQuick.Info.display_label/1`.
+- **No list a form cannot save** — A field with a fixed set of values (an
+  `Ash.Type.Enum`, or an atom with `one_of`) is picked from a select, and a
+  scalar is typed in. A list of scalars with no fixed set (`{:array, :atom}`,
+  `{:array, :string}`, `{:array, :integer}`, ...) gets one text input, which
+  posts a string the list refuses. A QuickView whose form would offer one, on
+  any public create, update or destroy, **does not compile**, and the error
+  lists every such field. Name its values with
+  `constraints: [items: [one_of: [...]]]`, type it with an `Ash.Type.Enum`,
+  render it with a form widget that posts a list
+  (`form: [widgets: %{tags: &__MODULE__.tags_input/1}]`), or leave it out of
+  the action.
 - **Activation** — Optional, and declared rather than detected: a resource opting in
   with `ash_quick do activation do enabled? true end end` gets an `:active` attribute,
   `:activate`/`:deactivate` actions, dimmed rows for its inactive records, activate/deactivate

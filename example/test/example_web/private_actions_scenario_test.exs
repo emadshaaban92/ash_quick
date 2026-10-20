@@ -112,6 +112,21 @@ defmodule ExampleWeb.PrivateActionsScenarioTest do
     end
   end
 
+  # A create is offered from the list's New button rather than a menu. With
+  # no authorizer `Ash.can?` allows it, so only `public?` keeps the button off a
+  # list whose create page would refuse the action.
+  describe "a private :create" do
+    test "gets no New button, though /create is routed", %{conn: conn, admin: admin} do
+      conn = log_in(conn, admin)
+
+      {:ok, view, _html} = live(conn, ~p"/test/private_create")
+      refute has_element?(view, "button[phx-click*='new_click']")
+
+      {:ok, view, _html} = live(conn, ~p"/test/private_create/create")
+      assert has_element?(view, "h1", "404")
+    end
+  end
+
   defp reindexes_of(product_id) do
     AuditLog
     |> Ash.Query.filter(resource_id == ^product_id and action_name == :reindex)

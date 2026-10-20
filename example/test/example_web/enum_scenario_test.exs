@@ -4,7 +4,9 @@ defmodule ExampleWeb.EnumScenarioTest do
   `one_of`, is picked from a select, filtered on from the list's filter, and
   shown under its labels. An enum's labels are its own, which here are not
   the values humanized (`:live` is "On air"). An atom without `one_of` holds
-  no fixed set, and is typed in.
+  no fixed set, and is typed in. A list of them has no input a form could save
+  it through, so a QuickView offering one on a form refuses to compile
+  (`AshQuick.LiveView.ListInputsTest` in the library).
 
   `Example.Test.EnumPicks` holds the fields, one of each kind.
   """
@@ -31,33 +33,20 @@ defmodule ExampleWeb.EnumScenarioTest do
       assert offered(view, "size") == ["Small", "Extra Large"]
     end
 
-    test "types in an atom, or a list of them, that holds no fixed set", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/test/enum_picks/create?action=jot")
-      html = render(view)
-
-      for field <- ["mood", "marks"] do
-        assert html =~ ~s(id="form_#{field}")
-        refute html =~ "form_#{field}_live_select_component"
-      end
-    end
-
-    # A known gap, kept on record rather than only routed around: a list of
-    # atoms without `one_of` holds no fixed set, so it gets the plain text
-    # input, which posts one string the list refuses ("is invalid"). Nothing
-    # on the form can save it; `main` behaves the same. It is why the plain
-    # atoms sit on `:jot` and not on the create the other tests save through.
-    @tag :skip
-    test "a plain list of atoms saves from the form", %{conn: conn} do
+    test "types in an atom that holds no fixed set, and saves it", %{conn: conn} do
       code = unique("E")
-      {:ok, view, _html} = live(conn, "/test/enum_picks/create?action=jot")
+      {:ok, view, html} = live(conn, "/test/enum_picks/create?action=jot")
+
+      assert html =~ ~s(id="form_mood")
+      refute html =~ "form_mood_live_select_component"
 
       pick(view, "stage", "On air")
 
       view
-      |> form("form[phx-submit=save]", %{"form" => %{"code" => code, "marks" => "red"}})
+      |> form("form[phx-submit=save]", %{"form" => %{"code" => code, "mood" => "sunny"}})
       |> render_submit()
 
-      assert [%{marks: [:red]}] = Ash.read!(EnumPicks) |> by_code(code)
+      assert [%{mood: :sunny}] = Ash.read!(EnumPicks) |> by_code(code)
     end
 
     test "saves the values picked from the selects", %{conn: conn} do

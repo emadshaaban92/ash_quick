@@ -144,22 +144,32 @@ defmodule ExampleWeb.UploadScenarioTest do
       |> assert_has("dd", text: "Processing")
     end
 
-    test "offers no control for the action the page cannot serve", ctx do
+    test "offers no control for the actions the page cannot serve", ctx do
       %{conn: conn, admin: admin} = ctx
 
       object = file_object(actor: admin)
 
-      # `:reference` is stamped by the pipeline with `authorize?: false` and by
-      # nothing else. Left authorizable it would render as a button that patches
-      # to `/file_objects/:id/reference`, a route this read-only page does not
-      # serve — which is exactly what `mix ash_quick.check` reports.
-      conn
-      |> log_in(admin)
-      |> visit(~p"/file_objects/#{object.id}")
-      |> refute_has("button", text: "Reference")
-      |> refute_has("a", text: "Reference")
+      # Every write after custody is the pipeline's, run with `authorize?:
+      # false`, so each is private. Public, each would render for an admin as a
+      # button opening `/file_objects/:id/<action>`, a route this read-only page
+      # does not serve — which is exactly what `mix ash_quick.check` reports.
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/file_objects/#{object.id}")
+        |> assert_has("h1", text: object.key)
 
-      refute Ash.can?({object, :reference}, admin)
+      for label <- ["Reference", "Release", "Reject", "Delete", "Destroy"] do
+        session
+        |> refute_has("button", text: label)
+        |> refute_has("a", text: label)
+      end
+
+      # Private keeps them off the page and authorizes nothing, so a policy
+      # refuses them to every actor as well, admins included.
+      for action <- [:reference, :release, :reject, :destroy] do
+        refute Ash.can?({object, action}, admin)
+      end
     end
   end
 

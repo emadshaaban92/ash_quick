@@ -169,20 +169,84 @@ defmodule AshQuick.LiveView.ListUtils do
   end
 
   defp retry_without_filter(socket, %URLParams{} = params, %Options{} = options, error) do
+    # Never the filter's values: they are what the visitor typed (an email, a
+    # name), and the data layer's cast error quotes them back, so each value is
+    # redacted out of the messages. The start of a message stays, because it is
+    # what tells a refused value from a host bug or a dropped connection; the
+    # rest goes, because an error such as `InvalidFilterValue` goes on to
+    # inspect the whole query, the actor and their email included. The field
+    # names come from the URL too, so they are inspected, and a message is cut
+    # to one line, or a newline in one would forge a log line. The frames are
+    # each inner error's own: the rescue's trace is only where `Ash.read!`
+    # re-raised, the same for every failure.
+    values = CustomFilter.values(params.custom_filter)
+
     Logger.warning("""
     AshQuick is re-reading #{inspect(options.resource)} without the custom \
     filter the URL carried, which raised. The visitor will be told the filter \
     was refused, whether or not that is what this error means.
 
-    Filter: #{inspect(params.custom_filter)}
+    Filtered fields: #{Enum.map_join(CustomFilter.field_names(params.custom_filter), ", ", &inspect/1)}
+    Errors:
 
-    #{Exception.format(:error, error)}\
+    #{Enum.map_join(inner_errors(error), "\n", &raised_at(&1, values))}\
     """)
 
     params = %URLParams{params | custom_filter: nil}
 
     {put_flash(socket, :error, @refused_filter_message), params,
      load_data!(socket, params, options)}
+  end
+
+  defp inner_errors(error) do
+    case Ash.Error.to_error_class(error) do
+      %{errors: [_ | _] = errors} -> errors
+      class -> [class]
+    end
+  end
+
+  @message_length 160
+
+  defp raised_at(error, values) do
+    "#{inspect(error.__struct__)}: #{summary(error, values)}\n#{frames(error)}"
+  end
+
+  # The message without Ash's bread crumbs, values redacted, on one line and cut
+  # short of whatever context the error inspects after it.
+  defp summary(error, values) do
+    summary =
+      error
+      |> Exception.message()
+      |> redact(values)
+      |> String.split("\n")
+      |> Enum.reject(&(String.trim(&1) in ["", "Bread Crumbs:"] or bread_crumb?(&1)))
+      |> Enum.join(" ")
+
+    if String.length(summary) > @message_length,
+      do: String.slice(summary, 0, @message_length) <> "…",
+      else: summary
+  end
+
+  defp bread_crumb?(line), do: String.starts_with?(String.trim_leading(line), "> ")
+
+  defp frames(%{stacktrace: %{stacktrace: [_ | _] = frames}}),
+    do: Exception.format_stacktrace(frames)
+
+  defp frames(_error), do: "    (no stack trace)\n"
+
+  @redacted "[filter value]"
+
+  # Quoted wherever it appears; bare only from four characters up, below which
+  # it would be cut out of words and numbers the message needs. A value that
+  # short identifies no one.
+  defp redact(message, values) do
+    Enum.reduce(values, message, fn value, message ->
+      message = String.replace(message, inspect(value), @redacted)
+
+      if String.length(value) >= 4,
+        do: String.replace(message, value, @redacted),
+        else: message
+    end)
   end
 
   defp maybe_apply_sort(query, nil), do: query

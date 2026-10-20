@@ -40,6 +40,7 @@ defmodule AshQuick.CheckTest do
                {:mislabelled_route, "/plain"},
                {:stray_base_path, "/elsewhere"},
                {:unroutable_action, "/widgets/:id/rename"},
+               {:unroutable_action, "/widgets/:id/destroy"},
                {:unroutable_show, "/gizmos/:id"},
                {:unrouted_nav_path, "/missing"},
                {:unrouted_grant, "/gone"},
@@ -190,7 +191,7 @@ defmodule AshQuick.CheckTest do
       assert text =~ "## missing_extension (1) — advisory, not counted"
       assert text =~ "## unreachable_entry (2)"
       assert text =~ "AshQuick.Test.Check.Bare does not carry the AshQuick extension."
-      assert text =~ "12 defect(s), 1 advisory."
+      assert text =~ "13 defect(s), 1 advisory."
 
       checks = Regex.scan(~r/^## (\w+)/m, text, capture: :all_but_first) |> List.flatten()
       assert checks == Enum.sort(checks)

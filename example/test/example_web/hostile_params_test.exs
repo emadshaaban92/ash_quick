@@ -117,9 +117,53 @@ defmodule ExampleWeb.HostileParamsTest do
           {:ok, _view, _html} = live(conn, ~p"/products?custom_filter=#{refused_filter()}")
         end)
 
-      assert log =~ "No such field no_such_field"
-      # And the filter it fired on, which the flash deliberately does not name.
-      assert log =~ ~s(field_name: "no_such_field")
+      assert log =~ "Ash.Error.Query.NoSuchField"
+      assert log =~ "No such field"
+      # Where it was raised, from the error's own frames rather than the
+      # rescue's, which only say where `Ash.read!` re-raised.
+      assert log =~ "Ash.Query.filter_input/"
+      # And the field it fired on, which the flash deliberately does not name.
+      assert log =~ ~s(Filtered fields: "no_such_field")
+    end
+
+    # A filter's value is whatever the visitor typed into it, an email or a
+    # name, and the data layer's cast error quotes it back. Neither reaches the
+    # log: the field and the kind of error are enough to find the cause.
+    test "without the value it compared against", %{conn: conn, admin: admin} do
+      product(name: "Four-season tent", actor: admin)
+      # `children: []` is still a leaf, as the filter reads it, so the field is
+      # named.
+      filter = %{
+        "operator" => "equals",
+        "field_name" => "price",
+        "value" => "secret@example.com",
+        "children" => []
+      }
+
+      log =
+        capture_log(fn ->
+          {:ok, _view, _html} = live(conn, ~p"/products?custom_filter=#{encode_filter(filter)}")
+        end)
+
+      assert log =~ ~s(Filtered fields: "price")
+      # The message stays, with the value cut out of it.
+      assert log =~ "[filter value]"
+      refute log =~ "secret@example.com"
+    end
+
+    # The field names come from the URL as well, so one carrying a newline
+    # would otherwise write a line of the visitor's into the log.
+    test "with the field names escaped", %{conn: conn} do
+      forged = "x\n[error] forged line"
+      filter = %{"operator" => "equals", "field_name" => forged, "value" => "1"}
+
+      log =
+        capture_log(fn ->
+          {:ok, _view, _html} = live(conn, ~p"/products?custom_filter=#{encode_filter(filter)}")
+        end)
+
+      assert log =~ ~s(Filtered fields: "x\\n[error] forged line")
+      refute log =~ "\n[error] forged line"
     end
 
     # The second way a filter fails, and the one that is not only a hostile-URL
