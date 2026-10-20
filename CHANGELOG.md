@@ -186,6 +186,12 @@
 
 ### Bug fixes
 
+- **A confirmation and a bulk action's row count read in Arabic.** "Cancel",
+  "Confirm" and "Applies to %{count} selected rows." were missing from the
+  gettext catalogue, so they showed in English in every locale. The catalogue
+  is extracted again (dropping the print modal's messages, whose component is
+  gone), and CI now fails when it falls behind the code.
+
 - **Dates and times read as formatted on the list and the details page.** A
   `:date`, `:time` or `:naive_datetime` field printed as ISO 8601
   (`2026-10-19`) where a `:utc_datetime` read as `AshQuick.Config` formats it
