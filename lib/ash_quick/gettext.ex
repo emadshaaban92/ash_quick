@@ -25,6 +25,10 @@ defmodule AshQuick.Gettext do
   `gettext.extract` rewrites `priv/gettext/ash_quick.pot` from the `gettext/1`
   call sites; `gettext.merge` folds new messages into each locale's `.po`
   without disturbing the translations already there.
+
+  `test/gettext_catalogue_test.exs` fails while a locale lacks a message, leaves
+  one empty in any plural form, or still marks one fuzzy, which is what
+  `gettext.merge` does when it guesses a new message from an old one.
   """
   use Gettext.Backend,
     otp_app: :ash_quick,

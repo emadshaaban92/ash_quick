@@ -4,6 +4,7 @@ defmodule AshQuick.LiveView.FormUtils do
   require Logger
   import Phoenix.LiveView
   import Phoenix.Component, only: [assign: 2]
+  use Gettext, backend: AshQuick.Gettext
   alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.FieldErrors
@@ -1181,18 +1182,21 @@ defmodule AshQuick.LiveView.FormUtils do
   the first time the presigner refuses an entry, which is a live page lost to
   an error the user was supposed to just read.
   """
-  def upload_error_message(:too_large), do: "Too large"
-  def upload_error_message(:too_many_files), do: "You have selected too many files"
-  def upload_error_message(:not_accepted), do: "You have selected an unacceptable file type"
-  def upload_error_message(:external_client_failure), do: "External Client Failure"
+  def upload_error_message(:too_large), do: gettext("Too large")
+  def upload_error_message(:too_many_files), do: gettext("You have selected too many files")
+
+  def upload_error_message(:not_accepted),
+    do: gettext("You have selected an unacceptable file type")
+
+  def upload_error_message(:external_client_failure), do: gettext("External Client Failure")
 
   # The presigner refused the entry, so no URL was signed and no bytes left the
   # browser. Nothing retries it — say the file was not uploaded.
   def upload_error_message({:external_metadata_failure, _meta}),
-    do: "This file was refused and has not been uploaded"
+    do: gettext("This file was refused and has not been uploaded")
 
   def upload_error_message(error) when is_atom(error), do: Utils.humanize(error)
-  def upload_error_message(_error), do: "This file could not be uploaded"
+  def upload_error_message(_error), do: gettext("This file could not be uploaded")
 
   defp arriving_opts(entry, socket, constraints) do
     [
@@ -1465,7 +1469,8 @@ defmodule AshQuick.LiveView.FormUtils do
           list_path
       end
 
-    {:halt, socket |> put_flash(:info, "Record deleted successfully") |> push_patch(to: path)}
+    {:halt,
+     socket |> put_flash(:info, gettext("Record deleted successfully")) |> push_patch(to: path)}
   end
 
   # An update returns to the page its modal opened over, which reloads to show
@@ -1477,7 +1482,8 @@ defmodule AshQuick.LiveView.FormUtils do
          _action,
          %{assigns: %{ash_action: %{type: :update}, ash_quick_background: %{path: path}}} = socket
        ) do
-    {:halt, socket |> put_flash(:info, "Record saved successfully") |> push_patch(to: path)}
+    {:halt,
+     socket |> put_flash(:info, gettext("Record saved successfully")) |> push_patch(to: path)}
   end
 
   defp handle_success(record, _form_params, _action, socket) do
@@ -1488,7 +1494,7 @@ defmodule AshQuick.LiveView.FormUtils do
 
     {:halt,
      socket
-     |> put_flash(:info, "Record saved successfully")
+     |> put_flash(:info, gettext("Record saved successfully"))
      |> push_patch(to: details_path)}
   end
 end

@@ -13,8 +13,7 @@ defmodule AshQuick.LiveView.PrintUtils do
 
   require Logger
   import Phoenix.LiveView, only: [push_event: 3, put_flash: 3]
-
-  @render_failed "It was recorded, but its PDF could not be produced. Print it again."
+  use Gettext, backend: AshQuick.Gettext
 
   @doc """
   Prints `result` — what an action returned: `{:ok, record}`, an
@@ -54,7 +53,11 @@ defmodule AshQuick.LiveView.PrintUtils do
           Exception.format(:error, exception, __STACKTRACE__)
       )
 
-      put_flash(socket, :error, @render_failed)
+      put_flash(
+        socket,
+        :error,
+        gettext("It was recorded, but its PDF could not be produced. Print it again.")
+      )
   end
 
   defp render!(template, [%resource{} | _] = records, scope) do

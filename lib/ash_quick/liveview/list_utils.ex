@@ -4,6 +4,7 @@ defmodule AshQuick.LiveView.ListUtils do
   require Logger
   import Phoenix.LiveView
   import Phoenix.Component, only: [assign: 2, assign: 3]
+  use Gettext, backend: AshQuick.Gettext
 
   alias Ash.Resource.Actions
   alias AshQuick.LiveView.ActionErrors
@@ -23,7 +24,8 @@ defmodule AshQuick.LiveView.ListUtils do
   # an unusable value on a perfectly good field lands here too. A visitor who
   # typed the filter knows which one they typed, and a visitor who was handed
   # the link cannot act on the name either way.
-  @refused_filter_message "That filter couldn't be applied to this list, so it was ignored."
+  defp refused_filter_message,
+    do: gettext("That filter couldn't be applied to this list, so it was ignored.")
 
   @error_classes [Ash.Error.Invalid, Ash.Error.Forbidden, Ash.Error.Framework, Ash.Error.Unknown]
 
@@ -194,7 +196,7 @@ defmodule AshQuick.LiveView.ListUtils do
 
     params = %URLParams{params | custom_filter: nil}
 
-    {put_flash(socket, :error, @refused_filter_message), params,
+    {put_flash(socket, :error, refused_filter_message()), params,
      load_data!(socket, params, options)}
   end
 
@@ -346,7 +348,7 @@ defmodule AshQuick.LiveView.ListUtils do
           end)
 
         _ ->
-          socket |> put_flash(:error, "Unable to determine current user for export")
+          socket |> put_flash(:error, gettext("Unable to determine current user for export"))
       end
 
     {:halt, socket}
@@ -646,17 +648,22 @@ defmodule AshQuick.LiveView.ListUtils do
 
   defp skipped_rows_message(action, selected, skipped) do
     applied =
-      "#{Utils.humanize(action.name)} applied to #{selected - skipped} of #{selected} selected rows."
+      ngettext(
+        "%{action} applied to %{applied} of 1 selected row.",
+        "%{action} applied to %{applied} of %{count} selected rows.",
+        selected,
+        action: Utils.humanize(action.name),
+        applied: selected - skipped
+      )
 
-    case skipped do
-      1 ->
-        applied <> " The other row was not changed and is still selected: check it and try again."
+    not_changed =
+      ngettext(
+        "The other row was not changed and is still selected: check it and try again.",
+        "The other %{count} rows were not changed and are still selected: check them and try again.",
+        skipped
+      )
 
-      _ ->
-        applied <>
-          " The other #{skipped} rows were not changed and are still selected: " <>
-          "check them and try again."
-    end
+    applied <> " " <> not_changed
   end
 
   defp assign_row_actions(socket, id, %Options{resource: resource}) do

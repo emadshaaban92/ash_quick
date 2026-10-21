@@ -4,6 +4,16 @@
 
 ### Features
 
+- **AshQuick's own flashes are translated.** "Record saved successfully",
+  "Record deleted successfully", the stale-record, not-found, refusal and
+  generic error sentences, the refused-filter and failed-print flashes, the
+  bulk run's skipped-rows count, the upload errors, the export and Live Users
+  flashes and the Live Users page title now go through `AshQuick.Gettext`,
+  with Arabic translations. A test fails when a locale's `.po` lacks a
+  message, leaves one empty in any plural form, marks one fuzzy, or names a
+  binding the English does not, so a message merged without a translation
+  no longer ships in English with CI green.
+
 - **Each field on a details page names itself.** A details row carries
   `data-field` with the field's path, `.`-joined for a relationship path
   (`[vehicle: :chassis_number]` is `"vehicle.chassis_number"`), so a test can

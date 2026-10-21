@@ -84,9 +84,10 @@ render an input for every field the action offers; an error on a field it
 leaves out shows nowhere.
 
 A run a policy refuses shows that policy's `error_message` when it has one, and
-"You don't have permission to do that." when it has none. The message is a
-msgid like Ash's own, so it goes through `:error_translator` too: add it to
-your `errors` catalogue. Only the message is shown, never the policy breakdown.
+"You don't have permission to do that." when it has none; that sentence, like
+AshQuick's other flashes, comes from AshQuick's own catalogue. The policy's
+message is a msgid like Ash's own, so it goes through `:error_translator` too:
+add it to your `errors` catalogue. Only the message is shown, never the policy breakdown.
 An `error_message` function that returns an exception of its own replaces the
 policy error, so the flash shows the fixed sentence instead.
 
