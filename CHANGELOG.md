@@ -4,6 +4,19 @@
 
 ### Features
 
+- **A list sorts by a column's header.** A click sorts the list by that
+  column ascending, then descending, then back to the default order; the
+  column goes ahead of `sort_by` and the action's own sort, which still break
+  its ties. One column at a time, in the URL as `?sort=name` or
+  `?sort=-owner.name`, kept while paging, searching and filtering, and
+  followed by the export. Every list column Ash sorts in the data layer is
+  sortable by default (public attributes, aggregates, expression
+  calculations, also through public to-one relationships; `sortable? false`
+  opts one out); `list: [sortable: ...]` names exactly which, so a large
+  table offers only its indexed columns, and `sortable: []` turns sorting
+  off. Entries are checked when the QuickView compiles, and a `?sort=` naming
+  another column is dropped.
+
 - **AshQuick's own flashes are translated.** "Record saved successfully",
   "Record deleted successfully", the stale-record, not-found, refusal and
   generic error sentences, the refused-filter and failed-print flashes, the

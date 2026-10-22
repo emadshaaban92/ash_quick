@@ -22,6 +22,7 @@ defmodule AshQuick.LiveView.QuickView.Options do
     filters: %{},
     sidebar: true,
     list_fields: [],
+    list_sortable: [],
     list_load: [],
     list_default_action: :index,
     details_fields: [],
@@ -58,7 +59,8 @@ defmodule AshQuick.LiveView.QuickView.Options do
     load: [type: @load_type],
     default_action: [type: :atom],
     new_action_label: [type: :string],
-    bulk_actions: [type: {:or, [{:list, :any}, {:fun, 1}]}]
+    bulk_actions: [type: {:or, [{:list, :any}, {:fun, 1}]}],
+    sortable: [type: {:list, {:or, [:atom, {:list, {:tuple, [:atom, :any]}}]}}]
   ]
 
   @form_schema [
@@ -109,6 +111,7 @@ defmodule AshQuick.LiveView.QuickView.Options do
     |> put_details_options(details_opts, default_attrs)
     |> put_form_options(opts[:form] || [])
     |> validate_lookups!()
+    |> put_list_sortable(list_opts[:sortable])
     |> validate_list_inputs!()
     |> validate_bulk_actions!()
   end
@@ -325,6 +328,88 @@ defmodule AshQuick.LiveView.QuickView.Options do
         bulk_actions: list_opts[:bulk_actions]
     }
   end
+
+  # The columns a visitor may sort the list by, as the names `?sort=` carries:
+  # each column's `QuickField.data_field/1`.
+  #
+  # Unsaid, it is every list column Ash can sort in the data layer — a public
+  # attribute, an expression calculation or an aggregate, of the resource or
+  # reached through public to-one relationships — by the same check a named
+  # list is held to. Each of those has `sortable?` for a resource to opt one
+  # out with. Anything Ash computes in Elixir is left out, since no data layer
+  # can order by it. Most resources are small enough for that to be free; a
+  # large one names the columns it has indexes for, or `[]` for none.
+  defp put_list_sortable(%__MODULE__{} = options, nil) do
+    sortable =
+      for %QuickField{path: path} = field <- options.list_fields,
+          sortable_path?(options.resource, path),
+          uniq: true,
+          do: QuickField.data_field(field)
+
+    %{options | list_sortable: sortable}
+  end
+
+  @unsortable "is not a field Ash can sort by in the data layer, through public, " <>
+                "sortable to-one relationships"
+
+  defp put_list_sortable(%__MODULE__{resource: resource} = options, sortable) do
+    columns = MapSet.new(options.list_fields, &QuickField.data_field/1)
+
+    refused =
+      Enum.flat_map(sortable, fn path ->
+        cond do
+          not single_path?(path) ->
+            [{path, "is not a field or a relationship path"}]
+
+          not MapSet.member?(columns, QuickField.data_field(path)) ->
+            [{path, "is not one of the list's fields"}]
+
+          not sortable_path?(resource, path) ->
+            [{path, @unsortable}]
+
+          true ->
+            []
+        end
+      end)
+
+    if refused != [] do
+      raise ArgumentError, """
+      #{inspect(options.module)} lets its list be sorted by columns it cannot be \
+      sorted by:
+
+      #{Enum.map_join(refused, "\n", fn {path, reason} -> "  * #{inspect(path)} #{reason}" end)}
+
+      `list: [sortable: ...]` names list columns: a public attribute, aggregate \
+      or expression calculation of #{inspect(resource)}, or one reached through \
+      public to-one relationships, such as `[owner: :name]`.
+      """
+    end
+
+    %{options | list_sortable: sortable |> Enum.map(&QuickField.data_field/1) |> Enum.uniq()}
+  end
+
+  defp single_path?(path) when is_atom(path), do: true
+  defp single_path?([{relationship, nested}]) when is_atom(relationship), do: single_path?(nested)
+  defp single_path?(_path), do: false
+
+  # A field Ash sorts in the data layer under offset pagination, which is the
+  # only kind a QuickView reads. Through a relationship, every hop has to be
+  # public and to-one: sorting through a to-many one has no single value to
+  # order a row by.
+  defp sortable_path?(resource, field) when is_atom(field),
+    do: Ash.Resource.Info.sortable?(resource, field, include_private?: false)
+
+  defp sortable_path?(resource, [{relationship, nested}]) do
+    case Ash.Resource.Info.public_relationship(resource, relationship) do
+      %{cardinality: :one, destination: destination} = relationship ->
+        Map.get(relationship, :sortable?, true) and sortable_path?(destination, nested)
+
+      _ ->
+        false
+    end
+  end
+
+  defp sortable_path?(_resource, _path), do: false
 
   defp put_details_options(options, details_opts, default_attrs) do
     %{

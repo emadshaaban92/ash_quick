@@ -554,4 +554,46 @@ defmodule AshQuick.LiveView.URLParamsCeilingTest do
       end
     end
   end
+
+  describe "sort" do
+    test "a column reads ascending, a leading - descending" do
+      assert URLParams.from_url_params(%{"sort" => "name"}).sort == {"name", :asc}
+      assert URLParams.from_url_params(%{"sort" => "-owner.name"}).sort == {"owner.name", :desc}
+    end
+
+    test "anything else is no sort" do
+      for sort <- ["", ["name"], %{"a" => "b"}, nil] do
+        assert URLParams.from_url_params(%{"sort" => sort}).sort == nil
+      end
+    end
+
+    test "a column the list does not offer is dropped" do
+      params = URLParams.from_url_params(%{"sort" => "-secret"})
+
+      assert URLParams.allow_sort(params, ["name"]).sort == nil
+      assert URLParams.allow_sort(params, ["secret"]).sort == {"secret", :desc}
+    end
+
+    test "a header cycles ascending, descending, then none, from the first page" do
+      params = URLParams.from_url_params(%{"page" => "3"})
+
+      params = URLParams.cycle_sort(params, "name")
+      assert {params.sort, params.page} == {{"name", :asc}, 1}
+
+      params = URLParams.cycle_sort(%{params | page: 2}, "name")
+      assert {params.sort, params.page} == {{"name", :desc}, 1}
+
+      assert URLParams.cycle_sort(params, "name").sort == nil
+      assert URLParams.cycle_sort(params, "code").sort == {"code", :asc}
+    end
+
+    test "is written back as it was read" do
+      params =
+        %{"sort" => "-name", "search" => "tent"}
+        |> URLParams.from_url_params()
+        |> URLParams.apply_pagination(struct(Pagination, max_page_size: 250, default_limit: 20))
+
+      assert URLParams.full_path("/products", params) == "/products?search=tent&sort=-name"
+    end
+  end
 end

@@ -12,9 +12,9 @@ defmodule ExampleWeb.ListScenarioTest do
   everything a hostile query string can be. What it cannot cover is whether the
   page acts on what was decoded, which is what is driven here.
 
-  There is no sort control: `sort_by` is a QuickView declaration, not something
-  a reader clicks. The ordering it produces is asserted all the same, because it
-  is what decides which rows a page of results contains.
+  Sorting by a column header is driven in `ExampleWeb.SortScenarioTest`. The
+  ordering `sort_by` produces is asserted here all the same, because it is what
+  decides which rows a page of results contains.
   """
   use ExampleWeb.FeatureCase, async: true
 

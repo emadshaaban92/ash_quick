@@ -37,6 +37,11 @@ defmodule AshQuick.LiveView.Components.ListView do
 
   attr(:path_for_page, :any, default: nil, doc: "the function for generating pagination paths")
 
+  attr(:sortable, :list,
+    default: [],
+    doc: "the `QuickField.data_field/1` names of the columns the list may be sorted by"
+  )
+
   attr(:actions, :any, default: nil)
   attr(:filters, :map, default: nil)
   attr(:selected_rows, :map, default: nil)
@@ -114,8 +119,19 @@ defmodule AshQuick.LiveView.Components.ListView do
                         class="checkbox checkbox-sm bg-base-300 text-base-content"
                       />
                     </th>
-                    <th :for={field <- @fields}>
-                      {field.label}
+                    <th
+                      :for={field <- @fields}
+                      aria-sort={aria_sort(@params, QuickField.data_field(field))}
+                    >
+                      <.sort_header
+                        :if={QuickField.data_field(field) in @sortable}
+                        field={field}
+                        params={@params}
+                        path={@path}
+                      />
+                      <span :if={QuickField.data_field(field) not in @sortable}>
+                        {field.label}
+                      </span>
                     </th>
                     <th>
                       <span class="sr-only">{gettext("Actions")}</span>
@@ -184,6 +200,48 @@ defmodule AshQuick.LiveView.Components.ListView do
       <.export_modal :if={AshQuick.Config.exports_enabled?()} export_data={@export_data} />
     </section>
     """
+  end
+
+  # The header's link leads to the next sort `URLParams.cycle_sort/2` gives the
+  # column; its arrow says which way the list is sorted by it now, if at all.
+  attr(:field, :map, required: true)
+  attr(:params, :map, required: true)
+  attr(:path, :string, required: true)
+
+  defp sort_header(assigns) do
+    assigns =
+      assign(assigns,
+        column: QuickField.data_field(assigns.field),
+        direction: sort_direction(assigns.params, QuickField.data_field(assigns.field))
+      )
+
+    ~H"""
+    <.link
+      patch={URLParams.full_path(@path, URLParams.cycle_sort(@params, @column))}
+      class="group inline-flex items-center gap-1 hover:text-base-content"
+      data-sort={@column}
+    >
+      {@field.label}
+      <.icon :if={@direction == :asc} name="hero-chevron-up-mini" class="w-4 h-4" />
+      <.icon :if={@direction == :desc} name="hero-chevron-down-mini" class="w-4 h-4" />
+      <.icon
+        :if={@direction == nil}
+        name="hero-chevron-up-down-mini"
+        class="w-4 h-4 opacity-30 group-hover:opacity-70"
+      />
+    </.link>
+    """
+  end
+
+  defp sort_direction(%URLParams{sort: {column, direction}}, column), do: direction
+  defp sort_direction(_params, _column), do: nil
+
+  defp aria_sort(params, column) do
+    case sort_direction(params, column) do
+      :asc -> "ascending"
+      :desc -> "descending"
+      nil -> nil
+    end
   end
 
   defp custom_filter_modal(assigns) do

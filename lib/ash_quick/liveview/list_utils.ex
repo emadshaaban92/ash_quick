@@ -85,7 +85,7 @@ defmodule AshQuick.LiveView.ListUtils do
     |> maybe_apply_base_filter(options.base_filter)
     |> maybe_apply_filters(options.filters, params.selected_filters)
     |> maybe_apply_custom_filter(params.custom_filter)
-    |> maybe_apply_sort(options.sort_by)
+    |> apply_sort(params, options)
     |> Utils.load_fields(options.list_fields, strict?: true)
     |> Ash.Query.load(options.load ++ options.list_load, strict?: true)
     |> maybe_load_active(options.resource)
@@ -251,6 +251,22 @@ defmodule AshQuick.LiveView.ListUtils do
     end)
   end
 
+  # A column the visitor sorted by goes first, then the QuickView's `sort_by`,
+  # then the action's own sort, each ordering the rows the one before ties on;
+  # Ash ends every paginated read with the primary key, so ties left after all
+  # of them keep their order across pages. The column goes through
+  # `sort_input/3`, as a visitor's input: Ash refuses a private field there,
+  # and authorizes it against field policies. Prepending it shifts the indices
+  # Ash keeps of input sorts, so `sort_by` is not authorized as one.
+  defp apply_sort(query, %URLParams{} = params, %Options{} = options) do
+    query = maybe_apply_sort(query, options.sort_by)
+
+    case URLParams.sort_input(params) do
+      nil -> query
+      sort -> Ash.Query.sort_input(query, sort, prepend?: true)
+    end
+  end
+
   defp maybe_apply_sort(query, nil), do: query
   defp maybe_apply_sort(query, sort_by), do: Ash.Query.sort(query, sort_by, prepend?: true)
 
@@ -266,7 +282,7 @@ defmodule AshQuick.LiveView.ListUtils do
     |> maybe_apply_base_filter(options.base_filter)
     |> maybe_apply_filters(options.filters, params.selected_filters)
     |> maybe_apply_custom_filter(params.custom_filter)
-    |> maybe_apply_sort(options.sort_by)
+    |> apply_sort(params, options)
   end
 
   defp build_export_query(resource, ids, socket, _options) do
