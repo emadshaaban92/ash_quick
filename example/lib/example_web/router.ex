@@ -116,6 +116,8 @@ defmodule ExampleWeb.Router do
         quick_view "/required_picks", Example.Test.RequiredPicksLive.Quick
         quick_view "/second_lists", Example.Test.SecondListsLive.Quick
         quick_view "/small_pages", Example.Test.SmallPagesLive.Quick
+        quick_view "/sorted_rows", Example.Test.SortedRowsLive.Quick
+        quick_view "/sorted_rows_named", Example.Test.SortedRowsNamedLive.Quick
         quick_view "/worded_policy", Example.Test.WordedPolicyLive.Quick
       end
     end

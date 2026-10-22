@@ -58,6 +58,8 @@ config :ash_quick,
         "/test/required_picks",
         "/test/second_lists",
         "/test/small_pages",
+        "/test/sorted_rows",
+        "/test/sorted_rows_named",
         "/test/worded_policy"
       ],
       # Tower keeps its default reporter here on purpose: it is the one that

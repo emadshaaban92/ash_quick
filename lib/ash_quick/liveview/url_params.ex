@@ -12,6 +12,8 @@ defmodule AshQuick.LiveView.URLParams do
             search: "",
             selected_filters: [],
             custom_filter: nil,
+            # `{column, :asc | :desc}`, a column named as `?sort=` names it.
+            sort: nil,
             read_args: %{},
             show_custom_filter: false,
             limit_given?: false,
@@ -40,6 +42,7 @@ defmodule AshQuick.LiveView.URLParams do
       search: params |> Map.get("search") |> parse_search(),
       selected_filters: params |> Map.get("selected_filters") |> parse_selected_filters(),
       custom_filter: params |> Map.get("custom_filter") |> decode_custom_filter(),
+      sort: params |> Map.get("sort") |> parse_sort(),
       read_args: params |> get_read_args(),
       show_custom_filter: Map.has_key?(params, "show_custom_filter")
     }
@@ -174,6 +177,44 @@ defmodule AshQuick.LiveView.URLParams do
 
   defp max_page(limit), do: div(@max_offset, limit) + 1
 
+  # Any name is read here, since nothing here knows the columns; one the list
+  # may not be sorted by is dropped by `allow_sort/2`.
+  defp parse_sort("-" <> column) when column != "", do: {column, :desc}
+  defp parse_sort(column) when is_binary(column) and column != "", do: {column, :asc}
+  defp parse_sort(_), do: nil
+
+  @doc """
+  Drops a sort by any column but `sortable`, the names a QuickView lets its list
+  be sorted by. Dropped rather than refused, like a limit over the ceiling: the
+  list reads in its default order, and every link it writes leaves the sort out.
+  """
+  def allow_sort(%__MODULE__{sort: {column, _direction}} = params, sortable) do
+    if column in sortable, do: params, else: %__MODULE__{params | sort: nil}
+  end
+
+  def allow_sort(%__MODULE__{} = params, _sortable), do: params
+
+  @doc """
+  The params a click on `column`'s header leads to: ascending, then descending,
+  then back to the list's default order. Any sort starts from the first page,
+  since the rows a page held are not the ones it holds sorted otherwise.
+  """
+  def cycle_sort(%__MODULE__{sort: {column, :asc}} = params, column),
+    do: %__MODULE__{params | sort: {column, :desc}, page: 1}
+
+  def cycle_sort(%__MODULE__{sort: {column, :desc}} = params, column),
+    do: %__MODULE__{params | sort: nil, page: 1}
+
+  def cycle_sort(%__MODULE__{} = params, column),
+    do: %__MODULE__{params | sort: {column, :asc}, page: 1}
+
+  @doc """
+  The sort as `Ash.Query.sort_input/3` reads it, or `nil` for the default order.
+  """
+  def sort_input(%__MODULE__{sort: {column, :asc}}), do: column
+  def sort_input(%__MODULE__{sort: {column, :desc}}), do: "-" <> column
+  def sort_input(%__MODULE__{sort: nil}), do: nil
+
   defp parse_search(search) when is_binary(search), do: search
   defp parse_search(_), do: ""
 
@@ -274,6 +315,7 @@ defmodule AshQuick.LiveView.URLParams do
     |> maybe_put_limit(params)
     |> maybe_put_page(params)
     |> maybe_put_search(params)
+    |> maybe_put_sort(params)
     |> maybe_put_selected_filters(params)
     |> maybe_put_custom_filter(params)
     |> maybe_put_read_args(params)
@@ -309,6 +351,13 @@ defmodule AshQuick.LiveView.URLParams do
 
   defp maybe_put_search(params_for_path, %{search: search}) do
     Map.put(params_for_path, "search", search)
+  end
+
+  defp maybe_put_sort(params_for_path, params) do
+    case sort_input(params) do
+      nil -> params_for_path
+      sort -> Map.put(params_for_path, "sort", sort)
+    end
   end
 
   defp maybe_put_selected_filters(params_for_path, %{selected_filters: []}), do: params_for_path

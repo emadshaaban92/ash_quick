@@ -136,7 +136,8 @@ The URL is not an option here — it is declared in the router with
 `quick_view/3` and arrives as the `@base_path` assign.
 
 ### Optional (top-level)
-- `:sort_by` — Default sort (e.g. `[name: :asc]`)
+- `:sort_by` — Default sort (e.g. `[name: :asc]`); a column the visitor sorts
+  by goes ahead of it, and it breaks that column's ties
 - `:load` — Extra fields/relationships to load on every query
 - `:base_filter` — Ash expression always applied to list queries
 - `:sidebar` — Navigation sidebar, defaults to `true`. Set `false` for full width.
@@ -162,6 +163,14 @@ The URL is not an option here — it is declared in the router with
   list, in order; not given, it is every public update and destroy without
   inputs. Names are checked at compile time (a function's result when the menu
   is built); an action taking an upload is refused
+- `:sortable` — the list columns a header click sorts by, e.g.
+  `[:name, [owner: :name]]`; `[]` for none. Not given, every list column Ash
+  sorts in the data layer (public attributes, aggregates, expression
+  calculations, also through public to-one relationships; no Elixir
+  calculations; `sortable? false` opts a field or relationship out). Name the
+  indexed ones on a large table. Each entry must be a
+  list field Ash can sort, checked at compile time. The sort is one column, in
+  the URL as `?sort=name` / `?sort=-name`; an unoffered one is dropped
 
 ### Details options (`:details`)
 - `:fields` — Fields in the detail view

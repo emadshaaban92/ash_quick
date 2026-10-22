@@ -535,6 +535,39 @@ surfaces probe for actions they merely hope are there.
 Custom QuickView templates should call `AshQuick.can?/4` rather than a bare
 `Ash.can?/2`, so their controls participate in the same policies.
 
+## Sorting a list
+
+A visitor sorts a list by clicking a column's header: ascending, then
+descending, then back to the list's default order. The column goes first, and
+the QuickView's `sort_by` and the action's own sort still order the rows it
+ties on. One column at a time, carried in the URL as `?sort=name` or
+`?sort=-owner.name`, kept while paging, searching and filtering, and followed
+by the export.
+
+Every list column Ash can sort in the data layer is sortable unless the
+QuickView says otherwise: public attributes, aggregates and expression
+calculations, of the resource or reached through public to-one relationships.
+Calculations Ash computes in Elixir are not, and a field or relationship with
+`sortable? false` opts out. Sorting by an unindexed column reads the whole
+table, which is nothing on a small one; for a large one, name the columns it
+has indexes for:
+
+```elixir
+use AshQuick.LiveView.QuickView,
+  resource: MyApp.Sales.Order,
+  list: [
+    fields: [:number, :placed_at, :total, [customer: :name]],
+    sortable: [:number, :placed_at, [customer: :name]]
+  ]
+```
+
+`sortable: []` turns sorting off. Each entry has to be one of the list's
+fields that Ash can sort, reached through public to-one relationships if it is
+a path; the QuickView refuses any other when it compiles. A `?sort=` naming
+any other column is dropped, and the list reads in its default order. The sort
+goes through `Ash.Query.sort_input/3`, so field policies apply to it as they
+do to a filter.
+
 ## Testing a details page
 
 Each row on a QuickView details page carries a `data-field` attribute naming

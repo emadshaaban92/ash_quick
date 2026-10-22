@@ -45,7 +45,9 @@ defmodule AshQuick.LiveView.QuickView do
 
   ### Optional
 
-    * `:sort_by` — Default sort for list queries (e.g. `[name: :asc]`).
+    * `:sort_by` — Default sort for list queries (e.g. `[name: :asc]`). A
+      column the visitor sorts by (see `:sortable` under `:list`) goes ahead
+      of it, and it orders the rows that column ties on.
     * `:load` — Extra fields or relationships to load on every query.
     * `:base_filter` — An Ash expression that is always applied to list queries.
     * `:sidebar` — Controls the navigation sidebar. Defaults to `true`.
@@ -115,6 +117,19 @@ defmodule AshQuick.LiveView.QuickView do
       compiles, a function's result when the menu is built: a name that is no
       public update or destroy, or one whose action takes an upload (which
       belongs to one record), is refused.
+    * `:sortable` — The list columns a visitor may sort by, by clicking the
+      column's header: `[:name, :inserted_at, [seller: :name]]`. Each is one of
+      the list's `:fields`, a public attribute, aggregate or expression
+      calculation, of the resource or reached through public to-one
+      relationships; the QuickView refuses any other when it compiles. Not
+      given, every list column that passes the same check is sortable, a
+      relationship path included; a field or relationship with
+      `sortable? false` opts out.
+      Sorting by an unindexed column reads the whole table, so a large one
+      names the columns it has indexes for, or `[]` for none. The sort is
+      one column at a time, carried in the URL as `?sort=name` or
+      `?sort=-name`, and the export follows it. A custom list template gets
+      the column names as `@sortable`.
 
   ### Details options (under `:details`)
 
@@ -919,6 +934,7 @@ defmodule AshQuick.LiveView.QuickView do
     socket
     |> assign(:id, "#{Ash.Resource.Info.trace_name(options.resource)}-list")
     |> assign(:fields, visible_fields(socket, options.list_fields, action, options))
+    |> assign(:sortable, options.list_sortable)
     |> assign(:new_action_label, options.new_action_label)
     |> assign(:new_click, fn -> JS.push("new_click") end)
     |> assign(:actions, socket.assigns[:bulk_actions] || [])
@@ -1005,7 +1021,12 @@ defmodule AshQuick.LiveView.QuickView do
       if reachable?(options, action_name),
         do: resolved_action(options.resource, action_name, params)
 
-    {paginate(params, action, options), action}
+    params =
+      params
+      |> paginate(action, options)
+      |> URLParams.allow_sort(options.list_sortable)
+
+    {params, action}
   end
 
   # Every page is sized by a list: a list page by its own action, and a record
