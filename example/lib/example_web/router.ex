@@ -104,6 +104,7 @@ defmodule ExampleWeb.Router do
         quick_view "/digits_only", Example.Test.DigitsOnlyLive.Quick
         quick_view "/enum_picks", Example.Test.EnumPicksLive.Quick
         quick_view "/field_rows", Example.Test.FieldRowsLive.Quick
+        quick_view "/filter_fields", Example.Test.FilterFieldsLive.Quick
         quick_view "/form_stages", Example.Test.FormStagesLive.Quick
         quick_view "/hidden_address", Example.Test.HiddenAddressLive.Quick
         quick_view "/lookup_items", Example.Test.LookupItemsLive.Quick
