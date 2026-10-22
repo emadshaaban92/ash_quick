@@ -33,6 +33,12 @@ defmodule AshQuick.LiveView.Components.ListView do
   )
 
   attr(:scope, :map, required: true)
+
+  attr(:ash_action, :map,
+    default: nil,
+    doc: "the read the list runs, which field policies are asked against"
+  )
+
   attr(:params, :map, default: nil)
 
   attr(:path_for_page, :any, default: nil, doc: "the function for generating pagination paths")
@@ -69,6 +75,8 @@ defmodule AshQuick.LiveView.Components.ListView do
               <.custom_filter_modal
                 :if={@params.show_custom_filter}
                 resource={@resource}
+                action={@ash_action}
+                scope={@scope}
                 params={@params}
                 path={@path}
               />
@@ -264,6 +272,8 @@ defmodule AshQuick.LiveView.Components.ListView do
           id="filter_form"
           module={AshQuick.LiveView.Components.FilterForm}
           resource={@resource}
+          action={@action}
+          scope={@scope}
           custom_filter={@params.custom_filter}
         />
       </div>

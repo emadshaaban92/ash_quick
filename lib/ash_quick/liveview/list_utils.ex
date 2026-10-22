@@ -32,9 +32,10 @@ defmodule AshQuick.LiveView.ListUtils do
   def do_handle_params(
         socket,
         %URLParams{} = params,
-        %Actions.Read{get?: false} = _action,
+        %Actions.Read{get?: false} = action,
         %Options{} = options
       ) do
+    {socket, params} = drop_hidden_fields(socket, params, action, options)
     {socket, params, page} = initial_read(socket, params, options)
 
     socket
@@ -113,6 +114,45 @@ defmodule AshQuick.LiveView.ListUtils do
       nil -> query
       ash_filter -> Ash.Query.filter_input(query, ash_filter)
     end
+  end
+
+  # A row on a field a field policy hides from the actor on every record is
+  # dropped before the read, the way `FilterForm` leaves the field out: Ash
+  # would read the field as `nil`, so the list would come back empty under a
+  # filter that looked like an answer. Only a link carries one, written for an
+  # actor who could see the field or by hand, so the visitor is told, and the
+  # address bar is corrected with the rest of `:params`.
+  #
+  # A root that is itself such a row, as a hand-written link can be, leaves no
+  # filter at all.
+  defp drop_hidden_fields(socket, %URLParams{custom_filter: nil} = params, _action, _options),
+    do: {socket, params}
+
+  defp drop_hidden_fields(socket, %URLParams{custom_filter: filter} = params, action, options) do
+    case hidden_fields(filter, action, options.resource, socket.assigns[:scope]) do
+      [] ->
+        {socket, params}
+
+      hidden ->
+        filter = CustomFilter.reject_fields(filter, hidden)
+
+        {put_flash(socket, :error, refused_filter_message()),
+         %URLParams{params | custom_filter: filter}}
+    end
+  end
+
+  # The names `filter` uses that are fields of `resource` the actor may not
+  # see. A name that is no field is left to the read, which refuses it.
+  defp hidden_fields(filter, action, resource, scope) do
+    by_name =
+      resource
+      |> Ash.Resource.Info.fields([:attributes, :calculations, :aggregates])
+      |> Map.new(&{to_string(&1.name), &1.name})
+
+    named = filter |> CustomFilter.field_names() |> Enum.filter(&Map.has_key?(by_name, &1))
+    visible = named |> Enum.map(&by_name[&1]) |> Utils.visible_fields(resource, action, scope)
+
+    Enum.reject(named, &(by_name[&1] in visible))
   end
 
   # A custom filter is the one part of this query a visitor authors, and there

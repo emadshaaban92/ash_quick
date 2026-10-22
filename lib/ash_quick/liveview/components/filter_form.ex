@@ -6,7 +6,10 @@ defmodule AshQuick.LiveView.Components.FilterForm do
 
   alias AshQuick.LiveView.CustomFilter
   alias AshQuick.LiveView.EnumOptions
+  alias AshQuick.LiveView.FilterDatetime
   alias AshQuick.LiveView.Utils
+
+  @datetime_types [Ash.Type.DateTime, Ash.Type.UtcDatetimeUsec, Ash.Type.UtcDatetime]
 
   @supported_types [
     Ash.Type.UUID,
@@ -25,12 +28,10 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   ]
 
   attr :resource, :atom, required: true
+  attr :action, :map, default: nil, doc: "the read the list runs"
+  attr :scope, :map, required: true
   @impl true
   def render(assigns) do
-    assigns =
-      assigns
-      |> assign(:fields, fields(assigns.resource))
-
     ~H"""
     <div class="flex w-full">
       <.form
@@ -95,7 +96,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
                 class="select select-sm sm:w-auto"
               >
                 {Phoenix.HTML.Form.options_for_select(
-                  @fields |> Enum.map(&{Utils.humanize(&1.name), &1.name}),
+                  field_options(@fields, filter.field_name),
                   filter.field_name
                 )}
               </select>
@@ -131,7 +132,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
           <% end %>
         <% end %>
 
-        <div class="flex flex-wrap gap-1">
+        <div :if={@fields != []} class="flex flex-wrap gap-1">
           <button
             phx-click="add_filter"
             type="button"
@@ -165,12 +166,12 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   end
 
   defp filter_value(%{field: %{type: t}} = assigns)
-       when t in [Ash.Type.DateTime, Ash.Type.UtcDatetimeUsec, Ash.Type.UtcDatetime] do
+       when t in @datetime_types do
     ~H"""
     <input
       type="datetime-local"
       name={"value-#{@filter.uuid}"}
-      value={@filter.value}
+      value={FilterDatetime.to_local(@filter.value, AshQuick.Config.timezone())}
       class="input input-sm min-w-0 flex-1"
     />
     """
@@ -195,7 +196,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       class="select  select-sm min-w-0 flex-1"
     >
       {Phoenix.HTML.Form.options_for_select(
-        [{"", nil}, {"True", true}, {"False", false}],
+        [{"", nil}, {gettext("True"), true}, {gettext("False"), false}],
         @filter.value
       )}
     </select>
@@ -217,7 +218,9 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     """
   end
 
-  defp filter_value(%{field: %{}} = assigns) do
+  # Any other field, and a row naming one this form does not offer: a URL
+  # written for an actor who could see it, or by hand.
+  defp filter_value(assigns) do
     ~H"""
     <input
       type="text"
@@ -233,6 +236,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     socket =
       socket
       |> assign(assigns)
+      |> assign_fields()
       |> maybe_assign_new_filter()
 
     {:ok, socket}
@@ -245,14 +249,11 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       %CustomFilter{
         operator: "and",
         uuid: Ash.UUID.generate(),
-        children: [
-          %CustomFilter{
-            uuid: Ash.UUID.generate(),
-            field_name: "id",
-            operator: "equals",
-            value: ""
-          }
-        ]
+        children:
+          case first_leaf(socket.assigns.fields) do
+            nil -> []
+            leaf -> [CustomFilter.new_leaf(leaf)]
+          end
       }
     )
   end
@@ -261,14 +262,16 @@ defmodule AshQuick.LiveView.Components.FilterForm do
 
   @impl true
   def handle_event("add_filter", %{"uuid" => uuid, "nested" => nested}, socket) do
-    custom_filter =
-      CustomFilter.add_filter(
-        socket.assigns.custom_filter,
-        uuid,
-        nested
-      )
+    # No field to start a row on: the buttons are not rendered then, so this is
+    # a stale page or a forged event.
+    case first_leaf(socket.assigns.fields) do
+      nil ->
+        {:noreply, socket}
 
-    {:noreply, assign(socket, :custom_filter, custom_filter)}
+      leaf ->
+        custom_filter = CustomFilter.add_filter(socket.assigns.custom_filter, uuid, nested, leaf)
+        {:noreply, assign(socket, :custom_filter, custom_filter)}
+    end
   end
 
   def handle_event("remove_filter", %{"uuid" => uuid}, socket) do
@@ -303,30 +306,26 @@ defmodule AshQuick.LiveView.Components.FilterForm do
         socket
       ) do
     field_name = params["field_name-" <> uuid]
-    fields = fields(socket.assigns.resource)
 
-    allowed_operators =
-      fields |> Enum.find(&(to_string(&1.name) == field_name)) |> field_operators()
+    # A field this form does not offer is ignored: a stale page, or an event
+    # naming a field the actor may not see.
+    case Enum.find(socket.assigns.fields, &(to_string(&1.name) == field_name)) do
+      nil ->
+        {:noreply, socket}
 
-    custom_filter =
-      socket.assigns.custom_filter
-      |> CustomFilter.update_filter(
-        uuid,
-        :field_name,
-        field_name
-      )
-      |> CustomFilter.update_filter(
-        uuid,
-        :operator,
-        List.first(allowed_operators) |> elem(1)
-      )
-      |> CustomFilter.update_filter(
-        uuid,
-        :value,
-        ""
-      )
+      field ->
+        custom_filter =
+          socket.assigns.custom_filter
+          |> CustomFilter.update_filter(uuid, :field_name, field_name)
+          |> CustomFilter.update_filter(
+            uuid,
+            :operator,
+            field |> field_operators() |> first_operator()
+          )
+          |> CustomFilter.update_filter(uuid, :value, "")
 
-    {:noreply, assign(socket, :custom_filter, custom_filter)}
+        {:noreply, assign(socket, :custom_filter, custom_filter)}
+    end
   end
 
   def handle_event(
@@ -334,12 +333,14 @@ defmodule AshQuick.LiveView.Components.FilterForm do
         %{"_target" => ["value-" <> uuid]} = params,
         socket
       ) do
+    value = held_value(socket, uuid, params["value-" <> uuid])
+
     custom_filter =
       CustomFilter.update_filter(
         socket.assigns.custom_filter,
         uuid,
         :value,
-        params["value-" <> uuid]
+        value
       )
 
     {:noreply, assign(socket, :custom_filter, custom_filter)}
@@ -353,6 +354,74 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   def handle_event("reset", _, socket) do
     notify_parent(nil)
     {:noreply, socket}
+  end
+
+  # A timestamp is typed in the zone the list shows it in, and held as the UTC
+  # instant that means. See `AshQuick.LiveView.FilterDatetime`.
+  defp held_value(socket, uuid, value) do
+    with %CustomFilter{field_name: name} <- CustomFilter.find(socket.assigns.custom_filter, uuid),
+         %{type: type} when type in @datetime_types <-
+           Enum.find(socket.assigns.fields, &(to_string(&1.name) == name)) do
+      FilterDatetime.to_utc(value, AshQuick.Config.timezone())
+    else
+      _ -> value
+    end
+  end
+
+  # Asked only when what it depends on changed, rather than on every render,
+  # event or re-render of the modal: a field policy is a check against the
+  # actor, and the answer does not change while the form is open.
+  defp assign_fields(socket) do
+    if Enum.any?([:resource, :action, :scope], &changed?(socket, &1)) do
+      %{resource: resource, action: action, scope: scope} = socket.assigns
+      assign(socket, :fields, fields(resource, action, scope))
+    else
+      socket
+    end
+  end
+
+  # A row can name a field this form does not offer: a link written for an
+  # actor who could see it, or by hand. The select holds it as a disabled
+  # option, so it shows the field the row filters on instead of the first one
+  # offered, which a browser would show and could not then be picked.
+  defp field_options(fields, field_name) do
+    options = Enum.map(fields, &{Utils.humanize(&1.name), to_string(&1.name)})
+
+    if is_binary(field_name) and not Enum.any?(options, &(elem(&1, 1) == field_name)),
+      do: [[key: Utils.humanize(field_name), value: field_name, disabled: true] | options],
+      else: options
+  end
+
+  # A new row starts on the first field offered: no one field is one every
+  # resource has, or one every actor may see.
+  defp first_leaf([field | _]),
+    do: %{
+      field_name: to_string(field.name),
+      operator: field |> field_operators() |> first_operator()
+    }
+
+  defp first_leaf([]), do: nil
+
+  defp first_operator([{_label, operator} | _]), do: operator
+  defp first_operator([]), do: nil
+
+  # A field a field policy hides from the actor on every row is not offered:
+  # Ash would read it as `nil` in the filter, so the list would come back empty
+  # and look like an answer. One hidden on some rows only stays.
+  # Without the list's read, the field policies are asked against the
+  # resource's primary read, so a caller that names none still hides them.
+  defp fields(resource, nil, scope) do
+    case Ash.Resource.Info.primary_action(resource, :read) do
+      nil -> fields(resource)
+      action -> fields(resource, action, scope)
+    end
+  end
+
+  defp fields(resource, action, scope) do
+    offered = fields(resource)
+    visible = offered |> Enum.map(& &1.name) |> Utils.visible_fields(resource, action, scope)
+
+    Enum.filter(offered, &(&1.name in visible))
   end
 
   defp fields(resource) do
@@ -407,12 +476,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   end
 
   defp type_operators(%{type: t})
-       when t in [
-              Ash.Type.DateTime,
-              Ash.Type.UtcDatetimeUsec,
-              Ash.Type.UtcDatetime,
-              Ash.Type.Float
-            ] do
+       when t in @datetime_types or t == Ash.Type.Float do
     [
       {">", "gt"},
       {">=", "gte"},

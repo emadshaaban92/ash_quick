@@ -583,3 +583,13 @@ msgstr "نوع الملف الذي اخترته غير مقبول"
 #, elixir-autogen, elixir-format
 msgid "You have selected too many files"
 msgstr "لقد اخترت عددًا كبيرًا جدًا من الملفات"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "False"
+msgstr "خطأ"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "True"
+msgstr "صحيح"

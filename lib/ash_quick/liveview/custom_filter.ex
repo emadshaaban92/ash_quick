@@ -4,7 +4,15 @@ defmodule AshQuick.LiveView.CustomFilter do
   @enforce_keys [:uuid, :operator]
   defstruct [:uuid, :operator, :field_name, :value, :children]
 
-  def add_filter(%__MODULE__{uuid: uuid, children: children} = filter, uuid, "true")
+  @doc """
+  Adds a row, or a group holding one row, under the group `uuid` names.
+
+  `leaf` is the row's starting `field_name` and `operator`: the form's first
+  offered field, since no field is one every resource offers.
+  """
+  def add_filter(filter, uuid, nested, leaf)
+
+  def add_filter(%__MODULE__{uuid: uuid, children: children} = filter, uuid, "true", leaf)
       when is_list(children) do
     new_uuid = Ash.UUID.generate()
 
@@ -20,33 +28,35 @@ defmodule AshQuick.LiveView.CustomFilter do
               }
             ]
     }
-    |> add_filter(new_uuid, "false")
+    |> add_filter(new_uuid, "false", leaf)
   end
 
-  def add_filter(%__MODULE__{uuid: uuid, children: children} = filter, uuid, "false")
+  def add_filter(%__MODULE__{uuid: uuid, children: children} = filter, uuid, "false", leaf)
       when is_list(children) do
-    %__MODULE__{
-      filter
-      | children:
-          children ++
-            [
-              %__MODULE__{
-                uuid: Ash.UUID.generate(),
-                field_name: "id",
-                operator: "equals",
-                value: ""
-              }
-            ]
-    }
+    %__MODULE__{filter | children: children ++ [new_leaf(leaf)]}
   end
 
-  def add_filter(%__MODULE__{children: children} = filter, uuid, nested) when is_list(children) do
-    %__MODULE__{filter | children: Enum.map(children, &add_filter(&1, uuid, nested))}
+  def add_filter(%__MODULE__{children: children} = filter, uuid, nested, leaf)
+      when is_list(children) do
+    %__MODULE__{filter | children: Enum.map(children, &add_filter(&1, uuid, nested, leaf))}
   end
 
-  def add_filter(%__MODULE__{} = filter, _uuid, _nested) do
+  def add_filter(%__MODULE__{} = filter, _uuid, _nested, _leaf) do
     filter
   end
+
+  @doc "A row comparing `leaf`'s field by its operator, with no value yet."
+  def new_leaf(%{field_name: field_name, operator: operator}) do
+    %__MODULE__{uuid: Ash.UUID.generate(), field_name: field_name, operator: operator, value: ""}
+  end
+
+  @doc "The node `uuid` names anywhere in `filter`'s tree, or `nil`."
+  def find(%__MODULE__{uuid: uuid} = filter, uuid), do: filter
+
+  def find(%__MODULE__{children: children}, uuid) when is_list(children),
+    do: Enum.find_value(children, &find(&1, uuid))
+
+  def find(%__MODULE__{}, _uuid), do: nil
 
   def update_filter(%__MODULE__{uuid: uuid} = filter, uuid, key, value) do
     Map.put(filter, key, value)
@@ -73,6 +83,22 @@ defmodule AshQuick.LiveView.CustomFilter do
     filter
   end
 
+  @doc """
+  `filter` without the rows that name one of `field_names`, anywhere in its
+  tree, or `nil` when `filter` is itself such a row.
+  """
+  def reject_fields(%__MODULE__{children: [_ | _] = children} = filter, field_names) do
+    children =
+      children
+      |> Enum.map(&reject_fields(&1, field_names))
+      |> Enum.reject(&is_nil/1)
+
+    %__MODULE__{filter | children: children}
+  end
+
+  def reject_fields(%__MODULE__{field_name: field_name} = filter, field_names),
+    do: if(field_name in field_names, do: nil, else: filter)
+
   def build_ash_filter(%__MODULE__{operator: operator, children: children})
       when is_list(children) and children != [] do
     case Enum.map(children, &build_ash_filter/1) |> Enum.reject(&is_nil/1) do
@@ -87,7 +113,9 @@ defmodule AshQuick.LiveView.CustomFilter do
         value: value
       })
       when is_binary(field_name) and is_binary(value) and value != "" do
-    %{field_name => %{"like" => "#{value}%"}}
+    # Ash's own predicate rather than `like`, which only AshPostgres defines and
+    # which would read a `%` or `_` in the value as a wildcard.
+    %{field_name => %{"string_starts_with" => value}}
   end
 
   def build_ash_filter(%__MODULE__{

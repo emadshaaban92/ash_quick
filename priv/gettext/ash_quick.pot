@@ -567,3 +567,13 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "You have selected too many files"
 msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "False"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "True"
+msgstr ""

@@ -218,6 +218,31 @@
 
 ### Bug fixes
 
+- **The list's Starts With filter works on every data layer, and reads `%`
+  and `_` as themselves.** It was a SQL `LIKE`, which only AshPostgres
+  defines, so on ETS or any other data layer the read was refused and the
+  filter dropped; on Postgres a `%` or `_` in the value matched anything. It
+  is now Ash's `string_starts_with`, which AshPostgres escapes. A filter link
+  written before still reads the same.
+
+- **A timestamp in the list's filter is read in the zone the list shows it
+  in.** The `datetime-local` input names no zone, and Ash cast its value as
+  UTC, so with `config :ash_quick, timezone: "Africa/Cairo"` a filter for
+  "after 10:00" kept rows from 13:00 on. The filter now holds the UTC instant
+  the typed time means in `AshQuick.Config.timezone/0`, and shows it back in
+  that zone. A filter link written before, holding a time with no zone, is
+  still read as UTC.
+
+- **The list's filter leaves out fields the actor may not see.** A field a
+  field policy hides on every row was still offered; Ash read it as `nil`, so
+  the filter returned nothing and looked like an answer. A row naming such a
+  field, from a link written for someone else, is dropped before the read,
+  with the refused-filter flash, and the address bar is corrected. A row
+  naming a field the form does not offer at all, such as a list, shows that
+  field in its select rather than the first one offered. A new row starts
+  on the first field offered rather than on `id`, which a resource may not
+  offer, and the boolean choices "True" and "False" are translated.
+
 - **A 404 details page wakes for its record however the URL spelled the id.**
   A details page whose record was not found listens for it on the id from the
   URL, which it used as typed, so `/products/<UPPER-CASED UUID>` listened on a
