@@ -46,9 +46,9 @@ defmodule Example.MixProject do
     [
       # The library under test, from the checkout this app lives in.
       {:ash_quick, path: ".."},
-      {:ash, "~> 3.36"},
+      {:ash, "~> 3.37"},
       {:ash_phoenix, "~> 2.3"},
-      {:ash_postgres, "~> 2.14"},
+      {:ash_postgres, "~> 2.15"},
       {:ecto_sql, "~> 3.14"},
       {:postgrex, ">= 0.0.0"},
       {:picosat_elixir, "~> 0.2"},
@@ -99,9 +99,9 @@ defmodule Example.MixProject do
 
       # Tooling.
       {:igniter, "~> 0.8", only: [:dev, :test]},
-      {:sourceror, "~> 1.12", only: [:dev, :test]},
+      {:sourceror, "~> 1.13", only: [:dev, :test]},
       {:lazy_html, ">= 0.1.0", only: :test},
-      {:phoenix_test, "~> 0.12", only: :test, runtime: false},
+      {:phoenix_test, "~> 0.13", only: :test, runtime: false},
       # What ExAws parses a multipart upload's responses with. Only reached
       # through `Example.Test.S3Stub`, which is the only bucket this app talks to.
       {:sweet_xml, "~> 0.7", only: :test},
