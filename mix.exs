@@ -52,7 +52,7 @@ defmodule AshQuick.MixProject do
       # loaded yet, and ash_phoenix 2.3.20, for the dynamic `keep_live`
       # subscriptions `AshQuick.LiveView.Liveness` re-targets. ash_phoenix sits
       # at 2.3.25 because that release fixed CVE-2026-82724..82727.
-      {:ash, "~> 3.36"},
+      {:ash, "~> 3.37"},
       {:ash_phoenix, "~> 2.3 and >= 2.3.25"},
       {:spark, "~> 2.7"},
       {:phoenix, "~> 1.8"},
@@ -80,7 +80,7 @@ defmodule AshQuick.MixProject do
       {:ex_aws, "~> 2.7", optional: true},
       {:ex_aws_s3, "~> 2.5", optional: true},
       {:ex_money, "~> 6.2", optional: true},
-      {:localize, "~> 1.3", optional: true},
+      {:localize, "~> 1.4", optional: true},
       {:merge_pdf, "~> 0.5", optional: true},
 
       # The installer and generators are mix tasks in this package, and a host
@@ -88,7 +88,7 @@ defmodule AshQuick.MixProject do
       # them uncompilable exactly where they are used. Optional, so a project
       # that never generates anything does not carry them.
       {:igniter, "~> 0.8", optional: true},
-      {:sourceror, "~> 1.12", optional: true},
+      {:sourceror, "~> 1.13", optional: true},
 
       # Tooling.
       {:lazy_html, ">= 0.0.0", only: :test},
