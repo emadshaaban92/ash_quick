@@ -11,7 +11,7 @@ defmodule Example.Test.FilterFields do
   @moduledoc """
   A resource for the list's filter: a code to match the start of, a timestamp
   to compare, a salary only an admin may see, which the filter offers to no
-  one else, and tags, which it offers to no one.
+  one else, a flag picked as Yes or No, and tags, which it offers to no one.
 
   In ETS rather than Postgres, so Starts With is read by Ash itself rather
   than by a SQL `LIKE`.
@@ -33,7 +33,7 @@ defmodule Example.Test.FilterFields do
   end
 
   actions do
-    defaults [:read, create: [:code, :stamped_at, :salary]]
+    defaults [:read, create: [:code, :stamped_at, :salary, :active]]
 
     read :index do
       argument :search, :string
@@ -79,6 +79,7 @@ defmodule Example.Test.FilterFields do
     attribute :code, :string, allow_nil?: false, public?: true
     attribute :stamped_at, :utc_datetime_usec, public?: true
     attribute :salary, :integer, public?: true
+    attribute :active, :boolean, public?: true
     # A list, which the filter does not offer.
     attribute :tags, {:array, :string}, public?: true, default: []
   end
@@ -91,6 +92,6 @@ defmodule Example.Test.FilterFieldsLive.Quick do
   """
   use AshQuick.LiveView.QuickView,
     resource: Example.Test.FilterFields,
-    list: [fields: [:code, :stamped_at]],
+    list: [fields: [:code, :stamped_at, :active]],
     details: [fields: [:code, :stamped_at]]
 end

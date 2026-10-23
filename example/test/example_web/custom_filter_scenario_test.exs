@@ -74,6 +74,58 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
     end
   end
 
+  describe "a boolean" do
+    setup %{conn: conn, admin: admin} do
+      {:ok, conn: log_in(conn, admin)}
+    end
+
+    # Yes and No each keep only their own rows. A row never set is neither:
+    # No compares `== false`, which a nil does not equal, so an unanswered
+    # flag is not read as a no.
+    test "is picked as Yes or No, and each keeps only its own rows", %{conn: conn} do
+      code = unique("YN")
+      yes = filter_field(code: "#{code}-yes", active: true)
+      no = filter_field(code: "#{code}-no", active: false)
+      unset = filter_field(code: "#{code}-unset", active: nil)
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      uuid = filter_uuid(view)
+      filter_change(view, "field_name-#{uuid}", "active")
+
+      assert texts(view, "select[name='value-#{uuid}'] option") == ["", "Yes", "No"]
+
+      for {value, kept, dropped} <- [{"true", yes, [no, unset]}, {"false", no, [yes, unset]}] do
+        view = apply_filter(conn, "/test/filter_fields", "active", "equals", value)
+
+        cells = texts(view, "td")
+        assert kept.code in cells, "#{value} dropped #{kept.code}"
+        for row <- dropped, do: refute(row.code in cells, "#{value} kept #{row.code}")
+      end
+    end
+
+    # The list shows a flag the way the filter offers it.
+    test "reads Yes or No in the list", %{conn: conn} do
+      code = unique("YL")
+      filter_field(code: "#{code}-yes", active: true)
+      filter_field(code: "#{code}-no", active: false)
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields")
+
+      rows =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("tbody tr")
+        |> Enum.map(fn row ->
+          row |> LazyHTML.query("td") |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+        end)
+
+      assert Enum.any?(rows, &("#{code}-yes" in &1 and "Yes" in &1))
+      assert Enum.any?(rows, &("#{code}-no" in &1 and "No" in &1))
+      refute Enum.any?(rows, &("True" in &1 or "False" in &1))
+    end
+  end
+
   describe "the fields offered" do
     test "leave out one a field policy hides from the actor", %{conn: conn, editor: editor} do
       {:ok, view, _html} =

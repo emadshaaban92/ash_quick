@@ -196,7 +196,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       class="select  select-sm min-w-0 flex-1"
     >
       {Phoenix.HTML.Form.options_for_select(
-        [{"", nil}, {gettext("True"), true}, {gettext("False"), false}],
+        [{"", nil}, {gettext("Yes"), true}, {gettext("No"), false}],
         @filter.value
       )}
     </select>
