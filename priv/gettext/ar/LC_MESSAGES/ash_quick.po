@@ -584,12 +584,14 @@ msgstr "نوع الملف الذي اخترته غير مقبول"
 msgid "You have selected too many files"
 msgstr "لقد اخترت عددًا كبيرًا جدًا من الملفات"
 
+#: lib/ash_quick/liveview/components/field_value.ex
 #: lib/ash_quick/liveview/components/filter_form.ex
 #, elixir-autogen, elixir-format
-msgid "False"
-msgstr "خطأ"
+msgid "No"
+msgstr "لا"
 
+#: lib/ash_quick/liveview/components/field_value.ex
 #: lib/ash_quick/liveview/components/filter_form.ex
 #, elixir-autogen, elixir-format
-msgid "True"
-msgstr "صحيح"
+msgid "Yes"
+msgstr "نعم"

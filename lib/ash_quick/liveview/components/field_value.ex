@@ -81,6 +81,14 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     """
   end
 
+  # Read as an answer, the way the list's filter offers it, rather than as the
+  # atom it is. Exports keep `true`/`false`: that is data, not the page.
+  def field_value(%{value: value} = assigns) when is_boolean(value) do
+    ~H"""
+    <span>{if @value, do: gettext("Yes"), else: gettext("No")}</span>
+    """
+  end
+
   def field_value(%{value: value} = assigns) when is_atom(value) do
     ~H"""
     <span>{@value |> Utils.humanize()}</span>
