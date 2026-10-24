@@ -314,7 +314,7 @@ defmodule ExampleWeb.LivenessScenarioTest do
 
       session
       |> assert_has("h1", text: renamed.name)
-      |> assert_has("dd", text: "False")
+      |> assert_has(~s([data-field="active"] dd), text: "No", exact: true)
     end
 
     test "drops the topics the list was holding when a record is opened", ctx do

@@ -241,7 +241,13 @@
   naming a field the form does not offer at all, such as a list, shows that
   field in its select rather than the first one offered. A new row starts
   on the first field offered rather than on `id`, which a resource may not
-  offer, and the boolean choices "True" and "False" are translated.
+  offer, and the boolean choices read "Yes" and "No", translated (Arabic
+  «نعم» and «لا»).
+
+- **A boolean reads "Yes" or "No" on the list and the details page.** It was
+  humanized as the atom it is, "True" or "False", in English whatever the
+  locale, while the filter above it offered "Yes" and "No". It now reads the
+  same translated words. Exports still write `true` and `false`.
 
 - **A 404 details page wakes for its record however the URL spelled the id.**
   A details page whose record was not found listens for it on the id from the
