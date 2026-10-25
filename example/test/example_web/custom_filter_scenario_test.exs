@@ -1,8 +1,9 @@
 defmodule ExampleWeb.CustomFilterScenarioTest do
   @moduledoc """
   The list's Advanced filters, built in the form and applied: Starts With on
-  any data layer, a timestamp typed in the zone the list shows it in, and only
-  the fields the actor may see.
+  any data layer, a timestamp typed in the zone the list shows it in, a value
+  its field cannot take named under its row, and only the fields the actor may
+  see.
 
   `Example.Test.FilterFields` holds the rows, in ETS; Starts With on Postgres
   runs against `Example.Catalog.Product`. The tables are shared with other
@@ -123,6 +124,112 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       assert Enum.any?(rows, &("#{code}-yes" in &1 and "Yes" in &1))
       assert Enum.any?(rows, &("#{code}-no" in &1 and "No" in &1))
       refute Enum.any?(rows, &("True" in &1 or "False" in &1))
+    end
+  end
+
+  # Before, a value its field could not take reached the data layer, which
+  # refused the whole tree: the list came back unfiltered under a flash that
+  # named no row. Ash casts a filter's values by the field's type, so the form
+  # asks the same question on Apply.
+  describe "a value its field cannot take" do
+    setup %{conn: conn, admin: admin} do
+      {:ok, conn: log_in(conn, admin)}
+    end
+
+    test "is shown under its row, and nothing is applied", %{conn: conn} do
+      row = filter_field(code: unique("BV"), salary: 5)
+
+      view = apply_filter(conn, "/test/filter_fields", "salary", "gt", "ten")
+      uuid = filter_uuid(view)
+
+      assert texts(view, "#value-error-#{uuid}") == ["is invalid"]
+      assert attribute(view, "input[name='value-#{uuid}']", "aria-invalid") == ["true"]
+
+      assert attribute(view, "input[name='value-#{uuid}']", "aria-describedby") ==
+               ["value-error-#{uuid}"]
+
+      refute_patched(view)
+      assert row.code in texts(view, "td")
+      refute render(view) =~ "couldn&#39;t be applied"
+      assert has_element?(view, "#custom-filter-form")
+    end
+
+    test "names only the row that holds it", %{conn: conn} do
+      row = filter_field(code: unique("BV"), salary: 5)
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      code_row = filter_uuid(view)
+      filter_change(view, "field_name-#{code_row}", "code")
+      filter_change(view, "value-#{code_row}", "anything")
+
+      view |> element("button[phx-value-nested='false']") |> render_click()
+      salary_row = view |> filter_uuids() |> List.last()
+      filter_change(view, "field_name-#{salary_row}", "salary")
+      filter_change(view, "operator-#{salary_row}", "gt")
+      filter_change(view, "value-#{salary_row}", "1.5")
+      view |> element("#custom-filter-form") |> render_submit()
+
+      assert texts(view, "#value-error-#{salary_row}") == ["is invalid"]
+      refute has_element?(view, "#value-error-#{code_row}")
+      refute_patched(view)
+      assert row.code in texts(view, "td")
+    end
+
+    test "is forgotten once the row is edited, and a good value applies", %{conn: conn} do
+      code = unique("BV")
+      kept = filter_field(code: "#{code}-kept", salary: 100)
+      dropped = filter_field(code: "#{code}-dropped", salary: 5)
+
+      view = apply_filter(conn, "/test/filter_fields", "salary", "gt", "ten")
+      uuid = filter_uuid(view)
+      assert has_element?(view, "#value-error-#{uuid}")
+
+      filter_change(view, "value-#{uuid}", "10")
+      refute has_element?(view, "#value-error-#{uuid}")
+
+      view |> element("#custom-filter-form") |> render_submit()
+
+      cells = texts(view, "td")
+      assert kept.code in cells
+      refute dropped.code in cells
+    end
+
+    # The picked value of a select is checked too, though only a forged event
+    # can send a bad one, and the select says so as a text input would.
+    test "marks a select holding one as invalid", %{conn: conn} do
+      view = apply_filter(conn, "/test/filter_fields", "active", "equals", "maybe")
+      uuid = filter_uuid(view)
+
+      assert texts(view, "#value-error-#{uuid}") == ["is invalid"]
+      assert attribute(view, "select[name='value-#{uuid}']", "aria-invalid") == ["true"]
+      refute_patched(view)
+    end
+
+    # Ash's filter reads a typed atom as the string it was typed as, whether
+    # or not the VM has that atom, so the form does not refuse it either.
+    test "lets an atom through that the VM does not know", %{conn: conn} do
+      value = "unknown_state_#{System.unique_integer([:positive])}"
+
+      view = apply_filter(conn, "/test/filter_fields", "state", "equals", value)
+
+      refute has_element?(view, "[id^='value-error-']")
+      assert_patch(view)
+    end
+
+    # On Postgres, where the data layer's own cast used to be the one refusing.
+    test "catches a broken UUID and text in a number", %{conn: conn, admin: admin} do
+      name = unique("Tent ")
+      product(name: name, actor: admin)
+
+      for {field, operator, value} <- [{"id", "equals", "not-a-uuid"}, {"price", "gt", "cheap"}] do
+        view = apply_filter(conn, "/products", field, operator, value)
+
+        assert texts(view, "#value-error-#{filter_uuid(view)}") == ["is invalid"],
+               "#{field} took #{value}"
+
+        refute_patched(view)
+        assert name in texts(view, "td")
+      end
     end
   end
 
@@ -296,8 +403,14 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
   end
 
   defp filter_uuid(view) do
-    [name] = attribute(view, "select[name^='field_name-']", "name")
-    String.replace_prefix(name, "field_name-", "")
+    [uuid] = filter_uuids(view)
+    uuid
+  end
+
+  defp filter_uuids(view) do
+    view
+    |> attribute("select[name^='field_name-']", "name")
+    |> Enum.map(&String.replace_prefix(&1, "field_name-", ""))
   end
 
   defp filter_change(view, name, value) do

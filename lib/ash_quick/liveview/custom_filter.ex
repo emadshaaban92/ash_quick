@@ -152,12 +152,15 @@ defmodule AshQuick.LiveView.CustomFilter do
         do: value
   end
 
-  # A node with children is a group, and one without is a leaf, `children: []`
-  # included, as `build_ash_filter/1` reads it.
-  defp leaves(%__MODULE__{children: [_ | _] = children}),
+  @doc """
+  The rows of `filter`'s tree, in order. A node with children is a group, and
+  one without is a row, `children: []` included, as `build_ash_filter/1` reads
+  it.
+  """
+  def leaves(%__MODULE__{children: [_ | _] = children}),
     do: Enum.flat_map(children, &leaves/1)
 
-  defp leaves(%__MODULE__{} = leaf), do: [leaf]
+  def leaves(%__MODULE__{} = leaf), do: [leaf]
 
   def to_string!(%__MODULE__{} = filter),
     do: filter |> JSON.encode!() |> :base64.encode()

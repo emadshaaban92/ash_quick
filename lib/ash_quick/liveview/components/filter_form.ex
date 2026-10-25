@@ -4,6 +4,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   use Gettext, backend: AshQuick.Gettext
   import AshQuick.Components
 
+  alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.CustomFilter
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.FilterDatetime
@@ -43,7 +44,13 @@ defmodule AshQuick.LiveView.Components.FilterForm do
         phx-submit="apply_filter"
         class="flex flex-col w-full"
       >
-        <.render_custom_filter root={true} myself={@myself} group={@custom_filter} fields={@fields} />
+        <.render_custom_filter
+          root={true}
+          myself={@myself}
+          group={@custom_filter}
+          fields={@fields}
+          value_errors={@value_errors}
+        />
 
         <div class="flex w-full gap-2 pt-4 pb-1">
           <button type="submit" class="btn btn-primary flex-1">{gettext("Apply Filters")}</button>
@@ -90,47 +97,21 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       <div class="ms-2 border-s-2 border-base-300 ps-4 space-y-1">
         <%= for {filter, _filter_index} <- Enum.with_index(@group.children) do %>
           <%= if is_list(filter.children) do %>
-            <.render_custom_filter root={false} myself={@myself} group={filter} fields={@fields} />
+            <.render_custom_filter
+              root={false}
+              myself={@myself}
+              group={filter}
+              fields={@fields}
+              value_errors={@value_errors}
+            />
           <% else %>
-            <div class="flex flex-col sm:flex-row sm:items-center gap-1">
-              <select
-                name={"field_name-#{filter.uuid}"}
-                class="select select-sm sm:w-auto"
-              >
-                {Phoenix.HTML.Form.options_for_select(
-                  field_options(@fields, filter.field_name),
-                  filter.field_name
-                )}
-              </select>
-              <div class="flex items-center gap-1">
-                <select
-                  name={"operator-#{filter.uuid}"}
-                  class="select select-sm sm:w-auto shrink-0"
-                >
-                  {Phoenix.HTML.Form.options_for_select(
-                    field_operators(
-                      @fields
-                      |> Enum.find(&(to_string(&1.name) == filter.field_name))
-                    ),
-                    filter.operator
-                  )}
-                </select>
-                <.filter_value
-                  filter={filter}
-                  field={Enum.find(@fields, &(to_string(&1.name) == filter.field_name))}
-                />
-
-                <button
-                  phx-click="remove_filter"
-                  type="button"
-                  phx-target={@myself}
-                  phx-value-uuid={filter.uuid}
-                  class="btn btn-error btn-sm btn-square"
-                >
-                  <.icon name="hero-x-mark" class="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+            <.filter_row
+              filter={filter}
+              fields={@fields}
+              field={field_for(@fields, filter.field_name)}
+              error={@value_errors[filter.uuid]}
+              myself={@myself}
+            />
           <% end %>
         <% end %>
 
@@ -161,6 +142,49 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     """
   end
 
+  # One row: its field, operator and value, and the error under it when its
+  # value was refused. `field` is the offered field it names, or `nil`.
+  defp filter_row(assigns) do
+    ~H"""
+    <div class="flex flex-col sm:flex-row sm:items-center gap-1">
+      <select
+        name={"field_name-#{@filter.uuid}"}
+        class="select select-sm sm:w-auto"
+      >
+        {Phoenix.HTML.Form.options_for_select(
+          field_options(@fields, @filter.field_name),
+          @filter.field_name
+        )}
+      </select>
+      <div class="flex items-center gap-1">
+        <select
+          name={"operator-#{@filter.uuid}"}
+          class="select select-sm sm:w-auto shrink-0"
+        >
+          {Phoenix.HTML.Form.options_for_select(
+            field_operators(@field),
+            @filter.operator
+          )}
+        </select>
+        <.filter_value filter={@filter} field={@field} error={@error} />
+
+        <button
+          phx-click="remove_filter"
+          type="button"
+          phx-target={@myself}
+          phx-value-uuid={@filter.uuid}
+          class="btn btn-error btn-sm btn-square"
+        >
+          <.icon name="hero-x-mark" class="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+    <div :if={@error} id={"value-error-#{@filter.uuid}"}>
+      <.error class="mt-0">{@error}</.error>
+    </div>
+    """
+  end
+
   # Whether the field is picked from a fixed set decides the input, and no
   # guard can ask that, so it is asked once here.
   defp filter_value(%{field: field} = assigns) when not is_map_key(assigns, :choice) do
@@ -174,7 +198,8 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       type="datetime-local"
       name={"value-#{@filter.uuid}"}
       value={FilterDatetime.to_local(@filter.value, AshQuick.Config.timezone())}
-      class="input input-sm min-w-0 flex-1"
+      class={["input input-sm min-w-0 flex-1", @error && "input-error"]}
+      {invalid_attrs(@filter, @error)}
     />
     """
   end
@@ -186,7 +211,8 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       type="date"
       name={"value-#{@filter.uuid}"}
       value={@filter.value}
-      class="input input-sm min-w-0 flex-1"
+      class={["input input-sm min-w-0 flex-1", @error && "input-error"]}
+      {invalid_attrs(@filter, @error)}
     />
     """
   end
@@ -195,7 +221,8 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     ~H"""
     <select
       name={"value-#{@filter.uuid}"}
-      class="select  select-sm min-w-0 flex-1"
+      class={["select select-sm min-w-0 flex-1", @error && "select-error"]}
+      {invalid_attrs(@filter, @error)}
     >
       {Phoenix.HTML.Form.options_for_select(
         [{"", nil}, {gettext("Yes"), true}, {gettext("No"), false}],
@@ -213,7 +240,8 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     ~H"""
     <select
       name={"value-#{@filter.uuid}"}
-      class="select  select-sm min-w-0 flex-1"
+      class={["select select-sm min-w-0 flex-1", @error && "select-error"]}
+      {invalid_attrs(@filter, @error)}
     >
       {Phoenix.HTML.Form.options_for_select(@options, @filter.value)}
     </select>
@@ -228,16 +256,24 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       type="text"
       name={"value-#{@filter.uuid}"}
       value={@filter.value}
-      class="input input-sm min-w-0 flex-1"
+      class={["input input-sm min-w-0 flex-1", @error && "input-error"]}
+      {invalid_attrs(@filter, @error)}
     />
     """
   end
+
+  # Ties a value's input to the error under its row, for a screen reader.
+  defp invalid_attrs(_filter, nil), do: []
+
+  defp invalid_attrs(filter, _error),
+    do: ["aria-invalid": "true", "aria-describedby": "value-error-#{filter.uuid}"]
 
   @impl true
   def update(assigns, socket) do
     socket =
       socket
       |> assign(assigns)
+      |> assign_new(:value_errors, fn -> %{} end)
       |> assign_fields()
       |> maybe_assign_new_filter()
 
@@ -277,13 +313,20 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   end
 
   def handle_event("remove_filter", %{"uuid" => uuid}, socket) do
+    # A group goes with its rows, and so do their errors.
+    removed =
+      case CustomFilter.find(socket.assigns.custom_filter, uuid) do
+        nil -> [uuid]
+        node -> [uuid | node |> CustomFilter.leaves() |> Enum.map(& &1.uuid)]
+      end
+
     custom_filter =
       CustomFilter.remove_filter(
         socket.assigns.custom_filter,
         uuid
       )
 
-    {:noreply, assign(socket, :custom_filter, custom_filter)}
+    {:noreply, socket |> assign(:custom_filter, custom_filter) |> forget_errors(removed)}
   end
 
   def handle_event(
@@ -299,7 +342,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
         params["operator-" <> uuid]
       )
 
-    {:noreply, assign(socket, :custom_filter, custom_filter)}
+    {:noreply, socket |> assign(:custom_filter, custom_filter) |> forget_error(uuid)}
   end
 
   def handle_event(
@@ -311,7 +354,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
 
     # A field this form does not offer is ignored: a stale page, or an event
     # naming a field the actor may not see.
-    case Enum.find(socket.assigns.fields, &(to_string(&1.name) == field_name)) do
+    case field_for(socket.assigns.fields, field_name) do
       nil ->
         {:noreply, socket}
 
@@ -326,7 +369,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
           )
           |> CustomFilter.update_filter(uuid, :value, "")
 
-        {:noreply, assign(socket, :custom_filter, custom_filter)}
+        {:noreply, socket |> assign(:custom_filter, custom_filter) |> forget_error(uuid)}
     end
   end
 
@@ -345,25 +388,84 @@ defmodule AshQuick.LiveView.Components.FilterForm do
         value
       )
 
-    {:noreply, assign(socket, :custom_filter, custom_filter)}
+    {:noreply, socket |> assign(:custom_filter, custom_filter) |> forget_error(uuid)}
   end
 
+  # Nothing is applied while a row holds a value its field cannot take: the
+  # read would refuse the whole tree, and the visitor could not tell which row
+  # it was. Each such row says so under itself instead.
   def handle_event("apply_filter", _, socket) do
-    notify_parent(socket.assigns.custom_filter)
-    {:noreply, socket}
+    %{custom_filter: custom_filter, fields: fields} = socket.assigns
+    errors = value_errors(custom_filter, fields)
+
+    if errors == %{}, do: notify_parent(custom_filter)
+
+    {:noreply, assign(socket, :value_errors, errors)}
   end
 
   def handle_event("reset", _, socket) do
     notify_parent(nil)
-    {:noreply, socket}
+    {:noreply, assign(socket, :value_errors, %{})}
   end
+
+  # An error answers the value it was found on, so it goes once the row is
+  # edited, rather than standing under a value it no longer describes.
+  defp forget_error(socket, uuid), do: forget_errors(socket, [uuid])
+
+  defp forget_errors(socket, uuids),
+    do: assign(socket, :value_errors, Map.drop(socket.assigns.value_errors, uuids))
+
+  # Each row whose value its field's type will not cast, by uuid, with the
+  # message to show under it. Asked with `Ash.Type.coerce/3`, which is what
+  # Ash casts a filter's values with, so the form refuses only what the read
+  # would: `cast_input/3` differs for some types, an atom among them, which it
+  # accepts only when the VM already knows it.
+  #
+  # A row with no value is left out of the filter, so it is not checked. Nor
+  # is one on a field the form does not offer, which only a link carries: the
+  # read decides that one, and drops the filter with a flash if it fails.
+  defp value_errors(filter, fields) do
+    for %CustomFilter{uuid: uuid, field_name: name, value: value} <- CustomFilter.leaves(filter),
+        value not in [nil, ""],
+        field = field_for(fields, name),
+        not is_nil(field),
+        message = cast_error(field, value),
+        not is_nil(message),
+        into: %{},
+        do: {uuid, message}
+  end
+
+  defp cast_error(field, value) do
+    case Ash.Type.coerce(field.type, value, Map.get(field, :constraints) || []) do
+      {:ok, _} -> nil
+      {:error, error} -> error_message(error)
+    end
+  end
+
+  # Worded the way a form words a field's error, and translated through the
+  # same `:error_translator`.
+  defp error_message(error) do
+    {message, vars} =
+      case error do
+        message when is_binary(message) -> {message, []}
+        [_ | _] = keyword -> {Keyword.get(keyword, :message, "is invalid"), keyword}
+        %{message: message, vars: vars} when is_binary(message) -> {message, vars || []}
+        error when is_exception(error) -> {Exception.message(error), []}
+        _ -> {"is invalid", []}
+      end
+
+    ActionErrors.translate(message, Enum.reject(vars, &match?({:message, _}, &1)))
+  end
+
+  # The offered field a row names, or `nil` for one the form does not offer.
+  defp field_for(fields, name), do: Enum.find(fields, &(to_string(&1.name) == name))
 
   # A timestamp is typed in the zone the list shows it in, and held as the UTC
   # instant that means. See `AshQuick.LiveView.FilterDatetime`.
   defp held_value(socket, uuid, value) do
     with %CustomFilter{field_name: name} <- CustomFilter.find(socket.assigns.custom_filter, uuid),
          %{type: type} when type in @datetime_types <-
-           Enum.find(socket.assigns.fields, &(to_string(&1.name) == name)) do
+           field_for(socket.assigns.fields, name) do
       FilterDatetime.to_utc(value, AshQuick.Config.timezone())
     else
       _ -> value

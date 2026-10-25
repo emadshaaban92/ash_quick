@@ -11,7 +11,8 @@ defmodule Example.Test.FilterFields do
   @moduledoc """
   A resource for the list's filter: a code to match the start of, a timestamp
   to compare, a salary only an admin may see, which the filter offers to no
-  one else, a flag picked as Yes or No, and tags, which it offers to no one.
+  one else, a flag picked as Yes or No, a state typed in as an atom, and tags,
+  which it offers to no one.
 
   In ETS rather than Postgres, so Starts With is read by Ash itself rather
   than by a SQL `LIKE`.
@@ -80,6 +81,9 @@ defmodule Example.Test.FilterFields do
     attribute :stamped_at, :utc_datetime_usec, public?: true
     attribute :salary, :integer, public?: true
     attribute :active, :boolean, public?: true
+    # An atom with no fixed set, typed in, whose value need not be an atom the
+    # VM knows.
+    attribute :state, :atom, public?: true
     # A list, which the filter does not offer.
     attribute :tags, {:array, :string}, public?: true, default: []
   end

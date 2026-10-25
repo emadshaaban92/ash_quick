@@ -164,15 +164,18 @@ defmodule AshQuick.LiveView.ListUtils do
   #     query;
   #   * a real field carrying a value its type cannot cast — which
   #     `filter_input/2` accepts, and the *data layer* refuses, as an
-  #     `Ecto.Query.CastError`. `equals` on a UUID, a price or a date is a
-  #     free-text box in `FilterForm`, so this one is reachable by typing, not
-  #     only by editing a URL.
+  #     `Ecto.Query.CastError`. `FilterForm` refuses such a value on Apply,
+  #     under its row, by asking the field's type as Ash's filter does
+  #     (`Ash.Type.coerce/3`), so a typed one never gets here. A link still
+  #     can: written by hand, or naming a field the form does not offer and so
+  #     does not check.
   #
   # Both arrive the same way: raised by `Ash.read!` from inside
   # `handle_params/3`, taking the mount down rather than showing on the page.
-  # A validity pre-check answers only the first and would have to keep in step
-  # with everything the data layer will accept, so the filter is not validated
-  # here — it is tried.
+  # The form's check is for the visitor, who is told which row was wrong; it
+  # sees only what the form offers, and only the cast, not everything the data
+  # layer will refuse. So the filter is not validated here — it is tried, and
+  # this path stays the backstop for whatever reaches it.
   #
   # A read that raises with a filter applied is read once more without it. If
   # that succeeds the filter was the problem: it is dropped from the params the
