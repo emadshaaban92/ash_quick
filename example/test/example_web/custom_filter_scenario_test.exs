@@ -344,6 +344,25 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       assert has_element?(view, "#ash-quick-filter-modal-title", "Custom Filter")
     end
 
+    # Both ways out wait on the submit: Cancel is a button in the form, which
+    # LiveView disables, and the live ✕ hides for its disabled twin while a
+    # form in the box loads. That swap is a CSS variant LiveViewTest cannot
+    # trigger, so this pins what it hangs on: the box is the `group/modal`
+    # the variant names, the form is inside it, and the live ✕ carries it.
+    test "leaves neither way out live while Apply runs", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      box = ~s(#{@modal} [class~="group/modal"])
+
+      assert has_element?(view, "#{box} #custom-filter-form button[type=button]", "Cancel")
+
+      assert has_element?(
+               view,
+               ~s(#{box} a[aria-label=Close][class~="group-has-[form.phx-submit-loading]/modal:hidden"])
+             )
+
+      assert has_element?(view, "#{box} button[disabled][aria-label=Close]")
+    end
+
     test "closes by its ✕", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
 

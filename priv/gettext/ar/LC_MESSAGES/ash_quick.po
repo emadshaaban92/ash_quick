@@ -63,7 +63,6 @@ msgid "Are you sure?"
 msgstr "هل أنت متأكد؟"
 
 #: lib/ash_quick/liveview/components/action_modal.ex
-#: lib/ash_quick/liveview/components/list_view.ex
 #, elixir-autogen, elixir-format
 msgid "Close"
 msgstr "إغلاق"

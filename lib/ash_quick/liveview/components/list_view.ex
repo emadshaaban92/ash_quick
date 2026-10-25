@@ -253,9 +253,9 @@ defmodule AshQuick.LiveView.Components.ListView do
     end
   end
 
-  # Like every AshQuick modal, it closes only by its ✕ or Cancel: no backdrop to
-  # click, so a stray tap beside it (easy on a phone) doesn't throw away a
-  # filter half built.
+  # The shared modal: only its ✕ or Cancel closes it, and not while Apply
+  # submits, when the ✕'s patch (made from the params before the filter)
+  # would race the one Apply makes and could undo it.
   defp custom_filter_modal(assigns) do
     assigns =
       assign(
@@ -265,35 +265,22 @@ defmodule AshQuick.LiveView.Components.ListView do
       )
 
     ~H"""
-    <dialog
+    <ActionModal.action_modal
       id="ash-quick-filter-modal"
-      class="modal modal-open"
-      aria-labelledby="ash-quick-filter-modal-title"
+      class="w-full max-w-2xl lg:max-w-4xl"
+      close={@close}
     >
-      <div class="modal-box w-full max-w-2xl lg:max-w-4xl">
-        <div class="flex justify-between items-center mb-4">
-          <h3 id="ash-quick-filter-modal-title" class="text-lg font-semibold">
-            {gettext("Custom Filter")}
-          </h3>
-          <.link
-            {ActionModal.close_attrs(@close)}
-            class="btn btn-sm btn-circle btn-ghost"
-            aria-label={gettext("Close")}
-          >
-            <.icon name="hero-x-mark" class="w-5 h-5" />
-          </.link>
-        </div>
-        <.live_component
-          id="filter_form"
-          module={AshQuick.LiveView.Components.FilterForm}
-          resource={@resource}
-          action={@action}
-          scope={@scope}
-          custom_filter={@params.custom_filter}
-          close={@close}
-        />
-      </div>
-    </dialog>
+      <:title>{gettext("Custom Filter")}</:title>
+      <.live_component
+        id="filter_form"
+        module={AshQuick.LiveView.Components.FilterForm}
+        resource={@resource}
+        action={@action}
+        scope={@scope}
+        custom_filter={@params.custom_filter}
+        close={@close}
+      />
+    </ActionModal.action_modal>
     """
   end
 
@@ -474,54 +461,40 @@ defmodule AshQuick.LiveView.Components.ListView do
 
   defp export_modal(assigns) do
     ~H"""
-    <dialog
+    <ActionModal.action_modal
       :if={@export_data && @export_data.failed != {:exit, {:shutdown, :cancel}}}
       id="ash-quick-export-modal"
-      class="modal modal-open"
-      aria-labelledby="ash-quick-export-modal-title"
+      close={JS.push("close-export-modal")}
     >
-      <div class="modal-box">
-        <div class="flex justify-between items-center mb-4">
-          <h3 id="ash-quick-export-modal-title" class="text-lg font-semibold">
-            {gettext("Export")}
-          </h3>
+      <:title>{gettext("Export")}</:title>
+      <div class="flex flex-col items-center justify-center py-8">
+        <div :if={@export_data.loading} class="flex flex-col items-center gap-3">
+          <span class="loading loading-spinner loading-lg text-primary"></span>
+          <span class="text-base-content/70">{gettext("Generating Data ...")}</span>
+        </div>
+
+        <div :if={@export_data.ok? && @export_data.result} class="flex flex-col items-center gap-4">
+          <p class="text-success font-medium">{gettext("Data exported successfully!")}</p>
           <.link
-            {ActionModal.close_attrs(JS.push("close-export-modal"))}
-            class="btn btn-sm btn-circle btn-ghost"
-            aria-label={gettext("Close")}
+            href={@export_data.result.url}
+            target="_blank"
+            class="btn btn-primary"
           >
-            <.icon name="hero-x-mark" class="w-5 h-5" />
+            <.icon name="hero-arrow-down-tray" class="w-4 h-4" /> {gettext("Download")}
           </.link>
         </div>
-        <div class="flex flex-col items-center justify-center py-8">
-          <div :if={@export_data.loading} class="flex flex-col items-center gap-3">
-            <span class="loading loading-spinner loading-lg text-primary"></span>
-            <span class="text-base-content/70">{gettext("Generating Data ...")}</span>
-          </div>
 
-          <div :if={@export_data.ok? && @export_data.result} class="flex flex-col items-center gap-4">
-            <p class="text-success font-medium">{gettext("Data exported successfully!")}</p>
-            <.link
-              href={@export_data.result.url}
-              target="_blank"
-              class="btn btn-primary"
-            >
-              <.icon name="hero-arrow-down-tray" class="w-4 h-4" /> {gettext("Download")}
-            </.link>
+        <div :if={@export_data.failed} class="flex flex-col items-center gap-4">
+          <div class="flex items-center gap-2 text-error">
+            <.icon name="hero-exclamation-circle" class="w-6 h-6" />
+            <p>{gettext("Failed to export")}</p>
           </div>
-
-          <div :if={@export_data.failed} class="flex flex-col items-center gap-4">
-            <div class="flex items-center gap-2 text-error">
-              <.icon name="hero-exclamation-circle" class="w-6 h-6" />
-              <p>{gettext("Failed to export")}</p>
-            </div>
-            <button phx-click="start-gen-report" class="btn btn-primary">
-              <.icon name="hero-arrow-path" class="w-4 h-4" /> {gettext("Retry")}
-            </button>
-          </div>
+          <button phx-click="start-gen-report" class="btn btn-primary">
+            <.icon name="hero-arrow-path" class="w-4 h-4" /> {gettext("Retry")}
+          </button>
         </div>
       </div>
-    </dialog>
+    </ActionModal.action_modal>
     """
   end
 
