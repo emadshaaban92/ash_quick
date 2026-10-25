@@ -30,6 +30,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   attr :resource, :atom, required: true
   attr :action, :map, default: nil, doc: "the read the list runs"
   attr :scope, :map, required: true
+  attr :close, :any, default: nil, doc: "a path or a `JS` command Cancel runs to close the modal"
   @impl true
   def render(assigns) do
     ~H"""
@@ -46,11 +47,12 @@ defmodule AshQuick.LiveView.Components.FilterForm do
 
         <div class="flex w-full gap-2 pt-4 pb-1">
           <button type="submit" class="btn btn-primary flex-1">{gettext("Apply Filters")}</button>
+          <AshQuick.LiveView.Components.FormView.cancel_link close={@close} />
           <button
             type="button"
             phx-click="reset"
             phx-target={@myself}
-            class="btn btn-ghost"
+            class="btn btn-ghost text-error"
           >
             {gettext("Reset")}
           </button>

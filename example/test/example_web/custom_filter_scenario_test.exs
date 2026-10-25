@@ -218,6 +218,59 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
     end
   end
 
+  # Like every modal, the filter closes only by its ✕ or its Cancel: a tap
+  # beside it, easy on a phone, would throw away a filter half built.
+  describe "the modal" do
+    @modal "#ash-quick-filter-modal"
+
+    setup %{conn: conn, admin: admin} do
+      {:ok, conn: log_in(conn, admin)}
+    end
+
+    test "has no backdrop to click away", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+
+      assert has_element?(view, @modal)
+      refute has_element?(view, "#{@modal} .modal-backdrop")
+      # Named by its heading, so a screen reader announces "Custom Filter".
+      assert has_element?(view, "#{@modal}[aria-labelledby='ash-quick-filter-modal-title']")
+      assert has_element?(view, "#ash-quick-filter-modal-title", "Custom Filter")
+    end
+
+    test "closes by its ✕", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+
+      view |> element("#{@modal} a[aria-label=Close]") |> render_click()
+
+      assert_patch(view, "/test/filter_fields")
+      refute has_element?(view, @modal)
+    end
+
+    # The edit made in the modal is dropped; the filter applied before stays,
+    # both on the list and in the modal opened again.
+    test "closes by Cancel, leaving the applied filter as it was", %{conn: conn} do
+      code = unique("CF")
+      kept = filter_field(code: code)
+      other = filter_field(code: "#{code}-other")
+      filter = encode_filter([%{"field_name" => "code", "operator" => "equals", "value" => code}])
+
+      {:ok, view, _html} =
+        live(conn, "/test/filter_fields?show_custom_filter=true&custom_filter=#{filter}")
+
+      uuid = filter_uuid(view)
+      filter_change(view, "value-#{uuid}", "#{code}-edited")
+      view |> element("#{@modal} form button[type=button]", "Cancel") |> render_click()
+
+      refute has_element?(view, @modal)
+      cells = texts(view, "td")
+      assert kept.code in cells
+      refute other.code in cells
+
+      view |> element("a[title='Advanced filters']") |> render_click()
+      assert attribute(view, "input[name='value-#{filter_uuid(view)}']", "value") == [code]
+    end
+  end
+
   defp encode_filter(rows) do
     %{"operator" => "and", "children" => rows}
     |> JSON.encode!()

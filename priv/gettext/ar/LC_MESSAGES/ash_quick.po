@@ -379,11 +379,6 @@ msgstr "أنت تتصفح بحساب %{actor}"
 msgid "cancel"
 msgstr "إلغاء"
 
-#: lib/ash_quick/liveview/components/list_view.ex
-#, elixir-autogen, elixir-format
-msgid "close"
-msgstr "إغلاق"
-
 #: lib/ash_quick/liveview/browser_sessions_live.ex
 #, elixir-autogen, elixir-format
 msgid "from %{ip}"

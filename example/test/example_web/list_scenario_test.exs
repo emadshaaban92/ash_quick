@@ -316,6 +316,27 @@ defmodule ExampleWeb.ListScenarioTest do
   end
 
   describe "export" do
+    # Like every modal, it closes only by its ✕: no backdrop to click away.
+    test "opens a modal that closes only by its ✕", %{conn: conn, admin: admin} do
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/products")
+
+      view |> element("a", "CSV") |> render_click()
+      render_async(view, @export_timeout)
+
+      assert has_element?(view, "#ash-quick-export-modal")
+      refute has_element?(view, "#ash-quick-export-modal .modal-backdrop")
+
+      assert has_element?(
+               view,
+               "#ash-quick-export-modal[aria-labelledby='ash-quick-export-modal-title']"
+             )
+
+      assert has_element?(view, "#ash-quick-export-modal-title", "Export")
+
+      view |> element("#ash-quick-export-modal a[aria-label=Close]") |> render_click()
+      refute has_element?(view, "#ash-quick-export-modal")
+    end
+
     test "writes the rows the page is showing, with the columns it is showing", ctx do
       %{conn: conn, admin: admin, brand: brand, category: category} = ctx
 
