@@ -227,6 +227,13 @@
 
 ### Bug fixes
 
+- **The filter's ✕ waits while Apply runs.** The Advanced filters and
+  export modals now use the same modal as an action's form, so the filter's
+  ✕ is swapped for a disabled twin while Apply submits, as the action
+  modal's is. Before, a ✕ clicked then patched with the params from before
+  the filter and could land after Apply's patch, undoing it. Every modal's
+  ✕ now sits at the end of the line in a right-to-left locale too.
+
 - **The Advanced filters and export modals close only by their ✕ (and
   the filter's Cancel).** A click on either backdrop closed it, unlike the
   action modal, so a stray tap beside the filter (easy on a phone) threw

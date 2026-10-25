@@ -21,7 +21,7 @@ defmodule AshQuick.LiveView.Components.BulkActionView do
 
     ~H"""
     <div inert>{@ash_quick_page}</div>
-    <ActionModal.action_modal close={JS.push("bulk_close")}>
+    <ActionModal.action_modal class="w-11/12 max-w-5xl p-0" close={JS.push("bulk_close")}>
       <.bulk_action_view
         bulk={@ash_quick_bulk}
         resource={@resource}

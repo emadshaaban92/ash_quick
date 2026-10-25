@@ -601,7 +601,10 @@ defmodule AshQuick.LiveView.QuickView do
 
           ~H"""
           <div inert>{__ash_quick_render__(@ash_quick_background.assigns)}</div>
-          <AshQuick.LiveView.Components.ActionModal.action_modal close={@ash_quick_background.path}>
+          <AshQuick.LiveView.Components.ActionModal.action_modal
+            class="w-11/12 max-w-5xl p-0"
+            close={@ash_quick_background.path}
+          >
             {@ash_quick_action}
           </AshQuick.LiveView.Components.ActionModal.action_modal>
           """
