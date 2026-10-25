@@ -218,6 +218,15 @@
 
 ### Bug fixes
 
+- **The Advanced filters and export modals close only by their ✕ (and
+  the filter's Cancel).** A click on either backdrop closed it, unlike the
+  action modal, so a stray tap beside the filter (easy on a phone) threw
+  away a filter half built. Both backdrops are gone, both ✕ buttons are
+  labelled Close, and each dialog is named by its heading for screen
+  readers. The filter gains a Cancel button between Apply and Reset,
+  which closes the modal and leaves the filter applied before as it was;
+  Reset, which clears the filter, now reads in the error colour.
+
 - **The list's Starts With filter works on every data layer, and reads `%`
   and `_` as themselves.** It was a SQL `LIKE`, which only AshPostgres
   defines, so on ETS or any other data layer the read was refused and the

@@ -10,6 +10,7 @@ defmodule AshQuick.LiveView.Components.ListView do
   alias AshQuick.LiveView.Utils
   alias AshQuick.LiveView.QuickField
   alias AshQuick.LiveView.URLParams
+  alias AshQuick.LiveView.Components.ActionModal
 
   attr(:id, :string, required: true)
   attr(:resource, :map, required: true)
@@ -252,37 +253,46 @@ defmodule AshQuick.LiveView.Components.ListView do
     end
   end
 
+  # Like every AshQuick modal, it closes only by its ✕ or Cancel: no backdrop to
+  # click, so a stray tap beside it (easy on a phone) doesn't throw away a
+  # filter half built.
   defp custom_filter_modal(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :close,
+        URLParams.full_path(assigns.path, URLParams.toggle_show_custom_filter(assigns.params))
+      )
+
     ~H"""
-    <dialog class="modal modal-open">
+    <dialog
+      id="ash-quick-filter-modal"
+      class="modal modal-open"
+      aria-labelledby="ash-quick-filter-modal-title"
+    >
       <div class="modal-box w-full max-w-2xl lg:max-w-4xl">
         <div class="flex justify-between items-center mb-4">
-          <h3 class="text-lg font-semibold">
+          <h3 id="ash-quick-filter-modal-title" class="text-lg font-semibold">
             {gettext("Custom Filter")}
           </h3>
           <.link
-            patch={URLParams.full_path(@path, @params |> URLParams.toggle_show_custom_filter())}
+            {ActionModal.close_attrs(@close)}
             class="btn btn-sm btn-circle btn-ghost"
+            aria-label={gettext("Close")}
           >
             <.icon name="hero-x-mark" class="w-5 h-5" />
           </.link>
         </div>
         <.live_component
-          :if={@params.show_custom_filter}
           id="filter_form"
           module={AshQuick.LiveView.Components.FilterForm}
           resource={@resource}
           action={@action}
           scope={@scope}
           custom_filter={@params.custom_filter}
+          close={@close}
         />
       </div>
-      <.link
-        patch={URLParams.full_path(@path, @params |> URLParams.toggle_show_custom_filter())}
-        class="modal-backdrop"
-      >
-        <span class="sr-only">{gettext("Close")}</span>
-      </.link>
     </dialog>
     """
   end
@@ -466,12 +476,20 @@ defmodule AshQuick.LiveView.Components.ListView do
     ~H"""
     <dialog
       :if={@export_data && @export_data.failed != {:exit, {:shutdown, :cancel}}}
+      id="ash-quick-export-modal"
       class="modal modal-open"
+      aria-labelledby="ash-quick-export-modal-title"
     >
       <div class="modal-box">
         <div class="flex justify-between items-center mb-4">
-          <h3 class="text-lg font-semibold">{gettext("Export")}</h3>
-          <.link phx-click="close-export-modal" class="btn btn-sm btn-circle btn-ghost">
+          <h3 id="ash-quick-export-modal-title" class="text-lg font-semibold">
+            {gettext("Export")}
+          </h3>
+          <.link
+            {ActionModal.close_attrs(JS.push("close-export-modal"))}
+            class="btn btn-sm btn-circle btn-ghost"
+            aria-label={gettext("Close")}
+          >
             <.icon name="hero-x-mark" class="w-5 h-5" />
           </.link>
         </div>
@@ -502,9 +520,6 @@ defmodule AshQuick.LiveView.Components.ListView do
             </button>
           </div>
         </div>
-      </div>
-      <div class="modal-backdrop">
-        <button phx-click="close-export-modal">{gettext("close")}</button>
       </div>
     </dialog>
     """
