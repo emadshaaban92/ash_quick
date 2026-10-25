@@ -4,6 +4,15 @@
 
 ### Features
 
+- **The list's filter names a value its field cannot take, under its row.**
+  On Apply, each row's value is cast with its field's type, as Ash casts a
+  filter's values; text in a number or a broken UUID shows the field's error
+  ("is invalid", through `:error_translator`) under that row, and nothing is
+  applied until it is fixed. Before, the data layer refused the whole filter
+  and the list came back unfiltered under a flash naming no row. A link
+  carrying such a value is still read once more without its filter, with
+  that flash.
+
 - **A list sorts by a column's header.** A click sorts the list by that
   column ascending, then descending, then back to the default order; the
   column goes ahead of `sort_by` and the action's own sort, which still break
