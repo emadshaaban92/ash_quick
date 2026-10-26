@@ -51,8 +51,9 @@ defmodule AshQuick.MixProject do
       # loads a policy authorizer itself instead of skipping one that is not
       # loaded yet, and ash_phoenix 2.3.20, for the dynamic `keep_live`
       # subscriptions `AshQuick.LiveView.Liveness` re-targets. ash_phoenix sits
-      # at 2.3.25 because that release fixed CVE-2026-82724..82727.
-      {:ash, "~> 3.37"},
+      # at 2.3.25 because that release fixed CVE-2026-82724..82727, and ash at
+      # 3.37.1 because that release fixed EEF-CVE-2026-114214.
+      {:ash, "~> 3.37 and >= 3.37.1"},
       {:ash_phoenix, "~> 2.3 and >= 2.3.25"},
       {:spark, "~> 2.7"},
       {:phoenix, "~> 1.8"},

@@ -21,15 +21,13 @@ defmodule AshQuick.LookupVerifierTest do
   an `:index` no page will ever call. Absence is `AshQuick.LiveView.QuickView.Options`'
   to catch, where what points at what is known.
 
-  Each probe is verified by hand through `AshQuick.Test.VerifierErrors`, which
-  says why the compiler's own run cannot hand its errors to a test.
+  Each probe is compiled through `AshQuick.Test.VerifierErrors`, which says how
+  a test gets hold of the errors the compiler's own run reports.
 
   `async: false` because suppressing the compiler's own report means swapping the
   global `:standard_error` device.
   """
   use ExUnit.Case, async: false
-
-  import ExUnit.CaptureIO
 
   alias AshQuick.Test.VerifierErrors
 
@@ -85,9 +83,7 @@ defmodule AshQuick.LookupVerifierTest do
     end
     """
 
-    # The compiler reports a verifier failure itself, on its own process —
-    # swallowed here so a deliberate failure does not look like a broken run.
-    capture_io(:stderr, fn -> Code.compile_string(source) end)
+    VerifierErrors.compile(source)
     Module.concat([name])
   end
 

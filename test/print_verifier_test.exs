@@ -12,8 +12,6 @@ defmodule AshQuick.PrintVerifierTest do
   """
   use ExUnit.Case, async: false
 
-  import ExUnit.CaptureIO
-
   alias AshQuick.Test.VerifierErrors
 
   defmodule Domain do
@@ -57,7 +55,7 @@ defmodule AshQuick.PrintVerifierTest do
     end
     """
 
-    capture_io(:stderr, fn -> Code.compile_string(source) end)
+    VerifierErrors.compile(source)
     VerifierErrors.errors(Module.concat([name]))
   end
 

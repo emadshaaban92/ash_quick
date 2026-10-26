@@ -16,8 +16,8 @@ defmodule AshQuick.AuditVerifierTest do
   section off and attaches `AshQuick.Audit.Change` to one of its actions is
   audited just as much as one that declares nothing.
 
-  Each probe is verified by hand through `AshQuick.Test.VerifierErrors`, which
-  says why the compiler's own run cannot hand its errors to a test.
+  Each probe is compiled through `AshQuick.Test.VerifierErrors`, which says how
+  a test gets hold of the errors the compiler's own run reports.
 
   `async: false` because suppressing the compiler's own report means swapping
   the global `:standard_error` device, and every test here swaps the
@@ -27,11 +27,9 @@ defmodule AshQuick.AuditVerifierTest do
   than here, because `use Ash.Resource` defines an `Inspect` implementation and
   a `.exs` file is compiled after protocol consolidation — one defined here is
   discarded, with a warning per resource. The probes escape that only because
-  the `capture_io(:stderr, ...)` around their compilation swallows it too.
+  `AshQuick.Test.VerifierErrors.compile/1` swallows stderr while they compile.
   """
   use ExUnit.Case, async: false
-
-  import ExUnit.CaptureIO
 
   alias AshQuick.Test.ArgumentAuditStore
   alias AshQuick.Test.MistypedChangesStore
@@ -101,9 +99,7 @@ defmodule AshQuick.AuditVerifierTest do
     end
     """
 
-    # The compiler reports a failure itself, on its own process — swallowed here
-    # so a deliberate failure does not look like a broken test run.
-    capture_io(:stderr, fn -> Code.compile_string(source) end)
+    VerifierErrors.compile(source)
 
     Module.concat([name])
   end
