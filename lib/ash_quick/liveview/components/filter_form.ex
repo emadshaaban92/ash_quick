@@ -32,6 +32,11 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   attr :action, :map, default: nil, doc: "the read the list runs"
   attr :scope, :map, required: true
   attr :close, :any, default: nil, doc: "a path or a `JS` command Cancel runs to close the modal"
+
+  attr :labels, :map,
+    default: %{},
+    doc: "the list's column labels by field name, which name a field here as its column does"
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -49,6 +54,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
           myself={@myself}
           group={@custom_filter}
           fields={@fields}
+          labels={@labels}
           value_errors={@value_errors}
         />
 
@@ -102,12 +108,14 @@ defmodule AshQuick.LiveView.Components.FilterForm do
               myself={@myself}
               group={filter}
               fields={@fields}
+              labels={@labels}
               value_errors={@value_errors}
             />
           <% else %>
             <.filter_row
               filter={filter}
               fields={@fields}
+              labels={@labels}
               field={field_for(@fields, filter.field_name)}
               error={@value_errors[filter.uuid]}
               myself={@myself}
@@ -152,7 +160,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
         class="select select-sm sm:w-auto"
       >
         {Phoenix.HTML.Form.options_for_select(
-          field_options(@fields, @filter.field_name),
+          field_options(@fields, @filter.field_name, @labels),
           @filter.field_name
         )}
       </select>
@@ -436,7 +444,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   end
 
   defp cast_error(field, value) do
-    case Ash.Type.coerce(field.type, value, Map.get(field, :constraints) || []) do
+    case CustomFilter.cast_value(field, value) do
       {:ok, _} -> nil
       {:error, error} -> error_message(error)
     end
@@ -488,13 +496,19 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # actor who could see it, or by hand. The select holds it as a disabled
   # option, so it shows the field the row filters on instead of the first one
   # offered, which a browser would show and could not then be picked.
-  defp field_options(fields, field_name) do
-    options = Enum.map(fields, &{Utils.humanize(&1.name), to_string(&1.name)})
+  defp field_options(fields, field_name, labels) do
+    options = Enum.map(fields, &{field_label(&1.name, labels), to_string(&1.name)})
 
     if is_binary(field_name) and not Enum.any?(options, &(elem(&1, 1) == field_name)),
-      do: [[key: Utils.humanize(field_name), value: field_name, disabled: true] | options],
+      do: [[key: field_label(field_name, labels), value: field_name, disabled: true] | options],
       else: options
   end
+
+  @doc """
+  What a field is called, here and on the list's chips: its column's label
+  when the list shows one, and its humanized name otherwise.
+  """
+  def field_label(name, labels), do: labels[to_string(name)] || Utils.humanize(name)
 
   # A new row starts on the first field offered: no one field is one every
   # resource has, or one every actor may see.
@@ -546,48 +560,52 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # An atom without `one_of` is offered too, and typed in.
   defp supported?(field), do: EnumOptions.kind(field) == :single or field.type in @supported_types
 
-  @equality [{"=", "equals"}, {"!=", "not_equals"}]
+  @doc """
+  What `operator` reads as, here and on the list's chips. One a link names that
+  this form never offers reads as written.
+  """
+  def operator_label("equals"), do: "="
+  def operator_label("not_equals"), do: "!="
+  def operator_label("gt"), do: ">"
+  def operator_label("gte"), do: ">="
+  def operator_label("lt"), do: "<"
+  def operator_label("lte"), do: "<="
+  def operator_label("contains"), do: gettext("Contains")
+  def operator_label("starts_with"), do: gettext("Starts With")
+  def operator_label(operator), do: operator
+
+  @doc """
+  What `operator` reads as in the middle of a chip's sentence ("Code starts
+  with A"), where the form's title case would read oddly.
+  """
+  def operator_phrase("contains"), do: gettext("contains")
+  def operator_phrase("starts_with"), do: gettext("starts with")
+  def operator_phrase(operator), do: operator_label(operator)
+
+  @equality ~w(equals not_equals)
+  @comparisons ~w(gt gte lt lte)
 
   # A field with a fixed set of values compares by value, whatever its type;
   # anything else by what its type allows.
   defp field_operators(field) do
-    if EnumOptions.kind(field) == :single, do: @equality, else: type_operators(field)
+    operators = if EnumOptions.kind(field) == :single, do: @equality, else: type_operators(field)
+    Enum.map(operators, &{operator_label(&1), &1})
   end
 
   defp type_operators(%{type: t})
        when t in [Ash.Type.UUID, Ash.Type.UUIDv7, Ash.Type.Atom, Ash.Type.Boolean],
        do: @equality
 
-  defp type_operators(%{type: t}) when t in [Ash.Type.String, Ash.Type.CiString] do
-    [
-      {"=", "equals"},
-      {"!=", "not_equals"},
-      {gettext("Contains"), "contains"},
-      {gettext("Starts With"), "starts_with"}
-    ]
-  end
+  defp type_operators(%{type: t}) when t in [Ash.Type.String, Ash.Type.CiString],
+    do: @equality ++ ~w(contains starts_with)
 
   defp type_operators(%{type: t})
-       when t in [Ash.Type.Date, Ash.Type.Integer, Ash.Type.Decimal] do
-    [
-      {"=", "equals"},
-      {"!=", "not_equals"},
-      {">", "gt"},
-      {">=", "gte"},
-      {"<", "lt"},
-      {"<=", "lte"}
-    ]
-  end
+       when t in [Ash.Type.Date, Ash.Type.Integer, Ash.Type.Decimal],
+       do: @equality ++ @comparisons
 
   defp type_operators(%{type: t})
-       when t in @datetime_types or t == Ash.Type.Float do
-    [
-      {">", "gt"},
-      {">=", "gte"},
-      {"<", "lt"},
-      {"<=", "lte"}
-    ]
-  end
+       when t in @datetime_types or t == Ash.Type.Float,
+       do: @comparisons
 
   defp type_operators(_field), do: []
 

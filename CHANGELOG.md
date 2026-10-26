@@ -4,6 +4,16 @@
 
 ### Features
 
+- **The list shows its applied filter as chips.** Above the table, each
+  top-level row of the Advanced filter is a chip ("Price > 10", "Active =
+  Yes"), naming the field as its column does and reading the value as a
+  column without a widget shows one (an enum's label, a timestamp in the
+  list's zone); its ✕ drops that row, and "Clear all" drops the filter. A
+  group of rows is one "All of 3 conditions" or "Any of 3 conditions" chip
+  that opens the modal. The Advanced filters button carries the number of
+  rows the list is filtered by. Rows without a value, and rows dropped
+  before the read, have no chip and are not counted.
+
 - **The list's filter names a value its field cannot take, under its row.**
   On Apply, each row's value is cast with its field's type, as Ash casts a
   filter's values; text in a number or a broken UUID shows the field's error

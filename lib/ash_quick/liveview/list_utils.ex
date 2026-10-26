@@ -144,15 +144,14 @@ defmodule AshQuick.LiveView.ListUtils do
   # The names `filter` uses that are fields of `resource` the actor may not
   # see. A name that is no field is left to the read, which refuses it.
   defp hidden_fields(filter, action, resource, scope) do
-    by_name =
-      resource
-      |> Ash.Resource.Info.fields([:attributes, :calculations, :aggregates])
-      |> Map.new(&{to_string(&1.name), &1.name})
+    by_name = CustomFilter.fields_by_name(resource)
 
     named = filter |> CustomFilter.field_names() |> Enum.filter(&Map.has_key?(by_name, &1))
-    visible = named |> Enum.map(&by_name[&1]) |> Utils.visible_fields(resource, action, scope)
 
-    Enum.reject(named, &(by_name[&1] in visible))
+    visible =
+      named |> Enum.map(&by_name[&1].name) |> Utils.visible_fields(resource, action, scope)
+
+    Enum.reject(named, &(by_name[&1].name in visible))
   end
 
   # A custom filter is the one part of this query a visitor authors, and there

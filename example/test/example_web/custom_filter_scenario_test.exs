@@ -397,8 +397,279 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
     end
   end
 
-  defp encode_filter(rows) do
-    %{"operator" => "and", "children" => rows}
+  # Before, a filtered list looked like the whole one: nothing on it said a
+  # filter was on, and the only way to see or drop one was the modal.
+  describe "the applied filter" do
+    setup %{conn: conn, admin: admin} do
+      {:ok, conn: log_in(conn, admin)}
+    end
+
+    test "shows each row as a chip, and their count on the button", %{conn: conn} do
+      code = unique("CH")
+      filter_field(code: code, active: true)
+
+      filter =
+        encode_filter([
+          %{"field_name" => "code", "operator" => "starts_with", "value" => code},
+          %{"field_name" => "active", "operator" => "equals", "value" => "true"}
+        ])
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+      assert chips(view) == ["Code starts with #{code}", "Active = Yes"]
+      assert has_element?(view, "#ash-quick-filter-count", "2 filters applied")
+      # The count's own words would otherwise name the link, so its name
+      # stays first.
+      assert has_element?(view, "a[title='Advanced filters'] > .sr-only", "Advanced filters")
+    end
+
+    # A timestamp is held as a UTC instant; the chip shows it the way the list
+    # shows one, in the list's zone, not as the `Z` string in the URL. The
+    # field is named as its column is, not as the form humanizes it.
+    test "reads a timestamp as the list shows one, under its column's name", %{conn: conn} do
+      filter =
+        encode_filter([
+          %{"field_name" => "stamped_at", "operator" => "gt", "value" => "2026-10-22T10:00:00Z"}
+        ])
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+      shown = AshQuick.Config.format_datetime(~U[2026-10-22 10:00:00Z])
+      assert chips(view) == ["Stamped > #{shown}"]
+
+      # The modal the chips open calls the field the same.
+      view |> element("a[title='Advanced filters']") |> render_click()
+      assert texts(view, "select[name^='field_name-'] option[selected]") == ["Stamped"]
+    end
+
+    test "drops a row by its chip's ✕, and the list widens", %{conn: conn} do
+      code = unique("CX")
+      yes = filter_field(code: "#{code}-yes", active: true)
+      no = filter_field(code: "#{code}-no", active: false)
+
+      filter =
+        encode_filter([
+          %{"field_name" => "code", "operator" => "starts_with", "value" => code},
+          %{"field_name" => "active", "operator" => "equals", "value" => "true"}
+        ])
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+      refute no.code in texts(view, "td")
+
+      view
+      |> element(~s([data-filter-chip="active"] a[data-remove-filter]))
+      |> render_click()
+
+      cells = texts(view, "td")
+      assert yes.code in cells
+      assert no.code in cells
+      assert chips(view) == ["Code starts with #{code}"]
+      assert has_element?(view, "#ash-quick-filter-count", "1 filter applied")
+    end
+
+    test "leaves no filter once its last chip goes", %{conn: conn} do
+      filter = encode_filter([%{"field_name" => "code", "operator" => "equals", "value" => "x"}])
+      {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+      view
+      |> element(~s([data-filter-chip="code"] a[data-remove-filter]))
+      |> render_click()
+
+      assert_patch(view, "/test/filter_fields")
+      assert chips(view) == []
+      refute has_element?(view, "#ash-quick-filter-count")
+    end
+
+    test "is dropped whole by Clear all", %{conn: conn} do
+      filter =
+        encode_filter([
+          %{"field_name" => "code", "operator" => "equals", "value" => "x"},
+          %{"field_name" => "active", "operator" => "equals", "value" => "true"}
+        ])
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+      view |> element("#ash-quick-filter-clear") |> render_click()
+
+      assert_patch(view, "/test/filter_fields")
+      assert chips(view) == []
+    end
+
+    # A group's rows mean something only together, so it is one chip, which
+    # opens the modal to read it. Its rows still count on the button.
+    test "shows a group as one chip that opens the modal", %{conn: conn} do
+      filter =
+        encode_filter([
+          %{"field_name" => "code", "operator" => "equals", "value" => "x"},
+          %{
+            "operator" => "or",
+            "children" => [
+              %{"field_name" => "active", "operator" => "equals", "value" => "true"},
+              %{"field_name" => "code", "operator" => "equals", "value" => "y"}
+            ]
+          }
+        ])
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+      # The group is an `or`, so either of its rows is enough.
+      assert chips(view) == ["Code = x", "Any of 2 conditions"]
+      assert has_element?(view, "#ash-quick-filter-count", "3 filters applied")
+
+      view |> element(~s([data-filter-chip="group"] a), "2 conditions") |> render_click()
+      assert has_element?(view, "#ash-quick-filter-modal")
+    end
+
+    test "says a group needs all of its rows when it does", %{conn: conn} do
+      filter =
+        encode_filter([
+          %{
+            "operator" => "and",
+            "children" => [
+              %{"field_name" => "active", "operator" => "equals", "value" => "true"},
+              %{"field_name" => "code", "operator" => "equals", "value" => "y"}
+            ]
+          }
+        ])
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+      assert chips(view) == ["All of 2 conditions"]
+    end
+
+    # A group of one row means that row, so it reads as one; its ✕ takes the
+    # group, which leaves no empty group behind in the filter.
+    test "shows a group of one row as that row, and drops the group by its ✕", %{conn: conn} do
+      code = unique("G1")
+      yes = filter_field(code: "#{code}-yes", active: true)
+      no = filter_field(code: "#{code}-no", active: false)
+
+      filter =
+        encode_filter([
+          %{"field_name" => "code", "operator" => "starts_with", "value" => code},
+          %{
+            "operator" => "or",
+            "children" => [%{"field_name" => "active", "operator" => "equals", "value" => "true"}]
+          }
+        ])
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+      assert chips(view) == ["Code starts with #{code}", "Active = Yes"]
+      refute no.code in texts(view, "td")
+
+      view |> element(~s([data-filter-chip="active"] a[data-remove-filter])) |> render_click()
+
+      assert chips(view) == ["Code starts with #{code}"]
+      cells = texts(view, "td")
+      assert yes.code in cells
+      assert no.code in cells
+      assert has_element?(view, "#ash-quick-filter-count", "1 filter applied")
+    end
+
+    # A link written by hand can make the whole filter one row, with no group.
+    test "shows a root that is a row, and leaves no filter by its ✕", %{conn: conn} do
+      filter =
+        %{"field_name" => "code", "operator" => "equals", "value" => "x"}
+        |> JSON.encode!()
+        |> :base64.encode()
+        |> URI.encode_www_form()
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+      assert chips(view) == ["Code = x"]
+      assert has_element?(view, "#ash-quick-filter-count", "1 filter applied")
+
+      view |> element(~s([data-filter-chip="code"] a[data-remove-filter])) |> render_click()
+
+      assert_patch(view, "/test/filter_fields")
+      assert chips(view) == []
+    end
+
+    # Each ✕ is named by its chip, so a screen reader can tell them apart.
+    test "names each ✕ by its chip", %{conn: conn} do
+      filter =
+        encode_filter([
+          %{"field_name" => "code", "operator" => "equals", "value" => "x"},
+          %{"field_name" => "active", "operator" => "equals", "value" => "true"}
+        ])
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+      names =
+        for ids <- attribute(view, "[data-filter-chip] a[data-remove-filter]", "aria-labelledby") do
+          ids
+          |> String.split()
+          |> Enum.map_join(" ", &(view |> texts("##{&1}") |> Enum.join()))
+          |> String.replace(~r/\s+/, " ")
+        end
+
+      assert names == ["Remove filter Code = x", "Remove filter Active = Yes"]
+      # The words that name a ✕ are read only as its name, not again beside it.
+      assert has_element?(view, "[data-filter-chip] span[hidden]", "Remove filter")
+    end
+
+    # `in` takes a list, which Ash reads, and which no field's type casts from
+    # it: the chip shows it as written, rather than rendering a list as iodata,
+    # which raised and took the page down.
+    test "shows a list value from a link as written", %{conn: conn} do
+      code = unique("IN")
+      row = filter_field(code: code, salary: 1000)
+
+      filter =
+        encode_filter([
+          %{"field_name" => "code", "operator" => "equals", "value" => code},
+          %{"field_name" => "salary", "operator" => "in", "value" => [1000, 2000]}
+        ])
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+      assert row.code in texts(view, "td")
+      assert chips(view) == ["Code = #{code}", "Salary in 1000, 2000"]
+    end
+
+    test "says when any one row is enough", %{conn: conn} do
+      filter =
+        encode_filter(
+          [
+            %{"field_name" => "code", "operator" => "equals", "value" => "x"},
+            %{"field_name" => "code", "operator" => "equals", "value" => "y"}
+          ],
+          "or"
+        )
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+      assert has_element?(view, "#ash-quick-filter-chips", "Any of:")
+    end
+
+    # A row left without a value filters by nothing, so it has no chip.
+    test "has no chip for a row without a value", %{conn: conn} do
+      filter = encode_filter([%{"field_name" => "code", "operator" => "equals", "value" => ""}])
+      {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+      assert chips(view) == []
+      refute has_element?(view, "#ash-quick-filter-count")
+    end
+
+    # The row on the field the editor may not see is dropped before the read,
+    # so the chips show only what the list was filtered by.
+    test "has no chip for a row dropped before the read", %{conn: conn, editor: editor} do
+      filter =
+        encode_filter([
+          %{"field_name" => "salary", "operator" => "gt", "value" => "10"},
+          %{"field_name" => "code", "operator" => "equals", "value" => "x"}
+        ])
+
+      {:ok, view, _html} =
+        live(log_in(conn, editor), "/test/filter_fields?custom_filter=#{filter}")
+
+      assert chips(view) == ["Code = x"]
+    end
+  end
+
+  defp encode_filter(rows, operator \\ "and") do
+    %{"operator" => operator, "children" => rows}
     |> JSON.encode!()
     |> :base64.encode()
     |> URI.encode_www_form()
@@ -444,6 +715,13 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query(selector)
     |> LazyHTML.attribute(name)
+  end
+
+  # Each chip's words, spaces collapsed, without its ✕.
+  defp chips(view) do
+    view
+    |> texts("[data-filter-chip] > span[id$='-text']")
+    |> Enum.map(&String.replace(&1, ~r/\s+/, " "))
   end
 
   defp texts(view, selector) do

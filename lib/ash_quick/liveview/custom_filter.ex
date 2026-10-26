@@ -99,6 +99,66 @@ defmodule AshQuick.LiveView.CustomFilter do
   def reject_fields(%__MODULE__{field_name: field_name} = filter, field_names),
     do: if(field_name in field_names, do: nil, else: filter)
 
+  @doc """
+  `filter` without the node `uuid` names, or `nil` when what is left filters by
+  nothing: the list then reads as it would with no filter, and so does its URL.
+  """
+  def without(%__MODULE__{uuid: uuid}, uuid), do: nil
+
+  def without(%__MODULE__{} = filter, uuid) do
+    filter = remove_filter(filter, uuid)
+    if applied?(filter), do: filter
+  end
+
+  @doc """
+  Whether `filter` filters by anything: a row with a field and a value, or a
+  group holding one. A row left without a value is skipped by
+  `build_ash_filter/1`, and so is a group of only such rows.
+  """
+  def applied?(%__MODULE__{children: [_ | _] = children}), do: Enum.any?(children, &applied?/1)
+
+  def applied?(%__MODULE__{field_name: field_name, operator: operator, value: value}),
+    do: is_binary(field_name) and is_binary(operator) and value not in [nil, ""]
+
+  @doc """
+  The nodes the list shows as one chip each: the root's own rows and groups
+  that filter by something, or the root itself when a link made it a row.
+  """
+  def chips(%__MODULE__{children: children}) when is_list(children),
+    do: Enum.filter(children, &applied?/1)
+
+  def chips(%__MODULE__{} = filter), do: if(applied?(filter), do: [filter], else: [])
+
+  @doc "The rows of `filter`'s tree that filter by something, in order."
+  def applied_leaves(%__MODULE__{} = filter),
+    do: filter |> leaves() |> Enum.filter(&applied?/1)
+
+  @doc """
+  The fields a row can name on `resource`, by the name a row holds them under.
+  """
+  def fields_by_name(resource) do
+    resource
+    |> Ash.Resource.Info.fields([:attributes, :aggregates, :calculations])
+    |> Map.new(&{to_string(&1.name), &1})
+  end
+
+  @doc """
+  `value` cast by `field`'s type, as Ash casts a filter's values: with
+  `Ash.Type.coerce/3`, which differs from `cast_input/3` for some types, an
+  atom among them, which `cast_input/3` accepts only when the VM already
+  knows it.
+
+  A link can pair any field with any value, and some types raise on one they
+  were never meant to see, as a list type handed a string reaches
+  `Enumerable`. Only such errors read as the value being invalid; anything
+  else a type raises is a bug and is left to surface.
+  """
+  def cast_value(field, value) do
+    Ash.Type.coerce(field.type, value, Map.get(field, :constraints) || [])
+  rescue
+    _ in [ArgumentError, FunctionClauseError, Protocol.UndefinedError] -> {:error, "is invalid"}
+  end
+
   def build_ash_filter(%__MODULE__{operator: operator, children: children})
       when is_list(children) and children != [] do
     case Enum.map(children, &build_ash_filter/1) |> Enum.reject(&is_nil/1) do

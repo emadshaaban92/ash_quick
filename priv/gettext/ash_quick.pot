@@ -573,3 +573,49 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Yes"
 msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "%{count} filter applied"
+msgid_plural "%{count} filters applied"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/ash_quick/liveview/components/filter_chips.ex
+#, elixir-autogen, elixir-format
+msgid "Any of:"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_chips.ex
+#, elixir-autogen, elixir-format
+msgid "Clear all"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_chips.ex
+#, elixir-autogen, elixir-format
+msgid "Remove filter"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_chips.ex
+#, elixir-autogen, elixir-format
+msgid "All of %{count} condition"
+msgid_plural "All of %{count} conditions"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/ash_quick/liveview/components/filter_chips.ex
+#, elixir-autogen, elixir-format
+msgid "Any of %{count} condition"
+msgid_plural "Any of %{count} conditions"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "contains"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "starts with"
+msgstr ""
