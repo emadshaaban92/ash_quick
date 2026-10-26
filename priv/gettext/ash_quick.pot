@@ -619,3 +619,64 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "starts with"
 msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Any Of"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Ends With"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Is Empty"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Is Not Empty"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Not Contains"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "On Day"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "does not contain"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "ends with"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "is any of"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "is empty"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "is not empty"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgctxt "filter chip"
+msgid "on"
+msgstr ""

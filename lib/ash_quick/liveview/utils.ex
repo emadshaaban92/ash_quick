@@ -364,7 +364,9 @@ defmodule AshQuick.LiveView.Utils do
   `action` reads.
 
   A field whose policy depends on the record stays, since the actor sees it on
-  some rows, and Ash marks the rest with `Ash.ForbiddenField`. Only a field of
+  some rows, and Ash marks the rest with `Ash.ForbiddenField`; `opts` go to
+  `Ash.can_see_fields/4`, whose `filter_is: false` drops it too, keeping only
+  the fields the actor sees on every record. Only a field of
   `resource` itself is asked about: a relationship path is judged by the related
   resource's policies, record by record, in the same way.
 
@@ -372,7 +374,7 @@ defmodule AshQuick.LiveView.Utils do
   not read, so a check that fails keeps every field rather than failing the
   page.
   """
-  def visible_fields(fields, resource, action, scope) do
+  def visible_fields(fields, resource, action, scope, opts \\ []) do
     policed =
       resource
       |> Ash.Resource.Info.fields([:attributes, :calculations, :aggregates])
@@ -385,7 +387,7 @@ defmodule AshQuick.LiveView.Utils do
         fields
 
       names ->
-        case Ash.can_see_fields({resource, action.name}, scope, Enum.uniq(names)) do
+        case Ash.can_see_fields({resource, action.name}, scope, Enum.uniq(names), opts) do
           {:ok, visible} -> Enum.reject(fields, &(Map.get(visible, field_path(&1)) == false))
           {:error, _error} -> fields
         end

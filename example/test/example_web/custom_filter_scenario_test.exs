@@ -609,10 +609,10 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       assert has_element?(view, "[data-filter-chip] span[hidden]", "Remove filter")
     end
 
-    # `in` takes a list, which Ash reads, and which no field's type casts from
-    # it: the chip shows it as written, rather than rendering a list as iodata,
-    # which raised and took the page down.
-    test "shows a list value from a link as written", %{conn: conn} do
+    # A link can hand Any Of to a field the form offers it on only for a fixed
+    # set. Its values read one by one as the field renders them, rather than
+    # rendering a list as iodata, which raised and took the page down.
+    test "shows a list value from a link, each as its field renders one", %{conn: conn} do
       code = unique("IN")
       row = filter_field(code: code, salary: 1000)
 
@@ -625,7 +625,7 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
 
       assert row.code in texts(view, "td")
-      assert chips(view) == ["Code = #{code}", "Salary in 1000, 2000"]
+      assert chips(view) == ["Code = #{code}", "Salary is any of 1000, 2000"]
     end
 
     test "says when any one row is enough", %{conn: conn} do
@@ -665,6 +665,354 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
         live(log_in(conn, editor), "/test/filter_fields?custom_filter=#{filter}")
 
       assert chips(view) == ["Code = x"]
+    end
+  end
+
+  describe "Ends With and Not Contains" do
+    setup %{conn: conn, admin: admin} do
+      {:ok, conn: log_in(conn, admin)}
+    end
+
+    test "keep the rows a value ends with, outside Postgres too", %{conn: conn} do
+      code = unique("EW")
+      kept = filter_field(code: "#{code}-kept-end")
+      dropped = filter_field(code: "#{code}-end-dropped")
+
+      view = apply_filter(conn, "/test/filter_fields", "code", "ends_with", "#{code}-kept-end")
+
+      cells = texts(view, "td")
+      assert kept.code in cells
+      refute dropped.code in cells
+      assert chips(view) == ["Code ends with #{code}-kept-end"]
+    end
+
+    test "read % and _ as themselves on Postgres", %{conn: conn, admin: admin} do
+      suffix = unique(" 50%")
+      kept = "Tent#{suffix}"
+      dropped = "Tent#{String.replace(suffix, "%", "0")}"
+
+      for name <- [kept, dropped], do: product(name: name, actor: admin)
+
+      view = apply_filter(conn, "/products", "name", "ends_with", suffix)
+      cells = texts(view, "td")
+      assert kept in cells
+      refute dropped in cells
+
+      view = apply_filter(conn, "/products", "name", "not_contains", "%")
+      cells = texts(view, "td")
+      assert dropped in cells
+      refute kept in cells
+    end
+
+    # A note left empty holds no text at all, so Ash reads "does not contain"
+    # of it as unknown, the way != leaves it out: Is Empty is what finds it.
+    test "drop the rows that hold the value, and an empty one", %{conn: conn} do
+      code = unique("NC")
+      kept = filter_field(code: "#{code}-kept", note: "plain")
+      dropped = filter_field(code: "#{code}-dropped", note: "has #{code} in it")
+      empty = filter_field(code: "#{code}-empty", note: nil)
+
+      view = apply_filter(conn, "/test/filter_fields", "note", "not_contains", code)
+
+      cells = texts(view, "td")
+      assert kept.code in cells
+      refute dropped.code in cells
+      refute empty.code in cells
+      assert chips(view) == ["Note does not contain #{code}"]
+    end
+  end
+
+  describe "Is Empty and Is Not Empty" do
+    setup %{conn: conn, admin: admin} do
+      {:ok, conn: log_in(conn, admin)}
+    end
+
+    test "split the rows by whether a field holds anything", %{conn: conn} do
+      code = unique("IE")
+      noted = filter_field(code: "#{code}-noted", note: "something")
+      empty = filter_field(code: "#{code}-empty", note: nil)
+
+      for {operator, kept, dropped, chip} <- [
+            {"is_nil", empty, noted, "Note is empty"},
+            {"is_not_nil", noted, empty, "Note is not empty"}
+          ] do
+        {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+        uuid = filter_uuid(view)
+        filter_change(view, "field_name-#{uuid}", "note")
+        filter_change(view, "operator-#{uuid}", operator)
+
+        refute has_element?(view, "[name^='value-#{uuid}']")
+
+        view |> element("#custom-filter-form") |> render_submit()
+
+        cells = texts(view, "td")
+        assert kept.code in cells, "#{operator} dropped #{kept.code}"
+        refute dropped.code in cells, "#{operator} kept #{dropped.code}"
+        assert chips(view) == [chip]
+      end
+    end
+
+    # A string kept as typed can hold `""`, which the list shows as blank as a
+    # `nil`, so both read as empty.
+    test "count a blank string as empty", %{conn: conn} do
+      code = unique("IB")
+      blank = filter_field(code: "#{code}-blank", note: "")
+      unset = filter_field(code: "#{code}-unset", note: nil)
+      noted = filter_field(code: "#{code}-noted", note: "something")
+
+      view = apply_filter(conn, "/test/filter_fields", "note", "is_nil", "")
+      cells = texts(view, "td")
+      assert blank.code in cells
+      assert unset.code in cells
+      refute noted.code in cells
+
+      view = apply_filter(conn, "/test/filter_fields", "note", "is_not_nil", "")
+      cells = texts(view, "td")
+      assert noted.code in cells
+      refute blank.code in cells
+      refute unset.code in cells
+    end
+
+    # Ash reads a memo the editor may not see as `nil`, so Is Empty would keep
+    # every inactive row as one without a memo.
+    test "are not offered on a field the actor sees on some rows only", %{
+      conn: conn,
+      admin: admin,
+      editor: editor
+    } do
+      for {actor, offered?} <- [{editor, false}, {admin, true}] do
+        {:ok, view, _html} =
+          live(log_in(conn, actor), "/test/filter_fields?show_custom_filter=true")
+
+        uuid = filter_uuid(view)
+        filter_change(view, "field_name-#{uuid}", "memo")
+        options = texts(view, "select[name='operator-#{uuid}'] option")
+
+        assert "Contains" in options
+        assert "Is Empty" in options == offered?, "#{actor.role}: #{inspect(options)}"
+      end
+    end
+
+    test "drop such a row from a link, with the refused-filter flash", %{
+      conn: conn,
+      editor: editor
+    } do
+      code = unique("IH")
+      hidden = filter_field(code: "#{code}-hidden", memo: "secret", active: false)
+
+      filter =
+        encode_filter([
+          %{"field_name" => "memo", "operator" => "is_nil"},
+          %{"field_name" => "code", "operator" => "starts_with", "value" => code}
+        ])
+
+      {:ok, view, _html} =
+        live(log_in(conn, editor), "/test/filter_fields?custom_filter=#{filter}")
+
+      assert render(view) =~ "couldn&#39;t be applied"
+      assert chips(view) == ["Code starts with #{code}"]
+      assert hidden.code in texts(view, "td")
+    end
+
+    # A sum with a default is never empty, so neither would narrow the list.
+    test "are not offered on an aggregate with a default", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      uuid = filter_uuid(view)
+
+      filter_change(view, "field_name-#{uuid}", "children_salary")
+
+      refute "Is Empty" in texts(view, "select[name='operator-#{uuid}'] option")
+    end
+
+    # A required field always holds something, so neither is offered on it.
+    test "are offered only on a field that can be empty", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      uuid = filter_uuid(view)
+
+      filter_change(view, "field_name-#{uuid}", "code")
+      refute texts(view, "select[name='operator-#{uuid}'] option") |> Enum.member?("Is Empty")
+
+      filter_change(view, "field_name-#{uuid}", "active")
+
+      assert texts(view, "select[name='operator-#{uuid}'] option") ==
+               ["=", "!=", "Is Empty", "Is Not Empty"]
+    end
+  end
+
+  describe "Any Of" do
+    setup %{conn: conn, admin: admin} do
+      {:ok, conn: log_in(conn, admin)}
+    end
+
+    test "keeps the rows holding any value picked from a fixed set", %{conn: conn} do
+      code = unique("AO")
+      draft = filter_field(code: "#{code}-draft", stage: :draft)
+      live_row = filter_field(code: "#{code}-live", stage: :live)
+      archived = filter_field(code: "#{code}-archived", stage: :archived)
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      uuid = filter_uuid(view)
+      filter_change(view, "field_name-#{uuid}", "stage")
+      filter_change(view, "operator-#{uuid}", "in")
+
+      assert texts(view, "select[name='value-#{uuid}[]'][multiple] option") ==
+               ["Draft", "Live", "Archived"]
+
+      filter_change(view, "value-#{uuid}", ["draft", "archived"])
+      view |> element("#custom-filter-form") |> render_submit()
+
+      cells = texts(view, "td")
+      assert draft.code in cells
+      assert archived.code in cells
+      refute live_row.code in cells
+      assert chips(view) == ["Stage is any of Draft, Archived"]
+    end
+
+    # A link can name Any Of on a field without a fixed set. The form shows
+    # its values typed in, one after another, rather than crashing on a list
+    # in a text input, and splits them again at each comma.
+    test "from a link on a field without a fixed set is typed in", %{conn: conn} do
+      code = unique("AT")
+      kept = filter_field(code: "#{code}-kept", salary: 3000)
+      dropped = filter_field(code: "#{code}-dropped", salary: 1000)
+
+      filter =
+        encode_filter([
+          %{"field_name" => "code", "operator" => "starts_with", "value" => code},
+          %{"field_name" => "salary", "operator" => "in", "value" => [1000, 2000]}
+        ])
+
+      {:ok, view, _html} =
+        live(conn, "/test/filter_fields?custom_filter=#{filter}&show_custom_filter=true")
+
+      [_code, uuid] = filter_uuids(view)
+      assert attribute(view, "input[name='value-#{uuid}']", "value") == ["1000, 2000"]
+      assert texts(view, "select[name='operator-#{uuid}'] option[selected]") == ["Any Of"]
+
+      filter_change(view, "value-#{uuid}", "2000, 3000")
+      view |> element("#custom-filter-form") |> render_submit()
+
+      cells = texts(view, "td")
+      assert kept.code in cells
+      refute dropped.code in cells
+      assert chips(view) == ["Code starts with #{code}", "Salary is any of 2000, 3000"]
+    end
+
+    # Picking Any Of after = keeps the value picked as the list's one value,
+    # and going back keeps the first value of the list.
+    test "carries the value across from =, and back", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      uuid = filter_uuid(view)
+      filter_change(view, "field_name-#{uuid}", "stage")
+      filter_change(view, "value-#{uuid}", "live")
+      filter_change(view, "operator-#{uuid}", "in")
+
+      assert texts(view, "select[name='value-#{uuid}[]'] option[selected]") == ["Live"]
+
+      filter_change(view, "value-#{uuid}", ["archived", "draft"])
+      filter_change(view, "operator-#{uuid}", "equals")
+
+      assert texts(view, "select[name='value-#{uuid}'] option[selected]") == ["Archived"]
+    end
+
+    # A select with nothing picked sends nothing, so the row filters by nothing.
+    test "applies nothing once every value is unpicked", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      uuid = filter_uuid(view)
+      filter_change(view, "field_name-#{uuid}", "stage")
+      filter_change(view, "operator-#{uuid}", "in")
+      filter_change(view, "value-#{uuid}", ["live"])
+
+      # A browser sends nothing for a select none of whose options is picked.
+      filter_change(view, "value-#{uuid}", [])
+
+      view |> element("#custom-filter-form") |> render_submit()
+
+      assert chips(view) == []
+      refute has_element?(view, "#ash-quick-filter-count")
+    end
+  end
+
+  describe "On Day" do
+    setup %{conn: conn, admin: admin} do
+      {:ok, conn: log_in(conn, admin)}
+    end
+
+    # The example shows times in UTC; the day read in another zone is pinned
+    # in the library's `AshQuick.LiveView.FilterDatetimeTest`.
+    test "keeps the rows stamped on that day, from its first moment to its last", %{
+      conn: conn
+    } do
+      code = unique("OD")
+      before = filter_field(code: "#{code}-before", stamped_at: ~U[2026-10-21 23:59:59.999999Z])
+      first = filter_field(code: "#{code}-first", stamped_at: ~U[2026-10-22 00:00:00.000000Z])
+      last = filter_field(code: "#{code}-last", stamped_at: ~U[2026-10-22 23:59:59.999999Z])
+      next = filter_field(code: "#{code}-next", stamped_at: ~U[2026-10-23 00:00:00.000000Z])
+
+      view = apply_filter(conn, "/test/filter_fields", "stamped_at", "on", "2026-10-22")
+
+      cells = texts(view, "td")
+      assert first.code in cells
+      assert last.code in cells
+      refute before.code in cells
+      refute next.code in cells
+      assert chips(view) == ["Stamped on #{AshQuick.Config.format_date(~D[2026-10-22])}"]
+
+      view |> element("a[title='Advanced filters']") |> render_click()
+      assert attribute(view, "input[type='date'][name^='value-']", "value") == ["2026-10-22"]
+    end
+
+    # Dropped before the read, rather than matching one instant of the day,
+    # so the read never sees it and nothing is logged as having failed.
+    test "drops a link's value that is no date, with the refused-filter flash", %{conn: conn} do
+      filter =
+        encode_filter([
+          %{"field_name" => "stamped_at", "operator" => "on", "value" => "2026-10-22T10:00:00"}
+        ])
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+          assert render(view) =~ "couldn&#39;t be applied"
+          assert chips(view) == []
+        end)
+
+      refute log =~ "re-reading"
+    end
+
+    # A link can write a row as `children: []`; it is a row all the same, so
+    # its instant does not follow it to On Day, which takes a date.
+    test "clears a link row's instant when it moves to On Day", %{conn: conn} do
+      filter =
+        encode_filter([
+          %{
+            "field_name" => "stamped_at",
+            "operator" => "gt",
+            "value" => "2026-10-22T08:00:00Z",
+            "children" => []
+          }
+        ])
+
+      {:ok, view, _html} =
+        live(conn, "/test/filter_fields?custom_filter=#{filter}&show_custom_filter=true")
+
+      uuid = filter_uuid(view)
+      filter_change(view, "operator-#{uuid}", "on")
+
+      assert attribute(view, "input[type='date'][name='value-#{uuid}']", "value") == [""]
+    end
+
+    test "names a date that is no day under its row", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      uuid = filter_uuid(view)
+      filter_change(view, "field_name-#{uuid}", "stamped_at")
+      filter_change(view, "operator-#{uuid}", "on")
+      filter_change(view, "value-#{uuid}", "2026-13-45")
+      view |> element("#custom-filter-form") |> render_submit()
+
+      assert has_element?(view, "#value-error-#{uuid}")
+      assert chips(view) == []
     end
   end
 

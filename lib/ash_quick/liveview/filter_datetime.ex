@@ -21,9 +21,7 @@ defmodule AshQuick.LiveView.FilterDatetime do
   def to_utc(value, timezone, database) when is_binary(value) do
     with {:ok, naive} <- parse_naive(value),
          {:ok, datetime} <- from_naive(naive, timezone, database) do
-      datetime
-      |> DateTime.shift_zone!("Etc/UTC", Calendar.UTCOnlyTimeZoneDatabase)
-      |> DateTime.to_iso8601()
+      utc_iso8601(datetime)
     else
       _ -> value
     end
@@ -47,6 +45,35 @@ defmodule AshQuick.LiveView.FilterDatetime do
   end
 
   def to_local(value, _timezone, _database), do: value
+
+  @doc """
+  The day a `date` value names in `timezone`, as the UTC instants it starts
+  and the next day starts at, in ISO 8601: the range On Day keeps, from the
+  first up to but not including the second. A day the zone starts in a gap
+  starts at the first instant after it.
+  """
+  def day_range(value, timezone, database \\ Calendar.get_time_zone_database())
+
+  def day_range(value, timezone, database) when is_binary(value) do
+    with {:ok, date} <- Date.from_iso8601(value),
+         {:ok, from} <- start_of_day(date, timezone, database),
+         {:ok, to} <- start_of_day(Date.add(date, 1), timezone, database) do
+      {:ok, utc_iso8601(from), utc_iso8601(to)}
+    else
+      _ -> :error
+    end
+  end
+
+  def day_range(_value, _timezone, _database), do: :error
+
+  defp start_of_day(date, timezone, database),
+    do: date |> NaiveDateTime.new!(~T[00:00:00]) |> from_naive(timezone, database)
+
+  defp utc_iso8601(datetime) do
+    datetime
+    |> DateTime.shift_zone!("Etc/UTC", Calendar.UTCOnlyTimeZoneDatabase)
+    |> DateTime.to_iso8601()
+  end
 
   defp parse_instant(value) do
     case DateTime.from_iso8601(value) do
