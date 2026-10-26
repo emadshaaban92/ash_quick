@@ -26,8 +26,6 @@ defmodule AshQuick.ImpersonationVerifierTest do
   """
   use ExUnit.Case, async: false
 
-  import ExUnit.CaptureIO
-
   alias AshQuick.Test.VerifierErrors
 
   defmodule Domain do
@@ -94,9 +92,7 @@ defmodule AshQuick.ImpersonationVerifierTest do
     end
     """
 
-    # The compiler reports a failure itself, on its own process — swallowed here
-    # so a deliberate failure does not look like a broken test run.
-    capture_io(:stderr, fn -> Code.compile_string(source) end)
+    VerifierErrors.compile(source)
 
     Module.concat([name])
   end

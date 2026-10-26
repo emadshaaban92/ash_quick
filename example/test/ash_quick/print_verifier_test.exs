@@ -10,7 +10,7 @@ defmodule AshQuick.PrintVerifierTest do
   """
   use ExUnit.Case, async: false
 
-  import ExUnit.CaptureIO
+  require Spark.Test
 
   defmodule Domain do
     @moduledoc false
@@ -66,13 +66,11 @@ defmodule AshQuick.PrintVerifierTest do
     end
     """
 
-    capture_io(:stderr, fn -> Code.compile_string(source) end)
     module = Module.concat([name])
 
-    Process.put({Spark.Dsl, :test_collector}, self())
-    module.__verify_spark_dsl__(module)
+    assert [{^module, [%Spark.Error.DslError{} = error]}] =
+             Spark.Test.dsl_errors(do: Code.compile_string(source))
 
-    assert_received {Spark.Dsl, :verifier_errors, ^module, [%Spark.Error.DslError{} = error]}
     assert Exception.message(error) =~ ~s({:chromic_pdf, "~> 1.17"})
   end
 end

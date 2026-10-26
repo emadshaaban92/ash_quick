@@ -15,16 +15,14 @@ defmodule AshQuick.BookkeepingVerifierTest do
   starts bumping `version` on writes that used to be no-ops. Nothing observable
   fails; the counter just climbs.
 
-  Each probe is verified by hand through `AshQuick.Test.VerifierErrors`, which
-  says why the compiler's own run cannot hand its errors to a test.
+  Each probe is compiled through `AshQuick.Test.VerifierErrors`, which says how
+  a test gets hold of the errors the compiler's own run reports.
 
   `async: false` because suppressing the compiler's own report means swapping
   the global `:standard_error` device, and four tests here swap the
   `:actor_resource` config.
   """
   use ExUnit.Case, async: false
-
-  import ExUnit.CaptureIO
 
   alias Ash.Resource.Change
   alias Ash.Resource.Info
@@ -67,9 +65,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
     end
     """
 
-    # The compiler reports a verifier failure itself, on its own process —
-    # swallowed here so a deliberate failure does not look like a broken run.
-    capture_io(:stderr, fn -> Code.compile_string(source) end)
+    VerifierErrors.compile(source)
     Module.concat([name])
   end
 
