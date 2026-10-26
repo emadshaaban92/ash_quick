@@ -11,6 +11,8 @@ defmodule AshQuick.LiveView.Components.ListView do
   alias AshQuick.LiveView.QuickField
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.Components.ActionModal
+  alias AshQuick.LiveView.Components.FilterChips
+  alias AshQuick.LiveView.CustomFilter
 
   attr(:id, :string, required: true)
   attr(:resource, :map, required: true)
@@ -80,19 +82,14 @@ defmodule AshQuick.LiveView.Components.ListView do
                 scope={@scope}
                 params={@params}
                 path={@path}
+                columns={@fields}
               />
 
               <div class="flex items-center w-full space-x-2">
                 <div class="flex-1">
                   <.search_form params={@params} />
                 </div>
-                <.link
-                  patch={URLParams.full_path(@path, @params |> URLParams.toggle_show_custom_filter())}
-                  class="btn btn-ghost btn-sm btn-square"
-                  title={gettext("Advanced filters")}
-                >
-                  <.icon name="hero-adjustments-horizontal" class="w-5 h-5" />
-                </.link>
+                <.filter_button params={@params} path={@path} />
               </div>
             </div>
             <div class="w-full lg:w-auto flex flex-col sm:flex-row space-y-2 sm:space-y-0 items-stretch sm:items-center justify-end sm:space-x-3 shrink-0">
@@ -112,6 +109,12 @@ defmodule AshQuick.LiveView.Components.ListView do
               </div>
             </div>
           </div>
+          <FilterChips.filter_chips
+            resource={@resource}
+            params={@params}
+            path={@path}
+            columns={@fields}
+          />
           <.form for={%{}} id="table-form" phx-change="table-form-change">
             <div class="overflow-x-auto min-h-[20rem] lg:min-h-[30rem]">
               <table class="table table-sm text-base-content">
@@ -253,6 +256,47 @@ defmodule AshQuick.LiveView.Components.ListView do
     end
   end
 
+  # Opens the filter modal, and counts the rows the list is filtered by, so a
+  # filtered list never passes for the whole one, even with the chips scrolled
+  # away.
+  attr(:params, :map, required: true)
+  attr(:path, :string, required: true)
+
+  defp filter_button(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :count,
+        case assigns.params.custom_filter do
+          %CustomFilter{} = filter -> filter |> CustomFilter.applied_leaves() |> length()
+          nil -> 0
+        end
+      )
+
+    ~H"""
+    <.link
+      patch={URLParams.full_path(@path, @params |> URLParams.toggle_show_custom_filter())}
+      class="btn btn-ghost btn-sm btn-square indicator"
+      title={gettext("Advanced filters")}
+    >
+      <.icon name="hero-adjustments-horizontal" class="w-5 h-5" />
+      <%!-- Text inside the link outranks its `title` as its name, so the
+      count alone would name it; this keeps "Advanced filters" first. --%>
+      <span :if={@count > 0} class="sr-only">{gettext("Advanced filters")}</span>
+      <span
+        :if={@count > 0}
+        id="ash-quick-filter-count"
+        class="indicator-item badge badge-primary badge-xs"
+      >
+        <span aria-hidden="true">{@count}</span>
+        <span class="sr-only">
+          {ngettext("%{count} filter applied", "%{count} filters applied", @count)}
+        </span>
+      </span>
+    </.link>
+    """
+  end
+
   # The shared modal: only its ✕ or Cancel closes it, and not while Apply
   # submits, when the ✕'s patch (made from the params before the filter)
   # would race the one Apply makes and could undo it.
@@ -278,6 +322,7 @@ defmodule AshQuick.LiveView.Components.ListView do
         action={@action}
         scope={@scope}
         custom_filter={@params.custom_filter}
+        labels={FilterChips.column_labels(@columns)}
         close={@close}
       />
     </ActionModal.action_modal>

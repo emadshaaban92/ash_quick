@@ -589,3 +589,61 @@ msgstr "لا"
 #, elixir-autogen, elixir-format
 msgid "Yes"
 msgstr "نعم"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "%{count} filter applied"
+msgid_plural "%{count} filters applied"
+msgstr[0] "لا فلاتر مطبقة"
+msgstr[1] "فلتر واحد مطبق"
+msgstr[2] "فلتران مطبقان"
+msgstr[3] "%{count} فلاتر مطبقة"
+msgstr[4] "%{count} فلترًا مطبقًا"
+msgstr[5] "%{count} فلتر مطبق"
+
+#: lib/ash_quick/liveview/components/filter_chips.ex
+#, elixir-autogen, elixir-format
+msgid "Any of:"
+msgstr "أي مما يلي:"
+
+#: lib/ash_quick/liveview/components/filter_chips.ex
+#, elixir-autogen, elixir-format
+msgid "Clear all"
+msgstr "مسح الكل"
+
+#: lib/ash_quick/liveview/components/filter_chips.ex
+#, elixir-autogen, elixir-format
+msgid "Remove filter"
+msgstr "إزالة الفلتر"
+
+#: lib/ash_quick/liveview/components/filter_chips.ex
+#, elixir-autogen, elixir-format
+msgid "All of %{count} condition"
+msgid_plural "All of %{count} conditions"
+msgstr[0] "لا شروط"
+msgstr[1] "شرط واحد"
+msgstr[2] "الشرطان معًا"
+msgstr[3] "كل الشروط الـ%{count}"
+msgstr[4] "كل الشروط الـ%{count}"
+msgstr[5] "كل الشروط الـ%{count}"
+
+#: lib/ash_quick/liveview/components/filter_chips.ex
+#, elixir-autogen, elixir-format
+msgid "Any of %{count} condition"
+msgid_plural "Any of %{count} conditions"
+msgstr[0] "لا شروط"
+msgstr[1] "شرط واحد"
+msgstr[2] "أيٌّ من الشرطين"
+msgstr[3] "أيٌّ من %{count} شروط"
+msgstr[4] "أيٌّ من %{count} شرطًا"
+msgstr[5] "أيٌّ من %{count} شرط"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "contains"
+msgstr "يحتوي على"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "starts with"
+msgstr "يبدأ بـ"

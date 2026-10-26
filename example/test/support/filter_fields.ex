@@ -96,6 +96,7 @@ defmodule Example.Test.FilterFieldsLive.Quick do
   """
   use AshQuick.LiveView.QuickView,
     resource: Example.Test.FilterFields,
-    list: [fields: [:code, :stamped_at, :active]],
+    # A column label of its own, which the filter's chip names the field by.
+    list: [fields: [:code, {:stamped_at, label: "Stamped"}, :active]],
     details: [fields: [:code, :stamped_at]]
 end
