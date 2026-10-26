@@ -14,6 +14,7 @@ defmodule AshQuick.LiveView.ListUtils do
   alias AshQuick.LiveView.FormUtils
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.CustomFilter
+  alias AshQuick.LiveView.FilterDatetime
   alias AshQuick.LiveView.Components.FilterForm
   alias AshQuick.LiveView.Liveness
   alias AshQuick.LiveView.PrintUtils
@@ -35,7 +36,7 @@ defmodule AshQuick.LiveView.ListUtils do
         %Actions.Read{get?: false} = action,
         %Options{} = options
       ) do
-    {socket, params} = drop_hidden_fields(socket, params, action, options)
+    {socket, params} = drop_refused_rows(socket, params, action, options)
     {socket, params, page} = initial_read(socket, params, options)
 
     socket
@@ -110,11 +111,27 @@ defmodule AshQuick.LiveView.ListUtils do
   defp maybe_apply_custom_filter(query, nil), do: query
 
   defp maybe_apply_custom_filter(query, custom_filter) do
-    case CustomFilter.build_ash_filter(custom_filter) do
+    case CustomFilter.build_ash_filter(custom_filter,
+           fields: emptiness_fields(query, custom_filter)
+         ) do
       nil -> query
       ash_filter -> Ash.Query.filter_input(query, ash_filter)
     end
   end
+
+  # Only Is Empty and Is Not Empty ask a field's type, so the resource's
+  # fields are looked up only for a filter holding one.
+  defp emptiness_fields(query, custom_filter) do
+    if emptiness_rows(custom_filter) == [],
+      do: %{},
+      else: CustomFilter.fields_by_name(query.resource)
+  end
+
+  defp emptiness_rows(filter),
+    do:
+      filter
+      |> CustomFilter.leaves()
+      |> Enum.filter(&(CustomFilter.value_shape(&1.operator) == :none))
 
   # A row on a field a field policy hides from the actor on every record is
   # dropped before the read, the way `FilterForm` leaves the field out: Ash
@@ -123,33 +140,70 @@ defmodule AshQuick.LiveView.ListUtils do
   # actor who could see the field or by hand, so the visitor is told, and the
   # address bar is corrected with the rest of `:params`.
   #
+  # So is Is Empty or Is Not Empty on a field hidden from the actor on only
+  # some records, which `FilterForm` does not offer on it: Ash reads the field
+  # as `nil` where it is hidden, so Is Empty would keep a row whose value the
+  # actor may not see as one that has none.
+  #
+  # And so is On Day with a value it cannot read as a day in the list's zone:
+  # one that is no date, or any date when the zone will not load. The filter
+  # it builds leaves such a row out, and the visitor is told here why.
+  #
   # A root that is itself such a row, as a hand-written link can be, leaves no
   # filter at all.
-  defp drop_hidden_fields(socket, %URLParams{custom_filter: nil} = params, _action, _options),
+  defp drop_refused_rows(socket, %URLParams{custom_filter: nil} = params, _action, _options),
     do: {socket, params}
 
-  defp drop_hidden_fields(socket, %URLParams{custom_filter: filter} = params, action, options) do
-    case hidden_fields(filter, action, options.resource, socket.assigns[:scope]) do
-      [] ->
+  defp drop_refused_rows(socket, %URLParams{custom_filter: filter} = params, action, options) do
+    scope = socket.assigns[:scope]
+    by_name = CustomFilter.fields_by_name(options.resource)
+
+    hidden =
+      hidden_fields(CustomFilter.field_names(filter), by_name, options.resource, action, scope)
+
+    partly_hidden =
+      case filter |> emptiness_rows() |> Enum.map(& &1.field_name) |> Enum.uniq() do
+        [] -> []
+        names -> hidden_fields(names, by_name, options.resource, action, scope, filter_is: false)
+      end
+
+    refused? = fn row ->
+      case CustomFilter.value_shape(row.operator) do
+        :none -> row.field_name in partly_hidden
+        :day -> unreadable_day?(row)
+        _ -> false
+      end
+    end
+
+    case {hidden, filter |> CustomFilter.leaves() |> Enum.filter(refused?)} do
+      {[], []} ->
         {socket, params}
 
-      hidden ->
-        filter = CustomFilter.reject_fields(filter, hidden)
+      _ ->
+        filter =
+          filter
+          |> CustomFilter.reject_fields(hidden)
+          |> CustomFilter.reject_rows(refused?)
 
         {put_flash(socket, :error, refused_filter_message()),
          %URLParams{params | custom_filter: filter}}
     end
   end
 
-  # The names `filter` uses that are fields of `resource` the actor may not
-  # see. A name that is no field is left to the read, which refuses it.
-  defp hidden_fields(filter, action, resource, scope) do
-    by_name = CustomFilter.fields_by_name(resource)
+  # A row left without a value filters by nothing, and is not refused.
+  defp unreadable_day?(%CustomFilter{value: value} = row) do
+    CustomFilter.applied?(row) and
+      FilterDatetime.day_range(value, AshQuick.Config.timezone()) == :error
+  end
 
-    named = filter |> CustomFilter.field_names() |> Enum.filter(&Map.has_key?(by_name, &1))
+  # Those of `names` that are fields of `resource`, `by_name`, the actor may
+  # not see: on every record, or with `filter_is: false` on some. A name that
+  # is no field is left to the read, which refuses it.
+  defp hidden_fields(names, by_name, resource, action, scope, opts \\ []) do
+    named = Enum.filter(names, &(is_binary(&1) and Map.has_key?(by_name, &1)))
 
     visible =
-      named |> Enum.map(&by_name[&1].name) |> Utils.visible_fields(resource, action, scope)
+      named |> Enum.map(&by_name[&1].name) |> Utils.visible_fields(resource, action, scope, opts)
 
     Enum.reject(named, &(by_name[&1].name in visible))
   end

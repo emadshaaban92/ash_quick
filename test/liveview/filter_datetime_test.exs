@@ -126,4 +126,26 @@ defmodule AshQuick.LiveView.FilterDatetimeTest do
       assert FilterDatetime.to_local(nil, "Test/Plus3", Zones) == nil
     end
   end
+
+  describe "day_range/3" do
+    test "is the day from its first moment in the zone up to the next day's" do
+      assert FilterDatetime.day_range("2026-10-22", "Test/Plus3", Zones) ==
+               {:ok, "2026-10-21T21:00:00Z", "2026-10-22T21:00:00Z"}
+    end
+
+    # The day the clocks spring forward is an hour short, and the day they fall
+    # back an hour long.
+    test "follows the zone's shifts, so a day need not be 24 hours" do
+      assert FilterDatetime.day_range("2026-03-29", "Test/Shifting", Zones) ==
+               {:ok, "2026-03-28T23:00:00Z", "2026-03-29T22:00:00Z"}
+
+      assert FilterDatetime.day_range("2026-10-25", "Test/Shifting", Zones) ==
+               {:ok, "2026-10-24T22:00:00Z", "2026-10-25T23:00:00Z"}
+    end
+
+    test "is no range for a value that is no date" do
+      assert FilterDatetime.day_range("2026-13-45", "Test/Plus3", Zones) == :error
+      assert FilterDatetime.day_range(nil, "Test/Plus3", Zones) == :error
+    end
+  end
 end

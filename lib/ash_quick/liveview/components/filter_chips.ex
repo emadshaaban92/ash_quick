@@ -190,23 +190,36 @@ defmodule AshQuick.LiveView.Components.FilterChips do
 
   # The value reads as `FieldValue` renders one of its field, as a column with
   # no widget of its own shows it: Yes or No, an enum's label, a timestamp in
-  # the list's zone. A column's widget is not used: it is handed the row's
-  # record, which a chip has none of. One its field's type will not take,
-  # which only a link carries, or one on a field the resource does not have,
-  # reads as written.
+  # the list's zone, On Day's date as the list shows a date. A column's widget
+  # is not used: it is handed the row's record, which a chip has none of. One
+  # its field's type will not take, which only a link carries, or one on a
+  # field the resource does not have, reads as written.
   attr :leaf, CustomFilter, required: true
   attr :field, :any, required: true
 
-  defp chip_value(%{field: %{type: type} = field, leaf: %{value: value}} = assigns)
+  # Is Empty and Is Not Empty compare with nothing, so their phrase is the
+  # whole chip.
+  defp chip_value(%{leaf: %{operator: operator}} = assigns)
+       when operator in ~w(is_nil is_not_nil) do
+    ~H""
+  end
+
+  # Any Of reads its values one after another, each as its field renders one.
+  defp chip_value(
+         %{field: %{type: type} = field, leaf: %{operator: operator, value: value}} = assigns
+       )
        when not is_nil(type) do
-    case CustomFilter.cast_value(field, value) do
-      {:ok, cast} when not is_nil(cast) ->
-        assigns = assign(assigns, :cast, cast)
+    case CustomFilter.cast_row_value(field, operator, value) do
+      {:ok, cast} when cast not in [nil, []] ->
+        items = if CustomFilter.value_shape(operator) == :list, do: cast, else: [cast]
+        assigns = assign(assigns, :items, items)
 
         ~H"""
-        <span class="font-semibold">
-          <FieldValue.field_value value={@cast} path={[]} ash_field={@field} />
-        </span>
+        <span class="font-semibold"><span :for={{item, i} <- Enum.with_index(@items)}><span :if={i != 0}>, </span><FieldValue.field_value
+          value={item}
+          path={[]}
+          ash_field={@field}
+        /></span></span>
         """
 
       _ ->
@@ -216,17 +229,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
 
   defp chip_value(assigns) do
     ~H"""
-    <span class="font-semibold">{as_written(@leaf.value)}</span>
+    <span class="font-semibold">{CustomFilter.as_written(@leaf.value)}</span>
     """
   end
-
-  # A link's value can be any JSON: a list, as `in` takes, would otherwise
-  # render as iodata, which raises for most lists.
-  defp as_written(value) when is_binary(value), do: value
-  defp as_written(value) when is_list(value), do: Enum.map_join(value, ", ", &as_written/1)
-
-  defp as_written(value) when is_number(value) or is_atom(value) or is_boolean(value),
-    do: to_string(value)
-
-  defp as_written(value), do: inspect(value)
 end

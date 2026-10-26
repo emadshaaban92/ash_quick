@@ -54,6 +54,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
           myself={@myself}
           group={@custom_filter}
           fields={@fields}
+          emptiable={@emptiable}
           labels={@labels}
           value_errors={@value_errors}
         />
@@ -102,12 +103,13 @@ defmodule AshQuick.LiveView.Components.FilterForm do
 
       <div class="ms-2 border-s-2 border-base-300 ps-4 space-y-1">
         <%= for {filter, _filter_index} <- Enum.with_index(@group.children) do %>
-          <%= if is_list(filter.children) do %>
+          <%= if CustomFilter.group?(filter) do %>
             <.render_custom_filter
               root={false}
               myself={@myself}
               group={filter}
               fields={@fields}
+              emptiable={@emptiable}
               labels={@labels}
               value_errors={@value_errors}
             />
@@ -115,6 +117,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
             <.filter_row
               filter={filter}
               fields={@fields}
+              emptiable={@emptiable}
               labels={@labels}
               field={field_for(@fields, filter.field_name)}
               error={@value_errors[filter.uuid]}
@@ -170,7 +173,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
           class="select select-sm sm:w-auto shrink-0"
         >
           {Phoenix.HTML.Form.options_for_select(
-            field_operators(@field),
+            operator_options(@field, @filter.operator, @emptiable),
             @filter.operator
           )}
         </select>
@@ -199,6 +202,53 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     assigns |> assign(:choice, EnumOptions.kind(field)) |> filter_value()
   end
 
+  # Is Empty and Is Not Empty compare with nothing. The space keeps the row's
+  # ✕ where the other rows have theirs.
+  defp filter_value(%{filter: %{operator: operator}} = assigns)
+       when operator in ~w(is_nil is_not_nil) do
+    ~H"""
+    <span class="flex-1"></span>
+    """
+  end
+
+  # Any Of picks several values from a fixed set.
+  defp filter_value(%{filter: %{operator: "in"}, choice: :single} = assigns) do
+    assigns =
+      assign(assigns,
+        options: EnumOptions.options(assigns.field),
+        selected: List.wrap(assigns.filter.value)
+      )
+
+    ~H"""
+    <select
+      name={"value-#{@filter.uuid}[]"}
+      multiple
+      size={min(length(@options), 5)}
+      class={["select select-sm h-auto min-w-0 flex-1 py-1", @error && "select-error"]}
+      {invalid_attrs(@filter, @error)}
+    >
+      {Phoenix.HTML.Form.options_for_select(@options, @selected)}
+    </select>
+    """
+  end
+
+  # Any Of on a field without a fixed set, which only a link carries: its
+  # values typed in, one after another, split again at each comma.
+  defp filter_value(%{filter: %{operator: "in"}} = assigns) do
+    ~H"""
+    <input
+      type="text"
+      name={"value-#{@filter.uuid}"}
+      value={typed_list(@filter.value, @field)}
+      class={["input input-sm min-w-0 flex-1", @error && "input-error"]}
+      {invalid_attrs(@filter, @error)}
+    />
+    """
+  end
+
+  # On Day names a whole day of a timestamp, in the zone the list shows it in.
+  defp filter_value(%{filter: %{operator: "on"}} = assigns), do: date_input(assigns)
+
   defp filter_value(%{field: %{type: t}} = assigns)
        when t in @datetime_types do
     ~H"""
@@ -212,18 +262,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     """
   end
 
-  defp filter_value(%{field: %{type: t}} = assigns)
-       when t in [Ash.Type.Date] do
-    ~H"""
-    <input
-      type="date"
-      name={"value-#{@filter.uuid}"}
-      value={@filter.value}
-      class={["input input-sm min-w-0 flex-1", @error && "input-error"]}
-      {invalid_attrs(@filter, @error)}
-    />
-    """
-  end
+  defp filter_value(%{field: %{type: Ash.Type.Date}} = assigns), do: date_input(assigns)
 
   defp filter_value(%{field: %{type: Ash.Type.Boolean}} = assigns) do
     ~H"""
@@ -257,11 +296,24 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   end
 
   # Any other field, and a row naming one this form does not offer: a URL
-  # written for an actor who could see it, or by hand.
+  # written for an actor who could see it, or by hand. A link can hand it a
+  # list, which reads as Any Of's typed values do.
   defp filter_value(assigns) do
     ~H"""
     <input
       type="text"
+      name={"value-#{@filter.uuid}"}
+      value={typed_list(@filter.value, @field)}
+      class={["input input-sm min-w-0 flex-1", @error && "input-error"]}
+      {invalid_attrs(@filter, @error)}
+    />
+    """
+  end
+
+  defp date_input(assigns) do
+    ~H"""
+    <input
+      type="date"
       name={"value-#{@filter.uuid}"}
       value={@filter.value}
       class={["input input-sm min-w-0 flex-1", @error && "input-error"]}
@@ -269,6 +321,19 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     />
     """
   end
+
+  # A value as a text input shows it: as a chip writes one, a list's values
+  # joined by commas, and a timestamp in the zone the list shows it in.
+  # `Phoenix.HTML` would read a list as iodata, which raises for most.
+  defp typed_list(nil, _field), do: nil
+
+  defp typed_list(values, field) when is_list(values),
+    do: values |> Enum.map(&typed_list(&1, field)) |> CustomFilter.as_written()
+
+  defp typed_list(value, %{type: type}) when type in @datetime_types,
+    do: FilterDatetime.to_local(value, AshQuick.Config.timezone())
+
+  defp typed_list(value, _field), do: CustomFilter.as_written(value)
 
   # Ties a value's input to the error under its row, for a screen reader.
   defp invalid_attrs(_filter, nil), do: []
@@ -342,13 +407,27 @@ defmodule AshQuick.LiveView.Components.FilterForm do
         %{"_target" => ["operator-" <> uuid]} = params,
         socket
       ) do
+    operator = params["operator-" <> uuid]
+
+    # A row's value follows it to an operator that takes the same kind of
+    # value: one value in or out of Any Of's list, and none to Is Empty.
     custom_filter =
-      CustomFilter.update_filter(
-        socket.assigns.custom_filter,
-        uuid,
-        :operator,
-        params["operator-" <> uuid]
-      )
+      case CustomFilter.find(socket.assigns.custom_filter, uuid) do
+        # A row is a node without children, `children: []` included, as a
+        # link can write one.
+        %CustomFilter{children: children, operator: from, value: value}
+        when children in [nil, []] ->
+          socket.assigns.custom_filter
+          |> CustomFilter.update_filter(uuid, :operator, operator)
+          |> CustomFilter.update_filter(
+            uuid,
+            :value,
+            CustomFilter.reshape_value(value, from, operator)
+          )
+
+        _ ->
+          CustomFilter.update_filter(socket.assigns.custom_filter, uuid, :operator, operator)
+      end
 
     {:noreply, socket |> assign(:custom_filter, custom_filter) |> forget_error(uuid)}
   end
@@ -373,7 +452,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
           |> CustomFilter.update_filter(
             uuid,
             :operator,
-            field |> field_operators() |> first_operator()
+            first_operator(field)
           )
           |> CustomFilter.update_filter(uuid, :value, "")
 
@@ -433,18 +512,18 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # is one on a field the form does not offer, which only a link carries: the
   # read decides that one, and drops the filter with a flash if it fails.
   defp value_errors(filter, fields) do
-    for %CustomFilter{uuid: uuid, field_name: name, value: value} <- CustomFilter.leaves(filter),
-        value not in [nil, ""],
+    for %CustomFilter{uuid: uuid, field_name: name, operator: operator, value: value} <-
+          CustomFilter.applied_leaves(filter),
         field = field_for(fields, name),
         not is_nil(field),
-        message = cast_error(field, value),
+        message = cast_error(field, operator, value),
         not is_nil(message),
         into: %{},
         do: {uuid, message}
   end
 
-  defp cast_error(field, value) do
-    case CustomFilter.cast_value(field, value) do
+  defp cast_error(field, operator, value) do
+    case CustomFilter.cast_row_value(field, operator, value) do
       {:ok, _} -> nil
       {:error, error} -> error_message(error)
     end
@@ -469,16 +548,35 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   defp field_for(fields, name), do: Enum.find(fields, &(to_string(&1.name) == name))
 
   # A timestamp is typed in the zone the list shows it in, and held as the UTC
-  # instant that means. See `AshQuick.LiveView.FilterDatetime`.
+  # instant that means. See `AshQuick.LiveView.FilterDatetime`. On Day holds
+  # its date as typed, and reads it in that zone when the filter is built.
   defp held_value(socket, uuid, value) do
-    with %CustomFilter{field_name: name} <- CustomFilter.find(socket.assigns.custom_filter, uuid),
-         %{type: type} when type in @datetime_types <-
-           field_for(socket.assigns.fields, name) do
-      FilterDatetime.to_utc(value, AshQuick.Config.timezone())
-    else
-      _ -> value
+    case CustomFilter.find(socket.assigns.custom_filter, uuid) do
+      %CustomFilter{field_name: name, operator: operator} ->
+        field = field_for(socket.assigns.fields, name)
+        hold(CustomFilter.value_shape(operator), field, value)
+
+      nil ->
+        value
     end
   end
+
+  # Any Of's select sends a list, and nothing at all once every value is
+  # unpicked; its text input, on a field without a fixed set, one string.
+  defp hold(:list, field, value) when is_binary(value) do
+    value
+    |> String.split(",")
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.map(&hold(:scalar, field, &1))
+  end
+
+  defp hold(:list, _field, value), do: List.wrap(value)
+
+  defp hold(:scalar, %{type: type}, value) when type in @datetime_types,
+    do: FilterDatetime.to_utc(value, AshQuick.Config.timezone())
+
+  defp hold(_shape, _field, value), do: value
 
   # Asked only when what it depends on changed, rather than on every render,
   # event or re-render of the modal: a field policy is a check against the
@@ -486,10 +584,29 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   defp assign_fields(socket) do
     if Enum.any?([:resource, :action, :scope], &changed?(socket, &1)) do
       %{resource: resource, action: action, scope: scope} = socket.assigns
-      assign(socket, :fields, fields(resource, action, scope))
+      action = action || Ash.Resource.Info.primary_action(resource, :read)
+      fields = fields(resource, action, scope)
+
+      socket
+      |> assign(:fields, fields)
+      |> assign(:emptiable, emptiable(fields, resource, action, scope))
     else
       socket
     end
+  end
+
+  # The fields Is Empty and Is Not Empty are offered on: ones that can be
+  # empty, and that the actor sees on every row. Ash reads a field as `nil`
+  # where a field policy hides it, so Is Empty would keep a row whose value
+  # the actor may not see as one that has none.
+  defp emptiable(fields, resource, action, scope) do
+    names = fields |> Enum.filter(&nullable?/1) |> Enum.map(& &1.name)
+
+    case action do
+      nil -> names
+      action -> Utils.visible_fields(names, resource, action, scope, filter_is: false)
+    end
+    |> MapSet.new()
   end
 
   # A row can name a field this form does not offer: a link written for an
@@ -515,25 +632,21 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   defp first_leaf([field | _]),
     do: %{
       field_name: to_string(field.name),
-      operator: field |> field_operators() |> first_operator()
+      operator: first_operator(field)
     }
 
   defp first_leaf([]), do: nil
 
-  defp first_operator([{_label, operator} | _]), do: operator
-  defp first_operator([]), do: nil
+  # Is Empty is never first: a row starts comparing its field with a value.
+  defp first_operator(field), do: field |> base_operators() |> List.first()
 
   # A field a field policy hides from the actor on every row is not offered:
   # Ash would read it as `nil` in the filter, so the list would come back empty
   # and look like an answer. One hidden on some rows only stays.
   # Without the list's read, the field policies are asked against the
-  # resource's primary read, so a caller that names none still hides them.
-  defp fields(resource, nil, scope) do
-    case Ash.Resource.Info.primary_action(resource, :read) do
-      nil -> fields(resource)
-      action -> fields(resource, action, scope)
-    end
-  end
+  # resource's primary read, so a caller that names none still hides them;
+  # `assign_fields/1` picks it, for this and for `emptiable/4` alike.
+  defp fields(resource, nil, _scope), do: fields(resource)
 
   defp fields(resource, action, scope) do
     offered = fields(resource)
@@ -571,7 +684,13 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   def operator_label("lt"), do: "<"
   def operator_label("lte"), do: "<="
   def operator_label("contains"), do: gettext("Contains")
+  def operator_label("not_contains"), do: gettext("Not Contains")
   def operator_label("starts_with"), do: gettext("Starts With")
+  def operator_label("ends_with"), do: gettext("Ends With")
+  def operator_label("in"), do: gettext("Any Of")
+  def operator_label("on"), do: gettext("On Day")
+  def operator_label("is_nil"), do: gettext("Is Empty")
+  def operator_label("is_not_nil"), do: gettext("Is Not Empty")
   def operator_label(operator), do: operator
 
   @doc """
@@ -579,33 +698,74 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   with A"), where the form's title case would read oddly.
   """
   def operator_phrase("contains"), do: gettext("contains")
+  def operator_phrase("not_contains"), do: gettext("does not contain")
   def operator_phrase("starts_with"), do: gettext("starts with")
+  def operator_phrase("ends_with"), do: gettext("ends with")
+  def operator_phrase("in"), do: gettext("is any of")
+  def operator_phrase("on"), do: pgettext("filter chip", "on")
+  def operator_phrase("is_nil"), do: gettext("is empty")
+  def operator_phrase("is_not_nil"), do: gettext("is not empty")
   def operator_phrase(operator), do: operator_label(operator)
 
   @equality ~w(equals not_equals)
   @comparisons ~w(gt gte lt lte)
+  @emptiness ~w(is_nil is_not_nil)
 
-  # A field with a fixed set of values compares by value, whatever its type;
-  # anything else by what its type allows.
-  defp field_operators(field) do
-    operators = if EnumOptions.kind(field) == :single, do: @equality, else: type_operators(field)
+  # The operators a row on `field` offers, each with its label. A row's own
+  # operator is offered too when its field does not, as Any Of a link names
+  # on a field without a fixed set, so the select shows what the row does.
+  defp operator_options(field, operator, emptiable) do
+    operators = field_operators(field, emptiable)
+
+    operators =
+      if is_binary(operator) and operator not in operators,
+        do: operators ++ [operator],
+        else: operators
+
     Enum.map(operators, &{operator_label(&1), &1})
   end
+
+  # A field is also asked whether it is empty when it can be, and the actor
+  # sees it on every row.
+  defp field_operators(nil, _emptiable), do: []
+
+  defp field_operators(field, emptiable) do
+    operators = base_operators(field)
+
+    if operators != [] and field.name in emptiable,
+      do: operators ++ @emptiness,
+      else: operators
+  end
+
+  # A field with a fixed set of values compares by value, whatever its type,
+  # or against several; anything else by what its type allows.
+  defp base_operators(field) do
+    if EnumOptions.kind(field) == :single,
+      do: @equality ++ ["in"],
+      else: type_operators(field)
+  end
+
+  # A count, or whether any row exists, is never `nil`, nor is an aggregate
+  # with a `default`. Another aggregate is when it finds nothing, and names no
+  # `allow_nil?` to say otherwise.
+  defp nullable?(%Ash.Resource.Aggregate{kind: kind}) when kind in [:count, :exists], do: false
+  defp nullable?(%Ash.Resource.Aggregate{default: default}) when not is_nil(default), do: false
+  defp nullable?(field), do: Map.get(field, :allow_nil?, true)
 
   defp type_operators(%{type: t})
        when t in [Ash.Type.UUID, Ash.Type.UUIDv7, Ash.Type.Atom, Ash.Type.Boolean],
        do: @equality
 
   defp type_operators(%{type: t}) when t in [Ash.Type.String, Ash.Type.CiString],
-    do: @equality ++ ~w(contains starts_with)
+    do: @equality ++ ~w(contains not_contains starts_with ends_with)
 
   defp type_operators(%{type: t})
        when t in [Ash.Type.Date, Ash.Type.Integer, Ash.Type.Decimal],
        do: @equality ++ @comparisons
 
-  defp type_operators(%{type: t})
-       when t in @datetime_types or t == Ash.Type.Float,
-       do: @comparisons
+  defp type_operators(%{type: t}) when t in @datetime_types, do: @comparisons ++ ["on"]
+
+  defp type_operators(%{type: Ash.Type.Float}), do: @comparisons
 
   defp type_operators(_field), do: []
 

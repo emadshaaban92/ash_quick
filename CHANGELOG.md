@@ -4,6 +4,21 @@
 
 ### Features
 
+- **The list's Advanced filter has more operators.** Is Empty and Is Not
+  Empty, on any field that can be empty and that the actor sees on every row
+  (a blank string counts as empty); Any Of, picking several values of a
+  fixed set (an `Ash.Type.Enum`, or an atom with `one_of`); Ends With and Not
+  Contains, on strings; and On Day, on timestamps, keeping a whole day as the
+  list shows it, in `AshQuick.Config.timezone/0`. Ends With is Ash's
+  `string_ends_with`, so it works on every data layer. Not Contains leaves
+  out a row whose field is empty, as Ash reads it; Is Empty finds those.
+  Each reads on its chip ("Note is empty", "Stage is any of Draft, Live"),
+  and a row's value follows it to an operator that takes one the same way.
+  A link's Any Of on a field without a fixed set shows its values typed in,
+  comma-separated, and a link's Is Empty on a field hidden on some rows is
+  dropped with the refused-filter flash, since Ash reads a hidden value as
+  `nil`.
+
 - **The list shows its applied filter as chips.** Above the table, each
   top-level row of the Advanced filter is a chip ("Price > 10", "Active =
   Yes"), naming the field as its column does and reading the value as a

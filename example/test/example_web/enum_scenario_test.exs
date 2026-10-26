@@ -107,18 +107,25 @@ defmodule ExampleWeb.EnumScenarioTest do
   end
 
   describe "the list's filter" do
-    test "offers each field with a fixed set by its labels, and = and !=", %{conn: conn} do
+    # Is Empty and Is Not Empty only where the field can be empty: a stage is
+    # required.
+    test "offers each field with a fixed set by its labels, and =, != and Any Of", %{
+      conn: conn
+    } do
       {:ok, view, _html} = live(conn, "/test/enum_picks?show_custom_filter=true")
       uuid = filter_uuid(view)
+      emptiness = ["Is Empty", "Is Not Empty"]
 
-      for {field, labels} <- [
-            {"stage", ["Being written", "On air", "Archived"]},
-            {"phase", ["Open", "Closed now"]},
-            {"size", ["Small", "Extra Large"]}
+      for {field, labels, extra} <- [
+            {"stage", ["Being written", "On air", "Archived"], []},
+            {"phase", ["Open", "Closed now"], emptiness},
+            {"size", ["Small", "Extra Large"], emptiness}
           ] do
         filter_change(view, "field_name-#{uuid}", field)
 
-        assert texts(view, "select[name='operator-#{uuid}'] option") == ["=", "!="]
+        assert texts(view, "select[name='operator-#{uuid}'] option") ==
+                 ["=", "!=", "Any Of" | extra]
+
         assert texts(view, "select[name='value-#{uuid}'] option") == ["" | labels]
       end
     end
@@ -133,7 +140,9 @@ defmodule ExampleWeb.EnumScenarioTest do
 
       filter_change(view, "field_name-#{uuid}", "mood")
 
-      assert texts(view, "select[name='operator-#{uuid}'] option") == ["=", "!="]
+      assert texts(view, "select[name='operator-#{uuid}'] option") ==
+               ["=", "!=", "Is Empty", "Is Not Empty"]
+
       assert texts(view, "input[name='value-#{uuid}']") == [""]
     end
 
