@@ -22,4 +22,10 @@ defmodule AshQuick.AshTypes.Attachment.Value do
           original_filename: String.t() | nil,
           byte_size: non_neg_integer() | nil
         }
+
+  @doc "What the attachment is called on a page: the name it was uploaded with, or its key's."
+  def display_name(%__MODULE__{original_filename: name}) when is_binary(name) and name != "",
+    do: name
+
+  def display_name(%__MODULE__{key: key}), do: Path.basename(key)
 end

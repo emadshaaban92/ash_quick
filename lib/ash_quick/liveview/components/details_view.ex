@@ -78,7 +78,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
       <div class="card bg-base-100 shadow-md p-5 mt-2">
         <dl class="-my-4 divide-y divide-base-200">
           <div
-            :for={field <- @fields}
+            :for={{field, index} <- Enum.with_index(@fields)}
             data-field={QuickField.data_field(field)}
             class="flex gap-4 py-4 text-sm leading-6 sm:gap-8"
           >
@@ -86,7 +86,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
               {field.label}
             </dt>
             <dd class="w-3/4 text-base-content">
-              <.render_field field={field} record={@record} scope={@scope} />
+              <.render_field field={field} index={index} record={@record} scope={@scope} />
             </dd>
           </div>
         </dl>
@@ -175,11 +175,28 @@ defmodule AshQuick.LiveView.Components.DetailsView do
     end
   end
 
-  defp render_field(%{field: %QuickField{path: path}, record: record} = assigns) do
-    assigns = assigns |> assign(:value, record) |> assign(:path, path)
+  # An attachment field opens its images in a viewer of its own, named for
+  # its position: a field can be listed twice, so its name is not unique.
+  # The resource is in the name so it does not take a host's own id. The
+  # viewer is announced by the field's label, as the page shows it.
+  defp render_field(%{field: %QuickField{path: path}, record: %resource{} = record} = assigns) do
+    assigns =
+      assigns
+      |> assign(:value, record)
+      |> assign(:path, path)
+      |> assign(
+        :viewer,
+        "#{Ash.Resource.Info.short_name(resource)}-attachment-viewer-#{assigns.index}"
+      )
 
     ~H"""
-    <.field_value value={@value} path={@path} scope={@scope} />
+    <.field_value
+      value={@value}
+      path={@path}
+      scope={@scope}
+      viewer={@viewer}
+      viewer_label={@field.label}
+    />
     """
   end
 

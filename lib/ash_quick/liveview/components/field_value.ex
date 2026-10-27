@@ -14,6 +14,15 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     default: nil,
     doc: "the page's request scope, which an attachment's state is read for"
 
+  attr :viewer, :string,
+    default: nil,
+    doc:
+      "an id for an attachment field's `AshQuick.Components.attachment_viewer/1`; none when nil"
+
+  attr :viewer_label, :string,
+    default: nil,
+    doc: "that viewer's accessible name, as the page labels the field; the field's name when nil"
+
   def field_value(%{value: nil} = assigns) do
     ~H"""
     <span></span>
@@ -38,7 +47,14 @@ defmodule AshQuick.LiveView.Components.FieldValue do
       assign(assigns, :states, AshQuick.Storage.states_for([assigns.value], scope: assigns.scope))
 
     ~H"""
-    <.attachment_preview value={@value} states={@states} />
+    <AshQuick.Components.attachment_viewer
+      :if={@viewer}
+      id={@viewer}
+      label={@viewer_label || Utils.humanize(@ash_field.name)}
+      values={List.wrap(@value)}
+      states={@states}
+    />
+    <.attachment_preview value={@value} states={@states} viewer={@viewer} />
     """
   end
 
@@ -47,8 +63,15 @@ defmodule AshQuick.LiveView.Components.FieldValue do
       assign(assigns, :states, AshQuick.Storage.states_for(assigns.value, scope: assigns.scope))
 
     ~H"""
+    <AshQuick.Components.attachment_viewer
+      :if={@viewer}
+      id={@viewer}
+      label={@viewer_label || Utils.humanize(@ash_field.name)}
+      values={@value}
+      states={@states}
+    />
     <div class="flex flex-wrap gap-2">
-      <.attachment_preview :for={value <- @value} value={value} states={@states} />
+      <.attachment_preview :for={value <- @value} value={value} states={@states} viewer={@viewer} />
     </div>
     """
   end
@@ -99,7 +122,13 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     assigns = assigns |> assign(path: path)
 
     ~H"""
-    <.field_value value={@value} path={@path} scope={@scope} />
+    <.field_value
+      value={@value}
+      path={@path}
+      scope={@scope}
+      viewer={@viewer}
+      viewer_label={@viewer_label}
+    />
     """
   end
 
@@ -111,7 +140,14 @@ defmodule AshQuick.LiveView.Components.FieldValue do
       |> assign(path: [])
 
     ~H"""
-    <.field_value value={@value} path={@path} ash_field={@ash_field} scope={@scope} />
+    <.field_value
+      value={@value}
+      path={@path}
+      ash_field={@ash_field}
+      scope={@scope}
+      viewer={@viewer}
+      viewer_label={@viewer_label}
+    />
     """
   end
 
@@ -124,7 +160,14 @@ defmodule AshQuick.LiveView.Components.FieldValue do
       |> assign(path: rest)
 
     ~H"""
-    <.field_value value={@value} path={@path} ash_field={@ash_field} scope={@scope} />
+    <.field_value
+      value={@value}
+      path={@path}
+      ash_field={@ash_field}
+      scope={@scope}
+      viewer={@viewer}
+      viewer_label={@viewer_label}
+    />
     """
   end
 
@@ -208,6 +251,10 @@ defmodule AshQuick.LiveView.Components.FieldValue do
   attr :value, :any, required: true
   attr :states, :map, default: %{}
 
+  attr :viewer, :string,
+    default: nil,
+    doc: "the id of an `AshQuick.Components.attachment_viewer/1` a servable image opens"
+
   def attachment_preview(%{value: nil} = assigns) do
     ~H"""
     <span></span>
@@ -262,13 +309,50 @@ defmodule AshQuick.LiveView.Components.FieldValue do
       class="link inline-flex items-center gap-1 text-sm"
     >
       <AshQuick.Components.icon name="hero-document" class="w-4 h-4" />
-      {@value.original_filename || Path.basename(@value.key)}
+      {AshQuick.AshTypes.Attachment.Value.display_name(@value)}
     </a>
     <AshQuick.Components.attachment_img
       :if={not match?({:ok, _}, @resolution)}
       value={@value}
       states={@states}
       class="max-w-36 px-3 py-2"
+    />
+    """
+  end
+
+  # Only a servable image has a slide in the viewer, so only it opens one.
+  # The thumbnail is drawn from the URL resolved here, not resolved again by
+  # `attachment_img/1`; the viewer resolves its slide's on its own.
+  def attachment_preview(
+        %{value: %AshQuick.AshTypes.Attachment.Value{file_type: :image}, viewer: viewer} =
+          assigns
+      )
+      when is_binary(viewer) do
+    assigns =
+      assign(
+        assigns,
+        :resolution,
+        AshQuick.Storage.url_for(assigns.value, states: assigns.states)
+      )
+
+    ~H"""
+    <button
+      :if={match?({:ok, _}, @resolution)}
+      type="button"
+      data-attachment-viewer={@viewer}
+      data-attachment-view={@value.key}
+      class="cursor-zoom-in transition hover:opacity-80"
+      aria-label={
+        gettext("View %{name}", name: AshQuick.AshTypes.Attachment.Value.display_name(@value))
+      }
+    >
+      <img src={elem(@resolution, 1)} alt="" class="max-w-36" />
+    </button>
+    <AshQuick.Components.attachment_img
+      :if={not match?({:ok, _}, @resolution)}
+      value={@value}
+      states={@states}
+      class="max-w-36"
     />
     """
   end

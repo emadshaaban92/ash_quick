@@ -62,6 +62,7 @@ msgstr "تطبيق البحث"
 msgid "Are you sure?"
 msgstr "هل أنت متأكد؟"
 
+#: lib/ash_quick/components.ex
 #: lib/ash_quick/liveview/components/action_modal.ex
 #, elixir-autogen, elixir-format
 msgid "Close"
@@ -708,3 +709,28 @@ msgstr "غير فارغ"
 msgctxt "filter chip"
 msgid "on"
 msgstr "في"
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Next"
+msgstr "التالي"
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Open"
+msgstr "فتح"
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Previous"
+msgstr "السابق"
+
+#: lib/ash_quick/liveview/components/field_value.ex
+#, elixir-autogen, elixir-format
+msgid "View %{name}"
+msgstr "عرض %{name}"
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Images"
+msgstr "الصور"

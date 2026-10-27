@@ -4,6 +4,22 @@
 
 ### Features
 
+- **A details page opens an attachment field's images at full size.** On
+  the built-in details page, a servable image in an `:attachment` or
+  `{:array, :attachment}` field is a button that opens a dialog showing it
+  as large as the screen allows, with previous and next (and the arrow keys,
+  following the reading direction) through the field's other images, and a
+  link to the original in a new tab. The dialog is announced by the field's
+  label, and fetches each original only when its slide is first shown. An
+  image the host is still holding or refused, a video and a document open
+  nothing, as before; a field drawn by a widget is left to it. The dialog is `AshQuick.Components.attachment_viewer/1`,
+  which a custom page uses directly: its previews open it when given its id
+  as `viewer`, wherever they sit on the page, and its `caption` slot says
+  more about each image than its file name. Its hook is colocated, so a host
+  already bundling `phoenix-colocated/ash_quick` needs nothing new.
+  `AshQuick.AshTypes.Attachment.Value.display_name/1` names an attachment the
+  way the previews do.
+
 - **The list's Advanced filter has more operators.** Is Empty and Is Not
   Empty, on any field that can be empty and that the actor sees on every row
   (a blank string counts as empty); Any Of, picking several values of a
@@ -588,6 +604,11 @@
   default interpolation gets the same treatment.
 
 ### Breaking changes
+
+- **`AshQuick.Components` has a public `attachment_viewer/1`.** Every
+  QuickView imports that module, so one defining its own `attachment_viewer/1`
+  no longer compiles once it calls it unqualified: rename it, or call it by
+  its module.
 
 - **`mix ash_quick.check` reports every update and destroy a page cannot
   route.** `:unroutable_action` looked only at actions taking inputs, but since

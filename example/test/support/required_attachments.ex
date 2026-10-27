@@ -127,5 +127,5 @@ defmodule Example.Test.RequiredAttachmentsLive.Quick do
   use AshQuick.LiveView.QuickView,
     resource: Example.Test.RequiredAttachments,
     list: [fields: [:code, :name]],
-    details: [fields: [:code, :name]]
+    details: [fields: [:code, :name, :image, :documents, {:documents, label: "Scans"}]]
 end
