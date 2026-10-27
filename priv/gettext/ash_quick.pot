@@ -58,6 +58,7 @@ msgstr ""
 msgid "Are you sure?"
 msgstr ""
 
+#: lib/ash_quick/components.ex
 #: lib/ash_quick/liveview/components/action_modal.ex
 #, elixir-autogen, elixir-format
 msgid "Close"
@@ -679,4 +680,29 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgctxt "filter chip"
 msgid "on"
+msgstr ""
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Next"
+msgstr ""
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Open"
+msgstr ""
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Previous"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/field_value.ex
+#, elixir-autogen, elixir-format
+msgid "View %{name}"
+msgstr ""
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Images"
 msgstr ""

@@ -144,6 +144,110 @@ defmodule ExampleWeb.AttachmentArrayScenarioTest do
     end
   end
 
+  describe "the details page" do
+    test "opens each servable image in a viewer, and nothing else", ctx do
+      %{conn: conn, admin: admin} = ctx
+      category = category(actor: admin)
+
+      put_documents(category, admin, [
+        document("private/categories/#{unique("front")}.jpg"),
+        document("private/categories/#{unique("deed")}.pdf"),
+        document("private/categories/#{unique("back")}.jpg")
+      ])
+
+      # Picked through the form, so the host is still holding it.
+      view = open(conn, category)
+      pick(view, "held.jpg")
+      save(view)
+
+      [front, deed, back, held] = Ash.reload!(category, authorize?: false).documents
+      {:ok, view, _html} = live(conn, ~p"/categories/#{category.id}")
+
+      [viewer] = viewers(view, "documents")
+      trigger = "[data-attachment-viewer='#{viewer}']"
+
+      assert slides(view, viewer) == [front.key, back.key]
+      assert has_element?(view, "##{viewer} [data-attachment-slide='#{front.key}'] img")
+      assert has_element?(view, "##{viewer} [data-attachment-slide='#{back.key}'] a", "Open")
+      assert has_element?(view, "##{viewer} button[aria-label='Next']")
+      assert has_element?(view, "dialog##{viewer}[aria-label='Documents']")
+
+      # Closed without a form, so a viewer inside a host's form cannot submit it.
+      refute has_element?(view, "##{viewer} form")
+      assert has_element?(view, "##{viewer} button[type=button][data-close][aria-label='Close']")
+      assert has_element?(view, "##{viewer} button[type=button][data-close].modal-backdrop")
+
+      assert has_element?(view, "#{trigger}[data-attachment-view='#{front.key}'] img")
+      assert has_element?(view, "#{trigger}[data-attachment-view='#{back.key}'] img")
+      refute has_element?(view, "[data-attachment-view='#{deed.key}']")
+      refute has_element?(view, "[data-attachment-view='#{held.key}']")
+      assert has_element?(view, "[data-field=documents] a", "deed")
+      assert has_element?(view, "[data-field=documents] [data-attachment-key='#{held.key}']")
+
+      # The image field draws itself with a widget, so it has no viewer.
+      assert viewers(view, "image") == []
+    end
+
+    test "has no viewer without an image to show", %{conn: conn, admin: admin} do
+      category = category(actor: admin)
+      put_documents(category, admin, [document("private/categories/#{unique("deed")}.pdf")])
+
+      {:ok, view, _html} = live(conn, ~p"/categories/#{category.id}")
+
+      refute has_element?(view, "dialog")
+      refute has_element?(view, "[data-attachment-viewer]")
+      assert has_element?(view, "[data-field=documents] a", "deed")
+    end
+
+    test "opens a single field's image, and a field listed twice from each listing", %{
+      conn: conn
+    } do
+      image = "private/required/#{unique("plate")}.jpg"
+      scan = "private/required/#{unique("scan")}.jpg"
+
+      record =
+        Example.Test.RequiredAttachments
+        |> Ash.Changeset.for_create(:create_with_image, %{
+          code: unique("R"),
+          name: "Plate",
+          image: document(image)
+        })
+        |> Ash.Changeset.force_change_attribute(:documents, [document(scan)])
+        |> Ash.create!(authorize?: false)
+
+      {:ok, view, _html} = live(conn, ~p"/test/required_attachments/#{record.id}")
+
+      [viewer] = viewers(view, "image")
+      assert slides(view, viewer) == [image]
+      refute has_element?(view, "##{viewer} button[aria-label='Next']")
+
+      assert has_element?(
+               view,
+               "[data-attachment-viewer='#{viewer}'][data-attachment-view='#{image}']"
+             )
+
+      # Each listing of the field has a viewer of its own, which only its own
+      # preview opens.
+      [first, second] = viewers(view, "documents")
+      assert first != second
+
+      # Each is named as its listing is labelled, not by the attribute.
+      assert has_element?(view, "dialog##{first}[aria-label='Documents']")
+      assert has_element?(view, "dialog##{second}[aria-label='Scans']")
+      assert has_element?(view, "dialog##{viewer}[aria-label='Image']")
+
+      for viewer <- [first, second] do
+        assert slides(view, viewer) == [scan]
+
+        assert view
+               |> render()
+               |> LazyHTML.from_fragment()
+               |> LazyHTML.query("[data-attachment-viewer='#{viewer}']")
+               |> Enum.count() == 1
+      end
+    end
+  end
+
   describe "a hand-sent event" do
     setup %{admin: admin} do
       category = category(actor: admin)
@@ -348,6 +452,23 @@ defmodule ExampleWeb.AttachmentArrayScenarioTest do
     |> Map.get(:documents)
     |> List.wrap()
     |> Enum.map(& &1.original_filename)
+  end
+
+  defp slides(view, viewer) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("##{viewer} [data-attachment-slide]")
+    |> LazyHTML.attribute("data-attachment-slide")
+  end
+
+  # The ids of the viewers in each listing of `field` on a details page.
+  defp viewers(view, field) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("[data-field=#{field}] dialog")
+    |> LazyHTML.attribute("id")
   end
 
   defp image_names(product), do: Enum.map(product.images, & &1.attachment.original_filename)

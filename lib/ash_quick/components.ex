@@ -10,6 +10,7 @@ defmodule AshQuick.Components do
   * `icon/1` — Heroicon via CSS class
   * `attachment_img/1` — Attachment image, or a placeholder while the host
     is still holding the object
+  * `attachment_viewer/1` — Images at full size, stepped through in a dialog
   * `attachment_row/1` — One stored attachment: a preview, its name, and a ✕
   * `attachment_dropzone/1` — A drop zone over an upload, with the files on
     their way in
@@ -192,6 +193,223 @@ defmodule AshQuick.Components do
   defp processing_placeholder_class, do: "bg-base-200 text-base-content/50 text-xs"
 
   @doc """
+  Renders a set of attachments' images at full size, in a dialog that steps
+  through them.
+
+  A thumbnail is too small to read a scanned paper or a photographed plate
+  from, so a preview elsewhere on the page opens this at its own image: any
+  element carrying `data-attachment-viewer` with this viewer's `id` and
+  `data-attachment-view` with the attachment's key. Pass the same `id` to
+  `AshQuick.LiveView.Components.FieldValue.attachment_preview/1` as `viewer`
+  and its image renders as such a button. The triggers can sit anywhere on the
+  page, so a host keeps its own layout around them.
+
+  Only an image that can be served gets a slide: one the host is still
+  holding, one it refused, a video or a document has nothing to show here,
+  and its preview opens nothing. With no such image the dialog is not
+  rendered at all.
+
+  Previous and next wrap around, as do the arrow keys, which follow the page's
+  reading direction; a slide swipes too. Each slide links its image in a new
+  tab, for the original resolution. The dialog is opened in the browser, so a
+  re-render keeps it open on the image it showed, wherever that slide moved.
+  It closes without a form, so it can sit inside the host's own.
+
+  A slide's image is fetched when it is first shown, from the URL signed when
+  the page rendered: on a page left open past the signature's lifetime, a
+  slide not yet seen fails to load, as its Open link and every other signed
+  link on the page do, until the page renders again.
+
+  ## Examples
+
+      <.attachment_viewer id="scans-viewer" values={@scans} states={@states} />
+
+      <AshQuick.LiveView.Components.FieldValue.attachment_preview
+        :for={scan <- @scans}
+        value={scan}
+        states={@states}
+        viewer="scans-viewer"
+      />
+
+  The `caption` slot is handed each attachment, for a host with more to say
+  about it than its file name:
+
+      <.attachment_viewer id="scans-viewer" values={@scans} states={@states}>
+        <:caption :let={scan}>{scan.original_filename}, uploaded by {uploader(scan)}</:caption>
+      </.attachment_viewer>
+  """
+  attr :id, :string, required: true
+  attr :values, :list, required: true, doc: "`AshQuick.AshTypes.Attachment.Value`s, in order"
+  attr :label, :string, default: nil, doc: "the dialog's accessible name; \"Images\" when nil"
+
+  attr :states, :map,
+    default: %{},
+    doc: "prefetched states from `AshQuick.Storage.states_for/2`, called with the page's `scope:`"
+
+  slot :caption, doc: "what a slide says under its image; given the attachment"
+
+  def attachment_viewer(assigns) do
+    assigns = assign(assigns, :slides, viewable_images(assigns.values, assigns.states))
+
+    ~H"""
+    <dialog
+      :if={@slides != []}
+      id={@id}
+      class="modal"
+      aria-label={@label || gettext("Images")}
+      phx-hook=".AttachmentViewer"
+      phx-mounted={Phoenix.LiveView.JS.ignore_attributes(["open"])}
+    >
+      <div class="modal-box relative w-11/12 max-w-6xl overflow-hidden p-0">
+        <div class="relative">
+          <div data-slides class="carousel w-full bg-base-300">
+            <figure
+              :for={{{value, url}, index} <- Enum.with_index(@slides)}
+              data-attachment-slide={value.key}
+              class="carousel-item w-full flex-col items-center"
+            >
+              <%!-- Lazy, so a viewer nobody opens fetches nothing; the box
+              caps the image at what is left of the screen beside the caption. --%>
+              <img
+                src={url}
+                alt={value.original_filename || ""}
+                loading="lazy"
+                class="h-[75vh] max-h-[calc(100dvh-5em-3.5rem)] w-full object-contain"
+              />
+              <figcaption class="flex h-14 w-full items-center gap-3 bg-base-100 px-4 text-sm">
+                <span class="text-base-content/60">{index + 1} / {length(@slides)}</span>
+                <span class="min-w-0 flex-1 truncate">
+                  <%= if @caption != [] do %>
+                    {render_slot(@caption, value)}
+                  <% else %>
+                    {AshQuick.AshTypes.Attachment.Value.display_name(value)}
+                  <% end %>
+                </span>
+                <a href={url} target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm">
+                  <.icon name="hero-arrow-top-right-on-square" class="w-4 h-4" /> {gettext("Open")}
+                </a>
+              </figcaption>
+            </figure>
+          </div>
+          <button
+            :if={length(@slides) > 1}
+            type="button"
+            data-step="-1"
+            class="btn btn-circle absolute start-3 top-[calc(50%-1.75rem)] -translate-y-1/2"
+            aria-label={gettext("Previous")}
+          >
+            <.icon name="hero-chevron-left" class="w-5 h-5 rtl:rotate-180" />
+          </button>
+          <button
+            :if={length(@slides) > 1}
+            type="button"
+            data-step="1"
+            class="btn btn-circle absolute end-3 top-[calc(50%-1.75rem)] -translate-y-1/2"
+            aria-label={gettext("Next")}
+          >
+            <.icon name="hero-chevron-right" class="w-5 h-5 rtl:rotate-180" />
+          </button>
+        </div>
+        <%!-- Closed by the hook rather than a `method="dialog"` form, which
+        inside a host's form would be dropped, leaving these to submit it. --%>
+        <button
+          type="button"
+          data-close
+          class="btn btn-circle btn-sm absolute end-3 top-3"
+          aria-label={gettext("Close")}
+        >
+          <.icon name="hero-x-mark" class="w-5 h-5" />
+        </button>
+      </div>
+      <button type="button" data-close class="modal-backdrop">{gettext("Close")}</button>
+    </dialog>
+    <%!-- Bundled into the host's app.js rather than inline, so a strict CSP
+    lets it run. --%>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".AttachmentViewer">
+      export default {
+        mounted() {
+          // The slide shown, or being scrolled to: read off the scroll
+          // position mid-animation, a second step would land short.
+          this.index = 0
+          this.onClick = e => {
+            const trigger = e.target.closest?.("[data-attachment-viewer]")
+            if (trigger?.dataset.attachmentViewer === this.el.id) return this.open(trigger.dataset.attachmentView)
+            if (!this.el.contains(e.target)) return
+            const step = e.target.closest("[data-step]")
+            if (step) this.go(this.index + Number(step.dataset.step))
+            else if (e.target.closest("[data-close]")) this.el.close()
+          }
+          // Focus is inside the scrolling carousel, which the arrow keys
+          // would scroll too, against the step. A modified arrow is the
+          // browser's or the field's (Alt+← goes back), so it is left alone.
+          this.onKeydown = e => {
+            if (!this.el.open || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+            if (e.target.isContentEditable || e.target.closest?.("input, textarea, select")) return
+            const step = {ArrowLeft: -this.forward(), ArrowRight: this.forward()}[e.key]
+            if (!step) return
+            e.preventDefault()
+            this.go(this.index + step)
+          }
+          // A swipe moves the carousel without a step; where it settles is
+          // the slide shown.
+          this.onScroll = e => {
+            if (!e.target.matches?.("[data-slides]")) return
+            clearTimeout(this.settling)
+            this.settling = setTimeout(() => {
+              const slides = this.slides()
+              this.index = Math.round(Math.abs(slides.scrollLeft) / slides.clientWidth)
+              this.key = slides.children[this.index]?.dataset.attachmentSlide
+            }, 150)
+          }
+          document.addEventListener("click", this.onClick)
+          window.addEventListener("keydown", this.onKeydown)
+          this.el.addEventListener("scroll", this.onScroll, true)
+        },
+        // A re-render can add, drop or reorder slides under the open viewer:
+        // it stays on the image it showed, or near where it was if that went.
+        updated() {
+          if (!this.el.open) return
+          const items = [...this.slides().children]
+          if (items[this.index]?.dataset.attachmentSlide === this.key) return
+          const at = items.findIndex(item => item.dataset.attachmentSlide === this.key)
+          this.go(at < 0 ? Math.min(this.index, items.length - 1) : at, "instant")
+        },
+        destroyed() {
+          clearTimeout(this.settling)
+          document.removeEventListener("click", this.onClick)
+          window.removeEventListener("keydown", this.onKeydown)
+        },
+        slides() { return this.el.querySelector("[data-slides]") },
+        forward() { return getComputedStyle(this.el).direction === "rtl" ? -1 : 1 },
+        open(key) {
+          const items = [...this.slides().children]
+          const index = items.findIndex(item => item.dataset.attachmentSlide === key)
+          if (index < 0) return
+          this.el.showModal()
+          this.go(index, "instant")
+        },
+        // Focus follows the slide, so Enter opens the image shown, not the
+        // first one `showModal` focused.
+        go(index, behavior = "smooth") {
+          const items = this.slides().children
+          this.index = (index + items.length) % items.length
+          const item = items[this.index]
+          this.key = item.dataset.attachmentSlide
+          item.scrollIntoView({behavior, block: "nearest", inline: "start"})
+          item.querySelector("a")?.focus({preventScroll: true})
+        }
+      }
+    </script>
+    """
+  end
+
+  defp viewable_images(values, states) do
+    for %AshQuick.AshTypes.Attachment.Value{file_type: :image} = value <- values,
+        {:ok, url} <- [AshQuick.Storage.url_for(value, states: states)],
+        do: {value, url}
+  end
+
+  @doc """
   Renders one stored attachment as a row: a preview, its file name, and a ✕.
 
   The preview is `AshQuick.LiveView.Components.FieldValue`'s, so an image is a
@@ -236,7 +454,7 @@ defmodule AshQuick.Components do
         <AshQuick.LiveView.Components.FieldValue.attachment_preview value={@value} states={@states} />
       </div>
       <span data-attachment-name class="grow truncate text-sm">
-        {@value.original_filename || Path.basename(@value.key)}
+        {AshQuick.AshTypes.Attachment.Value.display_name(@value)}
       </span>
       <button
         :if={@on_remove}
