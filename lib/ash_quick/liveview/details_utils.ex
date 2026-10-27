@@ -58,8 +58,8 @@ defmodule AshQuick.LiveView.DetailsUtils do
   @doc false
   # What the details header's actor halves need loaded. The record carries a
   # foreign key and the header renders a name, so the relationships have to come
-  # with it — nested down to the actor's label, because this load is strict and
-  # an unlisted field on the actor would come back `NotLoaded`.
+  # with it — nested down to the actor's label and hint, because this load is
+  # strict and an unlisted field on the actor would come back `NotLoaded`.
   #
   # Built from what the resource declared rather than from the two names: a
   # resource without `updated_by` has no such relationship, and naming it would
@@ -77,8 +77,13 @@ defmodule AshQuick.LiveView.DetailsUtils do
         []
 
       actor ->
-        label = AshQuick.Info.display_label(actor)
-        resource |> AshQuick.Info.actor_fields() |> Enum.map(&{&1, [label]})
+        fields =
+          Enum.reject(
+            [AshQuick.Info.display_label(actor), AshQuick.Info.display_hint(actor)],
+            &is_nil/1
+          )
+
+        resource |> AshQuick.Info.actor_fields() |> Enum.map(&{&1, fields})
     end
   end
 

@@ -53,6 +53,17 @@ defmodule AshQuick.Check do
       *is* gated on its route — see `AshQuick.LiveView.Router.served_shapes/2`
       — so there is nothing to report there.)
 
+  Over the resources and the router together:
+
+    * `:unrouted_display_path` — a resource's `display` path that no QuickView
+      over it serves with a details route. Its records are named without a
+      link rather than linked to a page that is not there or is another
+      resource's.
+    * `:ambiguous_display_path` — the actor resource served with a details
+      route at two or more paths and declaring none of them, so a details
+      header names its writers without a link. **Advisory**. Only the actor
+      resource is asked, since a writer is the only record a page links.
+
   Over the nav, the router and the access control together:
 
     * `:unrouted_nav_path` — a nav path the router does not serve.
@@ -81,7 +92,7 @@ defmodule AshQuick.Check do
 
   `--strict` fails on defects and ignores advisories. A number a project watches
   go down must not be a number that blocks a deploy, so `:missing_extension`
-  reports on every run and counts towards nothing.
+  and `:ambiguous_display_path` report on every run and count towards nothing.
 
   ## Accepting a divergence
 
@@ -101,6 +112,7 @@ defmodule AshQuick.Check do
   on the command that would make it invisible.
   """
 
+  alias AshQuick.Check.Display
   alias AshQuick.Check.ErrorReporting
   alias AshQuick.Check.Finding
   alias AshQuick.Check.Nav
@@ -121,6 +133,8 @@ defmodule AshQuick.Check do
     * `:nav` — the nav module. Defaults to the configured one.
     * `:router` — defaults to the router the nav declares.
     * `:access_control` — defaults to the one the nav declares.
+    * `:actor_resource` — the resource whose records are linked as writers.
+      Defaults to the configured `:actor_resource`.
     * `:exempt` — `[check_name: [subject]]`. Defaults to the configured
       `:check, :exempt`.
     * `:tower_reporters` — the reporters Tower is configured with. Defaults to
@@ -136,6 +150,11 @@ defmodule AshQuick.Check do
     [
       Resources.run(domains(opts)),
       Routing.run(router),
+      Display.run(
+        domains(opts),
+        router,
+        Keyword.get_lazy(opts, :actor_resource, &AshQuick.Config.actor_resource/0)
+      ),
       Nav.run(nav, router, access_control),
       opts
       |> Keyword.get_lazy(:tower_reporters, &ErrorReporting.configured_reporters/0)

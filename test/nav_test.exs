@@ -151,6 +151,65 @@ defmodule AshQuick.NavTest do
     end
   end
 
+  describe "where a record opens" do
+    test "at its resource's one details page, for a scope granted it" do
+      brand = %Brand{id: Ash.UUID.generate()}
+
+      assert Info.details_path(brand, scope([:catalog]), Declared) == "/brands/#{brand.id}"
+    end
+
+    test "nowhere for a scope the access control does not grant the page" do
+      assert Info.details_path(%Brand{id: Ash.UUID.generate()}, scope([]), Declared) == nil
+    end
+
+    test "nowhere with no router to derive the page from" do
+      assert Info.details_path(%Brand{id: Ash.UUID.generate()}, scope([]), Bare) == nil
+    end
+
+    test "nowhere for what is not a record" do
+      assert Info.details_path(nil, scope([:catalog]), Declared) == nil
+      assert Info.details_path(%Ash.ForbiddenField{}, scope([:catalog]), Declared) == nil
+    end
+
+    test "at the page a resource declares, when the router serves it there" do
+      widget = %AshQuick.Test.Check.Widget{id: Ash.UUID.generate()}
+
+      assert Info.base_path(AshQuick.Test.Check.Widget, AshQuick.Test.Check.Router) == "/widgets"
+      assert Info.details_path(widget, nil, AshQuick.Test.Check.Nav) == "/widgets/#{widget.id}"
+    end
+
+    # Each is reported by `mix ash_quick.check`; a link would lead to no page,
+    # or to another resource's.
+    test "nowhere when the declared page has no details route, or is another resource's" do
+      assert Info.base_path(AshQuick.Test.Check.Gizmo, AshQuick.Test.Check.Router) == nil
+      assert Info.base_path(AshQuick.Test.Check.Stray, AshQuick.Test.Check.Router) == nil
+    end
+
+    test "with an id escaped into one path segment" do
+      brand = %Brand{id: "a/b?c#d"}
+
+      assert Info.details_path(brand, scope([:catalog]), Declared) == "/brands/a%2Fb%3Fc%23d"
+    end
+
+    test "for several records, in order" do
+      brand = %Brand{id: Ash.UUID.generate()}
+
+      assert Info.details_paths([brand, nil, brand], scope([:catalog]), Declared) ==
+               ["/brands/#{brand.id}", nil, "/brands/#{brand.id}"]
+    end
+
+    test "nowhere when two pages serve the resource and it declares neither" do
+      assert Info.details_base_paths(AshQuick.Test.Check.Twin, AshQuick.Test.Check.Router) ==
+               ["/twins", "/my_twins"]
+
+      assert Info.base_path(AshQuick.Test.Check.Twin, AshQuick.Test.Check.Router) == nil
+    end
+
+    test "never at a page with no details route" do
+      assert Info.details_base_paths(AshQuick.Test.Check.Gizmo, AshQuick.Test.Check.Router) == []
+    end
+  end
+
   describe "an icon the host draws itself" do
     test "a string names a heroicon" do
       assert render_component(&AshQuick.Components.nav_icon/1,

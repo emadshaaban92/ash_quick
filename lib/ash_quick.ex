@@ -85,6 +85,37 @@ defmodule AshQuick do
   `AshQuick.Info.display_label/1` names the field — what a query has to select
   or load — and `display_value/1` reads it off a record.
 
+  A label is meant to be short: it is what a dropdown option shows. Two
+  records can share one — two people with the same name — so `hint` names a
+  second field that tells them apart, and `path` says where a record is
+  opened:
+
+      ash_quick do
+        display do
+          label :name
+          hint :email
+          path "/users"
+        end
+      end
+
+  `hint` follows the rules `label` does, and is read with
+  `AshQuick.Info.display_hint_value/1`. It is plain text, so it fits a
+  `title` attribute and a dropdown option alike; a page that wants markup
+  there draws the field with a widget. The details header loads it with its
+  writers, and shows it to every reader who may read the field — whether or
+  not they may open the writer's page — so a hint that is not for everyone
+  needs a field policy, and one a field policy hides is no hint at all.
+
+  `path` is the base path of a QuickView serving the resource, so a record's
+  details page is `<path>/:id`. Left out, it is derived from the router the
+  nav declares: the one QuickView with a details route serving the resource.
+  A resource served by two — a list of everyone and a page for oneself — has
+  to say which is its own, and `mix ash_quick.check` reports one that does
+  not, and a declared path the router does not serve. Either way, a page
+  links a record only for a reader the nav's access control grants the
+  path, so a declared path never opens a page the reader could not navigate
+  to. `AshQuick.Nav.Info.details_path/2` resolves both.
+
   ## Lookup
 
   Names the read action AshQuick runs a search through, and the argument the
@@ -560,6 +591,16 @@ defmodule AshQuick do
         type: :atom,
         doc:
           "The attribute, calculation or aggregate a record is labelled by — naming anything else does not compile. Filled in at compile time with `:display_name`, then `:name`, when not declared; a resource matching neither convention has to declare one."
+      ],
+      hint: [
+        type: :atom,
+        doc:
+          "An attribute, calculation or aggregate shown beside the label where one record has to be told from another with the same label — the tooltip on a details header's writer. Plain text. Naming anything else does not compile."
+      ],
+      path: [
+        type: :string,
+        doc:
+          "The base path of the QuickView a record of this resource is opened at; its details page is `<path>/:id`. Derived from the router when not declared, which only works when exactly one QuickView with a details route serves the resource."
       ]
     ]
   }

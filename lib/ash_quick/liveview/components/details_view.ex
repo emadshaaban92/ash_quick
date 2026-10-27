@@ -55,7 +55,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
         </.link>
         {AshQuick.Info.display_value(@record) || Map.get(@record, :id)}
         <:subtitle>
-          <.bookkeeping_header record={@record} />
+          <.bookkeeping_header record={@record} scope={@scope} />
         </:subtitle>
         <:actions>
           <div class="flex items-center gap-1">
@@ -103,33 +103,62 @@ defmodule AshQuick.LiveView.Components.DetailsView do
   # append-only resource records no last write, one nobody creates through has no
   # creator, and an actor the reader's policies hide leaves the timestamp
   # standing alone. A resource carrying none of the four renders nothing at all.
-  defp bookkeeping_header(%{record: %resource{}} = assigns) do
-    halves =
-      [
-        half(
-          assigns.record,
-          :created,
-          AshQuick.Info.inserted_at_field(resource),
-          AshQuick.Info.inserted_by_field(resource)
-        ),
-        half(
-          assigns.record,
-          :updated,
-          AshQuick.Info.updated_at_field(resource),
-          AshQuick.Info.updated_by_field(resource)
-        )
-      ]
+  #
+  # The writer is a link to their details page for a reader who may navigate
+  # there, and carries their display hint as a tooltip: a label is short, and
+  # two writers can share one.
+  defp bookkeeping_header(%{record: %resource{} = record, scope: scope} = assigns) do
+    halves = [
+      {:created, AshQuick.Info.inserted_at_field(resource),
+       AshQuick.Info.inserted_by_field(resource)},
+      {:updated, AshQuick.Info.updated_at_field(resource),
+       AshQuick.Info.updated_by_field(resource)}
+    ]
+
+    # Both writers in one call, so the access control is asked once a header.
+    writers = Enum.map(halves, fn {_kind, _at, by} -> by && Map.get(record, by) end)
+    paths = AshQuick.Nav.Info.details_paths(writers, scope)
+
+    parts =
+      halves
+      |> Enum.zip(Enum.zip(writers, paths))
+      |> Enum.map(fn {{kind, at, _by}, {writer, path}} ->
+        half(kind, timestamp(record, at), actor(writer, path))
+      end)
       |> Enum.reject(&is_nil/1)
+      |> Enum.intersperse([" · "])
+      |> Enum.concat()
 
-    assigns = assign(assigns, :halves, halves)
+    assigns = assign(assigns, :parts, parts)
 
+    # One line, and the parts carry their own spacing: whitespace between tags
+    # here would land in the sentence.
     ~H"""
-    <span :if={@halves != []}>{Enum.join(@halves, " · ")}</span>
+    <span :if={@parts != []}><.bookkeeping_part :for={part <- @parts} part={part} /></span>
     """
   end
 
-  defp half(record, kind, at_field, by_field) do
-    sentence(kind, actor_label(record, by_field), timestamp(record, at_field))
+  defp bookkeeping_part(%{part: text} = assigns) when is_binary(text), do: ~H"{@part}"
+
+  defp bookkeeping_part(%{part: %{path: nil}} = assigns),
+    do: ~H"<span title={@part.hint}>{@part.label}</span>"
+
+  defp bookkeeping_part(assigns),
+    do: ~H"""
+    <.link navigate={@part.path} class="link" title={@part.hint}>{@part.label}</.link>
+    """
+
+  # The sentence is translated whole with a marker standing in for the writer,
+  # then split around it, so the writer can be markup wherever the translation
+  # put them.
+  @actor_marker "\u{E000}"
+
+  defp half(kind, at, actor) do
+    case sentence(kind, actor && @actor_marker, at) do
+      nil -> nil
+      text when is_nil(actor) -> [text]
+      text -> text |> String.split(@actor_marker) |> Enum.intersperse(actor)
+    end
   end
 
   # Every combination is a whole sentence rather than a label joined to "by" and
@@ -160,8 +189,12 @@ defmodule AshQuick.LiveView.Components.DetailsView do
   # `display_value/1` is total over what a hidden or unloaded relationship
   # leaves behind — `nil`, `Ash.NotLoaded`, `Ash.ForbiddenField` — so a reader
   # who cannot see the actor gets the half without a name rather than a crash.
-  defp actor_label(_record, nil), do: nil
-  defp actor_label(record, field), do: record |> Map.get(field) |> AshQuick.Info.display_value()
+  defp actor(writer, path) do
+    case AshQuick.Info.display_value(writer) do
+      nil -> nil
+      label -> %{label: label, hint: AshQuick.Info.display_hint_value(writer), path: path}
+    end
+  end
 
   defp render_field(%{field: %QuickField{widget: widget, path: path}, record: record} = assigns)
        when is_function(widget) do

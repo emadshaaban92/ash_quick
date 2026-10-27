@@ -117,6 +117,108 @@ defmodule AshQuick.Nav.Info do
     end
   end
 
+  @doc """
+  The details page `record` opens at for `scope`, or `nil` when there is none
+  it may navigate to.
+
+  The base path is the one the record's resource declared under `display`,
+  when the router serves it as a QuickView over that resource with a details
+  route; else the one `details_base_paths/2` finds — and only when it finds
+  exactly one, since a resource served by two pages has not said which is its
+  own. The access control is asked about the record's own path, so a scope
+  granted only part of a resource's pages is linked to only those.
+
+  `details_paths/3` answers for several records with one call to the access
+  control.
+  """
+  def details_path(record, scope), do: details_path(record, scope, Config.nav())
+
+  def details_path(record, scope, nav),
+    do: [record] |> details_paths(scope, nav) |> hd()
+
+  @doc """
+  `details_path/3` for each of `records`, in order.
+
+  The access control is asked once, and only when some record has a page,
+  and each resource's base path is resolved once — a page linking several
+  records of one resource pays for one.
+  """
+  def details_paths(records, scope, nav \\ Config.nav()) do
+    router = router(nav)
+
+    bases =
+      records
+      |> Enum.flat_map(&record_resource/1)
+      |> Enum.uniq()
+      |> Map.new(&{&1, base_path(&1, router)})
+
+    allowed =
+      if Enum.any?(Map.values(bases)), do: allowed_routes(scope, nav), else: []
+
+    Enum.map(records, &record_details_path(&1, bases, allowed))
+  end
+
+  defp record_resource(%resource{id: id}) when not is_nil(id), do: [resource]
+  defp record_resource(_record), do: []
+
+  defp record_details_path(%resource{id: id}, bases, allowed) when not is_nil(id) do
+    with base when is_binary(base) <- Map.get(bases, resource),
+         path = base <> "/" <> URI.encode(to_string(id), &URI.char_unreserved?/1),
+         true <- allowed?(path, allowed) do
+      path
+    else
+      _ -> nil
+    end
+  end
+
+  defp record_details_path(_record, _bases, _allowed), do: nil
+
+  @doc """
+  The base path `resource`'s records open at, or `nil`: its declared
+  `display` path when `router` serves it with a details route over
+  `resource`, else the only one `details_base_paths/2` finds.
+
+  A declared path the router does not serve that way is no answer rather
+  than a link to a page that is not there; `mix ash_quick.check` reports it.
+  """
+  def base_path(resource, router) do
+    case AshQuick.Info.display_path(resource) do
+      nil ->
+        case details_base_paths(resource, router) do
+          [path] -> path
+          _none_or_several -> nil
+        end
+
+      declared ->
+        if serves_details?(router, declared, resource), do: declared
+    end
+  end
+
+  @doc """
+  The base path of every QuickView `router` serves `resource` at with a
+  details route.
+  """
+  def details_base_paths(resource, router) do
+    for {path, ^resource} <- discovered(router),
+        :show in AshQuick.LiveView.Router.served_shapes(router, path),
+        do: path
+  end
+
+  # One match against the router rather than a walk over its routes. Any id
+  # other than "create", which the create route takes, reaches the details
+  # route if there is one.
+  defp serves_details?(nil, _base, _resource), do: false
+
+  defp serves_details?(router, base, resource) do
+    case Phoenix.Router.route_info(router, "GET", base <> "/0", nil) do
+      %{route: route, ash_quick: %{base_path: ^base}, phoenix_live_view: {view, _, _, _}} ->
+        route == base <> "/:id" and view_resource(view) == resource
+
+      _ ->
+        false
+    end
+  end
+
   defp entities(nil), do: []
   defp entities(nav), do: Spark.Dsl.Extension.get_entities(nav, [:nav])
 
@@ -183,9 +285,9 @@ defmodule AshQuick.Nav.Info do
   # A route reached through a plain `live/3` has no options to read, and a
   # module the router names may not be loaded yet in a lazily-loading
   # environment.
-  defp resource(route) do
-    view = elem(route.metadata.phoenix_live_view, 0)
+  defp resource(route), do: route.metadata.phoenix_live_view |> elem(0) |> view_resource()
 
+  defp view_resource(view) do
     if Code.ensure_loaded?(view) and function_exported?(view, :__ash_quick_options__, 0) do
       view.__ash_quick_options__().resource
     end

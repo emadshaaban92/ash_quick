@@ -72,6 +72,8 @@ defmodule AshQuick.Test.Check.Widget do
   ash_quick do
     display do
       label :name
+      # The page it is served at, so nothing is reported.
+      path "/widgets"
     end
 
     liveness do
@@ -98,7 +100,8 @@ end
 defmodule AshQuick.Test.Check.Gizmo do
   @moduledoc """
   Listed and nothing else: its QuickView is routed `only: [:index]`, so every
-  row's details link leads to a route that is not there.
+  row's details link leads to a route that is not there — and so does the
+  `display` path it declares.
 
   No `:create` and no update or destroy, so the list's other two controls have
   nothing to say about it.
@@ -135,6 +138,7 @@ defmodule AshQuick.Test.Check.Gizmo do
   ash_quick do
     display do
       label :name
+      path "/gizmos"
     end
 
     liveness do
@@ -255,6 +259,113 @@ defmodule AshQuick.Test.Check.Repeat do
   end
 end
 
+defmodule AshQuick.Test.Check.Twin do
+  @moduledoc """
+  Served with a details route at two paths — a list of every twin and one of
+  the reader's own — and declaring neither as its own.
+
+  Read-only, so neither page has an action route to be missing.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.Check.Domain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshQuick]
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true
+  end
+
+  actions do
+    defaults [:read]
+
+    read :index do
+      argument :search, :string
+
+      pagination do
+        keyset? true
+        offset? true
+        default_limit 20
+        countable :by_default
+      end
+    end
+  end
+
+  ash_quick do
+    liveness do
+      enabled? false
+    end
+
+    versioning do
+      enabled? false
+    end
+
+    audit do
+      enabled? false
+    end
+
+    bookkeeping do
+      inserted_at false
+      updated_at false
+      inserted_by false
+      updated_by false
+    end
+  end
+end
+
+defmodule AshQuick.Test.Check.Stray do
+  @moduledoc """
+  Declares another resource's page as its own: `/widgets` is served, but as a
+  QuickView over `AshQuick.Test.Check.Widget`.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.Check.Domain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshQuick]
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true
+  end
+
+  actions do
+    defaults [:read]
+  end
+
+  ash_quick do
+    display do
+      path "/widgets"
+    end
+
+    liveness do
+      enabled? false
+    end
+
+    versioning do
+      enabled? false
+    end
+
+    audit do
+      enabled? false
+    end
+
+    bookkeeping do
+      inserted_at false
+      updated_at false
+      inserted_by false
+      updated_by false
+    end
+  end
+end
+
 defmodule AshQuick.Test.Check.Domain do
   @moduledoc """
   Registers its resources rather than allowing unregistered ones: the resource
@@ -269,6 +380,8 @@ defmodule AshQuick.Test.Check.Domain do
     resource AshQuick.Test.Check.Gizmo
     resource AshQuick.Test.Check.Echo
     resource AshQuick.Test.Check.Repeat
+    resource AshQuick.Test.Check.Twin
+    resource AshQuick.Test.Check.Stray
   end
 end
 
@@ -280,6 +393,11 @@ end
 defmodule AshQuick.Test.Check.GizmoLive.Quick do
   @moduledoc false
   use AshQuick.LiveView.QuickView, resource: AshQuick.Test.Check.Gizmo
+end
+
+defmodule AshQuick.Test.Check.TwinLive.Quick do
+  @moduledoc false
+  use AshQuick.LiveView.QuickView, resource: AshQuick.Test.Check.Twin
 end
 
 defmodule AshQuick.Test.Check.PlainLive do
@@ -305,6 +423,10 @@ defmodule AshQuick.Test.Check.Router do
 
   # A list whose rows link to a details page that is not served.
   quick_view("/gizmos", AshQuick.Test.Check.GizmoLive.Quick, only: [:index])
+
+  # One resource at two pages, neither of them its declared own.
+  quick_view("/twins", AshQuick.Test.Check.TwinLive.Quick, only: [:index, :show])
+  quick_view("/my_twins", AshQuick.Test.Check.TwinLive.Quick, only: [:index, :show])
 
   # A QuickView with no base path to read.
   live("/hand_routed", AshQuick.Test.Check.WidgetLive.Quick, nil)
@@ -336,7 +458,7 @@ defmodule AshQuick.Test.Check.AccessControl do
   def routes_for(_scope), do: all_routes()
 
   @impl true
-  def all_routes, do: ~w(/widgets /plain /orphan /gone)
+  def all_routes, do: ~w(/widgets /twins /my_twins /plain /orphan /gone)
 end
 
 defmodule AshQuick.Test.Check.SilentAccessControl do
