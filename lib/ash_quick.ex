@@ -102,7 +102,7 @@ defmodule AshQuick do
   `AshQuick.Info.display_hint_value/1`. It is plain text, so it fits a
   `title` attribute and a dropdown option alike; a page that wants markup
   there draws the field with a widget. A relationship dropdown shows it
-  under each option's label, beside each picked tag's, and as "Name (hint)"
+  under each option's label and each picked tag's, and as "Name (hint)"
   in a closed single-select; it is loaded with every option the dropdown
   reads, so an aggregate hint costs a subquery each time. The dropdown
   searches through the resource's lookup action, never by what it shows, so
@@ -609,7 +609,7 @@ defmodule AshQuick do
       hint: [
         type: :atom,
         doc:
-          "An attribute, calculation or aggregate shown beside the label where one record has to be told from another with the same label — the tooltip on a details page's link to the record, shown only to a reader who gets the link; beside a person's label in the Live Users register and the impersonation banner; and in every relationship dropdown onto the resource, under each option's label and beside each picked tag's. Loaded with each option a dropdown reads, so prefer an attribute or a cheap calculation, and have the lookup action search what it shows. Blank is no hint. Plain text. Naming anything else does not compile."
+          "An attribute, calculation or aggregate shown beside the label where one record has to be told from another with the same label — the tooltip on a details page's link to the record, shown only to a reader who gets the link; beside a person's label in the Live Users register and the impersonation banner; and in every relationship dropdown onto the resource, under each option's label and each picked tag's. Loaded with each option a dropdown reads, so prefer an attribute or a cheap calculation, and have the lookup action search what it shows. Blank is no hint. Plain text. Naming anything else does not compile."
       ],
       path: [
         type: :string,

@@ -4,8 +4,9 @@
 
 ### Features
 
-- **A relationship dropdown shows each record's display hint.** Under each
-  option's label, beside each picked tag's in a multi-select, and as
+- **A relationship dropdown shows each record's display hint.** On a line
+  of its own under each option's label and each picked tag's in a
+  multi-select, wrapping where it is too long for the column, and as
   "Name (hint)" in a closed single-select, so two records sharing a label
   (two people with the same name) can be told apart where one of them is
   picked. Picking the second of two same-named records in a multi-select
