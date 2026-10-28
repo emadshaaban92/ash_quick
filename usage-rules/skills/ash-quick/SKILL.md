@@ -718,7 +718,10 @@ and what to write.
   option — and put what tells two same-labelled records apart in `hint`
   (a field, plain text: the tooltip on a details page's links to its writers
   and related records, shown only with the link; shown beside the label in
-  the Live Users register and the impersonation banner). `path` names the
+  the Live Users register, the impersonation banner and every relationship
+  dropdown onto the resource, where it is loaded with each option, so an
+  aggregate hint costs a subquery per dropdown read; the lookup action
+  should search what the hint shows, since the dropdown searches through it). `path` names the
   QuickView base path a record opens at; leave it out when one QuickView with a
   details route serves the resource, declare it when two do.
   `AshQuick.Nav.Info.details_path/2` links a record only for a scope the nav's

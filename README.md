@@ -389,6 +389,13 @@ read that record. List pages do not link. The Live Users register and the
 impersonation banner show a person's hint beside their label, and the
 register's search matches it.
 
+Every relationship dropdown pointing at the resource shows the hint too: under
+each option's label, beside each picked tag's, and as "Name (hint)" in a
+closed single-select. It is loaded with every option the dropdown reads, so
+prefer an attribute or a cheap calculation over an aggregate. The dropdown
+searches through the lookup action, never by what it shows, so that action
+should match what the hint shows.
+
 **A lookup action**, if anything searches the resource. One declaration stands
 behind three surfaces: the list page, the export, and every relationship
 dropdown pointing *at* this resource. The action has to exist, accept the

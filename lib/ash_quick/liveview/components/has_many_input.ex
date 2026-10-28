@@ -2,6 +2,7 @@ defmodule AshQuick.LiveView.Components.HasManyInput do
   @moduledoc false
   use Phoenix.LiveComponent
   import AshQuick.Components
+  import AshQuick.LiveView.Components.RecordOption
   require Ash.Query
 
   alias AshQuick.LiveView.Utils
@@ -29,7 +30,10 @@ defmodule AshQuick.LiveView.Components.HasManyInput do
         mode={:quick_tags}
         tag_class="badge badge-primary h-auto min-h-6 py-0.5 max-w-full whitespace-normal"
         phx-target={@myself}
-      />
+      >
+        <:option :let={option}><.record_option option={option} /></:option>
+        <:tag :let={option}><.record_tag option={option} /></:tag>
+      </LiveSelect.live_select>
 
       <AshQuick.LiveView.FieldErrors.used_marker field={@field} />
       <.error :for={msg <- @errors} class="-mt-6">{msg}</.error>
@@ -42,10 +46,18 @@ defmodule AshQuick.LiveView.Components.HasManyInput do
     {:ok, assign(socket, assigns) |> set_default_options() |> set_field()}
   end
 
+  # The parent re-renders this on every keystroke in the form, and LiveSelect
+  # keeps the options it mounted with across a re-render anyway. So they are
+  # read once per record the form edits, not once per keystroke — a read that
+  # loads each option's hint, which may be an aggregate.
+  defp set_default_options(%{assigns: %{form: form, options_for: data}} = socket)
+       when form.data == data,
+       do: socket
+
   defp set_default_options(socket) do
-    assign(
-      socket,
-      default_options: get_options(socket)
+    assign(socket,
+      default_options: get_options(socket),
+      options_for: socket.assigns.form.data
     )
   end
 
@@ -87,6 +99,7 @@ defmodule AshQuick.LiveView.Components.HasManyInput do
       |> maybe_add_relationship_filters(relationship.filters)
       |> Ash.Query.select(key)
       |> Utils.load_display_label()
+      |> Utils.load_display_hint()
       |> Ash.Query.page(count: false)
       |> Ash.read!()
 
@@ -104,7 +117,7 @@ defmodule AshQuick.LiveView.Components.HasManyInput do
           default_options.results
       end
 
-    Enum.map(default_options_with_current, &{display_option(&1, key), Map.fetch!(&1, key)})
+    Enum.map(default_options_with_current, &Utils.to_option(&1, key))
   end
 
   # An option value is one scalar, so a composite key has nothing to be
@@ -127,11 +140,5 @@ defmodule AshQuick.LiveView.Components.HasManyInput do
 
   defp maybe_add_relationship_filters(query, [%Ash.Resource.Dsl.Filter{filter: filter} | rest]) do
     query |> Ash.Query.filter(^filter) |> maybe_add_relationship_filters(rest)
-  end
-
-  # The key is what the option is submitted as, so showing it is the one
-  # fallback that still points at the record the user picked.
-  defp display_option(record, key) do
-    AshQuick.Info.display_value(record) || to_string(Map.fetch!(record, key))
   end
 end

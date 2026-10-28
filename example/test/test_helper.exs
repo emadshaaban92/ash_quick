@@ -21,6 +21,9 @@ for resource <- [
       Example.Test.RequiredPicks,
       Example.Test.SecondLists,
       Example.Test.Secrets,
+      Example.Test.ShelvedCrates,
+      Example.Test.ShelvedCrates.Item,
+      Example.Test.ShelvedCrates.Shelf,
       Example.Test.SmallPages,
       Example.Test.WordedPolicy
     ] do

@@ -15,7 +15,7 @@ defmodule Example.Test.PickedLabels.Label do
     extensions: [AshQuick]
 
   actions do
-    defaults [:read, create: [:name]]
+    defaults [:read, create: [:name, :shelf]]
 
     read :index do
       argument :search, :string
@@ -32,6 +32,9 @@ defmodule Example.Test.PickedLabels.Label do
   ash_quick do
     display do
       label :name
+      # A calculation, so the dropdown has to load it rather than find it
+      # selected along with the label. Blank for a label with no shelf.
+      hint :place
     end
 
     versioning do
@@ -53,6 +56,14 @@ defmodule Example.Test.PickedLabels.Label do
   attributes do
     uuid_v7_primary_key :id
     attribute :name, :string, allow_nil?: false, public?: true
+    attribute :shelf, :string, public?: true
+  end
+
+  calculations do
+    calculate :place,
+              :string,
+              expr(if is_nil(shelf), do: "", else: "Shelf " <> shelf),
+              public?: true
   end
 end
 

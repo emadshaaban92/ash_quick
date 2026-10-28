@@ -47,8 +47,10 @@ defmodule AshQuick.LiveView.DetailsUtils do
     |> Ash.Query.filter(id == ^id)
     |> Utils.load_fields(options.details_fields, strict?: true)
     |> Ash.Query.load(options.load ++ options.details_load, strict?: true)
-    |> Ash.Query.load(actor_load(options.resource), strict?: true)
-    |> Ash.Query.load(related_hint_load(options.resource, options.details_fields))
+    |> then(&Ash.Query.load(&1, actor_load(options.resource, &1.tenant), strict?: true))
+    |> then(
+      &Ash.Query.load(&1, related_hint_load(options.resource, options.details_fields, &1.tenant))
+    )
     |> Utils.load_display_label()
     |> Ash.read_one()
     |> case do
@@ -73,17 +75,15 @@ defmodule AshQuick.LiveView.DetailsUtils do
   # the app — lists, exports, relationship loads, the API — would pay for two
   # joins and the actor resource's read policies to render a header nobody is
   # looking at.
-  def actor_load(resource) do
+  def actor_load(resource, tenant \\ nil) do
     case AshQuick.Config.actor_resource() do
       nil ->
         []
 
       actor ->
         fields =
-          Enum.reject(
-            [AshQuick.Info.display_label(actor), AshQuick.Info.display_hint(actor)],
-            &is_nil/1
-          )
+          Enum.reject([AshQuick.Info.display_label(actor)], &is_nil/1) ++
+            Utils.hint_fields(actor, tenant)
 
         resource |> AshQuick.Info.actor_fields() |> Enum.map(&{&1, fields})
     end
@@ -94,10 +94,9 @@ defmodule AshQuick.LiveView.DetailsUtils do
   # `QuickField.names_record?/2` — since the page links that record and the
   # hint is the link's tooltip. Merged into the field's own load rather than
   # strict, so it adds the hint without narrowing what the field selected.
-  def related_hint_load(resource, fields) do
+  def related_hint_load(resource, fields, tenant \\ nil) do
     for {chain, destination} <- linked_records(resource, fields),
-        hint <- [AshQuick.Info.display_hint(destination)],
-        hint != nil,
+        hint <- Utils.hint_fields(destination, tenant),
         uniq: true,
         do: chain |> List.foldr([hint], &[{&1, &2}]) |> hd()
   end

@@ -4,6 +4,21 @@
 
 ### Features
 
+- **A relationship dropdown shows each record's display hint.** Under each
+  option's label, beside each picked tag's in a multi-select, and as
+  "Name (hint)" in a closed single-select, so two records sharing a label
+  (two people with the same name) can be told apart where one of them is
+  picked. Picking the second of two same-named records in a multi-select
+  now adds it, rather than taking the first back out. The hint is loaded
+  with the options and with the records an update form starts from, so a
+  calculated or aggregate hint shows as well as an attribute. An aggregate
+  hint that needs a tenant is left out for a reader without one, rather
+  than failing the form. A record with no hint, a blank one, or one a field
+  policy hides is drawn with its label alone. A dropdown reads its options
+  once per record the form edits, not on every keystroke. Search is
+  unchanged: it goes through the lookup action, which should match what
+  the hint shows.
+
 - **A `sensitive?` field is redacted everywhere AshQuick puts it.** It
   reads as one fixed mark, `********`, so not even its length shows:
   - on the list and the details page, whatever its type (a date, a number,

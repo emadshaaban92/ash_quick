@@ -223,6 +223,65 @@ defmodule AshQuick.LiveView.Utils do
     Ash.Query.load(query, AshQuick.Info.display_label(resource), strict?: true)
   end
 
+  @doc """
+  Materializes the resource's display hint on `query`, when it declares one.
+
+  Merged into the select rather than strict, so it adds the hint beside the
+  label without narrowing whatever the caller selected.
+  """
+  def load_display_hint(%Ash.Query{resource: resource, tenant: tenant} = query) do
+    Ash.Query.load(query, hint_fields(resource, tenant))
+  end
+
+  @doc """
+  What a load names to bring `resource`'s display hint: `[hint]`, or `[]`
+  when it declares none.
+
+  Also `[]` for an aggregate hint over a resource that needs a tenant, when
+  `tenant` is nil: loading it would fail the whole read rather than drop one
+  hint, which is the rule `load_fields/3` applies to an aggregate field.
+  Every hint load asks here, so that rule holds wherever a hint is loaded.
+  """
+  def hint_fields(resource, tenant) do
+    case AshQuick.Info.display_hint(resource) do
+      nil -> []
+      hint -> if loadable?(resource, hint, tenant), do: [hint], else: []
+    end
+  end
+
+  defp loadable?(_resource, _field, tenant) when not is_nil(tenant), do: true
+
+  defp loadable?(resource, field, nil) do
+    case Ash.Resource.Info.field(resource, field) do
+      %Ash.Resource.Aggregate{relationship_path: path} -> not require_tenant?(resource, path)
+      _ -> true
+    end
+  end
+
+  @doc """
+  A relationship dropdown's option for `record`, submitted as its `key`.
+
+  LiveSelect tells a picked option from the others by its `label`, so the
+  label carries the hint, "Name (hint)", the way a hinted link's accessible
+  name does: two records sharing a name are then two options it can tell
+  apart, and the closed single-select and a tag LiveSelect restores after a
+  reconnect still show which record it is. `:name` and `:hint` are the two
+  parts, for the slots that draw them separately. Falls back to the key when
+  there is no label, since that still points at the record picked.
+  """
+  def to_option(record, key) do
+    value = Map.fetch!(record, key)
+    name = AshQuick.Info.display_value(record) || to_string(value)
+    hint = AshQuick.Info.display_hint_value(record)
+
+    %{
+      label: AshQuick.LiveView.Components.FieldValue.label_with_hint(name, hint),
+      value: value,
+      name: name,
+      hint: hint
+    }
+  end
+
   def load_fields(query, fields, opts \\ [])
 
   def load_fields(%Ash.Query{} = query, [], _opts), do: query
