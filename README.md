@@ -390,8 +390,8 @@ impersonation banner show a person's hint beside their label, and the
 register's search matches it.
 
 Every relationship dropdown pointing at the resource shows the hint too: under
-each option's label, beside each picked tag's, and as "Name (hint)" in a
-closed single-select. It is loaded with every option the dropdown reads, so
+each option's label and each picked tag's, on a line of its own, and as
+"Name (hint)" in a closed single-select. It is loaded with every option the dropdown reads, so
 prefer an attribute or a cheap calculation over an aggregate. The dropdown
 searches through the lookup action, never by what it shows, so that action
 should match what the hint shows.
