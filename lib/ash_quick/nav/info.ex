@@ -128,38 +128,38 @@ defmodule AshQuick.Nav.Info do
   own. The access control is asked about the record's own path, so a scope
   granted only part of a resource's pages is linked to only those.
 
-  `details_paths/3` answers for several records with one call to the access
-  control.
+  A page linking several records builds one `details_linker/3` instead.
   """
   def details_path(record, scope), do: details_path(record, scope, Config.nav())
 
-  def details_path(record, scope, nav),
-    do: [record] |> details_paths(scope, nav) |> hd()
+  def details_path(%resource{} = record, scope, nav),
+    do: details_linker([resource], scope, nav).(record)
+
+  def details_path(_record, _scope, _nav), do: nil
 
   @doc """
-  `details_path/3` for each of `records`, in order.
+  A function answering `details_path/3` for `scope`, for records of
+  `resources`, which a page builds once per render and asks about each record
+  it links. A record of any other resource has no path.
 
-  The access control is asked once, and only when some record has a page,
-  and each resource's base path is resolved once — a page linking several
-  records of one resource pays for one.
+  Each resource's base path is resolved once, when it is built, and the access
+  control is asked once — and not at all when none of `resources` has a
+  details page to link to.
   """
-  def details_paths(records, scope, nav \\ Config.nav()) do
+  def details_linker(resources, scope, nav \\ Config.nav()) do
     router = router(nav)
 
     bases =
-      records
-      |> Enum.flat_map(&record_resource/1)
+      resources
       |> Enum.uniq()
-      |> Map.new(&{&1, base_path(&1, router)})
+      |> Enum.map(&{&1, base_path(&1, router)})
+      |> Enum.reject(fn {_resource, base} -> is_nil(base) end)
+      |> Map.new()
 
-    allowed =
-      if Enum.any?(Map.values(bases)), do: allowed_routes(scope, nav), else: []
+    allowed = if map_size(bases) == 0, do: [], else: allowed_routes(scope, nav)
 
-    Enum.map(records, &record_details_path(&1, bases, allowed))
+    &record_details_path(&1, bases, allowed)
   end
-
-  defp record_resource(%resource{id: id}) when not is_nil(id), do: [resource]
-  defp record_resource(_record), do: []
 
   defp record_details_path(%resource{id: id}, bases, allowed) when not is_nil(id) do
     with base when is_binary(base) <- Map.get(bases, resource),

@@ -191,11 +191,28 @@ defmodule AshQuick.NavTest do
       assert Info.details_path(brand, scope([:catalog]), Declared) == "/brands/a%2Fb%3Fc%23d"
     end
 
-    test "for several records, in order" do
+    test "through a linker built once for a scope, over the resources a page links" do
       brand = %Brand{id: Ash.UUID.generate()}
+      linker = Info.details_linker([Brand], scope([:catalog]), Declared)
 
-      assert Info.details_paths([brand, nil, brand], scope([:catalog]), Declared) ==
-               ["/brands/#{brand.id}", nil, "/brands/#{brand.id}"]
+      assert linker.(brand) == "/brands/#{brand.id}"
+      assert linker.(nil) == nil
+      assert Info.details_linker([Brand], scope([]), Declared).(brand) == nil
+      assert Info.details_linker([Brand], scope([:catalog]), Bare).(brand) == nil
+
+      # A record of a resource the linker was not built for has no path.
+      assert Info.details_linker([], scope([:catalog]), Declared).(brand) == nil
+    end
+
+    # The fixture access control only answers a `Scope`, so anything else is
+    # a scope it raises on — and so a call it was never asked.
+    test "asking the access control only when some resource has a page" do
+      assert Info.details_linker([AshQuick.Test.Check.Gizmo], :not_a_scope, Declared).(nil) ==
+               nil
+
+      assert_raise FunctionClauseError, fn ->
+        Info.details_linker([Brand], :not_a_scope, Declared)
+      end
     end
 
     test "nowhere when two pages serve the resource and it declares neither" do

@@ -122,10 +122,15 @@ defmodule AshQuick.BrowserSessionPresence do
       # session be ended from another node without a topic per session.
       pid: self(),
       real_actor_label: label(real_actor),
-      # Both nil unless the tab is standing in for somebody, which is how every
-      # reader here tells the two kinds of session apart.
+      # A label can be shared — two people with one name — and the register is
+      # where telling them apart matters most, so each label travels with its
+      # resource's display hint.
+      real_actor_hint: hint(real_actor),
+      # All three nil unless the tab is standing in for somebody, which is how
+      # every reader here tells the two kinds of session apart.
       actor_id: identifier(session.actor),
       actor_label: label(session.actor),
+      actor_hint: hint(session.actor),
       impersonating_since: session.impersonating_since,
       started_at: session.started_at,
       ip: session.ip,
@@ -215,8 +220,12 @@ defmodule AshQuick.BrowserSessionPresence do
       id: meta.session_id,
       real_actor_id: real_actor_id,
       real_actor_label: meta.real_actor_label,
+      # Read loosely: a node still running a release from before the hint was
+      # tracked reports a meta without it.
+      real_actor_hint: Map.get(meta, :real_actor_hint),
       actor_id: meta.actor_id,
       actor_label: meta.actor_label,
+      actor_hint: Map.get(meta, :actor_hint),
       impersonating?: not is_nil(meta.actor_id),
       impersonating_since: meta.impersonating_since,
       started_at: meta.started_at,
@@ -255,6 +264,9 @@ defmodule AshQuick.BrowserSessionPresence do
   defp label(record) do
     AshQuick.Info.display_value(record) || to_string(identifier(record))
   end
+
+  defp hint(nil), do: nil
+  defp hint(record), do: AshQuick.Info.display_hint_value(record)
 
   defp identifier(nil), do: nil
   defp identifier(record), do: AshQuick.Impersonation.Token.identifier(record)

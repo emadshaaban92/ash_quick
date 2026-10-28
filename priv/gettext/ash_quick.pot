@@ -706,3 +706,18 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Images"
 msgstr ""
+
+#: lib/ash_quick/liveview/components/field_value.ex
+#, elixir-autogen, elixir-format
+msgid "%{label} (%{hint})"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Leave blank to keep it"
+msgstr ""
+
+#: lib/ash_quick/liveview/print_utils.ex
+#, elixir-autogen, elixir-format
+msgid "redacted"
+msgstr ""

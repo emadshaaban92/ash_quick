@@ -104,6 +104,62 @@ defmodule ExampleWeb.ImpersonationScenarioTest do
     end
   end
 
+  describe "two people sharing a name" do
+    test "are told apart by their hint in the register, its search, and the banner", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      name = "Sam Rivera #{System.unique_integer([:positive])}"
+      first = user(:editor, name: name, actor: admin)
+      second = user(:editor, name: name, actor: admin)
+
+      for person <- [first, second] do
+        {:ok, _view, _html} = live(conn |> log_in(person) |> in_tab(new_tab()), ~p"/products")
+      end
+
+      {:ok, console, _html} = live(log_in(conn, admin), ~p"/browser_sessions")
+
+      # `Example.Accounts.User` declares `hint :email`: the name alone would be
+      # two identical headings.
+      assert has_element?(console, "#person-#{first.id}", to_string(first.email))
+      assert has_element?(console, "#person-#{second.id}", to_string(second.email))
+
+      # Searched by the hint, since the name finds both.
+      console
+      |> form("#browser-sessions-filter-form", search: to_string(second.email))
+      |> render_change()
+
+      assert has_element?(console, "#person-#{second.id}")
+      refute has_element?(console, "#person-#{first.id}")
+
+      # And whoever stands in for one of them is told which.
+      token = impersonation_token(conn, admin, second)
+
+      conn
+      |> log_in(admin)
+      |> impersonating(token)
+      |> visit(~p"/products")
+      |> assert_has("[data-ash-quick-impersonating]",
+        text: "You're impersonating #{name} (#{second.email})"
+      )
+    end
+
+    test "an impersonating tab names the person it stands in for, with their hint", ctx do
+      %{conn: conn, admin: admin, editor: editor} = ctx
+
+      token = impersonation_token(conn, admin, editor)
+      admin_tab = new_tab()
+
+      {:ok, _view, _html} =
+        live(conn |> log_in(admin) |> in_tab(admin_tab) |> impersonating(token), ~p"/products")
+
+      {:ok, console, _html} = live(log_in(conn, admin), ~p"/browser_sessions")
+
+      # Under "Acting as", beside their name.
+      assert has_element?(console, "#session-#{admin_tab["id"]}", editor.name)
+      assert has_element?(console, "#session-#{admin_tab["id"]}", to_string(editor.email))
+    end
+  end
+
   describe "acting as somebody else" do
     test "a write names them, and names the person who was really at the keyboard", ctx do
       %{conn: conn, admin: admin, editor: editor, product: product} = ctx

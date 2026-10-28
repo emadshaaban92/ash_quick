@@ -379,10 +379,15 @@ ash_quick do
 end
 ```
 
-A details page's "Created by" names its writer as a link to their page, for a
-reader the nav's access control grants it, with the hint as the link's tooltip
-and in its accessible name. A reader with no link sees neither. The grant is a
-route grant: it does not ask whether the reader may read that writer.
+A details page links the records it names — the writers in its "Created by"
+header, and any field that stops at a relationship (`:store`) or reaches the
+related record's label (`{[brand: :name], label: "Maker"}`) — for a reader
+the nav's access control grants the record's page, with the hint as the
+link's tooltip and in its accessible name. A reader with no link sees
+neither. The grant is a route grant: it does not ask whether the reader may
+read that record. List pages do not link. The Live Users register and the
+impersonation banner show a person's hint beside their label, and the
+register's search matches it.
 
 **A lookup action**, if anything searches the resource. One declaration stands
 behind three surfaces: the list page, the export, and every relationship

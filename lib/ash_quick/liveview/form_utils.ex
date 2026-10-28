@@ -304,6 +304,40 @@ defmodule AshQuick.LiveView.FormUtils do
   end
 
   defp transform_nested_params(form, params, _) do
+    form
+    |> keep_blank_secrets(params)
+    |> transform_nested_form_params(form)
+  end
+
+  # The input for a `sensitive?` field never shows the stored value, so on an
+  # update a blank one means "unchanged", not "clear it".
+  defp keep_blank_secrets(%{type: :update, resource: resource, action: action}, params) do
+    resource
+    |> sensitive_inputs(action)
+    |> Enum.reduce(params, fn name, acc ->
+      key = to_string(name)
+      if Map.get(acc, key) == "", do: Map.delete(acc, key), else: acc
+    end)
+  end
+
+  defp keep_blank_secrets(_form, params), do: params
+
+  defp sensitive_inputs(resource, action) do
+    case Ash.Resource.Info.action(resource, action) do
+      nil ->
+        []
+
+      action ->
+        accepted =
+          for name <- action.accept,
+              AshQuick.Info.sensitive?(resource, name),
+              do: name
+
+        accepted ++ for(%{sensitive?: true, name: name} <- action.arguments, do: name)
+    end
+  end
+
+  defp transform_nested_form_params(params, form) do
     form.form_keys
     |> Enum.reduce(params, fn {field_name, form_key}, params_acc ->
       case form_key[:type] do

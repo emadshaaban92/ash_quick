@@ -18,6 +18,7 @@ defmodule AshQuick.LiveView.Components.ImpersonationBanner do
 
   import AshQuick.Components
 
+  alias AshQuick.LiveView.Components.FieldValue
   alias AshQuick.LiveView.Impersonation
 
   attr :scope, :any,
@@ -65,11 +66,15 @@ defmodule AshQuick.LiveView.Components.ImpersonationBanner do
   end
 
   # The resource's declared label, which is how every other AshQuick surface
-  # names a record.
+  # names a record, with its display hint: someone with two tabs open as two
+  # people sharing a name has to see which one this is.
   defp actor_label(nil), do: nil
 
   defp actor_label(actor) do
-    AshQuick.Info.display_value(actor) ||
-      to_string(AshQuick.Impersonation.Token.identifier(actor))
+    label =
+      AshQuick.Info.display_value(actor) ||
+        to_string(AshQuick.Impersonation.Token.identifier(actor))
+
+    FieldValue.label_with_hint(label, AshQuick.Info.display_hint_value(actor))
   end
 end

@@ -4,6 +4,45 @@
 
 ### Features
 
+- **A `sensitive?` field is redacted everywhere AshQuick puts it.** It
+  reads as one fixed mark, `********`, so not even its length shows:
+  - on the list and the details page, whatever its type (a date, a number,
+    a boolean or a list, not only a string, as before);
+  - in an export, CSV and XLSX alike;
+  - as a label or a hint, through `AshQuick.Info.display_value/1` and
+    `display_hint_value/1`, which now redact it themselves — so in every
+    title, dropdown option, link, tooltip, accessible name, the details
+    header's writers, the Live Users register and its search, and the
+    impersonation banner;
+  - in a print's filename, as the word "redacted".
+
+  A form's input for one is a password field that never carries the stored
+  value; on an update, a blank one keeps it ("Leave blank to keep it"), and
+  a value typed in replaces it. The audit trail already redacted these.
+
+- **A details page links the records its fields name.** A field that
+  stops at a relationship (`:store`, or a has-many `:children`) or reaches
+  the related record's display label, at any depth
+  (`{[brand: :name], label: "Maker"}`, `[product: [brand: :name]]`), is a
+  link to that record's details page, the way the header's writers are:
+  only for a reader the nav's access control grants that page, with the
+  record's `display hint` as the link's tooltip and in its accessible name,
+  and as plain text, without the hint, for anyone else. The label still
+  renders through its own field, so it is formatted, masked or marked
+  hidden as before, and one the reader cannot read is not a link. The
+  details query loads each such record's hint with it. The page builds one
+  `AshQuick.Nav.Info.details_linker/3` per render, over the resources it
+  can link, so each one's page is resolved once and the access control
+  asked at most once; a custom page can do the same. The "Name (hint)"
+  wording is translatable. List pages are unchanged.
+
+- **The Live Users register tells two people sharing a name apart.** Each
+  person's `display hint` is shown beside their label, both for whoever is
+  at the browser and for whoever a tab is acting as, and the register's
+  search matches it. The impersonation banner reads "You're impersonating
+  Name (hint)". The register reads the hint off the actor the host's scope
+  carries, so a hint that is a calculation has to be loaded there.
+
 - **A details page links its writers.** The "Created by X · Last updated
   by Y" header names each writer as a link to their details page, for a
   reader the nav's access control grants that page, and as plain text for
@@ -26,7 +65,7 @@
   the base path of the QuickView a record opens at, `<path>/:id`, used only
   where that QuickView serves the resource's details page there. Left out, it is the one QuickView with a details
   route the router serves the resource at, so most resources declare
-  nothing. `AshQuick.Nav.Info.details_path/2` and `details_paths/3` resolve
+  nothing. `AshQuick.Nav.Info.details_path/2` and `details_linker/3` resolve
   records' pages for a scope, for a custom page linking them.
   `mix ash_quick.check` reports a declared path that is not the resource's
   details page (`:unrouted_display_path`), and, as advisory, an actor

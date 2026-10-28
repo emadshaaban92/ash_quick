@@ -716,12 +716,18 @@ and what to write.
   `calculate :display_name, :string, expr(string_join([order.name, product.name], " — "))`.
   See `AshQuick.Info.display_label/1`. Keep the label short — it is a dropdown
   option — and put what tells two same-labelled records apart in `hint`
-  (a field, plain text: the tooltip on the details header's writer link,
-  shown only with the link). `path` names the
+  (a field, plain text: the tooltip on a details page's links to its writers
+  and related records, shown only with the link; shown beside the label in
+  the Live Users register and the impersonation banner). `path` names the
   QuickView base path a record opens at; leave it out when one QuickView with a
   details route serves the resource, declare it when two do.
   `AshQuick.Nav.Info.details_path/2` links a record only for a scope the nav's
   access control grants the page (a route grant, not the record's read policy).
+- **A `sensitive?` field is never shown** — AshQuick redacts it everywhere:
+  lists, details pages, exports, labels and hints (so titles, dropdowns,
+  links and the register), and print filenames. Its form input is a password
+  field with no stored value; on an update a blank one keeps it. Don't mark a
+  field `sensitive?` that people need to read on a page.
 - **No list a form cannot save** — A field with a fixed set of values (an
   `Ash.Type.Enum`, or an atom with `one_of`) is picked from a select, and a
   scalar is typed in. A list of scalars with no fixed set (`{:array, :atom}`,

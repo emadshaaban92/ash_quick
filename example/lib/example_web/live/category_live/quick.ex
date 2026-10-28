@@ -13,6 +13,7 @@ defmodule ExampleWeb.CategoryLive.Quick do
         :code,
         :name,
         {[parent: :name], label: "Parent"},
+        :children,
         {:image, widget: &ExampleWeb.ImageWidgets.image/1},
         :active
       ],
@@ -23,6 +24,7 @@ defmodule ExampleWeb.CategoryLive.Quick do
         :code,
         :name,
         {[parent: :name], label: "Parent"},
+        :children,
         {:image, widget: &ExampleWeb.ImageWidgets.image/1},
         :documents,
         :active,

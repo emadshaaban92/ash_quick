@@ -294,10 +294,12 @@ defmodule AshQuick.LiveView.BrowserSessionsLive do
 
   defp matches?(_session, ""), do: true
 
-  # Both names, because somebody ringing up about a user is as likely to be
-  # found in the row where a colleague is standing in for them as in their own.
+  # Both people, because somebody ringing up about a user is as likely to be
+  # found in the row where a colleague is standing in for them as in their own
+  # — and each by their hint as well as their label, which is what a caller
+  # sharing a name gives instead.
   defp matches?(session, search) do
-    [session.real_actor_label, session.actor_label]
+    [session.real_actor_label, session.real_actor_hint, session.actor_label, session.actor_hint]
     |> Enum.reject(&is_nil/1)
     |> Enum.any?(&String.contains?(String.downcase(&1), String.downcase(search)))
   end
@@ -308,10 +310,11 @@ defmodule AshQuick.LiveView.BrowserSessionsLive do
   defp group(sessions) do
     sessions
     |> Enum.group_by(& &1.real_actor_id)
-    |> Enum.map(fn {real_actor_id, sessions} ->
+    |> Enum.map(fn {real_actor_id, [first | _] = sessions} ->
       %{
         id: real_actor_id,
-        label: sessions |> List.first() |> Map.fetch!(:real_actor_label),
+        label: first.real_actor_label,
+        hint: first.real_actor_hint,
         sessions: Enum.sort_by(sessions, & &1.started_at, {:desc, DateTime})
       }
     end)
@@ -390,6 +393,9 @@ defmodule AshQuick.LiveView.BrowserSessionsLive do
                   >
                     {group.label}
                   </.link>
+                  <span :if={group.hint} class="text-sm text-base-content/60 truncate">
+                    {group.hint}
+                  </span>
                   <span class="text-xs text-base-content/50">
                     {tab_count(group.sessions)}
                   </span>
@@ -414,6 +420,12 @@ defmodule AshQuick.LiveView.BrowserSessionsLive do
                             >
                               {session.actor_label}
                             </.link>
+                            <span
+                              :if={session.actor_hint}
+                              class="text-sm text-base-content/60 truncate"
+                            >
+                              {session.actor_hint}
+                            </span>
                             <span class="badge badge-warning badge-sm mt-1 w-fit">
                               {gettext("Impersonating")}
                             </span>

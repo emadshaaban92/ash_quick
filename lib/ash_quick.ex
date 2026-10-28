@@ -101,10 +101,15 @@ defmodule AshQuick do
   `hint` follows the rules `label` does, and is read with
   `AshQuick.Info.display_hint_value/1`. It is plain text, so it fits a
   `title` attribute and a dropdown option alike; a page that wants markup
-  there draws the field with a widget. The details header loads it with its
-  writers and puts it on the writer's link, as a tooltip and in the link's
-  accessible name, so a reader who may not open the writer's page sees
-  neither. A field policy narrows it further: a hint it hides is no hint.
+  there draws the field with a widget. A details page links the records it
+  names — the writers in its header, and a field that stops at a
+  relationship or reaches the related record's label — and puts the hint on
+  each link, as a tooltip and in the link's accessible name, so a reader who
+  may not open that record's page sees neither. The Live Users register and
+  the impersonation banner show the hint beside a person's label, plainly,
+  since they are where two people sharing a name must never be confused, and
+  the register's search matches it. A field policy narrows all of these: a
+  hint it hides is no hint.
 
   `path` is the base path of a QuickView serving the resource, so a record's
   details page is `<path>/:id`. Left out, it is derived from the router the
@@ -599,7 +604,7 @@ defmodule AshQuick do
       hint: [
         type: :atom,
         doc:
-          "An attribute, calculation or aggregate shown beside the label where one record has to be told from another with the same label — the tooltip on a details header's writer link, shown only to a reader who gets the link. Plain text. Naming anything else does not compile."
+          "An attribute, calculation or aggregate shown beside the label where one record has to be told from another with the same label — the tooltip on a details page's link to the record, shown only to a reader who gets the link, and beside a person's label in the Live Users register. Plain text. Naming anything else does not compile."
       ],
       path: [
         type: :string,

@@ -7,6 +7,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
 
   import AshQuick.LiveView.Components.FieldValue
 
+  alias AshQuick.LiveView.DetailsUtils
   alias AshQuick.LiveView.Utils
   alias AshQuick.LiveView.QuickField
   alias AshQuick.LiveView.URLParams
@@ -39,10 +40,19 @@ defmodule AshQuick.LiveView.Components.DetailsView do
 
     {featured, overflow} = Enum.split_with(all_actions, &(&1.name in featured_actions))
 
+    # One per render, shared by the header and the fields, for every resource
+    # the page can link: each one's base path is resolved once, and the access
+    # control asked once — or not at all, when none of them has a page.
     assigns =
       assigns
       |> assign(:featured_actions, featured)
       |> assign(:overflow_actions, overflow)
+      |> assign(
+        :linker,
+        assigns.resource
+        |> linkable_resources(assigns.fields)
+        |> AshQuick.Nav.Info.details_linker(assigns.scope)
+      )
 
     ~H"""
     <section class="bg-base-200 p-3 sm:p-5">
@@ -55,7 +65,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
         </.link>
         {AshQuick.Info.display_value(@record) || Map.get(@record, :id)}
         <:subtitle>
-          <.bookkeeping_header record={@record} scope={@scope} />
+          <.bookkeeping_header record={@record} linker={@linker} />
         </:subtitle>
         <:actions>
           <div class="flex items-center gap-1">
@@ -86,7 +96,13 @@ defmodule AshQuick.LiveView.Components.DetailsView do
               {field.label}
             </dt>
             <dd class="w-3/4 text-base-content">
-              <.render_field field={field} index={index} record={@record} scope={@scope} />
+              <.render_field
+                field={field}
+                index={index}
+                record={@record}
+                scope={@scope}
+                linker={@linker}
+              />
             </dd>
           </div>
         </dl>
@@ -110,7 +126,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
   # goes with the link, so a reader the route is not granted to sees the bare
   # name, and a hint that is personal data is shown no further than the page
   # it describes.
-  defp bookkeeping_header(%{record: %resource{} = record, scope: scope} = assigns) do
+  defp bookkeeping_header(%{record: %resource{} = record, linker: linker} = assigns) do
     halves = [
       {:created, AshQuick.Info.inserted_at_field(resource),
        AshQuick.Info.inserted_by_field(resource)},
@@ -118,9 +134,8 @@ defmodule AshQuick.LiveView.Components.DetailsView do
        AshQuick.Info.updated_by_field(resource)}
     ]
 
-    # Both writers in one call, so the access control is asked once a header.
     writers = Enum.map(halves, fn {_kind, _at, by} -> by && Map.get(record, by) end)
-    paths = AshQuick.Nav.Info.details_paths(writers, scope)
+    paths = Enum.map(writers, linker)
 
     parts =
       halves
@@ -145,17 +160,25 @@ defmodule AshQuick.LiveView.Components.DetailsView do
 
   defp bookkeeping_part(%{part: %{path: nil}} = assigns), do: ~H"{@part.label}"
 
-  # `title` alone never shows on a touch screen and is unreliable for assistive
-  # technology, so the hint is in the link's accessible name too.
   defp bookkeeping_part(assigns),
     do: ~H"""
-    <.link
-      navigate={@part.path}
-      class="link"
-      title={@part.hint}
-      aria-label={@part.hint && "#{@part.label} (#{@part.hint})"}
-    >{@part.label}</.link>
+    <.hinted_link navigate={@part.path} label={@part.label} hint={@part.hint}>{@part.label}</.hinted_link>
     """
+
+  # The writers' resource, when the header names any, and every resource a
+  # details field names a record of.
+  defp linkable_resources(resource, fields) do
+    actors =
+      case {AshQuick.Config.actor_resource(), AshQuick.Info.actor_fields(resource)} do
+        {nil, _fields} -> []
+        {_actor, []} -> []
+        {actor, _fields} -> [actor]
+      end
+
+    related = resource |> DetailsUtils.linked_records(fields) |> Enum.map(&elem(&1, 1))
+
+    actors ++ related
+  end
 
   # The sentence is translated whole with a marker standing in for the writer,
   # then split around it, so the writer can be markup wherever the translation
@@ -195,9 +218,10 @@ defmodule AshQuick.LiveView.Components.DetailsView do
     end
   end
 
-  # `display_value/1` is total over what a hidden or unloaded relationship
+  # `AshQuick.Info.display_value/1` is total over what a hidden or unloaded relationship
   # leaves behind — `nil`, `Ash.NotLoaded`, `Ash.ForbiddenField` — so a reader
-  # who cannot see the actor gets the half without a name rather than a crash.
+  # who cannot see the actor gets the half without a name rather than a crash,
+  # and masks a `sensitive?` label, which the link's accessible name carries.
   defp actor(writer, path) do
     case AshQuick.Info.display_value(writer) do
       nil -> nil
@@ -238,6 +262,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
       scope={@scope}
       viewer={@viewer}
       viewer_label={@field.label}
+      linker={@linker}
     />
     """
   end

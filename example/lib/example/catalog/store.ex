@@ -71,6 +71,12 @@ defmodule Example.Catalog.Store do
   end
 
   ash_quick do
+    display do
+      # Stores can share a name; the code is unique. The tooltip on a store's
+      # link, for a reader who may open its page.
+      hint :code
+    end
+
     activation do
       enabled? true
     end

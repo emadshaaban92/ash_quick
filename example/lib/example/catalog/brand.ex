@@ -64,6 +64,11 @@ defmodule Example.Catalog.Brand do
   end
 
   ash_quick do
+    display do
+      # Brands can share a name; the code is unique.
+      hint :code
+    end
+
     activation do
       enabled? true
     end

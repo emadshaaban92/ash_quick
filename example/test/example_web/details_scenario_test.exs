@@ -116,6 +116,77 @@ defmodule ExampleWeb.DetailsScenarioTest do
     end
   end
 
+  describe "a related record" do
+    test "links to its page, with its hint, for a reader granted that page", ctx do
+      %{conn: conn, admin: admin, brand: brand, category: category} = ctx
+
+      store = store(name: "Harbour Street", actor: admin)
+
+      product =
+        product(name: "Trail tent", brand: brand, category: category, store: store, actor: admin)
+
+      # `{[brand: :name], label: "Brand"}` reaches the brand's label and `:store`
+      # stops at the relationship: both name a record, and both link it. Each
+      # carries its resource's `display hint`, the code.
+      conn
+      |> log_in(admin)
+      |> visit(~p"/products/#{product.id}")
+      |> assert_has(related_link("brands", brand), text: brand.name)
+      |> assert_has(related_link("stores", store), text: store.name)
+      |> click_link(related_link("stores", store), store.name)
+      |> assert_path(~p"/stores/#{store.id}")
+    end
+
+    test "is plain text, hint and all, for a reader without that page", ctx do
+      %{conn: conn, admin: admin, editor: editor, brand: brand, category: category} = ctx
+
+      store = store(name: "Harbour Street", actor: admin)
+
+      product =
+        product(name: "Trail tent", brand: brand, category: category, store: store, actor: admin)
+
+      # An editor holds `/brands` but not `/stores`.
+      conn
+      |> log_in(editor)
+      |> visit(~p"/products/#{product.id}")
+      |> assert_has(related_link("brands", brand), text: brand.name)
+      |> assert_has("[data-field='store'] dd", text: store.name)
+      |> refute_has("[data-field='store'] a")
+      |> refute_has("dd", text: store.code)
+      |> refute_has("[data-field='store'] [title]")
+    end
+
+    test "links each record of a list", ctx do
+      %{conn: conn, admin: admin, category: category} = ctx
+
+      first = category(name: "Dome tents", parent: category, actor: admin)
+      second = category(name: "Tunnel tents", parent: category, actor: admin)
+
+      conn
+      |> log_in(admin)
+      |> visit(~p"/categories/#{category.id}")
+      |> assert_has("[data-field='children'] a[href='/categories/#{first.id}']", text: first.name)
+      |> assert_has("[data-field='children'] a[href='/categories/#{second.id}']",
+        text: second.name
+      )
+      |> visit(~p"/categories/#{first.id}")
+      |> assert_has("[data-field='parent.name'] a[href='/categories/#{category.id}']",
+        text: category.name
+      )
+    end
+
+    # The list renders the same fields without linking them.
+    test "is not linked on a list page", ctx do
+      %{conn: conn, admin: admin, product: product, brand: brand} = ctx
+
+      conn
+      |> log_in(admin)
+      |> visit(~p"/products")
+      |> assert_has("td", text: product.name)
+      |> refute_has("td a[href='/brands/#{brand.id}']")
+    end
+  end
+
   describe "the bookkeeping header" do
     test "names both writers once a second person has touched the record", ctx do
       %{conn: conn, admin: admin, editor: editor, product: product} = ctx
@@ -294,5 +365,10 @@ defmodule ExampleWeb.DetailsScenarioTest do
       # creator, who is still named by the bookkeeping column.
       assert Ash.reload!(product, authorize?: false).inserted_by_id == ctx.admin.id
     end
+  end
+
+  defp related_link(base, record) do
+    ~s{dd a[href="/#{base}/#{record.id}"][title="#{record.code}"]} <>
+      ~s{[aria-label="#{record.name} (#{record.code})"]}
   end
 end

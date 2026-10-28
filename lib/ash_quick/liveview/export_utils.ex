@@ -121,8 +121,14 @@ defmodule AshQuick.LiveView.ExportUtils do
     field_export_value(value, path)
   end
 
-  defp field_export_value(value, field_name) when is_map(value) and is_atom(field_name) do
-    field_export_value(Map.get(value, field_name), [])
+  # A `sensitive?` field is redacted in a file the way it is on the page. A
+  # plain map has gone to JSON above, so a struct is all that reaches here.
+  defp field_export_value(%resource{} = value, field_name) when is_atom(field_name) do
+    case {AshQuick.Info.sensitive?(resource, field_name), Map.get(value, field_name)} do
+      {true, nil} -> ""
+      {true, field_value} -> AshQuick.Info.mask(field_value)
+      {false, field_value} -> field_export_value(field_value, [])
+    end
   end
 
   defp field_export_value(value, {relationship_name, rest})
