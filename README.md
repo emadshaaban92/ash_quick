@@ -365,6 +365,25 @@ end
 `label` names an attribute, calculation or aggregate — a composed label belongs
 in a calculation.
 
+Keep the label short, since it is what a dropdown option shows. Where two
+records can share one, `hint` names the field that tells them apart, and `path`
+says which QuickView a record opens at when the router has more than one:
+
+```elixir
+ash_quick do
+  display do
+    label :name
+    hint :email
+    path "/users"
+  end
+end
+```
+
+A details page's "Created by" names its writer as a link to their page, for a
+reader the nav's access control grants it, with the hint as the link's tooltip
+and in its accessible name. A reader with no link sees neither. The grant is a
+route grant: it does not ask whether the reader may read that writer.
+
 **A lookup action**, if anything searches the resource. One declaration stands
 behind three surfaces: the list page, the export, and every relationship
 dropdown pointing *at* this resource. The action has to exist, accept the

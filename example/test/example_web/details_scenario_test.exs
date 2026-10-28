@@ -18,6 +18,8 @@ defmodule ExampleWeb.DetailsScenarioTest do
 
   require Ash.Query
 
+  import Phoenix.LiveViewTest, only: [live: 2, element: 2, render: 1]
+
   alias Example.Accounts.AuditLog
   alias Example.Catalog.{PriceChange, Product}
 
@@ -127,6 +129,64 @@ defmodule ExampleWeb.DetailsScenarioTest do
       |> visit(~p"/products/#{product.id}")
       |> assert_has("*", text: "Created by #{admin.name}")
       |> assert_has("*", text: "Last updated by #{editor.name}")
+    end
+
+    test "links each writer to their page, with their hint as the tooltip", ctx do
+      %{conn: conn, admin: admin, editor: editor, product: product} = ctx
+
+      Ash.update!(product, %{name: "Four-season tent, revised"}, actor: editor)
+
+      # `/users` is the only QuickView over `User`, so the path is derived; the
+      # email is `User`'s declared hint.
+      conn
+      |> log_in(admin)
+      |> visit(~p"/products/#{product.id}")
+      |> assert_has("header a[href='/users/#{admin.id}'][title='#{admin.email}']",
+        text: admin.name
+      )
+      |> assert_has("header a[href='/users/#{editor.id}'][title='#{editor.email}']",
+        text: editor.name
+      )
+      |> assert_has(
+        "header a[href='/users/#{editor.id}'][aria-label='#{editor.name} (#{editor.email})']"
+      )
+      |> click_link("header a[href='/users/#{editor.id}']", editor.name)
+      |> assert_path(~p"/users/#{editor.id}")
+    end
+
+    test "names a writer bare for a reader who cannot open their page", ctx do
+      %{conn: conn, admin: admin, editor: editor, product: product} = ctx
+
+      # An editor holds `/products` but not `/users`, so gets neither the link
+      # nor the email it carries.
+      conn
+      |> log_in(editor)
+      |> visit(~p"/products/#{product.id}")
+      |> assert_has("header", text: "Created by #{admin.name}")
+      |> refute_has("header a[href^='/users']")
+      |> refute_has("header [title='#{admin.email}']")
+      |> refute_has("header [aria-label*='#{admin.email}']")
+    end
+
+    test "reads as one sentence per half, with nothing but the separator between", ctx do
+      %{conn: conn, admin: admin, editor: editor, product: product} = ctx
+
+      product = Ash.update!(product, %{name: "Four-season tent, revised"}, actor: editor)
+      at = &AshQuick.Config.format_datetime/1
+
+      {:ok, view, _html} = conn |> log_in(admin) |> live(~p"/products/#{product.id}")
+
+      # Exact, so whitespace the template leaves between the parts shows up.
+      text =
+        view
+        |> element("header p > span")
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.text()
+
+      assert text ==
+               "Created by #{admin.name} on #{at.(product.inserted_at)} · " <>
+                 "Last updated by #{editor.name} on #{at.(product.updated_at)}"
     end
 
     test "an append-only resource carries no last-updated half", ctx do

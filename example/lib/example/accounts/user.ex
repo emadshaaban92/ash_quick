@@ -110,6 +110,11 @@ defmodule Example.Accounts.User do
   ash_quick do
     display do
       label :name
+      # Names are not unique; the email tells two people sharing one apart.
+      # It is the tooltip on the link to this user in every details header
+      # they wrote, so only a reader granted `/users` sees it. A field policy
+      # on `:email` would narrow that further.
+      hint :email
     end
 
     activation do

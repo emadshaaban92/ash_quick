@@ -7,6 +7,11 @@ defmodule AshQuick.Display.Transformer do
   @inferred_labels [:display_name, :name]
   @labelable_fields [Ash.Resource.Attribute, Ash.Resource.Calculation, Ash.Resource.Aggregate]
 
+  # "/users" and "/admin/users", but not "/users/" (a page at "/users//<id>"),
+  # "//host" (a link to another host), anything carrying a query, a dynamic
+  # segment (":org_id", "*rest") nothing can fill, or a "." or ".." segment.
+  @base_path ~r{\A(/(?!\.\.?(?:/|\z))[^/?#\s:*]+)+\z}
+
   # Every field the resource offers has to be in the DSL state before its label
   # can be resolved against them, and a calculation added by another extension's
   # transformer is a legitimate label.
@@ -18,8 +23,48 @@ defmodule AshQuick.Display.Transformer do
   # here, once, and nowhere else — `AshQuick.Info` only reads what this wrote.
   @impl true
   def transform(dsl_state) do
-    with {:ok, label} <- label(dsl_state) do
+    with {:ok, label} <- label(dsl_state),
+         :ok <- validate_hint(dsl_state),
+         :ok <- validate_path(dsl_state) do
       {:ok, Transformer.set_option(dsl_state, [:ash_quick, :display], :label, label)}
+    end
+  end
+
+  defp validate_hint(dsl_state) do
+    case Transformer.get_option(dsl_state, [:ash_quick, :display], :hint) do
+      nil ->
+        :ok
+
+      hint ->
+        if labelable_field?(dsl_state, hint),
+          do: :ok,
+          else: {:error, unlabelable(dsl_state, :hint, hint)}
+    end
+  end
+
+  # Whether a QuickView serves it is the router's to say, and the router
+  # compiles after the resources: `mix ash_quick.check` holds that.
+  defp validate_path(dsl_state) do
+    case Transformer.get_option(dsl_state, [:ash_quick, :display], :path) do
+      nil ->
+        :ok
+
+      path ->
+        if Regex.match?(@base_path, path) do
+          :ok
+        else
+          {:error,
+           Spark.Error.DslError.exception(
+             module: Transformer.get_persisted(dsl_state, :module),
+             path: [:ash_quick, :display, :path],
+             message: """
+             `path #{inspect(path)}` is not a QuickView base path: one or more \
+             "/segment"s, with no trailing "/", no empty, "." or ".." segment, \
+             no dynamic segment and no query or fragment — a record's page is \
+             "<path>/:id".
+             """
+           )}
+        end
     end
   end
 
@@ -78,14 +123,17 @@ defmodule AshQuick.Display.Transformer do
     if labelable_field?(dsl_state, label) do
       {:ok, label}
     else
-      {:error,
-       Spark.Error.DslError.exception(
-         module: Transformer.get_persisted(dsl_state, :module),
-         path: [:ash_quick, :display, :label],
-         message:
-           "`label #{inspect(label)}` names no attribute, calculation or aggregate on this resource."
-       )}
+      {:error, unlabelable(dsl_state, :label, label)}
     end
+  end
+
+  defp unlabelable(dsl_state, option, field) do
+    Spark.Error.DslError.exception(
+      module: Transformer.get_persisted(dsl_state, :module),
+      path: [:ash_quick, :display, option],
+      message:
+        "`#{option} #{inspect(field)}` names no attribute, calculation or aggregate on this resource."
+    )
   end
 
   # A relationship is a field too, and naming one holds a struct rather than

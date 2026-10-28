@@ -51,16 +51,16 @@ defmodule AshQuick.LiveView.DetailsUtilsTest do
     assert record.id == product.id
   end
 
-  test "the actor load asks the actor resource what its records are called" do
+  test "the actor load asks the actor resource what its records are called, and told apart by" do
     actor = AshQuick.Config.actor_resource()
-    label = AshQuick.Info.display_label(actor)
+    label = [AshQuick.Info.display_label(actor), AshQuick.Info.display_hint(actor)]
 
-    assert DetailsUtils.actor_load(Product) == [inserted_by: [label], updated_by: [label]]
+    assert DetailsUtils.actor_load(Product) == [inserted_by: label, updated_by: label]
 
     # Built from what each resource declared, so an append-only resource never
     # names the relationship it does not have, and one that carries none of the
     # four asks for nothing.
-    assert DetailsUtils.actor_load(Example.Catalog.PriceChange) == [inserted_by: [label]]
+    assert DetailsUtils.actor_load(Example.Catalog.PriceChange) == [inserted_by: label]
     assert DetailsUtils.actor_load(Example.Accounts.AuditLog) == []
   end
 end

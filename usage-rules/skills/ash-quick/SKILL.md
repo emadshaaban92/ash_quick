@@ -628,7 +628,7 @@ bookkeeping and auditing.
 | Section | Default | Declare it to… |
 |---|---|---|
 | `liveness` | `enabled? true`, `prefix` = the resource's `short_name` | turn publishing off, or rename the topic prefix |
-| `display` | inferred from `:display_name`, else `:name` | name the label field on a resource with neither |
+| `display` | `label` inferred from `:display_name`, else `:name`; no `hint`; `path` derived from the router | name the label field on a resource with neither, add a `hint` that tells same-labelled records apart, or say which QuickView a record opens at |
 | `lookup` | nothing generated; `action :index`, `search_argument :search` when written | point search at a different read action |
 | `activation` | `enabled? false` | opt into soft-delete: `:active`, `:activate`/`:deactivate` |
 | `versioning` | `enabled? true`, `attribute :version` | turn the optimistic lock **off** |
@@ -714,7 +714,14 @@ and what to write.
   label — so a resource named by nothing it stores composes one, which is what the
   rung asks for (a field, not an attribute):
   `calculate :display_name, :string, expr(string_join([order.name, product.name], " — "))`.
-  See `AshQuick.Info.display_label/1`.
+  See `AshQuick.Info.display_label/1`. Keep the label short — it is a dropdown
+  option — and put what tells two same-labelled records apart in `hint`
+  (a field, plain text: the tooltip on the details header's writer link,
+  shown only with the link). `path` names the
+  QuickView base path a record opens at; leave it out when one QuickView with a
+  details route serves the resource, declare it when two do.
+  `AshQuick.Nav.Info.details_path/2` links a record only for a scope the nav's
+  access control grants the page (a route grant, not the record's read policy).
 - **No list a form cannot save** — A field with a fixed set of values (an
   `Ash.Type.Enum`, or an atom with `one_of`) is picked from a select, and a
   scalar is typed in. A list of scalars with no fixed set (`{:array, :atom}`,

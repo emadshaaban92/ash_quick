@@ -4,6 +4,37 @@
 
 ### Features
 
+- **A details page links its writers.** The "Created by X · Last updated
+  by Y" header names each writer as a link to their details page, for a
+  reader the nav's access control grants that page, and as plain text for
+  anyone else. Two new `display` options say how:
+
+  ```elixir
+  ash_quick do
+    display do
+      label :name
+      hint :email
+      path "/users"
+    end
+  end
+  ```
+
+  `hint` names an attribute, calculation or aggregate that tells two
+  records sharing a label apart; it is plain text, the writer's link's
+  tooltip and part of its accessible name, so a reader who gets no link
+  gets no hint either, and a field policy can hide it further. `path` is
+  the base path of the QuickView a record opens at, `<path>/:id`, used only
+  where that QuickView serves the resource's details page there. Left out, it is the one QuickView with a details
+  route the router serves the resource at, so most resources declare
+  nothing. `AshQuick.Nav.Info.details_path/2` and `details_paths/3` resolve
+  records' pages for a scope, for a custom page linking them.
+  `mix ash_quick.check` reports a declared path that is not the resource's
+  details page (`:unrouted_display_path`), and, as advisory, an actor
+  resource served at two with none declared (`:ambiguous_display_path`). A
+  hint naming no such field does not compile, and neither does a path that
+  is not static `/segment`s with no trailing `/`. A link checks the route
+  grant, not the writer's read policy.
+
 - **A details page opens an attachment field's images at full size.** On
   the built-in details page, a servable image in an `:attachment` or
   `{:array, :attachment}` field is a button that opens a dialog showing it

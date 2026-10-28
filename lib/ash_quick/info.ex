@@ -178,6 +178,46 @@ defmodule AshQuick.Info do
   def display_value(_record), do: nil
 
   @doc """
+  The field shown beside `resource`'s label to tell two records with the same
+  label apart, or `nil` when it declares none.
+
+  The details header loads it with its writers. Nothing else does: a
+  dropdown or a relationship field loads the label alone, so a caller
+  rendering the hint there loads it itself.
+  """
+  def display_hint(resource) do
+    if Ash.Resource.Info.resource?(resource) do
+      Spark.Dsl.Extension.get_opt(resource, [:ash_quick, :display], :hint, nil)
+    end
+  end
+
+  @doc """
+  The hint for `record`, or `nil` — total in the way `display_value/1` is, so
+  a hint a field policy hides, or one nobody loaded, is simply absent. See
+  `display_hint/1` for which records carry it loaded.
+  """
+  def display_hint_value(%resource{} = record) do
+    case display_hint(resource) do
+      nil -> nil
+      hint -> record |> Map.get(hint) |> to_label()
+    end
+  end
+
+  def display_hint_value(_record), do: nil
+
+  @doc """
+  The QuickView base path `resource` declared it is opened at, or `nil`.
+
+  Only the declaration: `AshQuick.Nav.Info.details_path/2` is what
+  falls back to the router and asks the reader's access control.
+  """
+  def display_path(resource) do
+    if Ash.Resource.Info.resource?(resource) do
+      Spark.Dsl.Extension.get_opt(resource, [:ash_quick, :display], :path, nil)
+    end
+  end
+
+  @doc """
   The read action a search over `resource` runs through.
 
   One action stands behind the list page, the export and every relationship

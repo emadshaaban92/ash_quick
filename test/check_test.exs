@@ -20,7 +20,13 @@ defmodule AshQuick.CheckTest do
   defp run(opts \\ []) do
     Check.run(
       Keyword.merge(
-        [domains: [Domain], nav: Nav, exempt: [], tower_reporters: [Tower.EphemeralReporter]],
+        [
+          domains: [Domain],
+          nav: Nav,
+          actor_resource: AshQuick.Test.Check.Twin,
+          exempt: [],
+          tower_reporters: [Tower.EphemeralReporter]
+        ],
         opts
       )
     )
@@ -42,6 +48,9 @@ defmodule AshQuick.CheckTest do
                {:unroutable_action, "/widgets/:id/rename"},
                {:unroutable_action, "/widgets/:id/destroy"},
                {:unroutable_show, "/gizmos/:id"},
+               {:unrouted_display_path, AshQuick.Test.Check.Gizmo},
+               {:ambiguous_display_path, AshQuick.Test.Check.Twin},
+               {:unrouted_display_path, AshQuick.Test.Check.Stray},
                {:unrouted_nav_path, "/missing"},
                {:unrouted_grant, "/gone"},
                {:linkless_route, "/orphan"},
@@ -73,18 +82,41 @@ defmodule AshQuick.CheckTest do
       refute collision.message =~ "AshQuick.Test.Check.Widget"
     end
 
-    # `AshQuick.Test.Check.Bare` is the only advisory, and `--strict` reads
-    # `defects/1` rather than the whole list.
-    test "an unadopted resource is advisory, and does not fail a strict run" do
+    # An unadopted resource and an unlinked record are the only advisories, and
+    # `--strict` reads `defects/1` rather than the whole list.
+    test "advisories do not fail a strict run" do
       report = run()
 
-      assert [%{check: :missing_extension, severity: :advisory}] =
-               Enum.filter(report.findings, &(&1.severity == :advisory))
+      assert [
+               %{check: :missing_extension, severity: :advisory},
+               %{check: :ambiguous_display_path, severity: :advisory}
+             ] = Enum.filter(report.findings, &(&1.severity == :advisory))
 
-      refute {:missing_extension, AshQuick.Test.Check.Bare} in Enum.map(
-               Check.defects(report),
-               &{&1.check, &1.subject}
-             )
+      defects = Enum.map(Check.defects(report), &{&1.check, &1.subject})
+
+      refute {:missing_extension, AshQuick.Test.Check.Bare} in defects
+      refute {:ambiguous_display_path, AshQuick.Test.Check.Twin} in defects
+    end
+
+    # A declared path is the resource's word, so it is held to the router even
+    # where the router would have derived none.
+    test "a declared display path that is not the resource's details page is a defect" do
+      assert [unserved, elsewhere] =
+               Enum.filter(run().findings, &(&1.check == :unrouted_display_path))
+
+      assert %{subject: AshQuick.Test.Check.Gizmo, severity: :defect} = unserved
+      assert unserved.message =~ "/gizmos/<id> is answered by nothing"
+
+      assert %{subject: AshQuick.Test.Check.Stray, severity: :defect} = elsewhere
+      assert elsewhere.message =~ "/widgets/<id> is AshQuick.Test.Check.Widget's page"
+    end
+
+    # Only a writer is linked, so a resource nothing links is not asked to
+    # choose between its pages.
+    test "two pages over a resource that is not the actor resource are not reported" do
+      checks = run(actor_resource: AshQuick.Test.Check.Widget) |> found() |> Keyword.keys()
+
+      refute :ambiguous_display_path in checks
     end
 
     # A dead grant has no entry either. Reporting both would bury the one fact
@@ -191,7 +223,7 @@ defmodule AshQuick.CheckTest do
       assert text =~ "## missing_extension (1) — advisory, not counted"
       assert text =~ "## unreachable_entry (2)"
       assert text =~ "AshQuick.Test.Check.Bare does not carry the AshQuick extension."
-      assert text =~ "13 defect(s), 1 advisory."
+      assert text =~ "15 defect(s), 2 advisory."
 
       checks = Regex.scan(~r/^## (\w+)/m, text, capture: :all_but_first) |> List.flatten()
       assert checks == Enum.sort(checks)

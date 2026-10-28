@@ -90,8 +90,9 @@ defmodule ExampleWeb.QuickViewScenarioTest do
     {:ok, view, html} = conn |> log_in(admin) |> live(~p"/products/#{created.id}")
 
     assert html =~ "Four-season tent"
-    # The bookkeeping header, built from the resource's declaration.
-    assert html =~ "Created by #{editor.name}"
+    # The bookkeeping header, built from the resource's declaration. The name
+    # is a link, so it is matched as text rather than in the markup.
+    assert has_element?(view, "header", "Created by #{editor.name}")
 
     # `:reprice` is offered because the resource defines it and the policy
     # allows it — nothing in `ExampleWeb.ProductLive.Quick` mentions it.
