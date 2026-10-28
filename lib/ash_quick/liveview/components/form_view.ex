@@ -207,6 +207,29 @@ defmodule AshQuick.LiveView.Components.FormView do
     widget.(assigns)
   end
 
+  # A `sensitive?` input never carries the stored value: the page would hold
+  # it in plain sight. It shows only what was typed into this form, and on an
+  # update a blank one keeps the value — `FormUtils` drops it from the params.
+  defp field_input(%{field: %{sensitive?: true}} = assigns) do
+    assigns =
+      assigns
+      |> assign(:typed, Map.get(assigns.phx_field.form.params, to_string(assigns.field.name)))
+      |> assign(:update?, assigns.phx_field.form.source.type == :update)
+
+    ~H"""
+    <.input
+      required={not @field.allow_nil? and not @update?}
+      field={@phx_field}
+      value={@typed}
+      type="password"
+      autocomplete="one-time-code"
+      placeholder={if @update?, do: gettext("Leave blank to keep it")}
+      label={@field.name |> Utils.humanize()}
+      phx-debounce="blur"
+    />
+    """
+  end
+
   defp field_input(%{field: %Argument{type: {:array, item_type}}} = assigns)
        when item_type in [Type.UUID, Type.UUIDv7] do
     case Utils.argument_to_relationship(assigns.field, assigns.resource, assigns.form.action) do
@@ -505,8 +528,8 @@ defmodule AshQuick.LiveView.Components.FormView do
     <.input
       required={not @field.allow_nil?}
       field={@phx_field}
-      type={if @field.sensitive?, do: "password", else: "text"}
-      autocomplete={if @field.sensitive?, do: "one-time-code", else: "on"}
+      type="text"
+      autocomplete="on"
       label={@field.name |> Utils.humanize()}
       phx-debounce="blur"
     />

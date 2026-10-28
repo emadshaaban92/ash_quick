@@ -167,4 +167,37 @@ defmodule AshQuick.LiveView.Components.FieldValueTest do
       refute html =~ "X-Amz-Signature"
     end
   end
+
+  describe "a sensitive field" do
+    # Asked before any clause that would format the value, so a date, a number
+    # or a list reads as redacted as a string does.
+    test "is redacted whatever it holds" do
+      for value <- ["4321", ~D[2026-10-19], 42, ["a", "b"], true] do
+        html =
+          render_component(&FieldValue.field_value/1,
+            value: value,
+            path: [],
+            ash_field: %{sensitive?: true, type: Ash.Type.String}
+          )
+
+        assert html =~ "********"
+        refute html =~ "4321"
+        refute html =~ "2026"
+        refute html =~ "Oct"
+        refute html =~ "42"
+        refute html =~ "Yes"
+      end
+    end
+
+    test "is blank when it holds nothing" do
+      html =
+        render_component(&FieldValue.field_value/1,
+          value: nil,
+          path: [],
+          ash_field: %{sensitive?: true, type: Ash.Type.String}
+        )
+
+      refute html =~ "*"
+    end
+  end
 end

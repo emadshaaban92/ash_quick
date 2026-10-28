@@ -6,6 +6,7 @@ defmodule AshQuick.LiveView.DetailsUtils do
 
   alias Ash.Resource.Actions
   alias AshQuick.LiveView.ActionErrors
+  alias AshQuick.LiveView.QuickField
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.Liveness
   alias AshQuick.LiveView.Utils
@@ -47,6 +48,7 @@ defmodule AshQuick.LiveView.DetailsUtils do
     |> Utils.load_fields(options.details_fields, strict?: true)
     |> Ash.Query.load(options.load ++ options.details_load, strict?: true)
     |> Ash.Query.load(actor_load(options.resource), strict?: true)
+    |> Ash.Query.load(related_hint_load(options.resource, options.details_fields))
     |> Utils.load_display_label()
     |> Ash.read_one()
     |> case do
@@ -85,6 +87,28 @@ defmodule AshQuick.LiveView.DetailsUtils do
 
         resource |> AshQuick.Info.actor_fields() |> Enum.map(&{&1, fields})
     end
+  end
+
+  @doc false
+  # The display hint of each record a details field names — see
+  # `QuickField.names_record?/2` — since the page links that record and the
+  # hint is the link's tooltip. Merged into the field's own load rather than
+  # strict, so it adds the hint without narrowing what the field selected.
+  def related_hint_load(resource, fields) do
+    for {chain, destination} <- linked_records(resource, fields),
+        hint <- [AshQuick.Info.display_hint(destination)],
+        hint != nil,
+        uniq: true,
+        do: chain |> List.foldr([hint], &[{&1, &2}]) |> hd()
+  end
+
+  @doc false
+  # Every record the details `fields` name, as the relationships reaching it
+  # and its resource.
+  def linked_records(resource, fields) do
+    fields
+    |> Enum.flat_map(&QuickField.named_records(resource, &1.path))
+    |> Enum.uniq()
   end
 
   # The details `keep_live(:record)` (and its refetch on a PubSub notification)

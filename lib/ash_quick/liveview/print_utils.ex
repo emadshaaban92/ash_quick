@@ -77,12 +77,20 @@ defmodule AshQuick.LiveView.PrintUtils do
     name =
       case records do
         [record] ->
-          "#{AshQuick.Info.display_value(record) || record.id}_#{label}"
+          "#{file_label(resource, record)}_#{label}"
 
         _ ->
           "#{Ash.Resource.Info.plural_name(resource)}_#{label}_#{length(records)}"
       end
 
     "#{name}-#{date}.pdf"
+  end
+
+  # A filename is where a redacted label would read worst — a run of
+  # asterisks some file systems refuse — so a `sensitive?` one is a word.
+  defp file_label(resource, record) do
+    if AshQuick.Info.sensitive?(resource, AshQuick.Info.display_label(resource)),
+      do: gettext("redacted"),
+      else: AshQuick.Info.display_value(record) || record.id
   end
 end

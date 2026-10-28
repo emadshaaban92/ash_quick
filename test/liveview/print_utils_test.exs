@@ -72,6 +72,53 @@ defmodule AshQuick.LiveView.PrintUtilsTest do
     end
   end
 
+  defmodule SecretSlip do
+    @moduledoc false
+    # Labelled by a `sensitive?` field, which no filename may carry.
+    use Ash.Resource,
+      domain: AshQuick.LiveView.PrintUtilsTest.Domain,
+      data_layer: Ash.DataLayer.Ets,
+      extensions: [AshQuick]
+
+    ash_quick do
+      display do
+        label :pin
+      end
+
+      bookkeeping do
+        inserted_at false
+        updated_at false
+        inserted_by false
+        updated_by false
+      end
+
+      liveness do
+        enabled? false
+      end
+    end
+
+    ets do
+      private? true
+    end
+
+    attributes do
+      uuid_primary_key :id
+      attribute :name, :string, public?: true
+      attribute :pin, :string, public?: true, sensitive?: true
+    end
+
+    actions do
+      defaults [:read, create: [:name, :pin]]
+
+      update :print do
+        accept []
+
+        change {AshQuick.Print,
+                template: AshQuick.LiveView.PrintUtilsTest.Template, delivery: :print}
+      end
+    end
+  end
+
   defmodule Renderer do
     @moduledoc false
     @behaviour AshQuick.PdfRenderer
@@ -135,6 +182,35 @@ defmodule AshQuick.LiveView.PrintUtilsTest do
              socket.private.live_temp.push_events
 
     assert Base.decode64!(data) == "<p>first</p><p>second</p>"
+  end
+
+  test "names the file for the record, or says redacted for a sensitive label" do
+    Application.put_env(:ash_quick, :pdf_renderer, Renderer)
+
+    socket = PrintUtils.print(socket(), printed(["first"]))
+
+    assert [["ash_quick:pdf", %{filename: "first_slip-" <> _}]] =
+             socket.private.live_temp.push_events
+
+    secret =
+      SecretSlip
+      |> Ash.Changeset.for_create(:create, %{name: "vault", pin: "4321"})
+      |> Ash.create!(authorize?: false)
+
+    socket =
+      PrintUtils.print(
+        socket(),
+        Ash.bulk_update([secret], :print, %{},
+          authorize?: false,
+          strategy: :stream,
+          return_records?: true
+        )
+      )
+
+    assert [["ash_quick:pdf", %{filename: "redacted_slip-" <> _ = filename}]] =
+             socket.private.live_temp.push_events
+
+    refute filename =~ "4321"
   end
 
   test "a renderer that fails leaves the print undelivered and says so" do

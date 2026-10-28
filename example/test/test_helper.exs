@@ -20,6 +20,7 @@ for resource <- [
       Example.Test.RequiredEntries,
       Example.Test.RequiredPicks,
       Example.Test.SecondLists,
+      Example.Test.Secrets,
       Example.Test.SmallPages,
       Example.Test.WordedPolicy
     ] do

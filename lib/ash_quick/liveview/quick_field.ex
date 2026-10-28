@@ -53,6 +53,46 @@ defmodule AshQuick.LiveView.QuickField do
     end
   end
 
+  @doc false
+  # Whether `rest`, the part of a field path past a relationship onto
+  # `destination`, names the related record itself: nothing more (the field
+  # stops at the relationship), or the destination's display label. The one
+  # rule both the details query, which loads the hint of every record a field
+  # names, and the details page, which links them, ask.
+  def names_record?(destination, rest) do
+    if Ash.Resource.Info.resource?(destination) and
+         not Ash.Resource.Info.embedded?(destination) and
+         AshQuick in Spark.extensions(destination) do
+      label = AshQuick.Info.display_label(destination)
+      rest in [nil, [], label, [label]]
+    else
+      false
+    end
+  end
+
+  @doc false
+  # Each record `path` names on a `resource` record, as the relationships that
+  # reach it and its resource, at any depth: `:store` and `[store: :name]`
+  # name a store, `[product: [brand: :name]]` a brand.
+  def named_records(resource, path), do: named_records(resource, path, [])
+
+  defp named_records(resource, name, chain) when is_atom(name),
+    do: named_records(resource, [{name, nil}], chain)
+
+  defp named_records(resource, [{name, rest}], chain) when is_atom(name) do
+    case Ash.Resource.Info.relationship(resource, name) do
+      %{destination: destination} ->
+        if names_record?(destination, rest),
+          do: [{chain ++ [name], destination}],
+          else: named_records(destination, rest, chain ++ [name])
+
+      nil ->
+        []
+    end
+  end
+
+  defp named_records(_resource, _path, _chain), do: []
+
   @doc """
   The value a widget is handed for `path` on `record`.
 

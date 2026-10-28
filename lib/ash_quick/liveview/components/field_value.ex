@@ -4,6 +4,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
   use Gettext, backend: AshQuick.Gettext
 
   alias AshQuick.LiveView.EnumOptions
+  alias AshQuick.LiveView.QuickField
   alias AshQuick.LiveView.Utils
 
   attr :value, :any, required: true
@@ -23,6 +24,11 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     default: nil,
     doc: "that viewer's accessible name, as the page labels the field; the field's name when nil"
 
+  attr :linker, :any,
+    default: nil,
+    doc:
+      "a function from a record to its details path or `nil`, from `AshQuick.Nav.Info.details_linker/3`; a related record is plain text when nil"
+
   def field_value(%{value: nil} = assigns) do
     ~H"""
     <span></span>
@@ -39,6 +45,15 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     <span class="text-base-content/50" title={gettext("Hidden")}>
       <span aria-hidden="true">—</span><span class="sr-only">{gettext("Hidden")}</span>
     </span>
+    """
+  end
+
+  # A `sensitive?` field is redacted whatever it holds — a string, a date, a
+  # number or a list of them — so it is asked before any clause that would
+  # format the value.
+  def field_value(%{path: [], ash_field: %{sensitive?: true}} = assigns) do
+    ~H"""
+    <span>{AshQuick.Info.mask(@value)}</span>
     """
   end
 
@@ -99,7 +114,13 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     ~H"""
     <span :for={{item, i} <- Enum.with_index(@value)}>
       <span :if={i != 0}> - </span>
-      <.field_value value={item} path={@path} ash_field={@ash_field} scope={@scope} />
+      <.field_value
+        value={item}
+        path={@path}
+        ash_field={@ash_field}
+        scope={@scope}
+        linker={@linker}
+      />
     </span>
     """
   end
@@ -128,6 +149,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
       scope={@scope}
       viewer={@viewer}
       viewer_label={@viewer_label}
+      linker={@linker}
     />
     """
   end
@@ -147,27 +169,42 @@ defmodule AshQuick.LiveView.Components.FieldValue do
       scope={@scope}
       viewer={@viewer}
       viewer_label={@viewer_label}
+      linker={@linker}
     />
     """
   end
 
   def field_value(%{path: {relationship_name, rest}} = assigns)
       when is_atom(relationship_name) do
+    relationship = Ash.Resource.Info.field(assigns.value, relationship_name)
+
     assigns =
       assigns
-      |> assign(ash_field: Ash.Resource.Info.field(assigns.value, relationship_name))
+      |> assign(ash_field: relationship)
       |> assign(value: Map.get(assigns.value, relationship_name))
       |> assign(path: rest)
+      |> assign(:links_label?, assigns.linker != nil and label_path?(relationship, rest))
 
     ~H"""
-    <.field_value
-      value={@value}
-      path={@path}
-      ash_field={@ash_field}
-      scope={@scope}
-      viewer={@viewer}
-      viewer_label={@viewer_label}
-    />
+    <%= case {@links_label?, @value} do %>
+      <% {true, [_ | _]} -> %>
+        <span :for={{item, i} <- Enum.with_index(@value)}>
+          <span :if={i != 0}> - </span>
+          <.linked_label record={item} path={@path} scope={@scope} linker={@linker} />
+        </span>
+      <% {true, %_{}} -> %>
+        <.linked_label record={@value} path={@path} scope={@scope} linker={@linker} />
+      <% _ -> %>
+        <.field_value
+          value={@value}
+          path={@path}
+          ash_field={@ash_field}
+          scope={@scope}
+          viewer={@viewer}
+          viewer_label={@viewer_label}
+          linker={@linker}
+        />
+    <% end %>
     """
   end
 
@@ -204,13 +241,6 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     """
   end
 
-  def field_value(%{path: [], ash_field: %{sensitive?: true}} = assigns)
-      when is_binary(assigns.value) do
-    ~H"""
-    <span>{@value |> String.replace(Regex.compile!("."), "*")}</span>
-    """
-  end
-
   def field_value(%{path: [], ash_field: %{type: AshQuick.AshTypes.Text}} = assigns) do
     ~H"""
     <p class="w-11/12 pe-4 overflow-x-auto text-wrap">{@value}</p>
@@ -218,10 +248,17 @@ defmodule AshQuick.LiveView.Components.FieldValue do
   end
 
   def field_value(%{path: [], value: %struct{}} = assigns) do
-    assigns = assign(assigns, :record_label, record_label(struct, assigns.value))
+    assigns =
+      assigns
+      |> assign(:record_label, record_label(struct, assigns.value))
+      |> assign(:record_path, record_path(struct, assigns.value, assigns.linker))
 
     ~H"""
-    <span>{@record_label || @value}</span>
+    <.maybe_hinted_link
+      navigate={@record_path}
+      label={@record_label}
+      hint={AshQuick.Info.display_hint_value(@value)}
+    ><span>{@record_label || @value}</span></.maybe_hinted_link>
     """
   end
 
@@ -229,6 +266,98 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     ~H"""
     <span>{@value}</span>
     """
+  end
+
+  @doc false
+  # A link to a record's details page carrying its display hint, as a tooltip
+  # and in its accessible name — the details header's writers and every
+  # related record a details field names. The hint goes with the link: a
+  # reader the record's page is not granted to sees the bare label.
+  attr :navigate, :string, required: true
+  attr :label, :string, required: true, doc: "what the link's accessible name starts with"
+  attr :hint, :string, default: nil
+  slot :inner_block, required: true
+
+  def hinted_link(assigns) do
+    ~H"""
+    <.link
+      navigate={@navigate}
+      class="link"
+      title={@hint}
+      aria-label={@hint && label_with_hint(@label, @hint)}
+    >{render_slot(@inner_block)}</.link>
+    """
+  end
+
+  # `hinted_link/1` where there is a page to link to, and the content alone
+  # where there is not.
+  attr :navigate, :string, default: nil
+  attr :label, :string, default: nil
+  attr :hint, :string, default: nil
+  slot :inner_block, required: true
+
+  defp maybe_hinted_link(%{navigate: nil} = assigns), do: ~H"{render_slot(@inner_block)}"
+
+  defp maybe_hinted_link(assigns) do
+    ~H"""
+    <.hinted_link navigate={@navigate} label={@label} hint={@hint}>{render_slot(@inner_block)}</.hinted_link>
+    """
+  end
+
+  @doc false
+  # A label with its hint beside it, worded by the locale: the link's
+  # accessible name, and the impersonation banner's.
+  def label_with_hint(label, nil), do: label
+  def label_with_hint(label, hint), do: gettext("%{label} (%{hint})", label: label, hint: hint)
+
+  # A related record named by its label field: the label renders through its
+  # own field — formatted, masked or marked hidden as it would be anyway — and
+  # is a link only when it can be read, since an unreadable one would leave
+  # the link nothing to say.
+  attr :record, :any, required: true
+  attr :path, :any, required: true
+  attr :scope, :any, default: nil
+  attr :linker, :any, required: true
+
+  defp linked_label(assigns) do
+    label = AshQuick.Info.display_value(assigns.record)
+
+    assigns =
+      assigns
+      |> assign(:label, label)
+      |> assign(:navigate, label && assigns.linker.(assigns.record))
+
+    ~H"""
+    <.maybe_hinted_link
+      navigate={@navigate}
+      label={@label}
+      hint={AshQuick.Info.display_hint_value(@record)}
+    ><.field_value value={@record} path={@path} scope={@scope} /></.maybe_hinted_link>
+    """
+  end
+
+  # Only on a label that can be read: the id `record_label/2` falls back to
+  # is not something to send a reader to a page by.
+  defp record_path(_struct, _value, nil), do: nil
+
+  defp record_path(struct, value, linker) do
+    if labelled_resource?(struct) and AshQuick.Info.display_value(value) != nil,
+      do: linker.(value)
+  end
+
+  # A path from a relationship to the destination's display label names the
+  # record as surely as stopping at the relationship does, and is how a page
+  # gives that field a label of its own: `{[brand: :name], label: "Maker"}`
+  # links the brand. The bare relationship is the clause above's, reached
+  # with an empty path.
+  defp label_path?(%{destination: destination}, rest) when rest not in [nil, []],
+    do: QuickField.names_record?(destination, rest)
+
+  defp label_path?(_relationship, _rest), do: false
+
+  defp labelled_resource?(struct) do
+    Ash.Resource.Info.resource?(struct) and not Ash.Resource.Info.embedded?(struct) and
+      AshQuick in Spark.extensions(struct)
   end
 
   # A field path that stops at a relationship is a whole record, and what a

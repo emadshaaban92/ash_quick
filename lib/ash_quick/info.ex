@@ -167,11 +167,16 @@ defmodule AshQuick.Info do
   `Ash.NotLoaded` or an `Ash.ForbiddenField` gives back, which is why those
   callers reach for the id through `Map.get/2`: the fallback fires on records
   that were never guaranteed to carry one.
+
+  A label field that is `sensitive?` reads as a fixed mark, `"********"`,
+  never its value: every title, dropdown option, link and name AshQuick
+  shows comes from here, and there is no reader of the raw label for one of
+  them to reach for by mistake.
   """
   def display_value(%resource{} = record) do
     case declared_label(resource) do
       nil -> nil
-      label -> record |> Map.get(label) |> to_label()
+      label -> record |> Map.get(label) |> to_label() |> redact(resource, label)
     end
   end
 
@@ -181,9 +186,11 @@ defmodule AshQuick.Info do
   The field shown beside `resource`'s label to tell two records with the same
   label apart, or `nil` when it declares none.
 
-  The details header loads it with its writers. Nothing else does: a
-  dropdown or a relationship field loads the label alone, so a caller
-  rendering the hint there loads it itself.
+  A details page loads it with its writers and with each record its fields
+  link. The Live Users register and the impersonation banner read it off the
+  actor the host's scope carries, so a calculated hint has to be loaded
+  there. Nothing else loads it: a dropdown or a list loads the label alone,
+  so a caller rendering the hint there loads it itself.
   """
   def display_hint(resource) do
     if Ash.Resource.Info.resource?(resource) do
@@ -193,17 +200,35 @@ defmodule AshQuick.Info do
 
   @doc """
   The hint for `record`, or `nil` — total in the way `display_value/1` is, so
-  a hint a field policy hides, or one nobody loaded, is simply absent. See
+  a hint a field policy hides, or one nobody loaded, is simply absent, and
+  one whose field is `sensitive?` is the same fixed mark. See
   `display_hint/1` for which records carry it loaded.
   """
   def display_hint_value(%resource{} = record) do
     case display_hint(resource) do
       nil -> nil
-      hint -> record |> Map.get(hint) |> to_label()
+      hint -> record |> Map.get(hint) |> to_label() |> redact(resource, hint)
     end
   end
 
   def display_hint_value(_record), do: nil
+
+  @doc false
+  # How a `sensitive?` value reads wherever AshQuick shows or writes it. One
+  # fixed mark rather than one per character, so not even the length leaks.
+  def mask(_value), do: "********"
+
+  @doc false
+  # Whether `field` of `resource` is `sensitive?`.
+  def sensitive?(resource, field) do
+    Ash.Resource.Info.resource?(resource) and
+      match?(%{sensitive?: true}, Ash.Resource.Info.field(resource, field))
+  end
+
+  defp redact(nil, _resource, _field), do: nil
+
+  defp redact(text, resource, field),
+    do: if(sensitive?(resource, field), do: mask(text), else: text)
 
   @doc """
   The QuickView base path `resource` declared it is opened at, or `nil`.

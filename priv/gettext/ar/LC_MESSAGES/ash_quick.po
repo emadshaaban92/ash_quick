@@ -734,3 +734,18 @@ msgstr "عرض %{name}"
 #, elixir-autogen, elixir-format
 msgid "Images"
 msgstr "الصور"
+
+#: lib/ash_quick/liveview/components/field_value.ex
+#, elixir-autogen, elixir-format
+msgid "%{label} (%{hint})"
+msgstr "%{label} (%{hint})"
+
+#: lib/ash_quick/liveview/components/form_view.ex
+#, elixir-autogen, elixir-format
+msgid "Leave blank to keep it"
+msgstr "اتركه فارغًا للإبقاء عليه"
+
+#: lib/ash_quick/liveview/print_utils.ex
+#, elixir-autogen, elixir-format
+msgid "redacted"
+msgstr "محجوب"
