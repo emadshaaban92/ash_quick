@@ -189,8 +189,9 @@ defmodule AshQuick.Info do
   A details page loads it with its writers and with each record its fields
   link. The Live Users register and the impersonation banner read it off the
   actor the host's scope carries, so a calculated hint has to be loaded
-  there. Nothing else loads it: a dropdown or a list loads the label alone,
-  so a caller rendering the hint there loads it itself.
+  there. A relationship dropdown loads it with its options and with the
+  records an update form has picked. A list loads the label alone, so a caller
+  rendering the hint there loads it itself.
   """
   def display_hint(resource) do
     if Ash.Resource.Info.resource?(resource) do
@@ -200,14 +201,15 @@ defmodule AshQuick.Info do
 
   @doc """
   The hint for `record`, or `nil` — total in the way `display_value/1` is, so
-  a hint a field policy hides, or one nobody loaded, is simply absent, and
+  a hint a field policy hides, a blank one, or one nobody loaded, is simply
+  absent, and
   one whose field is `sensitive?` is the same fixed mark. See
   `display_hint/1` for which records carry it loaded.
   """
   def display_hint_value(%resource{} = record) do
     case display_hint(resource) do
       nil -> nil
-      hint -> record |> Map.get(hint) |> to_label() |> redact(resource, hint)
+      hint -> record |> Map.get(hint) |> to_label() |> blank_to_nil() |> redact(resource, hint)
     end
   end
 
@@ -488,6 +490,11 @@ defmodule AshQuick.Info do
   # mid-render. Everything else is whatever the value prints as, so a label
   # declared on a ci_string, decimal or date renders rather than silently
   # degrading to the id.
+  # A blank hint tells nothing apart, so it is no hint rather than an empty
+  # tooltip or an empty line under a label.
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(value), do: value
+
   defp to_label(nil), do: nil
   defp to_label(%Ash.NotLoaded{}), do: nil
   defp to_label(%Ash.ForbiddenField{}), do: nil

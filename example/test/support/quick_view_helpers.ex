@@ -133,26 +133,77 @@ defmodule ExampleWeb.QuickViewHelpers do
   option list is. A dropdown reading through the wrong action, or dropping the
   argument it searches by, gets the *set* wrong while every individual pick
   still works — which an assertion over one entry cannot see.
+
+  A record's entry carries its display hint beside its label, so only the
+  label part is read: with the whole text, every `in` over the labels would
+  be false and every `refute ... in` would pass for the wrong reason.
   """
-  def dropdown_entries(%PhoenixTest.Live{view: view}, label) do
+  def dropdown_entries(%PhoenixTest.Live{} = session, label) do
+    session |> dropdown_options(label) |> Enum.map(&elem(&1, 0))
+  end
+
+  @doc """
+  The entries the dropdown labelled `label` offers once opened, each as
+  `{label, hint}`, with `nil` for an entry drawn without a hint.
+  """
+  def dropdown_options(%PhoenixTest.Live{view: view}, label) do
     field = find_live_select!(view, label)
 
     view
     |> open_dropdown(field)
-    |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+    |> Enum.map(&{part_text(&1, "label") || text(&1), part_text(&1, "hint")})
   end
 
-  @doc "Picks `entry` from the dropdown labelled `label`."
-  def select_entry(session, label, entry) do
+  @doc """
+  The picked tags of the multi-select labelled `label`, each as
+  `{label, hint}` like `dropdown_options/2`.
+  """
+  def picked_tags(%PhoenixTest.Live{view: view}, label) do
+    field = find_live_select!(view, label)
+
+    view
+    |> LiveViewTest.render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(field.tags_selector)
+    |> Enum.map(&{part_text(&1, "label") || text(&1), part_text(&1, "hint")})
+  end
+
+  defp entry_matches?(element, entry, opts) do
+    label = part_text(element, "label") || text(element)
+
+    String.contains?(label, entry) and
+      (not Keyword.has_key?(opts, :hint) or part_text(element, "hint") == opts[:hint])
+  end
+
+  defp part_text(element, part) do
+    case element |> LazyHTML.query(~s([data-part="#{part}"])) |> Enum.to_list() do
+      [] -> nil
+      [found | _] -> text(found)
+    end
+  end
+
+  defp text(element), do: element |> LazyHTML.text() |> String.trim()
+
+  @doc """
+  Picks `entry` from the dropdown labelled `label`.
+
+  Matched against each entry's label part, so a hint drawn beside the label
+  can't pick the wrong record. Where two entries share a label, `hint:`
+  names the one meant.
+  """
+  def select_entry(session, label, entry, opts \\ []) do
     PhoenixTest.unwrap(session, fn view ->
       field = find_live_select!(view, label)
 
       view
       |> open_dropdown(field)
-      |> Enum.find(&(&1 |> LazyHTML.text() |> String.contains?(entry)))
+      |> Enum.find(&entry_matches?(&1, entry, opts))
       |> case do
         nil ->
-          flunk("no entry matching #{inspect(entry)} in the #{inspect(label)} dropdown")
+          flunk(
+            "no entry matching #{inspect(entry)} #{inspect(opts)} " <>
+              "in the #{inspect(label)} dropdown"
+          )
 
         element ->
           idx = element |> LazyHTML.attribute("data-idx") |> List.first()
@@ -191,6 +242,7 @@ defmodule ExampleWeb.QuickViewHelpers do
         %{
           selector: selector,
           dropdown_entries_selector: "#{selector} > ul > li > div",
+          tags_selector: "#{selector} > div > div.badge",
           text_input_selector: "#{selector} > div > input[type='text']"
         }
 

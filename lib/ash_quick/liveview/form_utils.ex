@@ -53,9 +53,12 @@ defmodule AshQuick.LiveView.FormUtils do
     # own query, and `load_fields/3` brings the destination's display label
     # along with the relationship — otherwise the one option the user is
     # actually looking at is the one rendered as a UUID.
-    fields =
+    action_fields =
       Utils.action_fields(options.resource, action_name)
       |> Enum.map(&Utils.argument_to_relationship(&1, options.resource, action_name))
+
+    fields =
+      action_fields
       |> Enum.map(fn
         %Ash.Resource.Attribute{name: name} -> name
         %Ash.Resource.Relationships.BelongsTo{name: name} -> name
@@ -71,10 +74,28 @@ defmodule AshQuick.LiveView.FormUtils do
       |> Ash.Query.filter(id == ^id)
       |> Ash.Query.load(options.load, strict?: true)
       |> Utils.load_fields(fields, strict?: true)
+      |> then(&Ash.Query.load(&1, picked_hint_load(action_type, action_fields, &1.tenant)))
       |> Ash.read_one!()
 
     socket |> assign(record: record)
   end
+
+  # An update form's dropdowns draw their picked records with the
+  # destination's hint, and the strict relationship load above brings the
+  # label alone. Merged rather than strict, so it adds the hint without
+  # narrowing that load. A destroy confirmation draws no dropdown.
+  defp picked_hint_load(:update, action_fields, tenant) do
+    for %struct{name: name, destination: destination} <- action_fields,
+        struct in [
+          Ash.Resource.Relationships.BelongsTo,
+          Ash.Resource.Relationships.ManyToMany
+        ],
+        fields = Utils.hint_fields(destination, tenant),
+        fields != [],
+        do: {name, fields}
+  end
+
+  defp picked_hint_load(_action_type, _action_fields, _tenant), do: []
 
   defp set_form(socket, :create, _options) do
     form =
