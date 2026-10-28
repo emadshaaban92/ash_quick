@@ -208,6 +208,21 @@ defmodule AshQuick.NavTest do
     test "never at a page with no details route" do
       assert Info.details_base_paths(AshQuick.Test.Check.Gizmo, AshQuick.Test.Check.Router) == []
     end
+
+    test "never at a page written by hand where a details route would be" do
+      router = AshQuick.Test.Check.DetailsRouter
+
+      assert Info.details_base_paths(AshQuick.Test.Check.Gizmo, router) == []
+      assert Info.base_path(AshQuick.Test.Check.Gizmo, router) == nil
+      assert Info.base_path(AshQuick.Test.Check.Twin, router) == nil
+    end
+
+    test "never at a base path with a dynamic segment" do
+      assert Info.details_base_paths(
+               AshQuick.Test.Check.Twin,
+               AshQuick.Test.Check.DetailsRouter
+             ) == []
+    end
   end
 
   describe "an icon the host draws itself" do

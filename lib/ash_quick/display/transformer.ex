@@ -8,8 +8,9 @@ defmodule AshQuick.Display.Transformer do
   @labelable_fields [Ash.Resource.Attribute, Ash.Resource.Calculation, Ash.Resource.Aggregate]
 
   # "/users" and "/admin/users", but not "/users/" (a page at "/users//<id>"),
-  # "//host" (a link to another host) or anything carrying a query.
-  @base_path ~r{\A(/[^/?#\s]+)+\z}
+  # "//host" (a link to another host), anything carrying a query, a dynamic
+  # segment (":org_id", "*rest") nothing can fill, or a "." or ".." segment.
+  @base_path ~r{\A(/(?!\.\.?(?:/|\z))[^/?#\s:*]+)+\z}
 
   # Every field the resource offers has to be in the DSL state before its label
   # can be resolved against them, and a calculation added by another extension's
@@ -58,8 +59,9 @@ defmodule AshQuick.Display.Transformer do
              path: [:ash_quick, :display, :path],
              message: """
              `path #{inspect(path)}` is not a QuickView base path: one or more \
-             "/segment"s, with no trailing "/", no empty segment and no query or \
-             fragment — a record's page is "<path>/:id".
+             "/segment"s, with no trailing "/", no empty, "." or ".." segment, \
+             no dynamic segment and no query or fragment — a record's page is \
+             "<path>/:id".
              """
            )}
         end

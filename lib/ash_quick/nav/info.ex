@@ -175,40 +175,63 @@ defmodule AshQuick.Nav.Info do
 
   @doc """
   The base path `resource`'s records open at, or `nil`: its declared
-  `display` path when `router` serves it with a details route over
-  `resource`, else the only one `details_base_paths/2` finds.
+  `display` path when it is one of `details_base_paths/2`, else the only one
+  `details_base_paths/2` finds.
 
   A declared path the router does not serve that way is no answer rather
   than a link to a page that is not there; `mix ash_quick.check` reports it.
   """
   def base_path(resource, router) do
-    case AshQuick.Info.display_path(resource) do
-      nil ->
-        case details_base_paths(resource, router) do
-          [path] -> path
-          _none_or_several -> nil
-        end
+    paths = details_base_paths(resource, router)
 
-      declared ->
-        if serves_details?(router, declared, resource), do: declared
+    case {AshQuick.Info.display_path(resource), paths} do
+      {nil, [path]} -> path
+      {nil, _none_or_several} -> nil
+      {declared, paths} -> if declared in paths, do: declared
     end
   end
 
   @doc """
   The base path of every QuickView `router` serves `resource` at with a
-  details route.
+  details route: `<path>/:id` is a route of that QuickView, over `resource`.
+
+  A base path with a dynamic segment (a QuickView inside
+  `scope "/orgs/:org_id"`) is left out, since nothing here knows what to
+  fill it with.
   """
   def details_base_paths(resource, router) do
-    for {path, ^resource} <- discovered(router),
-        :show in AshQuick.LiveView.Router.served_shapes(router, path),
-        do: path
+    for {path, ^resource} <- details_pages(router), do: path
+  end
+
+  # Fixed for a compiled router, so worked out once per router and kept until
+  # it is recompiled; a header asking on every render pays for a lookup.
+  defp details_pages(nil), do: []
+
+  defp details_pages(router) do
+    key = {__MODULE__, :details_pages, router}
+    md5 = router.module_info(:md5)
+
+    case :persistent_term.get(key, nil) do
+      {^md5, pages} ->
+        pages
+
+      _missing_or_stale ->
+        pages =
+          for {path, resource} <- discovered(router),
+              resource != nil,
+              not String.contains?(path, [":", "*"]),
+              serves_details?(router, path, resource),
+              do: {path, resource}
+
+        :persistent_term.put(key, {md5, pages})
+        pages
+    end
   end
 
   # One match against the router rather than a walk over its routes. Any id
   # other than "create", which the create route takes, reaches the details
-  # route if there is one.
-  defp serves_details?(nil, _base, _resource), do: false
-
+  # route if there is one — and it has to be this QuickView's, not a page
+  # written by hand at the same path.
   defp serves_details?(router, base, resource) do
     case Phoenix.Router.route_info(router, "GET", base <> "/0", nil) do
       %{route: route, ash_quick: %{base_path: ^base}, phoenix_live_view: {view, _, _, _}} ->

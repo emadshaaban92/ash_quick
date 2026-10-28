@@ -105,8 +105,11 @@ defmodule AshQuick.LiveView.Components.DetailsView do
   # standing alone. A resource carrying none of the four renders nothing at all.
   #
   # The writer is a link to their details page for a reader who may navigate
-  # there, and carries their display hint as a tooltip: a label is short, and
-  # two writers can share one.
+  # there, and the link carries their display hint as a tooltip and in its
+  # accessible name: a label is short, and two writers can share one. The hint
+  # goes with the link, so a reader the route is not granted to sees the bare
+  # name, and a hint that is personal data is shown no further than the page
+  # it describes.
   defp bookkeeping_header(%{record: %resource{} = record, scope: scope} = assigns) do
     halves = [
       {:created, AshQuick.Info.inserted_at_field(resource),
@@ -140,12 +143,18 @@ defmodule AshQuick.LiveView.Components.DetailsView do
 
   defp bookkeeping_part(%{part: text} = assigns) when is_binary(text), do: ~H"{@part}"
 
-  defp bookkeeping_part(%{part: %{path: nil}} = assigns),
-    do: ~H"<span title={@part.hint}>{@part.label}</span>"
+  defp bookkeeping_part(%{part: %{path: nil}} = assigns), do: ~H"{@part.label}"
 
+  # `title` alone never shows on a touch screen and is unreliable for assistive
+  # technology, so the hint is in the link's accessible name too.
   defp bookkeeping_part(assigns),
     do: ~H"""
-    <.link navigate={@part.path} class="link" title={@part.hint}>{@part.label}</.link>
+    <.link
+      navigate={@part.path}
+      class="link"
+      title={@part.hint}
+      aria-label={@part.hint && "#{@part.label} (#{@part.hint})"}
+    >{@part.label}</.link>
     """
 
   # The sentence is translated whole with a marker standing in for the writer,
@@ -192,7 +201,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
   defp actor(writer, path) do
     case AshQuick.Info.display_value(writer) do
       nil -> nil
-      label -> %{label: label, hint: AshQuick.Info.display_hint_value(writer), path: path}
+      label -> %{label: label, hint: path && AshQuick.Info.display_hint_value(writer), path: path}
     end
   end
 

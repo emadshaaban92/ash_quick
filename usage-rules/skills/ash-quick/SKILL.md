@@ -716,11 +716,12 @@ and what to write.
   `calculate :display_name, :string, expr(string_join([order.name, product.name], " — "))`.
   See `AshQuick.Info.display_label/1`. Keep the label short — it is a dropdown
   option — and put what tells two same-labelled records apart in `hint`
-  (a field, plain text: the details header's writer tooltip). `path` names the
+  (a field, plain text: the tooltip on the details header's writer link,
+  shown only with the link). `path` names the
   QuickView base path a record opens at; leave it out when one QuickView with a
   details route serves the resource, declare it when two do.
   `AshQuick.Nav.Info.details_path/2` links a record only for a scope the nav's
-  access control grants the page.
+  access control grants the page (a route grant, not the record's read policy).
 - **No list a form cannot save** — A field with a fixed set of values (an
   `Ash.Type.Enum`, or an atom with `one_of`) is picked from a select, and a
   scalar is typed in. A list of scalars with no fixed set (`{:array, :atom}`,

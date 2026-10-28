@@ -147,19 +147,25 @@ defmodule ExampleWeb.DetailsScenarioTest do
       |> assert_has("header a[href='/users/#{editor.id}'][title='#{editor.email}']",
         text: editor.name
       )
+      |> assert_has(
+        "header a[href='/users/#{editor.id}'][aria-label='#{editor.name} (#{editor.email})']"
+      )
       |> click_link("header a[href='/users/#{editor.id}']", editor.name)
       |> assert_path(~p"/users/#{editor.id}")
     end
 
-    test "names a writer without a link for a reader who cannot open their page", ctx do
+    test "names a writer bare for a reader who cannot open their page", ctx do
       %{conn: conn, admin: admin, editor: editor, product: product} = ctx
 
-      # An editor holds `/products` but not `/users`.
+      # An editor holds `/products` but not `/users`, so gets neither the link
+      # nor the email it carries.
       conn
       |> log_in(editor)
       |> visit(~p"/products/#{product.id}")
-      |> assert_has("header span[title='#{admin.email}']", text: admin.name)
+      |> assert_has("header", text: "Created by #{admin.name}")
       |> refute_has("header a[href^='/users']")
+      |> refute_has("header [title='#{admin.email}']")
+      |> refute_has("header [aria-label*='#{admin.email}']")
     end
 
     test "reads as one sentence per half, with nothing but the separator between", ctx do

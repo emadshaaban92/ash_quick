@@ -20,11 +20,11 @@
   ```
 
   `hint` names an attribute, calculation or aggregate that tells two
-  records sharing a label apart; it is plain text, shown as the writer's
-  tooltip to every reader who may read the field, and absent where a field
-  policy hides it. `path` is the base path of the QuickView a record opens
-  at, `<path>/:id`, used only where the router serves that resource's
-  details page there. Left out, it is the one QuickView with a details
+  records sharing a label apart; it is plain text, the writer's link's
+  tooltip and part of its accessible name, so a reader who gets no link
+  gets no hint either, and a field policy can hide it further. `path` is
+  the base path of the QuickView a record opens at, `<path>/:id`, used only
+  where that QuickView serves the resource's details page there. Left out, it is the one QuickView with a details
   route the router serves the resource at, so most resources declare
   nothing. `AshQuick.Nav.Info.details_path/2` and `details_paths/3` resolve
   records' pages for a scope, for a custom page linking them.
@@ -32,7 +32,8 @@
   details page (`:unrouted_display_path`), and, as advisory, an actor
   resource served at two with none declared (`:ambiguous_display_path`). A
   hint naming no such field does not compile, and neither does a path that
-  is not `/segment`s with no trailing `/`.
+  is not static `/segment`s with no trailing `/`. A link checks the route
+  grant, not the writer's read policy.
 
 - **A details page opens an attachment field's images at full size.** On
   the built-in details page, a servable image in an `:attachment` or

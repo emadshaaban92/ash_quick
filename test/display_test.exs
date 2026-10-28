@@ -66,8 +66,10 @@ defmodule AshQuick.DisplayTest do
 
   test "a path that is not a base path does not compile" do
     # Relative; a page at "/users//<id>"; a link to another host; a query the
-    # id would be appended to.
-    for path <- ["users", "/", "/users/", "//cdn.example", "/users?tab=all", "/a//b"] do
+    # id would be appended to; a dynamic segment nothing fills; a dot segment.
+    for path <-
+          ["users", "/", "/users/", "//cdn.example", "/users?tab=all", "/a//b"] ++
+            ["/orgs/:org_id/users", "/files/*rest", "/users/..", "/./users"] do
       assert_raise Spark.Error.DslError, ~r/is not a QuickView base path/, fn ->
         compile(~s(path #{inspect(path)}))
       end
@@ -76,6 +78,7 @@ defmodule AshQuick.DisplayTest do
 
   test "a nested base path compiles" do
     assert AshQuick.Info.display_path(compile(~s(path "/admin/people"))) == "/admin/people"
+    assert AshQuick.Info.display_path(compile(~s(path "/v1.2/people"))) == "/v1.2/people"
   end
 
   test "a declared path is read back" do

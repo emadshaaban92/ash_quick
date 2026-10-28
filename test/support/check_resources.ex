@@ -447,6 +447,29 @@ defmodule AshQuick.Test.Check.Router do
   live("/orphan", AshQuick.Test.Check.PlainLive, :orphan)
 end
 
+defmodule AshQuick.Test.Check.DetailsRouter do
+  @moduledoc """
+  Pages that look like a QuickView's details route and are not one: a
+  hand-written page at `<base>/:id` beside a QuickView with no details route,
+  and a details route under a dynamic scope nothing can fill.
+  """
+  use Phoenix.Router
+
+  import AshQuick.LiveView.Router
+  import Phoenix.LiveView.Router, only: [live: 3]
+
+  # `Gizmo` declares `/gizmos`, and `Twin` would derive `/twins`, but neither
+  # QuickView answers `<base>/:id`.
+  quick_view("/gizmos", AshQuick.Test.Check.GizmoLive.Quick, only: [:index])
+  live("/gizmos/:id", AshQuick.Test.Check.PlainLive, :show)
+  quick_view("/twins", AshQuick.Test.Check.TwinLive.Quick, only: [:index])
+  live("/twins/:id", AshQuick.Test.Check.PlainLive, :show)
+
+  scope "/orgs/:org_id" do
+    quick_view("/twins", AshQuick.Test.Check.TwinLive.Quick, only: [:index, :show])
+  end
+end
+
 defmodule AshQuick.Test.Check.AccessControl do
   @moduledoc """
   Grants one route the router serves and the nav renders, one it renders without
