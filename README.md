@@ -113,6 +113,39 @@ The English label is the msgid. Labels are not `gettext` call sites, so
 `priv/gettext/<locale>/LC_MESSAGES/labels.po` as they read on the page. A label
 the catalogue lacks is drawn in English. With no translator, every label is.
 
+To find the ones the catalogue lacks, override your backend's
+`handle_missing_translation/5`, which Gettext calls for every message a locale
+has no entry for, and log them:
+
+```elixir
+# in MyAppWeb.Gettext, after `use Gettext.Backend`
+require Logger
+
+@impl Gettext.Backend
+def handle_missing_translation(locale, domain, msgctxt, msgid, bindings) do
+  # Once per process: a list names an enum value once, not once per row.
+  key = {__MODULE__, :missing, locale, domain, msgctxt, msgid}
+
+  # "en": the language the msgids are written in.
+  if locale != "en" and !Process.get(key) do
+    Process.put(key, true)
+    Logger.warning("Missing #{locale} translation in #{domain}: #{inspect(msgid)}")
+  end
+
+  super(locale, domain, msgctxt, msgid, bindings)
+end
+```
+
+Every label goes through the translator, so this names the ones that are easy
+to miss by eye too: an enum value in a dropdown, a nested form's input, a field
+a flashed error names, an export header. An entry left with an empty
+`msgstr` counts as missing too. Skip the language the msgids are written in,
+which has nothing to miss, rather than the default locale: an app that
+defaults to another language still needs to hear what that one lacks. Keep it
+to dev (the example app gates it on a `compile_env` flag). It names a label
+once per process, so each page logs what it lacks, and only once a page in
+that locale has drawn it.
+
 A custom template that draws a resource's labels itself calls `AshQuick.Labels`
 (`name/1` for a field, action or value name, `field/1` for a `:fields` entry,
 `translate/1` for an English string), so it reads the same as the pages around

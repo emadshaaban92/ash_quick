@@ -44,6 +44,9 @@ config :phoenix_live_reload, :dirs, [Path.expand(".."), Path.expand(".")]
 
 config :example, dev_routes: true
 
+# Log every message a page draws that the reader's locale lacks.
+config :example, warn_missing_translations: true
+
 config :logger, :default_formatter, format: "[$level] $message\n"
 
 config :phoenix, :stacktrace_depth, 20
