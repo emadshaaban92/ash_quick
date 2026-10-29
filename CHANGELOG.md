@@ -4,6 +4,29 @@
 
 ### Features
 
+- **Labels can be translated.** A new `:label_translator` config,
+  `{Mod, :fun}`, gets every label AshQuick draws in English and returns the
+  string to draw: field and action names (as humanized, after
+  `:humanize_overrides`), `label:` options, `new_action_label`, saved filter
+  labels, the titles of custom bulk items, nav entries and groups, page
+  titles, and the values of an enum or a `one_of` atom, on the list, the
+  details page, the forms, the filters, the sidebar and the apps grid. A label
+  that is not a string (markup in a `label:` option) is drawn as it is. It
+  runs where a label is drawn, so a reader in
+  Arabic gets Arabic labels on the same compiled QuickView an English reader
+  gets English ones on. An export's header is translated in the locale of the
+  reader who asked for it, the scope's (`AshQuick.Scope.locale/1`); the task
+  writing the file used to have none. `AshQuick.Nav.Info.sections/1` hands
+  out its labels translated, so a host drawing its own nav from it gets them
+  too. A
+  flashed error names its field through it too ("Field: message"), and the
+  "is invalid" a field-only error reads goes through `:error_translator` like
+  Ash's other messages. A form's title is one translatable message,
+  `[%{resource}] %{action}`, without the trailing space it had, and a details
+  page's is `%{resource} - %{record}`. With no translator, labels are drawn
+  as before. `AshQuick.Labels` (`translate/1`, `name/1`, `field/1`) is what
+  a custom template calls to match.
+
 - **A relationship dropdown shows each record's display hint.** On a line
   of its own under each option's label and each picked tag's in a
   multi-select, wrapping where it is too long for the column, and as

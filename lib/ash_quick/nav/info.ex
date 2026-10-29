@@ -9,6 +9,7 @@ defmodule AshQuick.Nav.Info do
   """
 
   alias AshQuick.Config
+  alias AshQuick.Labels
   alias AshQuick.LiveView.Utils
   alias AshQuick.Nav.Entry
   alias AshQuick.Nav.Group
@@ -17,7 +18,8 @@ defmodule AshQuick.Nav.Info do
   @default_icon "hero-rectangle-stack-solid"
 
   @doc """
-  The nav `scope` can reach, in declaration order.
+  The nav `scope` can reach, in declaration order, labelled in the reader's
+  language (`AshQuick.Labels.translate/1`).
 
   Groups render in the order they were declared, holding only the entries the
   scope is allowed to navigate to; a group left with none is dropped. Entries
@@ -39,6 +41,7 @@ defmodule AshQuick.Nav.Info do
       |> unresolved(router)
       |> Enum.filter(fn {entry, _resource} -> allowed?(entry.path, allowed) end)
       |> Enum.map(fn {entry, resource} -> resolve(entry, resource) end)
+      |> Enum.map(&%{&1 | label: Labels.translate(&1.label)})
 
     by_path = Map.new(entries, &{&1.path, &1})
     groups = groups(nav)
@@ -255,7 +258,7 @@ defmodule AshQuick.Nav.Info do
     groups
     |> Enum.map(
       &%Section{
-        group: &1,
+        group: %{&1 | label: Labels.translate(&1.label)},
         entries: Enum.flat_map(&1.paths, fn path -> List.wrap(by_path[path]) end)
       }
     )

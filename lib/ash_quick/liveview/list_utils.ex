@@ -7,6 +7,7 @@ defmodule AshQuick.LiveView.ListUtils do
   use Gettext, backend: AshQuick.Gettext
 
   alias Ash.Resource.Actions
+  alias AshQuick.Labels
   alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.BulkActions
   alias AshQuick.LiveView.BulkForm
@@ -67,8 +68,8 @@ defmodule AshQuick.LiveView.ListUtils do
   defp set_title(socket, %{resource: resource}) do
     title =
       case Ash.Resource.Info.plural_name(resource) do
-        nil -> "#{Ash.Resource.Info.short_name(resource)}s" |> Utils.humanize()
-        name -> name |> Utils.humanize()
+        nil -> "#{Ash.Resource.Info.short_name(resource)}s" |> Labels.name()
+        name -> name |> Labels.name()
       end
 
     socket |> assign(page_title: title)
@@ -443,11 +444,18 @@ defmodule AshQuick.LiveView.ListUtils do
       |> build_export_query(selected_ids, socket, options)
       |> Utils.load_fields(options.export_fields, strict?: true)
 
+    # The header is labelled in the reader's language, and a task inherits no
+    # locale. The scope's is the one a host puts on its pages, whether it set
+    # it process-wide or on its own backend, which falls back to this one.
+    locale = AshQuick.Scope.locale(socket.assigns.scope)
+
     socket =
       case Ash.Scope.ToOpts.get_actor(socket.assigns.scope) do
         {:ok, actor} when not is_nil(actor) ->
           socket
           |> assign_async(:export_data, fn ->
+            Gettext.put_locale(locale)
+
             {:ok, url} =
               AshQuick.LiveView.ExportUtils.generate_export_url(
                 export_query,
@@ -764,7 +772,7 @@ defmodule AshQuick.LiveView.ListUtils do
         "%{action} applied to %{applied} of 1 selected row.",
         "%{action} applied to %{applied} of %{count} selected rows.",
         selected,
-        action: Utils.humanize(action.name),
+        action: Labels.name(action.name),
         applied: selected - skipped
       )
 

@@ -3,6 +3,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
   use Phoenix.Component
   use Gettext, backend: AshQuick.Gettext
   import AshQuick.Components
+  alias AshQuick.Labels
   alias Phoenix.LiveView.JS
 
   import AshQuick.LiveView.Components.FieldValue
@@ -93,7 +94,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
             class="flex gap-4 py-4 text-sm leading-6 sm:gap-8"
           >
             <dt class="w-1/4 flex-none text-base-content/60">
-              {field.label}
+              {Labels.field(field)}
             </dt>
             <dd class="w-3/4 text-base-content">
               <.render_field
@@ -261,7 +262,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
       path={@path}
       scope={@scope}
       viewer={@viewer}
-      viewer_label={@field.label}
+      viewer_label={Labels.field(@field)}
       linker={@linker}
     />
     """
@@ -283,7 +284,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
         if(@action.type == :destroy, do: "btn-error", else: "btn-primary")
       ]}
     >
-      {Utils.humanize(@action.name)}
+      {Labels.name(@action.name)}
     </button>
     """
   end
@@ -311,7 +312,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
     <.link phx-click={
       JS.push("row_action_click", value: %{id: @record.id, action_name: @action.name})
     }>
-      {Utils.humanize(@action.name)}
+      {Labels.name(@action.name)}
     </.link>
     """
   end

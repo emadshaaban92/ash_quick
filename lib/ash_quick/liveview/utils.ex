@@ -364,12 +364,6 @@ defmodule AshQuick.LiveView.Utils do
     end
   end
 
-  def field_label(%AshQuick.LiveView.QuickField{label: label}), do: label
-  def field_label(field) when is_atom(field), do: humanize(field)
-  def field_label({_, label}) when is_binary(label), do: label
-  def field_label({field, _}) when is_atom(field), do: humanize(field)
-  def field_label([field]), do: field_label(field)
-
   @doc """
   Withholds `query`'s inactive records, for a resource that declared activation.
 

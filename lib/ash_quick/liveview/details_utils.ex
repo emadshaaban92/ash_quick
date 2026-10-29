@@ -3,8 +3,10 @@ defmodule AshQuick.LiveView.DetailsUtils do
   require Ash.Query
   import Phoenix.LiveView
   import Phoenix.Component, only: [assign: 2]
+  use Gettext, backend: AshQuick.Gettext
 
   alias Ash.Resource.Actions
+  alias AshQuick.Labels
   alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.QuickField
   alias AshQuick.LiveView.URLParams
@@ -123,12 +125,12 @@ defmodule AshQuick.LiveView.DetailsUtils do
   end
 
   defp set_title(socket, %{resource: resource}) do
-    resource_name = Ash.Resource.Info.short_name(resource) |> Utils.humanize()
+    resource_name = Ash.Resource.Info.short_name(resource) |> Labels.name()
 
     title =
       case AshQuick.Info.display_value(socket.assigns.record) do
         nil -> resource_name
-        label -> "#{resource_name} - #{label}"
+        label -> gettext("%{resource} - %{record}", resource: resource_name, record: label)
       end
 
     socket |> assign(page_title: title)

@@ -3,6 +3,7 @@ defmodule AshQuick.LiveView.BulkActions do
   # The list's bulk menu: what `list: [bulk_actions: ...]` names, or what is
   # derived from the resource when it names nothing.
 
+  alias AshQuick.Labels
   alias AshQuick.LiveView.QuickView.Options
   alias AshQuick.LiveView.Utils
   alias Phoenix.LiveView.JS
@@ -168,7 +169,7 @@ defmodule AshQuick.LiveView.BulkActions do
   defp resolve(items, resource, socket) do
     Enum.flat_map(items, fn
       item when item in [nil, false] -> []
-      item when is_map(item) -> [item]
+      item when is_map(item) -> [Map.update(item, :title, nil, &Labels.translate/1)]
       name -> if offerable?(resource, name, socket.assigns.scope), do: [item(name)], else: []
     end)
   end
@@ -179,7 +180,7 @@ defmodule AshQuick.LiveView.BulkActions do
 
   defp item(name) do
     %{
-      title: Utils.humanize(name),
+      title: Labels.name(name),
       func: JS.push("bulk_action", value: %{"action_name" => Atom.to_string(name)}),
       ash_quick_action: name
     }

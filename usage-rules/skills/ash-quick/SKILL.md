@@ -921,6 +921,20 @@ msgid (add it to the `errors` catalogue); without one, or when the
 have permission to do that." Give a policy an `error_message` when the person
 refused can act on the reason.
 
+`:label_translator` (`{Mod, :fun}`, arity 1) translates every label AshQuick
+draws — humanized field and action names, `label:` options,
+`new_action_label`, saved filter labels, custom bulk item titles, nav entries
+and groups (as `AshQuick.Nav.Info.sections/1` hands them out), page titles,
+enum and `one_of` values, export headers. It gets the English label as drawn
+(after `:humanize_overrides`) and runs at render, so it sees the reader's
+locale. The usual body is `Gettext.dgettext(MyAppWeb.Gettext, "labels",
+label)`, with the English label as the msgid in `labels.po`; labels are not
+`gettext` call sites, so `mix gettext.extract` does not find them. A custom
+template drawing a resource's labels itself calls `AshQuick.Labels`:
+`name/1` (humanize, then translate), `field/1` (a `:fields` entry) or
+`translate/1` (an English string), so it reads the same as the pages. A
+non-string label (markup) passes through untranslated.
+
 ## What the host application provides
 
 AshQuick reaches into the host through these and nothing else. `deps/ash_quick/README.md`

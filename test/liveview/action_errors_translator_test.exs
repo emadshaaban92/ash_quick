@@ -1,9 +1,10 @@
 defmodule AshQuick.LiveView.ActionErrorsTranslatorTest do
   @moduledoc """
   Ash's messages in a flash go through the host's `:error_translator`, as they
-  do next to an input.
+  do next to an input, and the field named in front of one through its
+  `:label_translator`.
 
-  Not async: the translator is application config, read on every call.
+  Not async: the translators are application config, read on every call.
   """
   use ExUnit.Case, async: false
 
@@ -28,14 +29,26 @@ defmodule AshQuick.LiveView.ActionErrorsTranslatorTest do
     end
   end
 
+  defmodule Labels do
+    @moduledoc false
+    # One label, so the other tests' fields are still drawn in English.
+    def translate_label("Sku"), do: "Référence"
+    def translate_label(label), do: label
+  end
+
   setup do
-    original = Application.get_env(:ash_quick, :error_translator)
-    Application.put_env(:ash_quick, :error_translator, {Translator, :translate_error})
+    put_config(:error_translator, {Translator, :translate_error})
+    put_config(:label_translator, {Labels, :translate_label})
+  end
+
+  defp put_config(key, value) do
+    original = Application.get_env(:ash_quick, key)
+    Application.put_env(:ash_quick, key, value)
 
     on_exit(fn ->
       if original,
-        do: Application.put_env(:ash_quick, :error_translator, original),
-        else: Application.delete_env(:ash_quick, :error_translator)
+        do: Application.put_env(:ash_quick, key, original),
+        else: Application.delete_env(:ash_quick, key)
     end)
   end
 
@@ -46,6 +59,15 @@ defmodule AshQuick.LiveView.ActionErrorsTranslatorTest do
       )
 
     assert ActionErrors.user_facing_message(error) == "Name: est obligatoire"
+  end
+
+  test "names the field in front through the label translator" do
+    error =
+      Ash.Error.Invalid.exception(
+        errors: [Ash.Error.Changes.Required.exception(field: :sku, type: :attribute)]
+      )
+
+    assert ActionErrors.user_facing_message(error) == "Référence: est obligatoire"
   end
 
   # Arabic has no capital letters, so a whole sentence translated into it reads

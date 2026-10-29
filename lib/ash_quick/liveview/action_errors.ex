@@ -14,6 +14,8 @@ defmodule AshQuick.LiveView.ActionErrors do
   # the locale of the process that flashes them.
   use Gettext, backend: AshQuick.Gettext
 
+  alias AshQuick.Labels
+
   @doc "A friendly message for an optimistic-lock (`StaleRecord`) conflict."
   def stale_message,
     do:
@@ -205,8 +207,7 @@ defmodule AshQuick.LiveView.ActionErrors do
 
   defp field_sentences(_), do: []
 
-  defp invalid_field_sentence(field),
-    do: "#{AshQuick.LiveView.Utils.humanize(field)}: is invalid"
+  defp invalid_field_sentence(field), do: field_sentence(field, translate("is invalid", []))
 
   @doc """
   Words the input errors among a form's `errors` that `inputs` (a set of field
@@ -275,11 +276,18 @@ defmodule AshQuick.LiveView.ActionErrors do
     cond do
       message == "" -> ""
       field in [nil, :_form] -> message
-      true -> "#{AshQuick.LiveView.Utils.humanize(field)}: #{message}"
+      true -> field_sentence(field, message)
     end
   end
 
   defp sentence(_), do: ""
+
+  defp field_sentence(field, message),
+    do:
+      gettext("%{field}: %{message}",
+        field: Labels.name(field),
+        message: message
+      )
 
   @doc """
   Renders an error's message through the host's `:error_translator`, the

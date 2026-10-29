@@ -749,3 +749,18 @@ msgstr "اتركه فارغًا للإبقاء عليه"
 #, elixir-autogen, elixir-format
 msgid "redacted"
 msgstr "محجوب"
+
+#: lib/ash_quick/liveview/action_errors.ex
+#, elixir-autogen, elixir-format
+msgid "%{field}: %{message}"
+msgstr "%{field}: %{message}"
+
+#: lib/ash_quick/liveview/form_utils.ex
+#, elixir-autogen, elixir-format
+msgid "[%{resource}] %{action}"
+msgstr "[%{resource}] %{action}"
+
+#: lib/ash_quick/liveview/details_utils.ex
+#, elixir-autogen, elixir-format
+msgid "%{resource} - %{record}"
+msgstr "%{resource} - %{record}"

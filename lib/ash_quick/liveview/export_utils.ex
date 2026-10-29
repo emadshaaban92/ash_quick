@@ -1,5 +1,6 @@
 defmodule AshQuick.LiveView.ExportUtils do
   @moduledoc false
+  alias AshQuick.Labels
   alias NimbleCSV.RFC4180, as: CSV
   alias AshQuick.LiveView.QuickView.Options
 
@@ -65,7 +66,7 @@ defmodule AshQuick.LiveView.ExportUtils do
 
     header =
       options.export_fields
-      |> Enum.map(&Utils.field_label/1)
+      |> Enum.map(&Labels.field/1)
 
     body =
       rows

@@ -4,6 +4,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
   use Gettext, backend: AshQuick.Gettext
   import AshQuick.Components, only: [icon: 1]
 
+  alias AshQuick.Labels
   alias AshQuick.LiveView.Components.FieldValue
   alias AshQuick.LiveView.Components.FilterForm
   alias AshQuick.LiveView.CustomFilter
@@ -67,8 +68,8 @@ defmodule AshQuick.LiveView.Components.FilterChips do
 
   def filter_chips(assigns), do: ~H""
 
-  @doc "The list's column labels by the field name a filter row holds."
-  def column_labels(columns), do: Map.new(columns, &{QuickField.data_field(&1), &1.label})
+  @doc "The list's column labels, as drawn, by the field name a filter row holds."
+  def column_labels(columns), do: Map.new(columns, &{QuickField.data_field(&1), Labels.field(&1)})
 
   # A group holding one row reads as that row, but its ✕ drops the group: the
   # row's `and` or `or` is the group's, and with one row it changes nothing.

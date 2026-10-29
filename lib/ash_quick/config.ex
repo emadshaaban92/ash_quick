@@ -59,6 +59,15 @@ defmodule AshQuick.Config do
     return a string. When `nil`, AshQuick uses simple string interpolation.
     Example: `{MyAppWeb.CoreComponents, :translate_error}`.
 
+  * `:label_translator` — A `{Module, :function}` tuple for translating the
+    labels AshQuick draws: field and action names, `label:` options, nav
+    entries and groups, page titles and the values of an enum or a `one_of`
+    atom. The function receives the English label as it would be drawn
+    (after `:humanize_overrides`) and must return a string. It runs on the
+    process that renders, so it sees the reader's locale. When `nil`, labels
+    are drawn in English. See `AshQuick.Labels`. Example:
+    `{MyAppWeb.Gettext, :translate_label}`.
+
   * `:endpoint` — The host's `Phoenix.Endpoint`. AshQuick publishes resource
     notifications through it, signs impersonation tokens with its secret, and
     reads the PubSub server `AshQuick.BrowserSessionPresence` rides on off its
@@ -356,6 +365,15 @@ defmodule AshQuick.Config do
   """
   def humanize_overrides do
     get(:humanize_overrides, %{})
+  end
+
+  @doc """
+  Returns the configured label translator, or `nil` for none.
+
+  When set, should be a `{Module, :function}` tuple.
+  """
+  def label_translator do
+    get(:label_translator)
   end
 
   @doc """

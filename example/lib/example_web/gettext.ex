@@ -22,4 +22,13 @@ defmodule ExampleWeb.Gettext do
   See the [Gettext Docs](https://hexdocs.pm/gettext) for detailed usage.
   """
   use Gettext.Backend, otp_app: :example
+
+  @doc """
+  A label AshQuick draws, in the reader's language: the `:label_translator`.
+
+  The English label is the msgid, so a field, action or nav entry is
+  translated in `priv/gettext/<locale>/LC_MESSAGES/labels.po`, and one the
+  catalogue lacks is drawn in English.
+  """
+  def translate_label(label), do: Gettext.dgettext(__MODULE__, "labels", label)
 end

@@ -3,9 +3,9 @@ defmodule AshQuick.LiveView.Components.FieldValue do
   use Phoenix.Component
   use Gettext, backend: AshQuick.Gettext
 
+  alias AshQuick.Labels
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.QuickField
-  alias AshQuick.LiveView.Utils
 
   attr :value, :any, required: true
   attr :path, :any, required: true
@@ -65,7 +65,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     <AshQuick.Components.attachment_viewer
       :if={@viewer}
       id={@viewer}
-      label={@viewer_label || Utils.humanize(@ash_field.name)}
+      label={@viewer_label || Labels.name(@ash_field.name)}
       values={List.wrap(@value)}
       states={@states}
     />
@@ -81,7 +81,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     <AshQuick.Components.attachment_viewer
       :if={@viewer}
       id={@viewer}
-      label={@viewer_label || Utils.humanize(@ash_field.name)}
+      label={@viewer_label || Labels.name(@ash_field.name)}
       values={@value}
       states={@states}
     />
@@ -135,7 +135,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
 
   def field_value(%{value: value} = assigns) when is_atom(value) do
     ~H"""
-    <span>{@value |> Utils.humanize()}</span>
+    <span>{Labels.name(@value)}</span>
     """
   end
 
