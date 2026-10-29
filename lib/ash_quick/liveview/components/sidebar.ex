@@ -26,6 +26,7 @@ defmodule AshQuick.LiveView.Components.Sidebar do
   import AshQuick.Components
 
   alias AshQuick.LiveView.URLParams
+  alias AshQuick.LiveView.Utils
   alias AshQuick.Nav
   alias Phoenix.LiveView.JS
 
@@ -80,7 +81,7 @@ defmodule AshQuick.LiveView.Components.Sidebar do
             <li :if={rule} class="mt-2 mb-1 border-t border-base-300" aria-hidden="true"></li>
             <li :if={heading?(section)} class="menu-title flex flex-row items-center gap-2">
               <.nav_icon icon={section.group.icon} class="w-4 h-4" />
-              {section.group.label}
+              {Utils.translate_label(section.group.label)}
             </li>
             <li :for={entry <- section.entries}>
               <%!-- Patching keeps the list params, but only the view that owns
@@ -91,7 +92,7 @@ defmodule AshQuick.LiveView.Components.Sidebar do
                 class="bg-base-300 hover:bg-base-200"
               >
                 <.nav_icon icon={entry.icon} class="w-6 h-6 text-base-content/60" />
-                {entry.label}
+                {Utils.translate_label(entry.label)}
               </.link>
               <.link
                 :if={marked?(entry, @current_path) and is_nil(@list_params)}
@@ -99,7 +100,7 @@ defmodule AshQuick.LiveView.Components.Sidebar do
                 class="bg-base-300 hover:bg-base-200"
               >
                 <.nav_icon icon={entry.icon} class="w-6 h-6 text-base-content/60" />
-                {entry.label}
+                {Utils.translate_label(entry.label)}
               </.link>
               <.link
                 :if={not marked?(entry, @current_path)}
@@ -110,7 +111,7 @@ defmodule AshQuick.LiveView.Components.Sidebar do
                   icon={entry.icon}
                   class="w-6 h-6 text-base-content/60 transition duration-75 group-hover:text-base-content"
                 />
-                {entry.label}
+                {Utils.translate_label(entry.label)}
               </.link>
             </li>
           <% end %>

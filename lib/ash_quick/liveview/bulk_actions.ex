@@ -179,7 +179,7 @@ defmodule AshQuick.LiveView.BulkActions do
 
   defp item(name) do
     %{
-      title: Utils.humanize(name),
+      title: Utils.label(name),
       func: JS.push("bulk_action", value: %{"action_name" => Atom.to_string(name)}),
       ash_quick_action: name
     }

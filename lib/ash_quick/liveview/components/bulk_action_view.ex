@@ -67,7 +67,7 @@ defmodule AshQuick.LiveView.Components.BulkActionView do
         id="ash-quick-bulk-action"
         phx-change="bulk_validate"
         phx-submit="bulk_save"
-        form_title={Utils.humanize(@bulk.action.name)}
+        form_title={Utils.label(@bulk.action.name)}
       >
         <p class="sm:col-span-2 font-medium">
           {ngettext(

@@ -67,8 +67,8 @@ defmodule AshQuick.LiveView.ListUtils do
   defp set_title(socket, %{resource: resource}) do
     title =
       case Ash.Resource.Info.plural_name(resource) do
-        nil -> "#{Ash.Resource.Info.short_name(resource)}s" |> Utils.humanize()
-        name -> name |> Utils.humanize()
+        nil -> "#{Ash.Resource.Info.short_name(resource)}s" |> Utils.label()
+        name -> name |> Utils.label()
       end
 
     socket |> assign(page_title: title)
@@ -443,11 +443,17 @@ defmodule AshQuick.LiveView.ListUtils do
       |> build_export_query(selected_ids, socket, options)
       |> Utils.load_fields(options.export_fields, strict?: true)
 
+    # The header is labelled in the reader's language, and a task does not
+    # inherit the process's locale.
+    locale = Gettext.get_locale()
+
     socket =
       case Ash.Scope.ToOpts.get_actor(socket.assigns.scope) do
         {:ok, actor} when not is_nil(actor) ->
           socket
           |> assign_async(:export_data, fn ->
+            Gettext.put_locale(locale)
+
             {:ok, url} =
               AshQuick.LiveView.ExportUtils.generate_export_url(
                 export_query,
@@ -764,7 +770,7 @@ defmodule AshQuick.LiveView.ListUtils do
         "%{action} applied to %{applied} of 1 selected row.",
         "%{action} applied to %{applied} of %{count} selected rows.",
         selected,
-        action: Utils.humanize(action.name),
+        action: Utils.label(action.name),
         applied: selected - skipped
       )
 

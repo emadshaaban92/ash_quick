@@ -65,7 +65,7 @@ defmodule AshQuick.LiveView.ExportUtils do
 
     header =
       options.export_fields
-      |> Enum.map(&Utils.field_label/1)
+      |> Enum.map(&(&1 |> Utils.field_label() |> Utils.translate_label()))
 
     body =
       rows

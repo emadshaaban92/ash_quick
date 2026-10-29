@@ -65,7 +65,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     <AshQuick.Components.attachment_viewer
       :if={@viewer}
       id={@viewer}
-      label={@viewer_label || Utils.humanize(@ash_field.name)}
+      label={@viewer_label || Utils.label(@ash_field.name)}
       values={List.wrap(@value)}
       states={@states}
     />
@@ -81,7 +81,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     <AshQuick.Components.attachment_viewer
       :if={@viewer}
       id={@viewer}
-      label={@viewer_label || Utils.humanize(@ash_field.name)}
+      label={@viewer_label || Utils.label(@ash_field.name)}
       values={@value}
       states={@states}
     />
@@ -135,7 +135,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
 
   def field_value(%{value: value} = assigns) when is_atom(value) do
     ~H"""
-    <span>{@value |> Utils.humanize()}</span>
+    <span>{Utils.label(@value)}</span>
     """
   end
 

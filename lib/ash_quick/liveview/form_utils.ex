@@ -40,7 +40,13 @@ defmodule AshQuick.LiveView.FormUtils do
 
   defp set_title(socket, action_name, %{resource: resource}) do
     resource_name = Ash.Resource.Info.short_name(resource)
-    title = "[#{resource_name |> Utils.humanize()}] #{action_name |> Utils.humanize()} "
+
+    title =
+      gettext("[%{resource}] %{action}",
+        resource: Utils.label(resource_name),
+        action: Utils.label(action_name)
+      )
+
     socket |> assign(page_title: title)
   end
 
@@ -934,7 +940,7 @@ defmodule AshQuick.LiveView.FormUtils do
     path
     |> Enum.reduce([], fn
       index, [field | labels] when is_integer(index) -> ["#{field} #{index + 1}" | labels]
-      field, labels -> [Utils.humanize(field) | labels]
+      field, labels -> [Utils.label(field) | labels]
     end)
     |> Enum.reverse()
     |> Enum.join(" › ")

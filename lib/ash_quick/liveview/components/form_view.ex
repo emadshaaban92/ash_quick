@@ -79,7 +79,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       phx-hook="AshQuick.Components.SubmitLock"
       class="flex flex-col gap-4"
     >
-      <h3 class="text-lg font-semibold">{Utils.humanize(@ash_action.name)}</h3>
+      <h3 class="text-lg font-semibold">{Utils.label(@ash_action.name)}</h3>
       <p :if={@ash_action.type != :create and @record} class="font-medium">
         {AshQuick.Info.display_value(@record)}
       </p>
@@ -224,7 +224,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       type="password"
       autocomplete="one-time-code"
       placeholder={if @update?, do: gettext("Leave blank to keep it")}
-      label={@field.name |> Utils.humanize()}
+      label={Utils.label(@field.name)}
       phx-debounce="blur"
     />
     """
@@ -242,7 +242,7 @@ defmodule AshQuick.LiveView.Components.FormView do
           required={not @field.allow_nil?}
           id={"select-#{@field.name}"}
           module={AshQuick.LiveView.Components.HasManyInput}
-          label={@relationship.name |> Utils.humanize()}
+          label={Utils.label(@relationship.name)}
           relationship={@relationship}
           scope={@scope}
           form={@form |> to_form()}
@@ -261,7 +261,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       id={"select-#{@field.name}"}
       required={not @field.allow_nil?}
       module={AshQuick.LiveView.Components.BelongsToInput}
-      label={@field.name |> Utils.humanize()}
+      label={Utils.label(@field.name)}
       relationship={@field}
       scope={@scope}
       form={@form |> to_form()}
@@ -278,7 +278,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       required={not @field.allow_nil?}
       module={AshQuick.LiveView.Components.ChoiceInput}
       multiple={@choice == :array}
-      label={@field.name |> Utils.humanize()}
+      label={Utils.label(@field.name)}
       attribute={@field}
       scope={@scope}
       form={@form |> to_form()}
@@ -302,7 +302,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       |> Enum.with_index()
       |> Enum.filter(&match?({%AshQuick.AshTypes.Attachment.Value{}, _}, &1))
 
-    name = assigns.field.name |> Utils.humanize() |> String.downcase()
+    name = assigns.field.name |> Utils.label() |> String.downcase()
 
     prompt =
       if rows == [],
@@ -334,7 +334,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       data-attachment-field={@field.name}
       class="flex flex-col gap-2 sm:col-span-4 card bg-base-100 p-5 my-3 phx-submit-loading:pointer-events-none"
     >
-      <h3 class="font-semibold">{Utils.humanize(@field.name)}</h3>
+      <h3 class="font-semibold">{Utils.label(@field.name)}</h3>
       <ul :if={@rows != []} class="divide-y divide-base-300">
         <.attachment_row
           :for={{value, index} <- @rows}
@@ -378,7 +378,7 @@ defmodule AshQuick.LiveView.Components.FormView do
     >
       <div class="flex justify-between">
         <label for={@uploads[@upload_name].ref}>
-          {if @field.name != :attachment, do: Utils.humanize(@field.name)}
+          {if @field.name != :attachment, do: Utils.label(@field.name)}
         </label>
         <div :if={@uploads[@upload_name].entries |> Enum.empty?()} class="flex flex-wrap gap-2">
           <AshQuick.LiveView.Components.FieldValue.attachment_preview
@@ -437,7 +437,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       required={not @field.allow_nil?}
       field={@phx_field}
       type="datetime-local"
-      label={@field.name |> Utils.humanize()}
+      label={Utils.label(@field.name)}
       phx-debounce="blur"
     />
     """
@@ -449,7 +449,7 @@ defmodule AshQuick.LiveView.Components.FormView do
     ~H"""
     <section class="sm:col-span-4 card bg-base-100 p-5 my-3">
       <h3 class="text-lg font-semibold mb-3">
-        {@field.name |> Utils.humanize()}
+        {Utils.label(@field.name)}
       </h3>
 
       <.inputs_for :let={nested_phx_form} field={@phx_field}>
@@ -496,7 +496,7 @@ defmodule AshQuick.LiveView.Components.FormView do
         form={nested_phx_form.source}
         scope={@scope}
         uploads={@uploads}
-        title={@field.name |> Utils.humanize()}
+        title={Utils.label(@field.name)}
       />
       <.error :for={msg <- @errors}>{msg}</.error>
     </.inputs_for>
@@ -510,7 +510,7 @@ defmodule AshQuick.LiveView.Components.FormView do
         required={not @field.allow_nil?}
         field={@phx_field}
         type="textarea"
-        label={@field.name |> Utils.humanize()}
+        label={Utils.label(@field.name)}
         phx-debounce="blur"
       />
     </div>
@@ -519,7 +519,7 @@ defmodule AshQuick.LiveView.Components.FormView do
 
   defp field_input(%{field: %{type: Type.Boolean}} = assigns) do
     ~H"""
-    <.input field={@phx_field} type="checkbox" label={@field.name |> Utils.humanize()} />
+    <.input field={@phx_field} type="checkbox" label={Utils.label(@field.name)} />
     """
   end
 
@@ -530,7 +530,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       field={@phx_field}
       type="text"
       autocomplete="on"
-      label={@field.name |> Utils.humanize()}
+      label={Utils.label(@field.name)}
       phx-debounce="blur"
     />
     """

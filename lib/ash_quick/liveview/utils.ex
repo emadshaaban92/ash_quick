@@ -33,6 +33,29 @@ defmodule AshQuick.LiveView.Utils do
   end
 
   @doc """
+  `label` in the reader's language, through the host's `:label_translator`.
+
+  A label is English wherever it comes from: a humanized name, a `label:`
+  option, a nav entry. Many are fixed when the code compiles, so the
+  translation is applied where one is drawn, against the locale on the
+  process. With no translator configured, `label` comes back as it is.
+  """
+  def translate_label(label) when is_binary(label) do
+    case AshQuick.Config.label_translator() do
+      nil -> label
+      {mod, fun} -> apply(mod, fun, [label])
+    end
+  end
+
+  def translate_label(nil), do: nil
+
+  @doc """
+  `name` humanized, then translated: the label a field, action or value is
+  drawn with.
+  """
+  def label(name), do: name |> humanize() |> translate_label()
+
+  @doc """
   Formats a `Money` for display, rendering an em dash for a missing amount.
   """
   def format_money(%Money{} = money) do

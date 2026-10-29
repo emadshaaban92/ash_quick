@@ -5,7 +5,9 @@ defmodule AshQuick.LiveView.EnumOptions do
   Two kinds of type hold a fixed set of values: an `Ash.Type.Enum` module,
   whose values and labels are its own (`values/0`, `label/1`), and an atom
   constrained by `one_of`, whose labels are `AshQuick.LiveView.Utils.humanize/1`
-  of each value. A `Ash.Type.NewType` over either counts as what it wraps. An
+  of each value. Either goes through the host's `:label_translator`
+  (`AshQuick.LiveView.Utils.translate_label/1`), so a value reads in the
+  reader's language. A `Ash.Type.NewType` over either counts as what it wraps. An
   atom without `one_of` holds no fixed set: it is typed in, like a string.
 
   Forms, the custom filter and the list and details pages all read their
@@ -70,22 +72,21 @@ defmodule AshQuick.LiveView.EnumOptions do
   @doc """
   The label `value` shows as in `field`: its enum's label when the field is
   typed by an `Ash.Type.Enum`, and `AshQuick.LiveView.Utils.humanize/1`
-  otherwise, `field` given or not.
+  otherwise, `field` given or not, translated by the `:label_translator`.
   """
   @spec label(field | nil, atom | String.t()) :: String.t()
-  def label(nil, value), do: Utils.humanize(value)
+  def label(nil, value), do: Utils.label(value)
 
   def label(field, value) do
     {type, _constraints} = item_type(field)
     label_for(type, value)
   end
 
-  defp label_for(type, value) do
-    case enum(type) do
-      nil -> Utils.humanize(value)
-      enum -> enum_label(enum, value)
-    end
-  end
+  defp label_for(type, value),
+    do: type |> enum() |> english_label(value) |> Utils.translate_label()
+
+  defp english_label(nil, value), do: Utils.humanize(value)
+  defp english_label(enum, value), do: enum_label(enum, value)
 
   # An enum's `label/1` matches only its own values, and an overridden one may
   # answer nil. A stored value the enum no longer lists still shows.

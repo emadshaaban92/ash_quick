@@ -625,7 +625,8 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   What a field is called, here and on the list's chips: its column's label
   when the list shows one, and its humanized name otherwise.
   """
-  def field_label(name, labels), do: labels[to_string(name)] || Utils.humanize(name)
+  def field_label(name, labels),
+    do: Utils.translate_label(labels[to_string(name)] || Utils.humanize(name))
 
   # A new row starts on the first field offered: no one field is one every
   # resource has, or one every actor may see.
