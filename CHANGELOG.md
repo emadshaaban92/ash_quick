@@ -4,6 +4,26 @@
 
 ### Features
 
+- **`mix gettext.extract` finds the labels to translate.** Labels AshQuick
+  draws are not `gettext` calls, so extraction never found them, and a host
+  had to keep `labels.po` by hand. A new `:label_gettext_backend` config names
+  the host's Gettext backend, and each QuickView and nav is given a
+  `dgettext_noop` call in its `labels` domain for every label it draws, as it
+  compiles: titles, columns, details rows and export headers, `label:`
+  options, saved filter labels, `new_action_label`, the bulk menu, actions,
+  every action's inputs (destroys' too, into embedded resources and managed
+  relationships), fields as the custom filter and a flashed error name them,
+  enum and `one_of` values, also of a resource a column reaches through a
+  relationship or an embedded attribute, and nav entries and groups, a
+  `quick_view/3` route giving the label a nav takes from its path. Each msgid
+  is the label as a page hands it to the `:label_translator`, read through
+  `AshQuick.Labels` with the translator held off;
+  `AshQuick.Labels.english/1` runs a function that way.
+  `mix gettext.extract --check-up-to-date` then covers the labels. Not
+  listed: the values of an `:atom` with no `one_of`, which are data, and a
+  bulk menu a function returns, whose custom titles the host marks with
+  `dgettext_noop/2`.
+
 - **Labels can be translated.** A new `:label_translator` config,
   `{Mod, :fun}`, gets every label AshQuick draws in English and returns the
   string to draw: field and action names (as humanized, after

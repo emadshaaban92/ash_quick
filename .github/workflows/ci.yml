@@ -102,9 +102,12 @@ jobs:
         run: mix format --check-formatted
 
       # A message the catalogue lacks shows untranslated in every locale.
+      # Extracted in dev: in test the fixture QuickViews under `test/support`
+      # are given label calls for a test backend, and none of them is
+      # AshQuick's own.
       - name: Gettext catalogue is up to date
         if: ${{ !cancelled() }}
-        run: mix gettext.extract --check-up-to-date
+        run: MIX_ENV=dev mix gettext.extract --check-up-to-date
 
       - name: Static analysis (Credo)
         if: ${{ !cancelled() }}
@@ -219,6 +222,13 @@ jobs:
       # there.
       - name: AshQuick compliance (strict)
         run: mix ash_quick.check --strict
+
+      # A message the template lacks, AshQuick's labels among them, is drawn
+      # in English in every locale. Extracted in dev: in test the QuickViews
+      # under `test/support` would be given calls too, and they are not pages
+      # of the app.
+      - name: Gettext templates are up to date
+        run: MIX_ENV=dev mix gettext.extract --check-up-to-date
 
       - name: Set up the test database
         run: mix ash.setup

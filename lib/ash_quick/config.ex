@@ -60,13 +60,25 @@ defmodule AshQuick.Config do
     Example: `{MyAppWeb.CoreComponents, :translate_error}`.
 
   * `:label_translator` — A `{Module, :function}` tuple for translating the
-    labels AshQuick draws: field and action names, `label:` options, nav
-    entries and groups, page titles and the values of an enum or a `one_of`
-    atom. The function receives the English label as it would be drawn
-    (after `:humanize_overrides`) and must return a string. It runs on the
+    labels AshQuick draws: field and action names, `label:` options, saved
+    filters, `new_action_label`, bulk menu titles, nav entries and groups,
+    page titles and the values of an enum or a `one_of` atom. The function
+    receives the English label as it would be drawn (after
+    `:humanize_overrides`) and must return a string. It runs on the
     process that renders, so it sees the reader's locale. When `nil`, labels
     are drawn in English. See `AshQuick.Labels`. Example:
     `{MyAppWeb.Gettext, :translate_label}`.
+
+  * `:label_gettext_backend` — The host's Gettext backend, the one the
+    `:label_translator` looks labels up in. Each QuickView and nav is given a
+    `dgettext_noop` call in its `labels` domain for every label it draws, the
+    ones its options state and the ones it derives, as it compiles, and so is
+    each `AshQuick.LiveView.Router.quick_view/3` route for the label a nav
+    derives from its path. So `mix gettext.extract` writes them into
+    `labels.pot`. When `nil`, no calls are given. Read at compile time, so it
+    belongs in `config.exs`. While messages are extracted, every QuickView
+    reads the backend as it compiles, so keep it in a file of its own, as
+    Phoenix generates it. Example: `MyAppWeb.Gettext`.
 
   * `:endpoint` — The host's `Phoenix.Endpoint`. AshQuick publishes resource
     notifications through it, signs impersonation tokens with its secret, and
@@ -374,6 +386,18 @@ defmodule AshQuick.Config do
   """
   def label_translator do
     get(:label_translator)
+  end
+
+  # Read while the host's QuickViews, navs and router compile, so a release
+  # refuses to boot when it was built against another.
+  @label_gettext_backend Application.compile_env(@otp_app, :label_gettext_backend)
+
+  @doc """
+  Returns the Gettext backend a QuickView's, a nav's and a router's labels are
+  extracted into, or `nil` for none.
+  """
+  def label_gettext_backend do
+    get(:label_gettext_backend, @label_gettext_backend)
   end
 
   @doc """

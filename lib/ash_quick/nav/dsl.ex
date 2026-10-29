@@ -74,5 +74,8 @@ defmodule AshQuick.Nav.Dsl do
     entities: [@entry, @group]
   }
 
-  use Spark.Dsl.Extension, sections: [@nav], verifiers: [AshQuick.Nav.Verifier]
+  use Spark.Dsl.Extension,
+    sections: [@nav],
+    transformers: [AshQuick.Nav.Labels],
+    verifiers: [AshQuick.Nav.Verifier]
 end

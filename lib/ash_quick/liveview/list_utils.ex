@@ -65,15 +65,8 @@ defmodule AshQuick.LiveView.ListUtils do
     )
   end
 
-  defp set_title(socket, %{resource: resource}) do
-    title =
-      case Ash.Resource.Info.plural_name(resource) do
-        nil -> "#{Ash.Resource.Info.short_name(resource)}s" |> Labels.name()
-        name -> name |> Labels.name()
-      end
-
-    socket |> assign(page_title: title)
-  end
+  defp set_title(socket, %{resource: resource}),
+    do: assign(socket, page_title: Labels.plural(resource))
 
   def load_data!(socket, %URLParams{} = params, %Options{} = options) do
     limit = params.limit

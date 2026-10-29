@@ -13,7 +13,8 @@ config :ash_quick,
   audit_resource: AshQuick.Test.AuditLog,
   storage: AshQuick.Test.Uploads.ObjectStore,
   s3_bucket: "ash-quick-test-bucket",
-  s3_host: "s3.example.invalid"
+  s3_host: "s3.example.invalid",
+  label_gettext_backend: AshQuick.Test.LabelCatalogue.Gettext
 
 # `AshQuick.Storage.S3` presigns through ExAws, which refuses without
 # credentials. Nothing here reaches a bucket; the URLs are what is asserted.

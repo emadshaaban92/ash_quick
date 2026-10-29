@@ -149,9 +149,13 @@ defmodule AshQuick.LiveView.Utils do
   def public_action?(resource, action_name),
     do: match?(%{public?: true}, Ash.Resource.Info.action(resource, action_name))
 
-  # `action_changes/2` puts global changes first; the action's own change is the
-  # more specific statement, so it is the one looked at first.
-  defp managed_relationship(resource, action, argument) do
+  @doc """
+  The relationship `action` manages through its `argument`, or `nil`.
+
+  `action_changes/2` puts global changes first; the action's own change is the
+  more specific statement, so it is the one looked at first.
+  """
+  def managed_relationship(resource, action, argument) do
     resource
     |> Ash.Resource.Info.action_changes(action)
     |> Enum.reverse()

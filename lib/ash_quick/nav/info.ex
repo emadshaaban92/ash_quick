@@ -301,7 +301,11 @@ defmodule AshQuick.Nav.Info do
     end
   end
 
-  defp path_label(path) do
+  @doc false
+  # What an entry is called when neither it nor its resource names it: its
+  # path's last segment, humanized. Read while a nav and a router compile too,
+  # for the labels they give `gettext` calls.
+  def path_label(path) do
     case String.split(path, "/", trim: true) do
       [] -> path
       segments -> segments |> List.last() |> Utils.humanize()

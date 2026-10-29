@@ -69,6 +69,7 @@ config :ash_quick,
   storage: Example.Uploads.ObjectStore,
   error_translator: {ExampleWeb.CoreComponents, :translate_error},
   label_translator: {ExampleWeb.Gettext, :translate_label},
+  label_gettext_backend: ExampleWeb.Gettext,
   timezone: "Etc/UTC"
 
 # `Example.Uploads.ObjectStore` delegates the signing to `AshQuick.Storage.S3`

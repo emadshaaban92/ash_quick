@@ -469,7 +469,7 @@ defmodule AshQuick.LiveView.QuickView do
   alias AshQuick.LiveView.Liveness
 
   defmacro __using__(opts) do
-    quote bind_quoted: [opts: opts] do
+    quote bind_quoted: [opts: opts, line: __CALLER__.line] do
       use Phoenix.LiveView
       import Phoenix.Template, only: [embed_templates: 1]
       import AshQuick.Components
@@ -482,6 +482,7 @@ defmodule AshQuick.LiveView.QuickView do
       embed_templates "action_*.html", suffix: "_html"
 
       @resource opts[:resource]
+      @ash_quick_line line
       @options AshQuick.LiveView.QuickView.Options.new(__MODULE__, @resource, opts)
 
       @doc """
@@ -569,68 +570,79 @@ defmodule AshQuick.LiveView.QuickView do
   end
 
   defmacro __before_compile__(env) do
-    env.module
-    |> Module.get_attribute(:options)
-    |> Liveness.verify_publishable!(env.module)
+    options = Module.get_attribute(env.module, :options)
+    Liveness.verify_publishable!(options, env.module)
 
-    if Module.defines?(env.module, {:render, 1}) do
-      :ok
-    else
-      quote do
-        @impl true
-        def render(%{connected?: false} = var!(assigns)) do
-          ~H"""
-          <div class="flex flex-col h-full items-center justify-center p-8">
-            <span class="loading loading-spinner loading-xl text-primary"></span>
-          </div>
-          """
-        end
+    labels =
+      options
+      |> AshQuick.Labels.Catalogue.labels()
+      |> AshQuick.Labels.Gettext.calls(Module.get_attribute(env.module, :ash_quick_line))
 
-        def render(%{ash_action: nil} = assigns) do
-          QuickView.render_unknown_action(assigns)
-        end
+    render =
+      if Module.defines?(env.module, {:render, 1}), do: nil, else: default_render()
 
-        # The page underneath is rendered from its own snapshot, in an
-        # expression reading nothing else, so typing into the form never
-        # re-renders it. The form's own render is assigned here rather than
-        # called in the template, because a template handed `assigns` whole
-        # loses change tracking.
-        def render(%{ash_quick_background: %{}} = var!(assigns)) do
-          var!(assigns) =
-            assign(var!(assigns), :ash_quick_action, __ash_quick_render__(var!(assigns)))
+    quote do
+      unquote(labels)
+      unquote(render)
+    end
+  end
 
-          ~H"""
-          <div inert>{__ash_quick_render__(@ash_quick_background.assigns)}</div>
-          <AshQuick.LiveView.Components.ActionModal.action_modal
-            class="w-11/12 max-w-5xl p-0"
-            close={@ash_quick_background.path}
-          >
-            {@ash_quick_action}
-          </AshQuick.LiveView.Components.ActionModal.action_modal>
-          """
-        end
+  # sobelow_skip ["DOS.StringToAtom"]
+  defp default_render do
+    quote do
+      @impl true
+      def render(%{connected?: false} = var!(assigns)) do
+        ~H"""
+        <div class="flex flex-col h-full items-center justify-center p-8">
+          <span class="loading loading-spinner loading-xl text-primary"></span>
+        </div>
+        """
+      end
 
-        # A bulk action opens over the list without leaving it, so the list
-        # stays live underneath, and the selection it acts on stays put.
-        def render(assigns) do
-          AshQuick.LiveView.Components.BulkActionView.with_page(
-            assigns,
-            __ash_quick_render__(assigns)
-          )
-        end
+      def render(%{ash_action: nil} = assigns) do
+        QuickView.render_unknown_action(assigns)
+      end
 
-        @doc false
-        # sobelow_skip ["DOS.StringToAtom"]
-        def __ash_quick_render__(assigns) do
-          template_function_name = "action_#{assigns.ash_action.name}_html" |> String.to_atom()
+      # The page underneath is rendered from its own snapshot, in an
+      # expression reading nothing else, so typing into the form never
+      # re-renders it. The form's own render is assigned here rather than
+      # called in the template, because a template handed `assigns` whole
+      # loses change tracking.
+      def render(%{ash_quick_background: %{}} = var!(assigns)) do
+        var!(assigns) =
+          assign(var!(assigns), :ash_quick_action, __ash_quick_render__(var!(assigns)))
 
-          if function_exported?(__MODULE__, template_function_name, 1) and
-               not QuickView.forbidden_form?(assigns) do
-            apply(__MODULE__, template_function_name, [assigns])
-          else
-            assigns
-            |> QuickView.do_render(assigns.params, assigns.ash_action)
-          end
+        ~H"""
+        <div inert>{__ash_quick_render__(@ash_quick_background.assigns)}</div>
+        <AshQuick.LiveView.Components.ActionModal.action_modal
+          class="w-11/12 max-w-5xl p-0"
+          close={@ash_quick_background.path}
+        >
+          {@ash_quick_action}
+        </AshQuick.LiveView.Components.ActionModal.action_modal>
+        """
+      end
+
+      # A bulk action opens over the list without leaving it, so the list
+      # stays live underneath, and the selection it acts on stays put.
+      def render(assigns) do
+        AshQuick.LiveView.Components.BulkActionView.with_page(
+          assigns,
+          __ash_quick_render__(assigns)
+        )
+      end
+
+      @doc false
+      # sobelow_skip ["DOS.StringToAtom"]
+      def __ash_quick_render__(assigns) do
+        template_function_name = "action_#{assigns.ash_action.name}_html" |> String.to_atom()
+
+        if function_exported?(__MODULE__, template_function_name, 1) and
+             not QuickView.forbidden_form?(assigns) do
+          apply(__MODULE__, template_function_name, [assigns])
+        else
+          assigns
+          |> QuickView.do_render(assigns.params, assigns.ash_action)
         end
       end
     end

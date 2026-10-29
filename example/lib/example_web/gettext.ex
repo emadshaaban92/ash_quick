@@ -28,7 +28,8 @@ defmodule ExampleWeb.Gettext do
 
   The English label is the msgid, so a field, action or nav entry is
   translated in `priv/gettext/<locale>/LC_MESSAGES/labels.po`, and one the
-  catalogue lacks is drawn in English.
+  catalogue lacks is drawn in English. This is also the
+  `:label_gettext_backend`, so `mix gettext.extract` finds them.
   """
   def translate_label(label), do: Gettext.dgettext(__MODULE__, "labels", label)
 end

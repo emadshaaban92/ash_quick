@@ -1,0 +1,824 @@
+## This file is a PO Template file.
+##
+## "msgid"s here are often extracted from source code.
+## Add new messages manually only if they're dynamic
+## messages that can't be statically extracted.
+##
+## Run "mix gettext.extract" to bring this file up to
+## date. Leave "msgstr"s empty as changing them here has no
+## effect: edit them in PO (.po) files instead.
+#
+msgid ""
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Accepts"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#, elixir-autogen, elixir-format
+msgid "Action Name"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#, elixir-autogen, elixir-format
+msgid "Action Type"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/brand_live/quick.ex:9
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#: lib/example_web/live/store_live/quick.ex:9
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Activate"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/brand_live/quick.ex:9
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#: lib/example_web/live/store_live/quick.ex:9
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Active"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Actor"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Add Images"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Admin"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Alt"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#, elixir-autogen, elixir-format
+msgid "Arguments"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Attachment"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#, elixir-autogen, elixir-format
+msgid "Attributes"
+msgstr ""
+
+#: lib/example_web/nav.ex:1
+#, elixir-autogen, elixir-format
+msgid "Audit"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#, elixir-autogen, elixir-format
+msgid "Audit Log"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/nav.ex:1
+#: lib/example_web/router.ex:72
+#, elixir-autogen, elixir-format
+msgid "Audit Logs"
+msgstr ""
+
+#: lib/example_web/live/brand_live/quick.ex:9
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Brand"
+msgstr ""
+
+#: lib/example_web/live/brand_live/quick.ex:9
+#: lib/example_web/nav.ex:1
+#: lib/example_web/router.ex:62
+#, elixir-autogen, elixir-format
+msgid "Brands"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Byte Size"
+msgstr ""
+
+#: lib/example_web/nav.ex:1
+#, elixir-autogen, elixir-format
+msgid "Catalog"
+msgstr ""
+
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/nav.ex:1
+#: lib/example_web/router.ex:63
+#, elixir-autogen, elixir-format
+msgid "Categories"
+msgstr ""
+
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Category"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#, elixir-autogen, elixir-format
+msgid "Changes"
+msgstr ""
+
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Children"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Clearance"
+msgstr ""
+
+#: lib/example_web/live/brand_live/quick.ex:9
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/product_live/quick.ex:30
+#: lib/example_web/live/store_live/quick.ex:9
+#, elixir-autogen, elixir-format
+msgid "Code"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Content Type"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#, elixir-autogen, elixir-format
+msgid "Context"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/brand_live/quick.ex:9
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#: lib/example_web/live/store_live/quick.ex:9
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Create"
+msgstr ""
+
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Create With Children"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/brand_live/quick.ex:9
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#: lib/example_web/live/store_live/quick.ex:9
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Deactivate"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/brand_live/quick.ex:9
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#: lib/example_web/live/store_live/quick.ex:9
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Delete"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Description"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Document"
+msgstr ""
+
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Documents"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Editor"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Email"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "English"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Featured"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "File Object"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/nav.ex:1
+#: lib/example_web/router.ex:73
+#, elixir-autogen, elixir-format
+msgid "File Objects"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#, elixir-autogen, elixir-format
+msgid "From Price"
+msgstr ""
+
+#: lib/example_web/nav.ex:1
+#, elixir-autogen, elixir-format
+msgid "Home"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/brand_live/quick.ex:9
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#: lib/example_web/live/store_live/quick.ex:9
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Id"
+msgstr ""
+
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Image"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Images"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Impersonate"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/brand_live/quick.ex:9
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#: lib/example_web/live/store_live/quick.ex:9
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Inserted At"
+msgstr ""
+
+#: lib/example_web/live/brand_live/quick.ex:9
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#: lib/example_web/live/store_live/quick.ex:9
+#, elixir-autogen, elixir-format
+msgid "Inserted By"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#, elixir-autogen, elixir-format
+msgid "Ip"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Key"
+msgstr ""
+
+#: lib/example_web/nav.ex:1
+#, elixir-autogen, elixir-format
+msgid "Live Users"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Locale"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Max Bytes"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/brand_live/quick.ex:9
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#: lib/example_web/live/store_live/quick.ex:9
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Name"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "New"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "New Images"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Original Filename"
+msgstr ""
+
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Parent"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Price"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#, elixir-autogen, elixir-format
+msgid "Price Change"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/nav.ex:1
+#: lib/example_web/router.ex:67
+#, elixir-autogen, elixir-format
+msgid "Price Changes"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Processing"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Product"
+msgstr ""
+
+#: lib/example_web/live/product_live/quick.ex:30
+#: lib/example_web/nav.ex:1
+#: lib/example_web/router.ex:64
+#, elixir-autogen, elixir-format
+msgid "Products"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Quick Add"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Ready"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#, elixir-autogen, elixir-format
+msgid "Real Actor"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Referenced At"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Referenced By"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Rejected"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Reprice"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Resource"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Resource Name"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Role"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Sale"
+msgstr ""
+
+#: lib/example_web/nav.ex:1
+#, elixir-autogen, elixir-format
+msgid "Settings"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Sku"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Source"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Staff Pick"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "State"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#: lib/example_web/live/store_live/quick.ex:9
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Store"
+msgstr ""
+
+#: lib/example_web/live/store_live/quick.ex:9
+#: lib/example_web/nav.ex:1
+#: lib/example_web/router.ex:61
+#, elixir-autogen, elixir-format
+msgid "Stores"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Tags"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Take Custody"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#, elixir-autogen, elixir-format
+msgid "Tenant"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex:16
+#, elixir-autogen, elixir-format
+msgid "To Price"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/brand_live/quick.ex:9
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#: lib/example_web/live/store_live/quick.ex:9
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Update"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/brand_live/quick.ex:9
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#: lib/example_web/live/store_live/quick.ex:9
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Updated At"
+msgstr ""
+
+#: lib/example_web/live/brand_live/quick.ex:9
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#: lib/example_web/live/store_live/quick.ex:9
+#, elixir-autogen, elixir-format
+msgid "Updated By"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Upload Form"
+msgstr ""
+
+#: lib/example_web/nav.ex:1
+#, elixir-autogen, elixir-format
+msgid "Uploads"
+msgstr ""
+
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "User"
+msgstr ""
+
+#: lib/example_web/live/user_live/quick.ex:15
+#: lib/example_web/nav.ex:1
+#: lib/example_web/router.ex:69
+#, elixir-autogen, elixir-format
+msgid "Users"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/brand_live/quick.ex:9
+#: lib/example_web/live/category_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/price_change_live/quick.ex:16
+#: lib/example_web/live/product_live/quick.ex:30
+#: lib/example_web/live/store_live/quick.ex:9
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Version"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Video"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Viewer"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#: lib/example_web/live/file_object_live/quick.ex:8
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "العربية"
+msgstr ""
+
+#: lib/example_web/live/brand_live/quick.ex:9
+#, elixir-autogen, elixir-format
+msgid "Add Brand"
+msgstr ""
+
+#: lib/example_web/live/category_live/quick.ex:9
+#, elixir-autogen, elixir-format
+msgid "Add Category"
+msgstr ""
+
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "Add Product"
+msgstr ""
+
+#: lib/example_web/live/user_live/quick.ex:15
+#, elixir-autogen, elixir-format
+msgid "Add User"
+msgstr ""
+
+#: lib/example_web/router.ex:100
+#, elixir-autogen, elixir-format
+msgid "Bulk Guarded"
+msgstr ""
+
+#: lib/example_web/router.ex:101
+#, elixir-autogen, elixir-format
+msgid "Bulk Named"
+msgstr ""
+
+#: lib/example_web/router.ex:102
+#, elixir-autogen, elixir-format
+msgid "Dated Entries"
+msgstr ""
+
+#: lib/example_web/router.ex:103
+#, elixir-autogen, elixir-format
+msgid "Default Pages"
+msgstr ""
+
+#: lib/example_web/router.ex:104
+#, elixir-autogen, elixir-format
+msgid "Digits Only"
+msgstr ""
+
+#: lib/example_web/live/product_live/quick.ex:92
+#, elixir-autogen, elixir-format
+msgid "Discount 10%"
+msgstr ""
+
+#: lib/example_web/router.ex:105
+#, elixir-autogen, elixir-format
+msgid "Enum Picks"
+msgstr ""
+
+#: lib/example_web/router.ex:106
+#, elixir-autogen, elixir-format
+msgid "Field Rows"
+msgstr ""
+
+#: lib/example_web/router.ex:107
+#, elixir-autogen, elixir-format
+msgid "Filter Fields"
+msgstr ""
+
+#: lib/example_web/router.ex:108
+#, elixir-autogen, elixir-format
+msgid "Form Stages"
+msgstr ""
+
+#: lib/example_web/router.ex:109
+#, elixir-autogen, elixir-format
+msgid "Hidden Address"
+msgstr ""
+
+#: lib/example_web/router.ex:110
+#, elixir-autogen, elixir-format
+msgid "Lookup Items"
+msgstr ""
+
+#: lib/example_web/router.ex:111
+#, elixir-autogen, elixir-format
+msgid "Nested Items"
+msgstr ""
+
+#: lib/example_web/live/product_live/quick.ex:30
+#, elixir-autogen, elixir-format
+msgid "On sale"
+msgstr ""
+
+#: lib/example_web/live/store_live/quick.ex:9
+#, elixir-autogen, elixir-format
+msgid "Open a Store"
+msgstr ""
+
+#: lib/example_web/router.ex:112
+#, elixir-autogen, elixir-format
+msgid "Picked Labels"
+msgstr ""
+
+#: lib/example_web/router.ex:113
+#, elixir-autogen, elixir-format
+msgid "Printable"
+msgstr ""
+
+#: lib/example_web/router.ex:114
+#, elixir-autogen, elixir-format
+msgid "Private Create"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex:9
+#, elixir-autogen, elixir-format
+msgid "Real actor"
+msgstr ""
+
+#: lib/example_web/router.ex:115
+#, elixir-autogen, elixir-format
+msgid "Required Attachments"
+msgstr ""
+
+#: lib/example_web/router.ex:116
+#, elixir-autogen, elixir-format
+msgid "Required Entries"
+msgstr ""
+
+#: lib/example_web/router.ex:117
+#, elixir-autogen, elixir-format
+msgid "Required Picks"
+msgstr ""
+
+#: lib/example_web/router.ex:119
+#, elixir-autogen, elixir-format
+msgid "Second Lists"
+msgstr ""
+
+#: lib/example_web/router.ex:118
+#, elixir-autogen, elixir-format
+msgid "Secrets"
+msgstr ""
+
+#: lib/example_web/router.ex:120
+#, elixir-autogen, elixir-format
+msgid "Shelved Crates"
+msgstr ""
+
+#: lib/example_web/router.ex:121
+#, elixir-autogen, elixir-format
+msgid "Small Pages"
+msgstr ""
+
+#: lib/example_web/router.ex:122
+#, elixir-autogen, elixir-format
+msgid "Sorted Rows"
+msgstr ""
+
+#: lib/example_web/router.ex:123
+#, elixir-autogen, elixir-format
+msgid "Sorted Rows Named"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex:8
+#, elixir-autogen, elixir-format
+msgid "Uploaded by"
+msgstr ""
+
+#: lib/example_web/router.ex:124
+#, elixir-autogen, elixir-format
+msgid "Worded Policy"
+msgstr ""

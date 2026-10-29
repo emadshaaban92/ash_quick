@@ -86,9 +86,18 @@ defmodule AshQuick.LiveView.Router do
         end
       end
 
+    # The label a nav gives this page when nothing names it better, extracted
+    # here, where its path is known. A path with no segment of its own takes
+    # its label from the scope, which the macro cannot see.
+    labels =
+      if String.trim(path, "/") == "",
+        do: [],
+        else: AshQuick.Labels.Gettext.noops([AshQuick.Nav.Info.path_label(path)], __CALLER__.line)
+
     quote do
       require Phoenix.LiveView.Router
-      (unquote_splicing(routes))
+      require Gettext.Macros
+      (unquote_splicing(labels ++ routes))
     end
   end
 

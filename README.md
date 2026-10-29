@@ -108,10 +108,45 @@ config :ash_quick, label_translator: {MyAppWeb.Gettext, :translate_label}
 def translate_label(label), do: Gettext.dgettext(__MODULE__, "labels", label)
 ```
 
-The English label is the msgid. Labels are not `gettext` call sites, so
-`mix gettext.extract` does not find them: write them into
-`priv/gettext/<locale>/LC_MESSAGES/labels.po` as they read on the page. A label
-the catalogue lacks is drawn in English. With no translator, every label is.
+The English label is the msgid. Name the same backend as
+`:label_gettext_backend`, and every QuickView and nav is given a
+`dgettext_noop` call in its `labels` domain for each label it draws, the
+ones its options state and the ones it derives, as it compiles. A
+`quick_view/3` route is given one for the label a nav takes from its path.
+`mix gettext.extract` then finds them alongside the app's own and writes
+`priv/gettext/labels.pot`; merge it into each locale and translate there:
+
+```elixir
+config :ash_quick,
+  label_translator: {MyAppWeb.Gettext, :translate_label},
+  label_gettext_backend: MyAppWeb.Gettext
+```
+
+```bash
+mix gettext.extract
+mix gettext.merge priv/gettext --no-fuzzy
+```
+
+`mix gettext.extract --check-up-to-date` in CI then covers the labels too.
+Keep `--no-fuzzy`: Gettext uses a fuzzy entry at runtime, and a label guessed
+from another is a wrong label on the page. A label the template lacks is
+drawn in English. With no translator, every label is.
+
+Write a label in the options as a plain string, not a `gettext` call: the
+options are read once, as the QuickView compiles, and the string is the msgid
+the translator looks up as the page renders. A bulk menu returned by a
+function is only known once there is a socket, so mark a custom item's title
+with `dgettext_noop("labels", "Discount 10%")` where it is written; it is
+extracted with the rest and translated as it is drawn. A custom template
+draws labels of its own, so translate those where they are written too, with
+`gettext/1`.
+
+One kind of value cannot be listed: an `:atom` with no `one_of` constraint.
+Any atom fits it, so its values are data rather than names the resource
+states, and none is in the template; each is drawn humanized, through the
+translator, and stays English unless its msgid happens to be there for
+another reason. When the values are a fixed set, say so with `one_of` or an
+`Ash.Type.Enum`, and they are listed like the rest.
 
 A custom template that draws a resource's labels itself calls `AshQuick.Labels`
 (`name/1` for a field, action or value name, `field/1` for a `:fields` entry,

@@ -928,8 +928,19 @@ and groups (as `AshQuick.Nav.Info.sections/1` hands them out), page titles,
 enum and `one_of` values, export headers. It gets the English label as drawn
 (after `:humanize_overrides`) and runs at render, so it sees the reader's
 locale. The usual body is `Gettext.dgettext(MyAppWeb.Gettext, "labels",
-label)`, with the English label as the msgid in `labels.po`; labels are not
-`gettext` call sites, so `mix gettext.extract` does not find them. A custom
+label)`, with the English label as the msgid in `labels.po`. Name the same
+backend as `:label_gettext_backend` and every QuickView and nav gets a
+`dgettext_noop` call in the `labels` domain for each label it draws (its
+options' and its derived ones; a `quick_view/3` route gets one for the label
+a nav takes from its path), so plain `mix gettext.extract` writes
+`priv/gettext/labels.pot` (then `mix gettext.merge priv/gettext --no-fuzzy`;
+keep `--no-fuzzy`), and `--check-up-to-date` in CI covers the labels. Write
+labels in the options as plain strings, never `gettext` calls: the options
+are read once, at compile time. Not listed: a bulk menu a function returns
+(mark a custom item's title with `dgettext_noop("labels", ...)`), a custom
+template's labels (translate them with `gettext/1` where they are written),
+and the values of an `:atom` with no `one_of`, which are data: give the field
+`one_of` or an `Ash.Type.Enum` when its values are a fixed set. A custom
 template drawing a resource's labels itself calls `AshQuick.Labels`:
 `name/1` (humanize, then translate), `field/1` (a `:fields` entry) or
 `translate/1` (an English string), so it reads the same as the pages. A
