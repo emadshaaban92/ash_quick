@@ -978,7 +978,9 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
           assert chips(view) == []
         end)
 
-      refute log =~ "re-reading"
+      # Refuted by this page's own resource, because `capture_log/1` also
+      # catches the re-reads the rest of the async suite logs meanwhile.
+      refute log =~ "re-reading #{inspect(Example.Test.FilterFields)}"
     end
 
     # A link can write a row as `children: []`; it is a row all the same, so
