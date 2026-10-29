@@ -57,6 +57,7 @@ defmodule AshQuick.Test.LabelCatalogue.Crate do
     defaults [:read, :create, :update, :destroy]
 
     update :seal do
+      require_atomic? false
       argument :seal_colour, :atom, constraints: [one_of: [:red, :blue]]
     end
 
