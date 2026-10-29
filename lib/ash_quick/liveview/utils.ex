@@ -33,29 +33,6 @@ defmodule AshQuick.LiveView.Utils do
   end
 
   @doc """
-  `label` in the reader's language, through the host's `:label_translator`.
-
-  A label is English wherever it comes from: a humanized name, a `label:`
-  option, a nav entry. Many are fixed when the code compiles, so the
-  translation is applied where one is drawn, against the locale on the
-  process. With no translator configured, `label` comes back as it is.
-  """
-  def translate_label(label) when is_binary(label) do
-    case AshQuick.Config.label_translator() do
-      nil -> label
-      {mod, fun} -> apply(mod, fun, [label])
-    end
-  end
-
-  def translate_label(nil), do: nil
-
-  @doc """
-  `name` humanized, then translated: the label a field, action or value is
-  drawn with.
-  """
-  def label(name), do: name |> humanize() |> translate_label()
-
-  @doc """
   Formats a `Money` for display, rendering an em dash for a missing amount.
   """
   def format_money(%Money{} = money) do
@@ -386,12 +363,6 @@ defmodule AshQuick.LiveView.Utils do
       _ -> not Ash.Resource.Info.multitenancy_global?(relationship.destination)
     end
   end
-
-  def field_label(%AshQuick.LiveView.QuickField{label: label}), do: label
-  def field_label(field) when is_atom(field), do: humanize(field)
-  def field_label({_, label}) when is_binary(label), do: label
-  def field_label({field, _}) when is_atom(field), do: humanize(field)
-  def field_label([field]), do: field_label(field)
 
   @doc """
   Withholds `query`'s inactive records, for a resource that declared activation.

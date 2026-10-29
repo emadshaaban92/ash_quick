@@ -3,6 +3,7 @@ defmodule AshQuick.LiveView.Components.ListView do
   use Phoenix.Component
   use Gettext, backend: AshQuick.Gettext
   import AshQuick.Components
+  alias AshQuick.Labels
   alias Phoenix.LiveView.JS
 
   import AshQuick.LiveView.Components.FieldValue
@@ -142,7 +143,7 @@ defmodule AshQuick.LiveView.Components.ListView do
                         path={@path}
                       />
                       <span :if={QuickField.data_field(field) not in @sortable}>
-                        {Utils.translate_label(field.label)}
+                        {Labels.field(field)}
                       </span>
                     </th>
                     <th>
@@ -233,7 +234,7 @@ defmodule AshQuick.LiveView.Components.ListView do
       class="group inline-flex items-center gap-1 hover:text-base-content"
       data-sort={@column}
     >
-      {Utils.translate_label(@field.label)}
+      {Labels.field(@field)}
       <.icon :if={@direction == :asc} name="hero-chevron-up-mini" class="w-4 h-4" />
       <.icon :if={@direction == :desc} name="hero-chevron-down-mini" class="w-4 h-4" />
       <.icon
@@ -425,7 +426,7 @@ defmodule AshQuick.LiveView.Components.ListView do
       id={"#{@record.id}-action-#{@action.name}"}
       phx-click={JS.push("row_action_click", value: %{id: @record.id, action_name: @action.name})}
     >
-      {Utils.label(@action.name)}
+      {Labels.name(@action.name)}
     </.link>
     """
   end
@@ -466,7 +467,7 @@ defmodule AshQuick.LiveView.Components.ListView do
       class="btn btn-primary btn-sm"
     >
       <.icon name="hero-plus" class="h-4 w-4" />
-      {Utils.translate_label(@new_action_label) || gettext("Create")}
+      {Labels.translate(@new_action_label) || gettext("Create")}
     </button>
     """
   end
@@ -611,7 +612,7 @@ defmodule AshQuick.LiveView.Components.ListView do
               for={"filter_#{filter_name}"}
               class="ms-2 text-sm font-medium cursor-pointer"
             >
-              {Utils.translate_label(label)}
+              {Labels.translate(label)}
             </label>
           </li>
         </ul>

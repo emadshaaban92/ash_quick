@@ -731,3 +731,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "[%{resource}] %{action}"
 msgstr ""
+
+#: lib/ash_quick/liveview/details_utils.ex
+#, elixir-autogen, elixir-format
+msgid "%{resource} - %{record}"
+msgstr ""

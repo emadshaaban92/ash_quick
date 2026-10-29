@@ -52,6 +52,9 @@ defmodule ExampleWeb.LabelTranslatorScenarioTest do
     render_change(view, "table-form-change", %{product.id => "on"})
     assert has_element?(view, "#bulk-actions-menu a", "تغيير السعر")
     refute has_element?(view, "#bulk-actions-menu a", "Reprice")
+    # An item the page wrote itself, beside the ones AshQuick derives.
+    assert has_element?(view, "#bulk-actions-menu a", "خصم 10%")
+    refute has_element?(view, "#bulk-actions-menu a", "Discount 10%")
 
     {:ok, english, _html} = live(log_in(conn, admin), ~p"/products?search=#{product.sku}")
 
@@ -61,6 +64,34 @@ defmodule ExampleWeb.LabelTranslatorScenarioTest do
     assert has_element?(english, "button", "Add Product")
     assert has_element?(english, "#default-sidebar a", "Products")
     refute has_element?(english, "th", "الاسم")
+  end
+
+  test "the custom filter names its fields as the columns do", ctx do
+    %{conn: conn, admin: admin, arabic: arabic} = ctx
+
+    filter =
+      %{
+        "operator" => "and",
+        "children" => [%{"field_name" => "name", "operator" => "equals", "value" => "x"}]
+      }
+      |> JSON.encode!()
+      |> :base64.encode()
+      |> URI.encode_www_form()
+
+    {:ok, view, _html} = live(log_in(conn, arabic), "/products?custom_filter=#{filter}")
+
+    assert has_element?(view, "[data-filter-chip]", "الاسم")
+    refute has_element?(view, "[data-filter-chip]", "Name")
+
+    {:ok, view, _html} = live(log_in(conn, arabic), "/products?show_custom_filter=true")
+
+    assert has_element?(view, "select[name^='field_name-'] option", "الاسم")
+    # Not a column: named from the field itself.
+    assert has_element?(view, "select[name^='field_name-'] option", "الإصدار")
+    refute has_element?(view, "select[name^='field_name-'] option", "Name")
+
+    {:ok, english, _html} = live(log_in(conn, admin), "/products?custom_filter=#{filter}")
+    assert has_element?(english, "[data-filter-chip]", "Name")
   end
 
   test "the apps grid labels its tiles", %{conn: conn, admin: admin, arabic: arabic} do

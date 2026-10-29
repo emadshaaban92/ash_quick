@@ -45,3 +45,9 @@ msgstr "تعديل"
 
 msgid "Reprice"
 msgstr "تغيير السعر"
+
+msgid "Discount 10%"
+msgstr "خصم 10%"
+
+msgid "Version"
+msgstr "الإصدار"

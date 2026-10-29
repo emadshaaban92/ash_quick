@@ -9,7 +9,6 @@ defmodule AshQuick.LiveView.Components.NavGrid do
 
   import AshQuick.Components
 
-  alias AshQuick.LiveView.Utils
   alias AshQuick.Nav
 
   attr :scope, :any, required: true
@@ -38,7 +37,7 @@ defmodule AshQuick.LiveView.Components.NavGrid do
             icon={tile.group.icon}
             class="mx-auto mb-1 w-6/12 @min-[22rem]:w-5/12 max-w-32 h-auto aspect-square text-base-content/40 group-hover:text-base-content/60"
           />
-          <div class="text-xs @min-[22rem]:text-sm">{Utils.translate_label(tile.group.label)}</div>
+          <div class="text-xs @min-[22rem]:text-sm">{tile.group.label}</div>
         </.link>
       </div>
     </div>

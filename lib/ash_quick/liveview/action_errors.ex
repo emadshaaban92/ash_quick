@@ -14,6 +14,8 @@ defmodule AshQuick.LiveView.ActionErrors do
   # the locale of the process that flashes them.
   use Gettext, backend: AshQuick.Gettext
 
+  alias AshQuick.Labels
+
   @doc "A friendly message for an optimistic-lock (`StaleRecord`) conflict."
   def stale_message,
     do:
@@ -283,7 +285,7 @@ defmodule AshQuick.LiveView.ActionErrors do
   defp field_sentence(field, message),
     do:
       gettext("%{field}: %{message}",
-        field: AshQuick.LiveView.Utils.label(field),
+        field: Labels.name(field),
         message: message
       )
 

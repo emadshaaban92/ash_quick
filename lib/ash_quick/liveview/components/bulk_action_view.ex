@@ -8,8 +8,8 @@ defmodule AshQuick.LiveView.Components.BulkActionView do
   use Gettext, backend: AshQuick.Gettext
   import AshQuick.Components
 
+  alias AshQuick.Labels
   alias AshQuick.LiveView.Components.{ActionModal, FormView}
-  alias AshQuick.LiveView.Utils
   alias Phoenix.LiveView.JS
 
   @doc false
@@ -67,7 +67,7 @@ defmodule AshQuick.LiveView.Components.BulkActionView do
         id="ash-quick-bulk-action"
         phx-change="bulk_validate"
         phx-submit="bulk_save"
-        form_title={Utils.label(@bulk.action.name)}
+        form_title={Labels.name(@bulk.action.name)}
       >
         <p class="sm:col-span-2 font-medium">
           {ngettext(

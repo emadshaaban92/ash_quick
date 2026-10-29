@@ -5,6 +5,7 @@ defmodule AshQuick.LiveView.FormUtils do
   import Phoenix.LiveView
   import Phoenix.Component, only: [assign: 2]
   use Gettext, backend: AshQuick.Gettext
+  alias AshQuick.Labels
   alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.FieldErrors
@@ -43,8 +44,8 @@ defmodule AshQuick.LiveView.FormUtils do
 
     title =
       gettext("[%{resource}] %{action}",
-        resource: Utils.label(resource_name),
-        action: Utils.label(action_name)
+        resource: Labels.name(resource_name),
+        action: Labels.name(action_name)
       )
 
     socket |> assign(page_title: title)
@@ -940,7 +941,7 @@ defmodule AshQuick.LiveView.FormUtils do
     path
     |> Enum.reduce([], fn
       index, [field | labels] when is_integer(index) -> ["#{field} #{index + 1}" | labels]
-      field, labels -> [Utils.label(field) | labels]
+      field, labels -> [Labels.name(field) | labels]
     end)
     |> Enum.reverse()
     |> Enum.join(" › ")

@@ -94,10 +94,11 @@ policy error, so the flash shows the fixed sentence instead.
 `:label_translator` does for labels what `:error_translator` does for errors.
 Every label AshQuick draws is English: a field or action name humanized (after
 `:humanize_overrides`), a `label:` option, a `new_action_label`, a saved
-filter's label, a nav entry or group, a page title, an enum's or a `one_of`
-atom's value. Many are fixed when a QuickView compiles, so AshQuick hands each
-one to the translator where it draws it, on the process that renders, and the
-reader's locale applies; an export's header is translated in that locale too.
+filter's label, a custom bulk item's title, a nav entry or group, a page
+title, an enum's or a `one_of` atom's value. Many are fixed when a QuickView
+compiles, so AshQuick hands each one to the translator where it draws it, on
+the process that renders, and the reader's locale applies; an export's header
+is translated in the scope's locale too.
 Name a function that takes the English label and returns the string to draw:
 
 ```elixir
@@ -111,6 +112,11 @@ The English label is the msgid. Labels are not `gettext` call sites, so
 `mix gettext.extract` does not find them: write them into
 `priv/gettext/<locale>/LC_MESSAGES/labels.po` as they read on the page. A label
 the catalogue lacks is drawn in English. With no translator, every label is.
+
+A custom template that draws a resource's labels itself calls `AshQuick.Labels`
+(`name/1` for a field, action or value name, `field/1` for a `:fields` entry,
+`translate/1` for an English string), so it reads the same as the pages around
+it.
 
 ### Error reporting
 

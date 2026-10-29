@@ -65,7 +65,8 @@ defmodule AshQuick.Config do
     atom. The function receives the English label as it would be drawn
     (after `:humanize_overrides`) and must return a string. It runs on the
     process that renders, so it sees the reader's locale. When `nil`, labels
-    are drawn in English. Example: `{MyAppWeb.Gettext, :translate_label}`.
+    are drawn in English. See `AshQuick.Labels`. Example:
+    `{MyAppWeb.Gettext, :translate_label}`.
 
   * `:endpoint` — The host's `Phoenix.Endpoint`. AshQuick publishes resource
     notifications through it, signs impersonation tokens with its secret, and
