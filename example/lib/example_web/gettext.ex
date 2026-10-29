@@ -25,15 +25,19 @@ defmodule ExampleWeb.Gettext do
 
   require Logger
 
-  # On in dev only (`config/dev.exs`): every untranslated message logs each
-  # time it is drawn, which is the point while looking at a page, and noise
-  # in production logs.
+  # On in dev only (`config/dev.exs`): the point while looking at a page,
+  # noise in production logs.
   @warn_missing? Application.compile_env(:example, :warn_missing_translations, false)
+
+  # The language the msgids are written in, which has nothing to miss. Not
+  # the default locale: an app defaulting to another language still needs to
+  # hear what that one lacks.
+  @source_locale "en"
 
   @doc """
   Logs a message the reader's locale has no translation for, then draws the
-  msgid as Gettext would. The default locale is skipped: its msgids are its
-  text, and nothing is missing.
+  msgid as Gettext would. Each one is logged once per process, so a list
+  page names an untranslated enum value once rather than once per row.
 
   Every label AshQuick draws goes through `translate_label/1`, so a field,
   action, enum value or nav entry `labels.po` lacks is named here as soon as
@@ -41,7 +45,10 @@ defmodule ExampleWeb.Gettext do
   """
   @impl Gettext.Backend
   def handle_missing_translation(locale, domain, msgctxt, msgid, bindings) do
-    if @warn_missing? and locale != __gettext__(:default_locale) do
+    key = {__MODULE__, :missing, locale, domain, msgctxt, msgid}
+
+    if @warn_missing? and locale != @source_locale and !Process.get(key) do
+      Process.put(key, true)
       Logger.warning("Missing #{locale} translation in #{domain}: #{inspect(msgid)}")
     end
 

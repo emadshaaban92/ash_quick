@@ -123,7 +123,12 @@ require Logger
 
 @impl Gettext.Backend
 def handle_missing_translation(locale, domain, msgctxt, msgid, bindings) do
-  if locale != __gettext__(:default_locale) do
+  # Once per process: a list names an enum value once, not once per row.
+  key = {__MODULE__, :missing, locale, domain, msgctxt, msgid}
+
+  # "en": the language the msgids are written in.
+  if locale != "en" and !Process.get(key) do
+    Process.put(key, true)
     Logger.warning("Missing #{locale} translation in #{domain}: #{inspect(msgid)}")
   end
 
@@ -133,10 +138,13 @@ end
 
 Every label goes through the translator, so this names the ones that are easy
 to miss by eye too: an enum value in a dropdown, a nested form's input, a field
-a flashed error names, an export header. Skip the default locale: its labels
-have no entries to miss. It runs each time a label is drawn, so keep it to dev
-(the example app gates it on a `compile_env` flag), and it only names a label
-once a page in that locale has drawn it.
+a flashed error names, an export header. An entry left with an empty
+`msgstr` counts as missing too. Skip the language the msgids are written in,
+which has nothing to miss, rather than the default locale: an app that
+defaults to another language still needs to hear what that one lacks. Keep it
+to dev (the example app gates it on a `compile_env` flag). It names a label
+once per process, so each page logs what it lacks, and only once a page in
+that locale has drawn it.
 
 A custom template that draws a resource's labels itself calls `AshQuick.Labels`
 (`name/1` for a field, action or value name, `field/1` for a `:fields` entry,
