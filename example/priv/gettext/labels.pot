@@ -1,0 +1,575 @@
+# This file is a PO Template file, written by `mix ash_quick.gen.gettext`
+# from the labels AshQuick draws. Do not edit it: run the task again, then
+# `mix gettext.merge priv/gettext --no-fuzzy`, and translate in the `.po`
+# files.
+msgid ""
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Accepts"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+msgid "Action Name"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+msgid "Action Type"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/brand_live/quick.ex
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+#: lib/example_web/live/store_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "Activate"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/brand_live/quick.ex
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+#: lib/example_web/live/store_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "Active"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Actor"
+msgstr ""
+
+#: lib/example_web/live/brand_live/quick.ex
+msgid "Add Brand"
+msgstr ""
+
+#: lib/example_web/live/category_live/quick.ex
+msgid "Add Category"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Add Images"
+msgstr ""
+
+#: lib/example_web/live/product_live/quick.ex
+msgid "Add Product"
+msgstr ""
+
+#: lib/example_web/live/user_live/quick.ex
+msgid "Add User"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "Admin"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Alt"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+msgid "Arguments"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Attachment"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+msgid "Attributes"
+msgstr ""
+
+#: lib/example_web/nav.ex
+msgid "Audit"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+msgid "Audit Log"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/nav.ex
+msgid "Audit Logs"
+msgstr ""
+
+#: lib/example_web/live/brand_live/quick.ex
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Brand"
+msgstr ""
+
+#: lib/example_web/live/brand_live/quick.ex
+#: lib/example_web/nav.ex
+msgid "Brands"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Byte Size"
+msgstr ""
+
+#: lib/example_web/nav.ex
+msgid "Catalog"
+msgstr ""
+
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/nav.ex
+msgid "Categories"
+msgstr ""
+
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Category"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+msgid "Changes"
+msgstr ""
+
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Children"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Clearance"
+msgstr ""
+
+#: lib/example_web/live/brand_live/quick.ex
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+#: lib/example_web/live/store_live/quick.ex
+msgid "Code"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Content Type"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+msgid "Context"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/brand_live/quick.ex
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+#: lib/example_web/live/store_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "Create"
+msgstr ""
+
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Create With Children"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/brand_live/quick.ex
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+#: lib/example_web/live/store_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "Deactivate"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/brand_live/quick.ex
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+#: lib/example_web/live/store_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "Delete"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Description"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Document"
+msgstr ""
+
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Documents"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "Editor"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "Email"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "English"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Featured"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "File Object"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/nav.ex
+msgid "File Objects"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+msgid "From Price"
+msgstr ""
+
+#: lib/example_web/nav.ex
+msgid "Home"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/brand_live/quick.ex
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+#: lib/example_web/live/store_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "Id"
+msgstr ""
+
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Image"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Images"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "Impersonate"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/brand_live/quick.ex
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+#: lib/example_web/live/store_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "Inserted At"
+msgstr ""
+
+#: lib/example_web/live/brand_live/quick.ex
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+#: lib/example_web/live/store_live/quick.ex
+msgid "Inserted By"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+msgid "Ip"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Key"
+msgstr ""
+
+#: lib/example_web/nav.ex
+msgid "Live Users"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "Locale"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Max Bytes"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/brand_live/quick.ex
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+#: lib/example_web/live/store_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "Name"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "New"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "New Images"
+msgstr ""
+
+#: lib/example_web/live/product_live/quick.ex
+msgid "On sale"
+msgstr ""
+
+#: lib/example_web/live/store_live/quick.ex
+msgid "Open a Store"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Original Filename"
+msgstr ""
+
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Parent"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Price"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+msgid "Price Change"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/nav.ex
+msgid "Price Changes"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Processing"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Product"
+msgstr ""
+
+#: lib/example_web/live/product_live/quick.ex
+#: lib/example_web/nav.ex
+msgid "Products"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Quick Add"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Ready"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+msgid "Real Actor"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+msgid "Real actor"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Referenced At"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Referenced By"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Rejected"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Reprice"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Resource"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Resource Name"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "Role"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Sale"
+msgstr ""
+
+#: lib/example_web/nav.ex
+msgid "Settings"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Sku"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Source"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Staff Pick"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "State"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+#: lib/example_web/live/store_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "Store"
+msgstr ""
+
+#: lib/example_web/live/store_live/quick.ex
+#: lib/example_web/nav.ex
+msgid "Stores"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+msgid "Tags"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Take Custody"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+msgid "Tenant"
+msgstr ""
+
+#: lib/example_web/live/price_change_live/quick.ex
+msgid "To Price"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/brand_live/quick.ex
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+#: lib/example_web/live/store_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "Update"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/brand_live/quick.ex
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+#: lib/example_web/live/store_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "Updated At"
+msgstr ""
+
+#: lib/example_web/live/brand_live/quick.ex
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+#: lib/example_web/live/store_live/quick.ex
+msgid "Updated By"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Upload Form"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Uploaded by"
+msgstr ""
+
+#: lib/example_web/nav.ex
+msgid "Uploads"
+msgstr ""
+
+#: lib/example_web/live/user_live/quick.ex
+msgid "User"
+msgstr ""
+
+#: lib/example_web/live/user_live/quick.ex
+#: lib/example_web/nav.ex
+msgid "Users"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/brand_live/quick.ex
+#: lib/example_web/live/category_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/price_change_live/quick.ex
+#: lib/example_web/live/product_live/quick.ex
+#: lib/example_web/live/store_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "Version"
+msgstr ""
+
+#: lib/example_web/live/file_object_live/quick.ex
+msgid "Video"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "Viewer"
+msgstr ""
+
+#: lib/example_web/live/audit_log_live/quick.ex
+#: lib/example_web/live/file_object_live/quick.ex
+#: lib/example_web/live/user_live/quick.ex
+msgid "العربية"
+msgstr ""

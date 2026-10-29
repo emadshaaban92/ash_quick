@@ -60,6 +60,8 @@ defmodule AshQuick.MixProject do
       {:phoenix_live_view, "~> 1.2"},
       {:phoenix_html, "~> 4.3"},
       {:gettext, "~> 1.0"},
+      # Composes the template `mix ash_quick.gen.gettext` writes; Gettext's own.
+      {:expo, "~> 1.0"},
       {:live_select, "~> 1.7"},
       {:jason, "~> 1.4"},
 

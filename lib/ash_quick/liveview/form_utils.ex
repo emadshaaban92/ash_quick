@@ -40,11 +40,9 @@ defmodule AshQuick.LiveView.FormUtils do
   end
 
   defp set_title(socket, action_name, %{resource: resource}) do
-    resource_name = Ash.Resource.Info.short_name(resource)
-
     title =
       gettext("[%{resource}] %{action}",
-        resource: Labels.name(resource_name),
+        resource: Labels.resource(resource),
         action: Labels.name(action_name)
       )
 

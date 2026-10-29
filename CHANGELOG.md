@@ -4,6 +4,24 @@
 
 ### Features
 
+- **`mix ash_quick.gen.gettext` writes the labels to translate.** Labels are
+  not `gettext` calls, so `mix gettext.extract` never found them, and a host
+  had to keep `labels.po` by hand. The task reads every label the nav and the
+  QuickViews the router serves can draw, through `AshQuick.Labels` with the
+  translator held off, so each msgid is the label exactly as a page hands it
+  over: titles, columns, details rows, export headers, saved filters,
+  `new_action_label`, custom items of a `bulk_actions` list, actions, form
+  inputs (into embedded resources and managed relationships), fields as the
+  custom filter and a flashed error name them, enum and `one_of` values, also
+  of a resource a column reaches, and nav entries and groups. It writes
+  `priv/gettext/labels.pot` for `mix gettext.merge priv/gettext --no-fuzzy`;
+  `--domain` and `--priv` move it, and `--check-up-to-date` fails CI when it is
+  stale. Its messages are not `elixir-autogen`, so `mix gettext.extract` leaves
+  the file alone. `AshQuick.Labels.Catalogue.labels/1` is the list it writes,
+  and `AshQuick.Labels.english/1` runs a function with this process's labels
+  left in English. The titles a `bulk_actions` function returns are the host's
+  code and are not read: translate them with `gettext/1`.
+
 - **Labels can be translated.** A new `:label_translator` config,
   `{Mod, :fun}`, gets every label AshQuick draws in English and returns the
   string to draw: field and action names (as humanized, after

@@ -125,7 +125,7 @@ defmodule AshQuick.LiveView.DetailsUtils do
   end
 
   defp set_title(socket, %{resource: resource}) do
-    resource_name = Ash.Resource.Info.short_name(resource) |> Labels.name()
+    resource_name = Labels.resource(resource)
 
     title =
       case AshQuick.Info.display_value(socket.assigns.record) do

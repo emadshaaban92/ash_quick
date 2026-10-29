@@ -19,6 +19,8 @@ defmodule ExampleWeb.ProductLive.Quick do
   the menu shows them. "Discount 10%" is the other kind of entry: a custom item
   whose event this module handles itself.
   """
+  use Gettext, backend: ExampleWeb.Gettext
+
   require Ash.Expr
 
   alias AshQuick.LiveView.ActionErrors
@@ -76,6 +78,9 @@ defmodule ExampleWeb.ProductLive.Quick do
   allows it, so an editor's menu has no `Reprice`. A custom item is the host's
   to guard, which is why this is a function of the socket rather than a list.
 
+  Its title is translated here, with `gettext/1`: `mix ash_quick.gen.gettext`
+  cannot call this function to read it, so it is not in the labels catalogue.
+
   "Discount 10%" stays beside `Reprice` because it does what one set of inputs
   cannot: each row's new price comes from its own old one. `Reprice` sets the
   same price on every row.
@@ -83,7 +88,7 @@ defmodule ExampleWeb.ProductLive.Quick do
   def bulk_actions(socket) do
     discount =
       if Ash.can?({Product, :reprice}, socket.assigns.scope, log_policy_breakdown?: false),
-        do: %{title: "Discount 10%", func: JS.push("discount")}
+        do: %{title: gettext("Discount 10%"), func: JS.push("discount")}
 
     [:reprice, discount, :activate, :deactivate, :destroy]
   end

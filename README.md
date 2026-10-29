@@ -109,9 +109,27 @@ def translate_label(label), do: Gettext.dgettext(__MODULE__, "labels", label)
 ```
 
 The English label is the msgid. Labels are not `gettext` call sites, so
-`mix gettext.extract` does not find them: write them into
-`priv/gettext/<locale>/LC_MESSAGES/labels.po` as they read on the page. A label
-the catalogue lacks is drawn in English. With no translator, every label is.
+`mix gettext.extract` does not find them. `mix ash_quick.gen.gettext` does: it
+reads every label the nav and the QuickViews the router serves can draw, the
+way the pages draw them, and writes `priv/gettext/labels.pot`. Merge it into
+each locale and translate there:
+
+```bash
+mix ash_quick.gen.gettext
+mix gettext.merge priv/gettext --no-fuzzy
+```
+
+Run it again after adding a field, an action, an enum value or a nav entry,
+and run `mix ash_quick.gen.gettext --check-up-to-date` in CI. Keep
+`--no-fuzzy`: Gettext uses a fuzzy entry at runtime, and a label guessed from
+another is a wrong label on the page. A label the catalogue lacks is drawn in
+English. With no translator, every label is.
+
+Two kinds of label are the host's own code, so the task cannot read them:
+the titles a `bulk_actions` function returns, and what a custom template
+draws. Translate those where they are written, with `gettext/1`. `merge`
+drops a `labels.po` entry the template does not hold, so one added by hand
+does not last.
 
 A custom template that draws a resource's labels itself calls `AshQuick.Labels`
 (`name/1` for a field, action or value name, `field/1` for a `:fields` entry,

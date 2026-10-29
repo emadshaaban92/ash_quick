@@ -220,6 +220,12 @@ jobs:
       - name: AshQuick compliance (strict)
         run: mix ash_quick.check --strict
 
+      # A label the template lacks is drawn in English in every locale. Read
+      # in dev: the test environment adds routes to fixtures that are not
+      # pages of the app.
+      - name: Labels template is up to date
+        run: MIX_ENV=dev mix ash_quick.gen.gettext --check-up-to-date
+
       - name: Set up the test database
         run: mix ash.setup
 

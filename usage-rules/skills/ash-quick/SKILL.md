@@ -928,8 +928,14 @@ and groups (as `AshQuick.Nav.Info.sections/1` hands them out), page titles,
 enum and `one_of` values, export headers. It gets the English label as drawn
 (after `:humanize_overrides`) and runs at render, so it sees the reader's
 locale. The usual body is `Gettext.dgettext(MyAppWeb.Gettext, "labels",
-label)`, with the English label as the msgid in `labels.po`; labels are not
-`gettext` call sites, so `mix gettext.extract` does not find them. A custom
+label)`, with the English label as the msgid in `labels.po`. Labels are not
+`gettext` call sites, so `mix gettext.extract` does not find them: `mix
+ash_quick.gen.gettext` writes `priv/gettext/labels.pot` from the nav and every
+routed QuickView, then `mix gettext.merge priv/gettext --no-fuzzy` (keep
+`--no-fuzzy`); `--check-up-to-date` is for CI. It cannot read the titles a
+`bulk_actions` function returns, nor a custom template's labels: translate
+those with `gettext/1` where they are written, never by hand in `labels.po`
+(merge drops the entry). A custom
 template drawing a resource's labels itself calls `AshQuick.Labels`:
 `name/1` (humanize, then translate), `field/1` (a `:fields` entry) or
 `translate/1` (an English string), so it reads the same as the pages. A
