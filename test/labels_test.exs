@@ -27,6 +27,14 @@ defmodule AshQuick.LabelsTest do
     assert Labels.translate("Unlisted") == "Unlisted"
   end
 
+  # No name is special but `destroy`: a host rewords one with a `label:` or a
+  # translation, and the English the catalogue keys on is what it reads here.
+  test "a name reads as its words, title-cased" do
+    assert Labels.name(:vat_number) == "Vat Number"
+    assert Labels.name(:name_ar) == "Name Ar"
+    assert Labels.name(:destroy) == "Delete"
+  end
+
   # A `label:` option is stored unchecked, so markup that rendered before
   # labels were translated still renders rather than taking the LiveView down.
   test "anything but a string is drawn as it is" do

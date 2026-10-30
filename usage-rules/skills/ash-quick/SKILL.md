@@ -926,8 +926,8 @@ else it draws there, in the `ash_quick` domain and that backend's locale: its
 own buttons and flashes, and every label (humanized field and action names,
 `label:` options, `new_action_label`, saved filter labels, custom bulk item
 titles, nav entries and groups as `AshQuick.Nav.Info.sections/1` hands them
-out, page titles, enum and `one_of` values, export headers). The English label
-(after `:humanize_overrides`) is the msgid, translated at render, so it reads
+out, page titles, enum and `one_of` values, export headers). The English label is
+the msgid, translated at render, so it reads
 in the reader's locale. Labels are not `gettext` call sites, so
 `mix ash_quick.gen.gettext` writes `priv/gettext/ash_quick.pot` from the nav,
 the QuickViews and their resources (`--locale ar` copies the Arabic AshQuick

@@ -3,8 +3,7 @@ defmodule AshQuick.Labels do
   The labels AshQuick draws, in the reader's language.
 
   A label is English wherever it comes from: a field, action or value name
-  humanized (after `:humanize_overrides`), a `label:` option, a nav entry or
-  group. Many are fixed when a QuickView or a nav compiles, so each is
+  humanized, a `label:` option, an enum's own label, a nav entry or group. Many are fixed when a QuickView or a nav compiles, so each is
   translated when it is drawn, on the process that renders, where the reader's
   locale is set. The English label is the msgid, looked up like AshQuick's own
   strings: in the `ash_quick` domain of the host's `:gettext` backend (see

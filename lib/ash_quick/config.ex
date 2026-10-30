@@ -49,11 +49,6 @@ defmodule AshQuick.Config do
     public URLs against (e.g. `"s3.amazonaws.com"`,
     `"storage.googleapis.com"`). Defaults to `"s3.amazonaws.com"`.
 
-  * `:humanize_overrides` — A map of field name atoms to custom display
-    strings. For example: `%{national_id: "National ID"}`. Used by
-    `AshQuick.LiveView.Utils.humanize/1` to override the default
-    `Phoenix.Naming.humanize/1` behaviour for specific field names.
-
   * `:error_translator` — A `{Module, :function}` tuple for translating
     changeset error tuples. The function receives `{msg, opts}` and must
     return a string. When `nil`, AshQuick uses simple string interpolation.
@@ -371,15 +366,6 @@ defmodule AshQuick.Config do
   """
   def s3_host do
     get(:s3_host, "s3.amazonaws.com")
-  end
-
-  @doc """
-  Returns the configured humanize overrides map. Defaults to `%{}`.
-
-  Keys are atoms (field names), values are display strings.
-  """
-  def humanize_overrides do
-    get(:humanize_overrides, %{})
   end
 
   @doc """

@@ -746,6 +746,20 @@
 
 ### Breaking changes
 
+- **`:humanize_overrides` is removed, and so is the `_ar` label rule.** A
+  humanized name is now only `Phoenix.Naming.humanize/1` title-cased, with
+  `destroy` read as "Delete": `config :ash_quick, humanize_overrides:` is
+  ignored, `AshQuick.Config.humanize_overrides/0` is gone, and a field ending
+  in `_ar` reads "Name Ar" where it read "Name (Arabic)". The overrides were
+  read at compile time inside the dependency, so changing them did nothing
+  until it was recompiled; they matched a bare name on every resource; and
+  an override in another language replaced the English msgid translators
+  work from. Reword a label with a `label:` on the QuickView's field, a
+  `label:` on an `Ash.Type.Enum` value, or a translation in the catalogue,
+  English included (README, "Configuration"). A label's msgid changes with it,
+  so a host that had overrides runs `mix ash_quick.gen.gettext` and
+  `mix gettext.merge priv/gettext` again.
+
 - **`AshQuick.LiveView.Utils.format_money/1` is removed.** AshQuick no longer
   called it, and it matched `%Money{}`, which a host without ex_money could
   not compile. A host calling it calls `AshQuick.Config.format_money/1`

@@ -36,9 +36,8 @@ defmodule ExampleWeb.LocaleScenarioTest do
       conn
       |> log_in(admin)
       |> visit(~p"/users/#{editor.id}/update")
-      # Offered by its `one_of` constraint, labelled through
-      # `config :ash_quick, humanize_overrides:` — nothing on the QuickView
-      # mentions the field.
+      # Offered and labelled by its enum, `Example.Accounts.Locale` — nothing
+      # on the QuickView mentions the field.
       |> select_entry("Locale", "العربية")
       |> click_button("Save")
 

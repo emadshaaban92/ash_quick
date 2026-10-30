@@ -78,10 +78,7 @@ config :ash_quick,
 # substring of the right one.
 config :ash_quick,
   s3_bucket: "ash-quick-library-default",
-  s3_host: "s3.invalid",
-  # A locale code is not a field name, and `Phoenix.Naming.humanize/1` would
-  # offer "En" and "Ar" in the language picker.
-  humanize_overrides: %{en: "English", ar: "العربية"}
+  s3_host: "s3.invalid"
 
 # Nothing here reaches a bucket: the presigned URL is the whole artifact, and
 # ExAws refuses to sign without credentials.
