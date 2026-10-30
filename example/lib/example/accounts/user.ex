@@ -152,11 +152,10 @@ defmodule Example.Accounts.User do
     # The language this person's pages render in. Unrestricted, unlike `:role`:
     # choosing your own language is not a privilege, and `/users` is an admin's
     # page only because everything else on it is.
-    attribute :locale, :atom,
+    attribute :locale, Example.Accounts.Locale,
       allow_nil?: false,
       public?: true,
-      default: :en,
-      constraints: [one_of: [:en, :ar]]
+      default: :en
   end
 
   relationships do

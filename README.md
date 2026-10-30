@@ -65,7 +65,7 @@ so — the pages would simply be dead and the columns empty. `compile_env` turns
 that into a refusal to boot. Everything else is read at runtime and may move.
 
 `AshQuick.Config` documents every key, including the S3 ones,
-`:humanize_overrides`, `:refetch_window` and `:impersonation_max_age`.
+`:refetch_window` and `:impersonation_max_age`.
 
 `:error_translator` is the function your forms translate errors with. AshQuick
 puts Ash's error messages through it everywhere it shows one, in a flash as well
@@ -96,10 +96,9 @@ policy error, so the flash shows the fixed sentence instead.
 `:gettext` names your Gettext backend, and AshQuick translates everything else
 it draws there, in the `ash_quick` domain and in that backend's locale: its own
 buttons, flashes and empty states, and the labels it draws. A label is English
-wherever it comes from: a field or action name humanized (after
-`:humanize_overrides`), a `label:` option, a `new_action_label`, a saved
-filter's label, a custom bulk item's title, a nav entry or group, a page title,
-an enum's or a `one_of` atom's value. Many are fixed when a QuickView compiles,
+wherever it comes from: a field or action name humanized, a `label:` option, a
+`new_action_label`, a saved filter's label, a custom bulk item's title, a nav
+entry or group, a page title, an enum's or a `one_of` atom's value. Many are fixed when a QuickView compiles,
 so AshQuick translates each where it draws it, on the process that renders,
 where the reader's locale is set; an export's header and dates are in the
 scope's locale too. Set the locale however you set it for your own pages,
@@ -125,6 +124,18 @@ task keeps:
 ```elixir
 %{title: dgettext_noop("ash_quick", "Discount 10%"), func: JS.push("discount")}
 ```
+
+A humanized name is only a default: `vat_number` reads "Vat Number", and a
+locale code `ar` reads "Ar". Reword one where it is drawn, or in the catalogue:
+
+* a `label:` on the QuickView's field, `{:vat_number, label: "VAT number"}`,
+  for that page;
+* a `label:` on an `Ash.Type.Enum`'s value (`ar: [label: "العربية"]`), for
+  that value everywhere it shows;
+* a translation, for every page that draws the label, English included: give
+  `"Vat Number"` a `msgstr` of `"VAT number"` in
+  `priv/gettext/en/LC_MESSAGES/ash_quick.po`
+  (`mix gettext.merge priv/gettext --locale en` creates it).
 
 The template being complete does not make a locale's translation complete: an
 entry left with an empty `msgstr` is drawn in English. To hear about those in

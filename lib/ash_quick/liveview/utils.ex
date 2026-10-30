@@ -12,27 +12,11 @@ defmodule AshQuick.LiveView.Utils do
     Relationships.ManyToMany
   ]
 
-  @humanize_overrides Application.compile_env(:ash_quick, :humanize_overrides, [])
-
-  for {key, label} <- @humanize_overrides do
-    str_key = Atom.to_string(key)
-    def humanize(unquote(str_key)), do: unquote(label)
-    def humanize(unquote(key)), do: unquote(label)
-  end
-
   def humanize("destroy"), do: "Delete"
 
   def humanize(name) when is_atom(name), do: humanize(Atom.to_string(name))
 
   def humanize(name) when is_binary(name) do
-    if String.ends_with?(name, "_ar") do
-      "#{titleize(String.trim_trailing(name, "_ar"))} (Arabic)"
-    else
-      titleize(name)
-    end
-  end
-
-  defp titleize(name) do
     name
     |> Phoenix.Naming.humanize()
     |> String.split()
