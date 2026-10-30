@@ -93,16 +93,37 @@ shown, never the policy breakdown.
 An `error_message` function that returns an exception of its own replaces the
 policy error, so the flash shows the fixed sentence instead.
 
+#### Translating
+
 `:gettext` names your Gettext backend, and AshQuick translates everything else
 it draws there, in the `ash_quick` domain and in that backend's locale: its own
 buttons, flashes and empty states, and the labels it draws. A label is English
 wherever it comes from: a field or action name humanized, a `label:` option, a
 `new_action_label`, a saved filter's label, a custom bulk item's title, a nav
-entry or group, a page title, an enum's or a `one_of` atom's value. Many are fixed when a QuickView compiles,
-so AshQuick translates each where it draws it, on the process that renders,
-where the reader's locale is set; an export's header and dates are in the
-scope's locale too. Set the locale however you set it for your own pages,
-process-wide or on your backend. Without `:gettext`, AshQuick draws English.
+entry or group, a page title, an enum's or a `one_of` atom's value. Many are
+fixed when a QuickView compiles, so AshQuick translates each where it draws it,
+on the process that renders, where the reader's locale is set. An export is
+written in a task of its own, in the scope's locale (`AshQuick.Scope.locale/1`).
+Set the locale however you set it for your own pages, process-wide or on your
+backend. Without `:gettext`, AshQuick draws English.
+
+The page runs the way the locale writes: right to left for Arabic, Hebrew,
+Persian and the other right-to-left scripts. AshQuick's markup uses logical
+CSS properties, so `dir` on `<html>` is the only switch. Set it, and `lang`,
+in your root layout:
+
+```heex
+<html lang={AshQuick.Locale.current()} dir={AshQuick.Locale.direction()}>
+```
+
+The dead render resolves the locale before a tab says who it is, so a tab that
+turns out to be impersonating someone has the real user's `lang` and `dir`.
+Push the right ones from the connected mount, and `initLocale` (see
+[Assets](#assets)) applies them to `<html>`:
+
+```elixir
+push_event(socket, "locale", %{lang: locale, dir: AshQuick.Locale.direction(locale)})
+```
 
 Labels are not `gettext` call sites, so `mix gettext.extract` cannot find them.
 `mix ash_quick.gen.gettext` writes `priv/gettext/ash_quick.pot` with AshQuick's
@@ -115,8 +136,9 @@ mix gettext.merge priv/gettext
 ```
 
 `--locale ar` copies the Arabic translation AshQuick ships, as a starting point;
-copied once, it is yours to edit. Run the task again when you add a field, an action or a nav entry, and
-`mix ash_quick.gen.gettext --check` in CI fails until you do. A label the task
+copied once, it is yours to edit. Run the task again when you add a field, an
+action or a nav entry, and `mix ash_quick.gen.gettext --check` in CI fails
+until you do. A label the task
 cannot read, such as the title of a bulk item a function builds, is marked where
 you write it, and `mix gettext.extract` adds it to the same template, which the
 task keeps:
@@ -171,11 +193,12 @@ it.
 #### Dates, times and money
 
 Dates, times and money are formatted with Localize, when it is loaded, in the
-same locale. Localize ships English data alone and downloads nothing unless
-told to: a locale it has no data for is formatted in English, silently. So a
-host lists its locales and downloads their data, the way it fetches its deps:
-before it compiles in development, in CI, and in the build a release is cut
-from.
+locale your Gettext backend translates in, and a `DateTime` is shown in
+`:timezone`. Without Localize, dates and times read as `2026-10-25` and
+`2026-10-25 17:37:27`. Localize ships English data alone and downloads nothing
+unless told to: a locale it has no data for is formatted in English, silently.
+So a host lists its locales and downloads their data, the way it fetches its
+deps: in development, in CI, and in the build a release is cut from.
 
 1. List your locales in `config/config.exs`, the ones your Gettext backend
    has. `mix localize.download_locales` loads that file alone, before anything

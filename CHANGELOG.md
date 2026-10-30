@@ -749,7 +749,7 @@
 - **`:humanize_overrides` is removed, and so is the `_ar` label rule.** A
   humanized name is now only `Phoenix.Naming.humanize/1` title-cased, with
   `destroy` read as "Delete": `config :ash_quick, humanize_overrides:` is
-  ignored, `AshQuick.Config.humanize_overrides/0` is gone, and a field ending
+  ignored, its `humanize_overrides/0` getter is gone, and a field ending
   in `_ar` reads "Name Ar" where it read "Name (Arabic)". The overrides were
   read at compile time inside the dependency, so changing them did nothing
   until it was recompiled; they matched a bare name on every resource; and
