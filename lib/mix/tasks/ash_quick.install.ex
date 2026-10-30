@@ -43,9 +43,10 @@ if Code.ensure_loaded?(Igniter) do
         library's colocated hooks in `app.js`.
 
     The rest of `app.js` (the tab's session params, the locale, and printing)
-    is stated in a notice rather than patched in, and so is copying Ash's error
-    messages into the host's Gettext catalogue (`mix ash.gen.gettext`), which
-    writes into `priv/gettext`.
+    is stated in a notice rather than patched in, and so is writing the
+    templates the host translates Ash's error messages and AshQuick in
+    (`mix ash.gen.gettext`, `mix ash_quick.gen.gettext`), which write into
+    `priv/gettext`.
 
     ## Options
 
@@ -213,6 +214,7 @@ if Code.ensure_loaded?(Igniter) do
 
     defp configure(igniter, endpoint, actor_resource, audit_resource, nav, web_module, options) do
       {igniter, translator} = error_translator(igniter, web_module)
+      {igniter, backend} = gettext_backend(igniter, web_module)
 
       items =
         [
@@ -220,6 +222,7 @@ if Code.ensure_loaded?(Igniter) do
           {[:actor_resource], actor_resource},
           {[:audit_resource], audit_resource},
           {[:nav], nav},
+          {[:gettext], backend},
           {[:error_translator], translator},
           {[:timezone], options[:timezone]}
         ]
@@ -230,6 +233,7 @@ if Code.ensure_loaded?(Igniter) do
         comment: @config_comment
       )
       |> maybe_add_gettext_notice(translator)
+      |> maybe_add_template_notice(backend)
     end
 
     # Copying Ash's messages writes into the host's `priv/gettext`, which is
@@ -247,6 +251,24 @@ if Code.ensure_loaded?(Igniter) do
       AshQuick renders them through `#{inspect(module)}.#{function}/1`, the
       `:error_translator` written above, in a flash as well as next to an input;
       `--domain errors` puts them where its `dgettext(..., "errors", ...)` looks.
+      """)
+    end
+
+    # Writing the template writes into the host's `priv/gettext` too, so it is
+    # stated the same way. Only with a backend: without one AshQuick is English.
+    defp maybe_add_template_notice(igniter, nil), do: igniter
+
+    defp maybe_add_template_notice(igniter, backend) do
+      Igniter.add_notice(igniter, """
+      To translate AshQuick, its own strings and the labels your pages draw,
+      write its template into #{inspect(backend)}'s catalogue:
+
+          mix ash_quick.gen.gettext
+          mix gettext.merge priv/gettext
+
+      `--locale ar` also copies the Arabic translation AshQuick ships. Run it
+      again when you add a field, an action or a nav entry; `--check` fails CI
+      until you do.
       """)
     end
 
@@ -306,10 +328,22 @@ if Code.ensure_loaded?(Igniter) do
     # a form renders, and every Phoenix application already has one. Left unset
     # when it does not, rather than configured at a module that is not there.
     defp error_translator(igniter, web_module) do
-      core_components = Module.concat(web_module, CoreComponents)
+      case web_module(igniter, web_module, CoreComponents) do
+        {igniter, nil} -> {igniter, nil}
+        {igniter, core_components} -> {igniter, {core_components, :translate_error}}
+      end
+    end
 
-      case Igniter.Project.Module.module_exists(igniter, core_components) do
-        {true, igniter} -> {igniter, {core_components, :translate_error}}
+    # Every Phoenix application has a Gettext backend; AshQuick translates
+    # through it. Left unset when there is none, and AshQuick draws English.
+    defp gettext_backend(igniter, web_module), do: web_module(igniter, web_module, Gettext)
+
+    # `<Web>.<suffix>` when the application has it, else nil.
+    defp web_module(igniter, web_module, suffix) do
+      module = Module.concat(web_module, suffix)
+
+      case Igniter.Project.Module.module_exists(igniter, module) do
+        {true, igniter} -> {igniter, module}
         {false, igniter} -> {igniter, nil}
       end
     end

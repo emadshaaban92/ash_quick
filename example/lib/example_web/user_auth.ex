@@ -168,11 +168,11 @@ defmodule ExampleWeb.UserAuth do
     end)
   end
 
-  # `Gettext.put_locale/1` is process-wide rather than per-backend, so this one
-  # call covers `AshQuick.Gettext` and this application's own.
+  # On this application's backend, which AshQuick translates through, so its
+  # pages and AshQuick's read the same locale.
   defp put_locale(scope) do
     locale = AshQuick.Scope.locale(scope)
-    Gettext.put_locale(locale)
+    Gettext.put_locale(ExampleWeb.Gettext, locale)
     locale
   end
 

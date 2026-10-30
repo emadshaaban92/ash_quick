@@ -1,13 +1,14 @@
-defmodule ExampleWeb.LabelTranslatorScenarioTest do
+defmodule ExampleWeb.LabelScenarioTest do
   @moduledoc """
   The labels AshQuick draws, in the reader's language.
 
   A label is English wherever it comes from — a humanized field or action
   name, a `label:` option, a nav entry or group, a `one_of` value — and most
-  are fixed when the QuickView compiles. `config :ash_quick, label_translator:`
-  names `ExampleWeb.Gettext.translate_label/1`, which looks each one up in
-  `priv/gettext/ar/LC_MESSAGES/labels.po` as the page renders, against the
-  locale `ExampleWeb.UserAuth` put on the process.
+  are fixed when the QuickView compiles. `config :ash_quick, gettext:` names
+  `ExampleWeb.Gettext`, where each one is looked up in
+  `priv/gettext/ar/LC_MESSAGES/ash_quick.po` as the page renders, against the
+  locale `ExampleWeb.UserAuth` put on the process. `mix ash_quick.gen.gettext`
+  listed them in the template.
 
   The English admin is the control throughout: the same page drawn for them
   still says what the code says, so an Arabic assertion is about the locale

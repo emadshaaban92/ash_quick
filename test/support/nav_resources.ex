@@ -36,6 +36,12 @@ defmodule AshQuick.Test.Nav.Brand do
     attribute :name, :string, public?: true
   end
 
+  # Two hops to a value set, for `mix ash_quick.gen.gettext`: a label can be
+  # any number of relationships away from the page that draws it.
+  relationships do
+    belongs_to :maker, AshQuick.Test.Nav.Maker, public?: true
+  end
+
   actions do
     default_accept [:name]
     defaults [:read, :create, :update, :destroy]
@@ -72,6 +78,32 @@ defmodule AshQuick.Test.Nav.Brand do
       inserted_by false
       updated_by false
     end
+  end
+end
+
+defmodule AshQuick.Test.Nav.Maker do
+  @moduledoc "Who makes a brand: one hop from the QuickView's resource."
+  use Ash.Resource, domain: AshQuick.Test.Nav.Domain, data_layer: Ash.DataLayer.Ets
+
+  attributes do
+    uuid_primary_key :id
+  end
+
+  relationships do
+    belongs_to :country, AshQuick.Test.Nav.Country, public?: true
+  end
+end
+
+defmodule AshQuick.Test.Nav.Country do
+  @moduledoc "Where a maker is: two hops away, with a fixed set of regions."
+  use Ash.Resource, domain: AshQuick.Test.Nav.Domain, data_layer: Ash.DataLayer.Ets
+
+  attributes do
+    uuid_primary_key :id
+
+    attribute :region, :atom,
+      public?: true,
+      constraints: [one_of: [:north_africa, :levant]]
   end
 end
 

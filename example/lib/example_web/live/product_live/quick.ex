@@ -19,6 +19,8 @@ defmodule ExampleWeb.ProductLive.Quick do
   the menu shows them. "Discount 10%" is the other kind of entry: a custom item
   whose event this module handles itself.
   """
+  use Gettext, backend: ExampleWeb.Gettext
+
   require Ash.Expr
 
   alias AshQuick.LiveView.ActionErrors
@@ -79,11 +81,15 @@ defmodule ExampleWeb.ProductLive.Quick do
   "Discount 10%" stays beside `Reprice` because it does what one set of inputs
   cannot: each row's new price comes from its own old one. `Reprice` sets the
   same price on every row.
+
+  AshQuick translates the title as it draws it, as it does every label. A
+  function is something `mix ash_quick.gen.gettext` cannot read, so the title is
+  marked for `mix gettext.extract` instead, in the `ash_quick` domain.
   """
   def bulk_actions(socket) do
     discount =
       if Ash.can?({Product, :reprice}, socket.assigns.scope, log_policy_breakdown?: false),
-        do: %{title: "Discount 10%", func: JS.push("discount")}
+        do: %{title: dgettext_noop("ash_quick", "Discount 10%"), func: JS.push("discount")}
 
     [:reprice, discount, :activate, :deactivate, :destroy]
   end

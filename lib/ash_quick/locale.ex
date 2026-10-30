@@ -2,9 +2,10 @@ defmodule AshQuick.Locale do
   @moduledoc """
   What a locale means for the markup around it.
 
-  The locale itself is Gettext's — set once per process from the scope, read
-  back with `Gettext.get_locale/0`. This answers the one thing Gettext does not:
-  which way the page runs, for the `dir` attribute the whole layout keys off.
+  The locale itself is Gettext's: the host sets it from the scope, process-wide
+  or on its own backend, and `current/0` reads it back from the backend AshQuick
+  translates through. This answers the one thing Gettext does not: which way
+  the page runs, for the `dir` attribute the whole layout keys off.
 
   Directional CSS is written with logical properties, so `dir` is the only
   switch: set it on `<html>` and the sidebar, tables and forms follow, as do
@@ -17,9 +18,15 @@ defmodule AshQuick.Locale do
   @rtl ~w(ar arc ckb dv fa he ks ku ps sd ug ur yi)
 
   @doc """
-  `"rtl"` or `"ltr"` for the process's current locale.
+  The reader's locale: the one the host's `:gettext` backend translates in, or
+  Gettext's process-wide one when there is no backend.
   """
-  def direction, do: Gettext.get_locale() |> direction()
+  def current, do: Gettext.get_locale(AshQuick.Config.gettext() || AshQuick.Gettext)
+
+  @doc """
+  `"rtl"` or `"ltr"` for the reader's locale (`current/0`).
+  """
+  def direction, do: current() |> direction()
 
   @doc """
   `"rtl"` or `"ltr"` for `locale`, ignoring any region suffix — `"ar_EG"` is as

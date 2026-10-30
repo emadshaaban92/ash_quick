@@ -444,9 +444,9 @@ defmodule AshQuick.LiveView.ListUtils do
       |> build_export_query(selected_ids, socket, options)
       |> Utils.load_fields(options.export_fields, strict?: true)
 
-    # The header is labelled in the reader's language, and a task inherits no
-    # locale. The scope's is the one a host puts on its pages, whether it set
-    # it process-wide or on its own backend, which falls back to this one.
+    # The header and the dates are in the reader's language, and a task
+    # inherits no locale. The scope's is the one a host puts on its pages;
+    # set process-wide, the host's backend falls back to it.
     locale = AshQuick.Scope.locale(socket.assigns.scope)
 
     socket =

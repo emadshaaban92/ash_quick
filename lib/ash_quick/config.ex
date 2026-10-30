@@ -59,14 +59,13 @@ defmodule AshQuick.Config do
     return a string. When `nil`, AshQuick uses simple string interpolation.
     Example: `{MyAppWeb.CoreComponents, :translate_error}`.
 
-  * `:label_translator` — A `{Module, :function}` tuple for translating the
-    labels AshQuick draws: field and action names, `label:` options, nav
-    entries and groups, page titles and the values of an enum or a `one_of`
-    atom. The function receives the English label as it would be drawn
-    (after `:humanize_overrides`) and must return a string. It runs on the
-    process that renders, so it sees the reader's locale. When `nil`, labels
-    are drawn in English. See `AshQuick.Labels`. Example:
-    `{MyAppWeb.Gettext, :translate_label}`.
+  * `:gettext` — The host's Gettext backend (e.g. `MyAppWeb.Gettext`). Every
+    string AshQuick draws, its own and the labels it draws (field and action
+    names, `label:` options, nav entries and groups, page titles and the values
+    of an enum or a `one_of` atom), is looked up there in the `ash_quick`
+    domain, in that backend's locale. `mix ash_quick.gen.gettext` writes the
+    template. When `nil`, everything is drawn in English. See
+    `AshQuick.Gettext` and `AshQuick.Labels`.
 
   * `:endpoint` — The host's `Phoenix.Endpoint`. AshQuick publishes resource
     notifications through it, signs impersonation tokens with its secret, and
@@ -250,8 +249,9 @@ defmodule AshQuick.Config do
   Formats a `DateTime` or `NaiveDateTime` for display.
 
   Shifts a `DateTime` to the configured timezone; a `NaiveDateTime` names no
-  zone, so it is formatted as it is. Formats with
-  `Localize.DateTime.to_string!/1` when available; otherwise falls back to
+  zone, so it is formatted as it is. Formats with `Localize.DateTime` in the
+  reader's locale (`AshQuick.Locale.current/0`) when Localize is loaded;
+  otherwise, or for a locale Localize does not know, falls back to
   `Calendar.strftime/2`.
   """
   def format_datetime(nil), do: ""
@@ -263,11 +263,9 @@ defmodule AshQuick.Config do
   def format_datetime(%NaiveDateTime{} = value), do: localize_datetime(value)
 
   defp localize_datetime(value) do
-    if Code.ensure_loaded?(Localize.DateTime) do
-      Localize.DateTime.to_string!(value)
-    else
+    localized(Localize.DateTime, value, [], fn ->
       Calendar.strftime(value, "%Y-%m-%d %H:%M:%S")
-    end
+    end)
   end
 
   @doc """
@@ -290,11 +288,9 @@ defmodule AshQuick.Config do
   defp localize_time(value, opts) do
     format = Keyword.get(opts, :format, :short)
 
-    if Code.ensure_loaded?(Localize.Time) do
-      Localize.Time.to_string!(value, format: format)
-    else
+    localized(Localize.Time, value, [format: format], fn ->
       Calendar.strftime(value, strftime_time_format(format))
-    end
+    end)
   end
 
   defp strftime_time_format(:short), do: "%H:%M"
@@ -303,16 +299,25 @@ defmodule AshQuick.Config do
   @doc """
   Formats a `Date` for display.
 
-  Uses `Localize.Date.to_string!/1` when available; otherwise falls back
-  to `Calendar.strftime/2`.
+  Uses `Localize.Date` in the reader's locale when Localize is loaded;
+  otherwise, or for a locale Localize does not know, falls back to
+  `Calendar.strftime/2`.
   """
   def format_date(nil), do: ""
 
   def format_date(%Date{} = value) do
-    if Code.ensure_loaded?(Localize.Date) do
-      Localize.Date.to_string!(value)
+    localized(Localize.Date, value, [], fn -> Calendar.strftime(value, "%Y-%m-%d") end)
+  end
+
+  # Localize keeps a locale of its own that nothing sets, so the reader's is
+  # passed. A locale Localize has no data for falls back inside Localize; one it
+  # cannot parse at all is an error, which reads as no Localize.
+  defp localized(module, value, opts, fallback) do
+    with true <- Code.ensure_loaded?(module),
+         {:ok, string} <- module.to_string(value, [locale: AshQuick.Locale.current()] ++ opts) do
+      string
     else
-      Calendar.strftime(value, "%Y-%m-%d")
+      _no_localize -> fallback.()
     end
   end
 
@@ -368,12 +373,21 @@ defmodule AshQuick.Config do
   end
 
   @doc """
-  Returns the configured label translator, or `nil` for none.
-
-  When set, should be a `{Module, :function}` tuple.
+  Returns the host's Gettext backend AshQuick translates through, or `nil` for
+  none.
   """
-  def label_translator do
-    get(:label_translator)
+  def gettext do
+    case get(:gettext) do
+      AshQuick.Gettext ->
+        # It forwards every lookup to this backend, so it would forward to
+        # itself until the stack gave out.
+        raise ArgumentError,
+              "config :ash_quick, gettext: names the host's own Gettext backend " <>
+                "(e.g. MyAppWeb.Gettext), not AshQuick.Gettext, which forwards to it"
+
+      backend ->
+        backend
+    end
   end
 
   @doc """

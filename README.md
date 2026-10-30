@@ -51,6 +51,7 @@ config :ash_quick,
   audit_resource: MyApp.AuditLog,
   nav: MyAppWeb.Nav,
   storage: MyApp.Uploads.ObjectStore,
+  gettext: MyAppWeb.Gettext,
   error_translator: {MyAppWeb.CoreComponents, :translate_error},
   timezone: "Etc/UTC"
 ```
@@ -85,37 +86,50 @@ leaves out shows nowhere.
 
 A run a policy refuses shows that policy's `error_message` when it has one, and
 "You don't have permission to do that." when it has none; that sentence, like
-AshQuick's other flashes, comes from AshQuick's own catalogue. The policy's
-message is a msgid like Ash's own, so it goes through `:error_translator` too:
-add it to your `errors` catalogue. Only the message is shown, never the policy breakdown.
+AshQuick's other flashes, is one of AshQuick's own messages (see below). The
+policy's message is a msgid like Ash's own, so it goes through
+`:error_translator` too: add it to your `errors` catalogue. Only the message is
+shown, never the policy breakdown.
 An `error_message` function that returns an exception of its own replaces the
 policy error, so the flash shows the fixed sentence instead.
 
-`:label_translator` does for labels what `:error_translator` does for errors.
-Every label AshQuick draws is English: a field or action name humanized (after
+`:gettext` names your Gettext backend, and AshQuick translates everything else
+it draws there, in the `ash_quick` domain and in that backend's locale: its own
+buttons, flashes and empty states, and the labels it draws. A label is English
+wherever it comes from: a field or action name humanized (after
 `:humanize_overrides`), a `label:` option, a `new_action_label`, a saved
-filter's label, a custom bulk item's title, a nav entry or group, a page
-title, an enum's or a `one_of` atom's value. Many are fixed when a QuickView
-compiles, so AshQuick hands each one to the translator where it draws it, on
-the process that renders, and the reader's locale applies; an export's header
-is translated in the scope's locale too.
-Name a function that takes the English label and returns the string to draw:
+filter's label, a custom bulk item's title, a nav entry or group, a page title,
+an enum's or a `one_of` atom's value. Many are fixed when a QuickView compiles,
+so AshQuick translates each where it draws it, on the process that renders,
+where the reader's locale is set; an export's header and dates are in the
+scope's locale too. Set the locale however you set it for your own pages,
+process-wide or on your backend. Without `:gettext`, AshQuick draws English.
 
-```elixir
-config :ash_quick, label_translator: {MyAppWeb.Gettext, :translate_label}
+Labels are not `gettext` call sites, so `mix gettext.extract` cannot find them.
+`mix ash_quick.gen.gettext` writes `priv/gettext/ash_quick.pot` with AshQuick's
+own messages and every label your nav and QuickViews draw, read off them along
+with the resources they reach:
 
-# in MyAppWeb.Gettext
-def translate_label(label), do: Gettext.dgettext(__MODULE__, "labels", label)
+```bash
+mix ash_quick.gen.gettext --locale ar
+mix gettext.merge priv/gettext
 ```
 
-The English label is the msgid. Labels are not `gettext` call sites, so
-`mix gettext.extract` does not find them: write them into
-`priv/gettext/<locale>/LC_MESSAGES/labels.po` as they read on the page. A label
-the catalogue lacks is drawn in English. With no translator, every label is.
+`--locale ar` copies the Arabic translation AshQuick ships, as a starting point;
+copied once, it is yours to edit. Run the task again when you add a field, an action or a nav entry, and
+`mix ash_quick.gen.gettext --check` in CI fails until you do. A label the task
+cannot read, such as the title of a bulk item a function builds, is marked where
+you write it, and `mix gettext.extract` adds it to the same template, which the
+task keeps:
 
-To find the ones the catalogue lacks, override your backend's
-`handle_missing_translation/5`, which Gettext calls for every message a locale
-has no entry for, and log them:
+```elixir
+%{title: dgettext_noop("ash_quick", "Discount 10%"), func: JS.push("discount")}
+```
+
+The template being complete does not make a locale's translation complete: an
+entry left with an empty `msgstr` is drawn in English. To hear about those in
+dev, override your backend's `handle_missing_translation/5`, which Gettext calls
+for every message a locale has no translation for, AshQuick's included:
 
 ```elixir
 # in MyAppWeb.Gettext, after `use Gettext.Backend`
@@ -136,15 +150,7 @@ def handle_missing_translation(locale, domain, msgctxt, msgid, bindings) do
 end
 ```
 
-Every label goes through the translator, so this names the ones that are easy
-to miss by eye too: an enum value in a dropdown, a nested form's input, a field
-a flashed error names, an export header. An entry left with an empty
-`msgstr` counts as missing too. Skip the language the msgids are written in,
-which has nothing to miss, rather than the default locale: an app that
-defaults to another language still needs to hear what that one lacks. Keep it
-to dev (the example app gates it on a `compile_env` flag). It names a label
-once per process, so each page logs what it lacks, and only once a page in
-that locale has drawn it.
+Keep it to dev (the example app gates it on a `compile_env` flag).
 
 A custom template that draws a resource's labels itself calls `AshQuick.Labels`
 (`name/1` for a field, action or value name, `field/1` for a `:fields` entry,

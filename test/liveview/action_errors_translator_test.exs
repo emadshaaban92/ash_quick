@@ -1,10 +1,11 @@
 defmodule AshQuick.LiveView.ActionErrorsTranslatorTest do
   @moduledoc """
   Ash's messages in a flash go through the host's `:error_translator`, as they
-  do next to an input, and the field named in front of one through its
-  `:label_translator`.
+  do next to an input, and the field named in front of one is a label, looked
+  up in its `:gettext` backend.
 
-  Not async: the translators are application config, read on every call.
+  Not async: the translator and the backend are application config, read on
+  every call.
   """
   use ExUnit.Case, async: false
 
@@ -29,16 +30,13 @@ defmodule AshQuick.LiveView.ActionErrorsTranslatorTest do
     end
   end
 
-  defmodule Labels do
-    @moduledoc false
-    # One label, so the other tests' fields are still drawn in English.
-    def translate_label("Sku"), do: "Référence"
-    def translate_label(label), do: label
-  end
-
+  # Its French catalogue holds one label, so the other tests' fields are still
+  # drawn in English.
   setup do
     put_config(:error_translator, {Translator, :translate_error})
-    put_config(:label_translator, {Labels, :translate_label})
+    put_config(:gettext, AshQuick.Test.LabelGettext)
+    Gettext.put_locale(AshQuick.Test.LabelGettext, "fr")
+    :ok
   end
 
   defp put_config(key, value) do
@@ -61,7 +59,7 @@ defmodule AshQuick.LiveView.ActionErrorsTranslatorTest do
     assert ActionErrors.user_facing_message(error) == "Name: est obligatoire"
   end
 
-  test "names the field in front through the label translator" do
+  test "names the field in front in the reader's language" do
     error =
       Ash.Error.Invalid.exception(
         errors: [Ash.Error.Changes.Required.exception(field: :sku, type: :attribute)]

@@ -1,0 +1,900 @@
+## This file is a PO Template file.
+##
+## "msgid"s here are often extracted from source code.
+## Add new messages manually only if they're dynamic
+## messages that can't be statically extracted.
+##
+## Run "mix gettext.extract" to bring this file up to
+## date. Leave "msgstr"s empty as changing them here has no
+## effect: edit them in PO (.po) files instead.
+#
+msgid ""
+msgstr ""
+
+#, elixir-format
+msgid "%{count} tab"
+msgid_plural "%{count} tabs"
+msgstr[0] ""
+msgstr[1] ""
+
+#, elixir-format
+msgid "AND"
+msgstr ""
+
+#, elixir-format
+msgid "Access Forbidden"
+msgstr ""
+
+#, elixir-format
+msgid "Acting as"
+msgstr ""
+
+#, elixir-format
+msgid "Actions"
+msgstr ""
+
+#, elixir-format
+msgid "Add"
+msgstr ""
+
+#, elixir-format
+msgid "Advanced filters"
+msgstr ""
+
+#, elixir-format
+msgid "Apply Filters"
+msgstr ""
+
+#, elixir-format
+msgid "Are you sure?"
+msgstr ""
+
+#, elixir-format
+msgid "Close"
+msgstr ""
+
+#, elixir-format
+msgid "Contains"
+msgstr ""
+
+#, elixir-format
+msgid "Create"
+msgstr ""
+
+#, elixir-format
+msgid "Created by %{actor}"
+msgstr ""
+
+#, elixir-format
+msgid "Created by %{actor} on %{at}"
+msgstr ""
+
+#, elixir-format
+msgid "Created on %{at}"
+msgstr ""
+
+#, elixir-format
+msgid "Custom Filter"
+msgstr ""
+
+#, elixir-format
+msgid "Data exported successfully!"
+msgstr ""
+
+#, elixir-format
+msgid "Download"
+msgstr ""
+
+#, elixir-format
+msgid "End"
+msgstr ""
+
+#, elixir-format
+msgid "End session"
+msgstr ""
+
+#, elixir-format
+msgid "Everyone signed in right now, the tabs they have open, and the page each one is on. A tab drops off this list when it is closed, signs out, or loses its connection."
+msgstr ""
+
+#, elixir-format
+msgid "Export"
+msgstr ""
+
+#, elixir-format
+msgid "Failed to export"
+msgstr ""
+
+#, elixir-format
+msgid "Filter"
+msgstr ""
+
+#, elixir-format
+msgid "Generating Data ..."
+msgstr ""
+
+#, elixir-format
+msgid "Go Home"
+msgstr ""
+
+#, elixir-format
+msgid "Go back home"
+msgstr ""
+
+#, elixir-format
+msgid "Group"
+msgstr ""
+
+#, elixir-format
+msgid "Impersonating"
+msgstr ""
+
+#, elixir-format
+msgid "Impersonations only"
+msgstr ""
+
+#, elixir-format
+msgid "Last updated by %{actor}"
+msgstr ""
+
+#, elixir-format
+msgid "Last updated by %{actor} on %{at}"
+msgstr ""
+
+#, elixir-format
+msgid "Last updated on %{at}"
+msgstr ""
+
+#, elixir-format
+msgid "Live Users"
+msgstr ""
+
+#, elixir-format
+msgid "Loading…"
+msgstr ""
+
+#, elixir-format
+msgid "Next page"
+msgstr ""
+
+#, elixir-format
+msgid "No actions available"
+msgstr ""
+
+#, elixir-format
+msgid "Nobody is impersonating anyone right now."
+msgstr ""
+
+#, elixir-format
+msgid "Nobody is signed in right now."
+msgstr ""
+
+#, elixir-format
+msgid "Nobody matches that name."
+msgstr ""
+
+#, elixir-format
+msgid "Not on a page"
+msgstr ""
+
+#, elixir-format
+msgid "Now viewing"
+msgstr ""
+
+#, elixir-format
+msgid "OR"
+msgstr ""
+
+#, elixir-format
+msgid "Open as them"
+msgstr ""
+
+#, elixir-format
+msgid "Previous page"
+msgstr ""
+
+#, elixir-format
+msgid "Processing"
+msgstr ""
+
+#, elixir-format
+msgid "Rejected"
+msgstr ""
+
+#, elixir-format
+msgid "Reset"
+msgstr ""
+
+#, elixir-format
+msgid "Retry"
+msgstr ""
+
+#, elixir-format
+msgid "Row actions"
+msgstr ""
+
+#, elixir-format
+msgid "Save"
+msgstr ""
+
+#, elixir-format
+msgid "Search"
+msgstr ""
+
+#, elixir-format
+msgid "Search by name"
+msgstr ""
+
+#, elixir-format
+msgid "Select"
+msgstr ""
+
+#, elixir-format
+msgid "Select all rows"
+msgstr ""
+
+#, elixir-format
+msgid "Select filters"
+msgstr ""
+
+#, elixir-format
+msgid "Select row"
+msgstr ""
+
+#, elixir-format
+msgid "Rows per page"
+msgstr ""
+
+#, elixir-format
+msgid "Showing %{from}-%{to} of %{count}"
+msgstr ""
+
+#, elixir-format
+msgid "Sidenav"
+msgstr ""
+
+#, elixir-format
+msgid "Started"
+msgstr ""
+
+#, elixir-format
+msgid "Starts With"
+msgstr ""
+
+#, elixir-format
+msgid "Table navigation"
+msgstr ""
+
+#, elixir-format
+msgid "The resource you're looking for could not be found."
+msgstr ""
+
+#, elixir-format
+msgid "Themselves"
+msgstr ""
+
+#, elixir-format
+msgid "This file is still being processed"
+msgstr ""
+
+#, elixir-format
+msgid "This file was refused"
+msgstr ""
+
+#, elixir-format
+msgid "Toggle sidebar"
+msgstr ""
+
+#, elixir-format
+msgid "View details"
+msgstr ""
+
+#, elixir-format
+msgid "You do not have permission to perform this action. Please contact an administrator if you believe this is an error."
+msgstr ""
+
+#, elixir-format
+msgid "You're impersonating %{actor}"
+msgstr ""
+
+#, elixir-format
+msgid "cancel"
+msgstr ""
+
+#, elixir-format
+msgid "from %{ip}"
+msgstr ""
+
+#, elixir-format
+msgid "Go Back"
+msgstr ""
+
+#, elixir-format
+msgctxt "query builder"
+msgid "Filter"
+msgstr ""
+
+#, elixir-format
+msgid "No results on this page, of %{count} in total"
+msgstr ""
+
+#, elixir-format
+msgid "%{count}, %{size} MB each — %{exts}"
+msgstr ""
+
+#, elixir-format
+msgid "Add %{name}"
+msgstr ""
+
+#, elixir-format
+msgid "Add more %{name}"
+msgstr ""
+
+#, elixir-format
+msgid "One file"
+msgstr ""
+
+#, elixir-format
+msgid "Remove"
+msgstr ""
+
+#, elixir-format
+msgid "Up to %{count} at a time"
+msgstr ""
+
+#, elixir-format
+msgid "any type"
+msgstr ""
+
+#, elixir-format
+msgid "browse"
+msgstr ""
+
+#, elixir-format
+msgid "drop them here or"
+msgstr ""
+
+#, elixir-format
+msgid "Hidden"
+msgstr ""
+
+#, elixir-format
+msgid "Applies to 1 selected row."
+msgid_plural "Applies to %{count} selected rows."
+msgstr[0] ""
+msgstr[1] ""
+
+#, elixir-format
+msgid "Cancel"
+msgstr ""
+
+#, elixir-format
+msgid "Confirm"
+msgstr ""
+
+#, elixir-format
+msgid "%{action} applied to %{applied} of 1 selected row."
+msgid_plural "%{action} applied to %{applied} of %{count} selected rows."
+msgstr[0] ""
+msgstr[1] ""
+
+#, elixir-format
+msgid "External Client Failure"
+msgstr ""
+
+#, elixir-format
+msgid "Impersonation ended."
+msgstr ""
+
+#, elixir-format
+msgid "It was recorded, but its PDF could not be produced. Print it again."
+msgstr ""
+
+#, elixir-format
+msgid "Record deleted successfully"
+msgstr ""
+
+#, elixir-format
+msgid "Record saved successfully"
+msgstr ""
+
+#, elixir-format
+msgid "Something went wrong on our end. Please try again, or contact support if it keeps happening."
+msgstr ""
+
+#, elixir-format
+msgid "That filter couldn't be applied to this list, so it was ignored."
+msgstr ""
+
+#, elixir-format
+msgid "That record no longer exists — it may have been deleted since you opened this page."
+msgstr ""
+
+#, elixir-format
+msgid "That session has already ended."
+msgstr ""
+
+#, elixir-format
+msgid "The other row was not changed and is still selected: check it and try again."
+msgid_plural "The other %{count} rows were not changed and are still selected: check them and try again."
+msgstr[0] ""
+msgstr[1] ""
+
+#, elixir-format
+msgid "This file could not be uploaded"
+msgstr ""
+
+#, elixir-format
+msgid "This file was refused and has not been uploaded"
+msgstr ""
+
+#, elixir-format
+msgid "This record changed since you opened it — reload to see the latest, then try again."
+msgstr ""
+
+#, elixir-format
+msgid "Too large"
+msgstr ""
+
+#, elixir-format
+msgid "Unable to determine current user for export"
+msgstr ""
+
+#, elixir-format
+msgid "You don't have permission to do that."
+msgstr ""
+
+#, elixir-format
+msgid "You have selected an unacceptable file type"
+msgstr ""
+
+#, elixir-format
+msgid "You have selected too many files"
+msgstr ""
+
+#, elixir-format
+msgid "No"
+msgstr ""
+
+#, elixir-format
+msgid "Yes"
+msgstr ""
+
+#, elixir-format
+msgid "%{count} filter applied"
+msgid_plural "%{count} filters applied"
+msgstr[0] ""
+msgstr[1] ""
+
+#, elixir-format
+msgid "Any of:"
+msgstr ""
+
+#, elixir-format
+msgid "Clear all"
+msgstr ""
+
+#, elixir-format
+msgid "Remove filter"
+msgstr ""
+
+#, elixir-format
+msgid "All of %{count} condition"
+msgid_plural "All of %{count} conditions"
+msgstr[0] ""
+msgstr[1] ""
+
+#, elixir-format
+msgid "Any of %{count} condition"
+msgid_plural "Any of %{count} conditions"
+msgstr[0] ""
+msgstr[1] ""
+
+#, elixir-format
+msgid "contains"
+msgstr ""
+
+#, elixir-format
+msgid "starts with"
+msgstr ""
+
+#, elixir-format
+msgid "Any Of"
+msgstr ""
+
+#, elixir-format
+msgid "Ends With"
+msgstr ""
+
+#, elixir-format
+msgid "Is Empty"
+msgstr ""
+
+#, elixir-format
+msgid "Is Not Empty"
+msgstr ""
+
+#, elixir-format
+msgid "Not Contains"
+msgstr ""
+
+#, elixir-format
+msgid "On Day"
+msgstr ""
+
+#, elixir-format
+msgid "does not contain"
+msgstr ""
+
+#, elixir-format
+msgid "ends with"
+msgstr ""
+
+#, elixir-format
+msgid "is any of"
+msgstr ""
+
+#, elixir-format
+msgid "is empty"
+msgstr ""
+
+#, elixir-format
+msgid "is not empty"
+msgstr ""
+
+#, elixir-format
+msgctxt "filter chip"
+msgid "on"
+msgstr ""
+
+#, elixir-format
+msgid "Next"
+msgstr ""
+
+#, elixir-format
+msgid "Open"
+msgstr ""
+
+#, elixir-format
+msgid "Previous"
+msgstr ""
+
+#, elixir-format
+msgid "View %{name}"
+msgstr ""
+
+#, elixir-format
+msgid "Images"
+msgstr ""
+
+#, elixir-format
+msgid "%{label} (%{hint})"
+msgstr ""
+
+#, elixir-format
+msgid "Leave blank to keep it"
+msgstr ""
+
+#, elixir-format
+msgid "redacted"
+msgstr ""
+
+#, elixir-format
+msgid "%{field}: %{message}"
+msgstr ""
+
+#, elixir-format
+msgid "[%{resource}] %{action}"
+msgstr ""
+
+#, elixir-format
+msgid "%{resource} - %{record}"
+msgstr ""
+
+msgid "Accepts"
+msgstr ""
+
+msgid "Action Name"
+msgstr ""
+
+msgid "Action Type"
+msgstr ""
+
+msgid "Activate"
+msgstr ""
+
+msgid "Active"
+msgstr ""
+
+msgid "Actor"
+msgstr ""
+
+msgid "Add Brand"
+msgstr ""
+
+msgid "Add Category"
+msgstr ""
+
+msgid "Add Images"
+msgstr ""
+
+msgid "Add Product"
+msgstr ""
+
+msgid "Add User"
+msgstr ""
+
+msgid "Admin"
+msgstr ""
+
+msgid "Arguments"
+msgstr ""
+
+msgid "Attributes"
+msgstr ""
+
+msgid "Audit"
+msgstr ""
+
+msgid "Audit Log"
+msgstr ""
+
+msgid "Audit Logs"
+msgstr ""
+
+msgid "Brand"
+msgstr ""
+
+msgid "Brands"
+msgstr ""
+
+msgid "By Email"
+msgstr ""
+
+msgid "By Keys"
+msgstr ""
+
+msgid "Byte Size"
+msgstr ""
+
+msgid "Catalog"
+msgstr ""
+
+msgid "Categories"
+msgstr ""
+
+msgid "Category"
+msgstr ""
+
+msgid "Changes"
+msgstr ""
+
+msgid "Children"
+msgstr ""
+
+msgid "Clearance"
+msgstr ""
+
+msgid "Code"
+msgstr ""
+
+msgid "Content Type"
+msgstr ""
+
+msgid "Context"
+msgstr ""
+
+msgid "Create With Children"
+msgstr ""
+
+msgid "Deactivate"
+msgstr ""
+
+msgid "Delete"
+msgstr ""
+
+msgid "Description"
+msgstr ""
+
+msgid "Document"
+msgstr ""
+
+msgid "Documents"
+msgstr ""
+
+msgid "Editor"
+msgstr ""
+
+msgid "Email"
+msgstr ""
+
+msgid "English"
+msgstr ""
+
+msgid "File Object"
+msgstr ""
+
+msgid "File Objects"
+msgstr ""
+
+msgid "From Price"
+msgstr ""
+
+msgid "Home"
+msgstr ""
+
+msgid "Id"
+msgstr ""
+
+msgid "Image"
+msgstr ""
+
+msgid "Impersonate"
+msgstr ""
+
+msgid "Index"
+msgstr ""
+
+msgid "Inserted At"
+msgstr ""
+
+msgid "Inserted By"
+msgstr ""
+
+msgid "Ip"
+msgstr ""
+
+msgid "Key"
+msgstr ""
+
+msgid "Locale"
+msgstr ""
+
+msgid "Max Bytes"
+msgstr ""
+
+msgid "Name"
+msgstr ""
+
+msgid "New"
+msgstr ""
+
+msgid "New Images"
+msgstr ""
+
+msgid "On sale"
+msgstr ""
+
+msgid "Open a Store"
+msgstr ""
+
+msgid "Original Filename"
+msgstr ""
+
+msgid "Parent"
+msgstr ""
+
+msgid "Price"
+msgstr ""
+
+msgid "Price Change"
+msgstr ""
+
+msgid "Price Changes"
+msgstr ""
+
+msgid "Product"
+msgstr ""
+
+msgid "Products"
+msgstr ""
+
+msgid "Quick Add"
+msgstr ""
+
+msgid "Read"
+msgstr ""
+
+msgid "Ready"
+msgstr ""
+
+msgid "Real Actor"
+msgstr ""
+
+msgid "Real actor"
+msgstr ""
+
+msgid "Referenced At"
+msgstr ""
+
+msgid "Referenced By"
+msgstr ""
+
+msgid "Reprice"
+msgstr ""
+
+msgid "Resource"
+msgstr ""
+
+msgid "Resource Name"
+msgstr ""
+
+msgid "Role"
+msgstr ""
+
+msgid "Sale"
+msgstr ""
+
+msgid "Settings"
+msgstr ""
+
+msgid "Sku"
+msgstr ""
+
+msgid "Source"
+msgstr ""
+
+msgid "Staff Pick"
+msgstr ""
+
+msgid "State"
+msgstr ""
+
+msgid "Store"
+msgstr ""
+
+msgid "Stores"
+msgstr ""
+
+msgid "Tags"
+msgstr ""
+
+msgid "Take Custody"
+msgstr ""
+
+msgid "Tenant"
+msgstr ""
+
+msgid "To Price"
+msgstr ""
+
+msgid "Update"
+msgstr ""
+
+msgid "Updated At"
+msgstr ""
+
+msgid "Updated By"
+msgstr ""
+
+msgid "Upload Form"
+msgstr ""
+
+msgid "Uploaded by"
+msgstr ""
+
+msgid "Uploads"
+msgstr ""
+
+msgid "User"
+msgstr ""
+
+msgid "Users"
+msgstr ""
+
+msgid "Version"
+msgstr ""
+
+msgid "Video"
+msgstr ""
+
+msgid "Viewer"
+msgstr ""
+
+msgid "العربية"
+msgstr ""
+
+#: lib/example_web/live/product_live/quick.ex:92
+#, elixir-autogen, elixir-format
+msgid "Discount 10%"
+msgstr ""
