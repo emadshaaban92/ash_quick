@@ -1,17 +1,17 @@
 defmodule AshQuick.GettextCatalogueTest do
   # CI's `mix gettext.extract --check-up-to-date` holds the .pot to the code.
-  # This holds each locale's .po to the .pot: a message nobody merged, left
-  # empty, or that `gettext.merge` matched to a different one and marked fuzzy
-  # shows the wrong words, or English, with CI green otherwise.
+  # This holds each seed a host can start from to the .pot: a message nobody
+  # merged, left empty, or that `gettext.merge` matched to a different one and
+  # marked fuzzy shows the wrong words, or English, with CI green otherwise.
   use ExUnit.Case, async: true
 
   alias Expo.Message
 
-  @dir Path.expand("../priv/gettext", __DIR__)
-  @pot Path.join(@dir, "ash_quick.pot")
+  @dir Path.expand("../priv/gettext_seeds", __DIR__)
+  @pot Path.expand("../priv/gettext/ash_quick.pot", __DIR__)
   @locales @dir |> Path.join("*/LC_MESSAGES/ash_quick.po") |> Path.wildcard()
 
-  test "ships at least one locale" do
+  test "ships at least one seed" do
     assert [_ | _] = Path.wildcard(Path.join(@dir, "*/LC_MESSAGES/ash_quick.po"))
   end
 
@@ -24,7 +24,7 @@ defmodule AshQuick.GettextCatalogueTest do
         missing = keys(Expo.PO.parse_file!(@pot)) -- keys(Expo.PO.parse_file!(@po))
 
         assert missing == [],
-               "#{@locale} lacks #{inspect(missing)}; run `mix gettext.extract --merge`"
+               "#{@locale} lacks #{inspect(missing)}; run `mix gettext.merge priv/gettext_seeds/#{@locale}/LC_MESSAGES/ash_quick.po priv/gettext/ash_quick.pot`"
       end
 
       test "translates every message, in every plural form" do

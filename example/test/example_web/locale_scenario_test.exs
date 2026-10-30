@@ -2,8 +2,9 @@ defmodule ExampleWeb.LocaleScenarioTest do
   @moduledoc """
   The language a person's pages render in, and the direction they run.
 
-  Everything AshQuick draws goes through `AshQuick.Gettext`, against whatever
-  locale is on the process. The locale itself comes off the scope
+  Everything AshQuick draws goes through `AshQuick.Gettext` to this
+  application's `ExampleWeb.Gettext`, against whatever locale is on the
+  process. The locale itself comes off the scope
   (`AshQuick.Scope.locale/1`), and `ExampleWeb.UserAuth` is what puts it there —
   once in the `:assign_scope` plug, for the render the browser gets first, and
   again at the LiveView mount.
@@ -20,8 +21,8 @@ defmodule ExampleWeb.LocaleScenarioTest do
 
   alias Example.Accounts.User
 
-  # AshQuick's own catalogue, not this application's — the point is that a host
-  # gets the library's chrome translated without shipping a string for it.
+  # AshQuick's own strings, translated in this application's `ash_quick.po`,
+  # which started as the Arabic seed AshQuick ships.
   @search_en "Search"
   @search_ar "بحث"
   @export_ar "تصدير"

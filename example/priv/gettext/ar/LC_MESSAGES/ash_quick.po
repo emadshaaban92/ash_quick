@@ -1,0 +1,928 @@
+## "msgid"s in this file come from POT (.pot) files.
+###
+### Do not add, change, or remove "msgid"s manually here as
+### they're tied to the ones in the corresponding POT file
+### (with the same domain).
+###
+### Use "mix gettext.extract --merge" or "mix gettext.merge"
+### to merge POT files into PO files.
+msgid ""
+msgstr ""
+"Language: ar\n"
+"Plural-Forms: nplurals=6; plural=(n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 && n%100<=10 ? 3 : n%100>=11 ? 4 : 5);\n"
+
+#, elixir-format
+msgid "%{count} tab"
+msgid_plural "%{count} tabs"
+msgstr[0] "لا تبويبات"
+msgstr[1] "تبويب واحد"
+msgstr[2] "تبويبان"
+msgstr[3] "%{count} تبويبات"
+msgstr[4] "%{count} تبويبًا"
+msgstr[5] "%{count} تبويب"
+
+#, elixir-format
+msgid "AND"
+msgstr "و"
+
+#, elixir-format
+msgid "Access Forbidden"
+msgstr "لا تملك صلاحية الوصول"
+
+#, elixir-format
+msgid "Acting as"
+msgstr "الحساب النشط"
+
+#, elixir-format
+msgid "Actions"
+msgstr "إجراءات"
+
+#, elixir-format
+msgid "Add"
+msgstr "إضافة"
+
+#, elixir-format
+msgid "Advanced filters"
+msgstr "بحث متقدم"
+
+#, elixir-format
+msgid "Apply Filters"
+msgstr "تطبيق البحث"
+
+#, elixir-format
+msgid "Are you sure?"
+msgstr "هل أنت متأكد؟"
+
+#, elixir-format
+msgid "Close"
+msgstr "إغلاق"
+
+#, elixir-format
+msgid "Contains"
+msgstr "يحتوي على"
+
+#, elixir-format
+msgid "Create"
+msgstr "إنشاء"
+
+#, elixir-format
+msgid "Created by %{actor}"
+msgstr "أنشأه %{actor}"
+
+#, elixir-format
+msgid "Created by %{actor} on %{at}"
+msgstr "أنشأه %{actor} في %{at}"
+
+#, elixir-format
+msgid "Created on %{at}"
+msgstr "أنشئ في %{at}"
+
+#, elixir-format
+msgid "Custom Filter"
+msgstr "بحث متقدم"
+
+#, elixir-format
+msgid "Data exported successfully!"
+msgstr "تم تصدير البيانات بنجاح!"
+
+#, elixir-format
+msgid "Download"
+msgstr "تنزيل"
+
+#, elixir-format
+msgid "End"
+msgstr "إنهاء"
+
+#, elixir-format
+msgid "End session"
+msgstr "إنهاء الجلسة"
+
+#, elixir-format
+msgid "Everyone signed in right now, the tabs they have open, and the page each one is on. A tab drops off this list when it is closed, signs out, or loses its connection."
+msgstr "كل من سجّل دخوله الآن، والتبويبات المفتوحة لديه، والصفحة التي يتصفحها كل واحد منهم. يختفي التبويب من هذه القائمة عند إغلاقه أو تسجيل الخروج أو انقطاع الاتصال."
+
+#, elixir-format
+msgid "Export"
+msgstr "تصدير"
+
+#, elixir-format
+msgid "Failed to export"
+msgstr "تعذّر التصدير"
+
+#, elixir-format
+msgid "Filter"
+msgstr "فلتر"
+
+#, elixir-format
+msgid "Generating Data ..."
+msgstr "جارٍ تجهيز البيانات..."
+
+#, elixir-format
+msgid "Go Home"
+msgstr "الصفحة الرئيسية"
+
+#, elixir-format
+msgid "Go back home"
+msgstr "العودة إلى الصفحة الرئيسية"
+
+#, elixir-format
+msgid "Group"
+msgstr "مجموعة"
+
+#, elixir-format
+msgid "Impersonating"
+msgstr "دخول بحساب آخر"
+
+#, elixir-format
+msgid "Impersonations only"
+msgstr "الجلسات بحساب آخر فقط"
+
+#, elixir-format
+msgid "Last updated by %{actor}"
+msgstr "آخر تحديث بواسطة %{actor}"
+
+#, elixir-format
+msgid "Last updated by %{actor} on %{at}"
+msgstr "آخر تحديث بواسطة %{actor} في %{at}"
+
+#, elixir-format
+msgid "Last updated on %{at}"
+msgstr "آخر تحديث في %{at}"
+
+#, elixir-format
+msgid "Live Users"
+msgstr "المستخدمون المتصلون الآن"
+
+#, elixir-format
+msgid "Loading…"
+msgstr "جارٍ التحميل…"
+
+#, elixir-format
+msgid "Next page"
+msgstr "الصفحة التالية"
+
+#, elixir-format
+msgid "No actions available"
+msgstr "لا توجد إجراءات متاحة"
+
+#, elixir-format
+msgid "Nobody is impersonating anyone right now."
+msgstr "لا أحد يتصفح بحساب مستخدم آخر الآن."
+
+#, elixir-format
+msgid "Nobody is signed in right now."
+msgstr "لا أحد مسجّل دخوله الآن."
+
+#, elixir-format
+msgid "Nobody matches that name."
+msgstr "لا أحد يطابق هذا الاسم."
+
+#, elixir-format
+msgid "Not on a page"
+msgstr "لا يتصفح أي صفحة"
+
+#, elixir-format
+msgid "Now viewing"
+msgstr "الصفحة الحالية"
+
+#, elixir-format
+msgid "OR"
+msgstr "أو"
+
+#, elixir-format
+msgid "Open as them"
+msgstr "الدخول بحسابه"
+
+#, elixir-format
+msgid "Previous page"
+msgstr "الصفحة السابقة"
+
+#, elixir-format
+msgid "Processing"
+msgstr "قيد المعالجة"
+
+#, elixir-format
+msgid "Rejected"
+msgstr "مرفوض"
+
+#, elixir-format
+msgid "Reset"
+msgstr "إعادة تعيين"
+
+#, elixir-format
+msgid "Retry"
+msgstr "إعادة المحاولة"
+
+#, elixir-format
+msgid "Row actions"
+msgstr "إجراءات الصف"
+
+#, elixir-format
+msgid "Save"
+msgstr "حفظ"
+
+#, elixir-format
+msgid "Search"
+msgstr "بحث"
+
+#, elixir-format
+msgid "Search by name"
+msgstr "البحث بالاسم"
+
+#, elixir-format
+msgid "Select"
+msgstr "تحديد"
+
+#, elixir-format
+msgid "Select all rows"
+msgstr "تحديد كل الصفوف"
+
+#, elixir-format
+msgid "Select filters"
+msgstr "اختيار الفلاتر"
+
+#, elixir-format
+msgid "Select row"
+msgstr "تحديد الصف"
+
+#, elixir-format
+msgid "Rows per page"
+msgstr "عدد الصفوف في الصفحة"
+
+#, elixir-format
+msgid "Showing %{from}-%{to} of %{count}"
+msgstr "عرض %{from}-%{to} من %{count}"
+
+#, elixir-format
+msgid "Sidenav"
+msgstr "القائمة الجانبية"
+
+#, elixir-format
+msgid "Started"
+msgstr "وقت البدء"
+
+#, elixir-format
+msgid "Starts With"
+msgstr "يبدأ بـ"
+
+#, elixir-format
+msgid "Table navigation"
+msgstr "التنقل بين الصفحات"
+
+#, elixir-format
+msgid "The resource you're looking for could not be found."
+msgstr "لم نعثر على ما تبحث عنه."
+
+#, elixir-format
+msgid "Themselves"
+msgstr "حسابه الشخصي"
+
+#, elixir-format
+msgid "This file is still being processed"
+msgstr "لا يزال هذا الملف قيد المعالجة"
+
+#, elixir-format
+msgid "This file was refused"
+msgstr "تم رفض هذا الملف"
+
+#, elixir-format
+msgid "Toggle sidebar"
+msgstr "إظهار القائمة الجانبية أو إخفاؤها"
+
+#, elixir-format
+msgid "View details"
+msgstr "عرض التفاصيل"
+
+#, elixir-format
+msgid "You do not have permission to perform this action. Please contact an administrator if you believe this is an error."
+msgstr "ليس لديك صلاحية للقيام بهذا الإجراء. تواصل مع المسؤول إذا كنت تعتقد أن هناك خطأ."
+
+#, elixir-format
+msgid "You're impersonating %{actor}"
+msgstr "أنت تتصفح بحساب %{actor}"
+
+#, elixir-format
+msgid "cancel"
+msgstr "إلغاء"
+
+#, elixir-format
+msgid "from %{ip}"
+msgstr "من %{ip}"
+
+#, elixir-format
+msgid "Go Back"
+msgstr "رجوع"
+
+#, elixir-format
+msgctxt "query builder"
+msgid "Filter"
+msgstr "شرط"
+
+#, elixir-format
+msgid "No results on this page, of %{count} in total"
+msgstr "لا توجد نتائج في هذه الصفحة، من أصل %{count}"
+
+#, elixir-format
+msgid "%{count}, %{size} MB each — %{exts}"
+msgstr "%{count}، %{size} ميغابايت لكل ملف — %{exts}"
+
+#, elixir-format
+msgid "Add %{name}"
+msgstr "إضافة %{name}"
+
+#, elixir-format
+msgid "Add more %{name}"
+msgstr "إضافة المزيد من %{name}"
+
+#, elixir-format
+msgid "One file"
+msgstr "ملف واحد"
+
+#, elixir-format
+msgid "Remove"
+msgstr "إزالة"
+
+#, elixir-format
+msgid "Up to %{count} at a time"
+msgstr "حتى %{count} في المرة الواحدة"
+
+#, elixir-format
+msgid "any type"
+msgstr "أي نوع"
+
+#, elixir-format
+msgid "browse"
+msgstr "تصفّح"
+
+#, elixir-format
+msgid "drop them here or"
+msgstr "أفلتها هنا أو"
+
+#, elixir-format
+msgid "Hidden"
+msgstr "مخفي"
+
+#, elixir-format
+msgid "Applies to 1 selected row."
+msgid_plural "Applies to %{count} selected rows."
+msgstr[0] "لا ينطبق على أي صف محدد."
+msgstr[1] "ينطبق على صف محدد واحد."
+msgstr[2] "ينطبق على صفين محددين."
+msgstr[3] "ينطبق على %{count} صفوف محددة."
+msgstr[4] "ينطبق على %{count} صفًا محددًا."
+msgstr[5] "ينطبق على %{count} صف محدد."
+
+#, elixir-format
+msgid "Cancel"
+msgstr "إلغاء"
+
+#, elixir-format
+msgid "Confirm"
+msgstr "تأكيد"
+
+#, elixir-format
+msgid "%{action} applied to %{applied} of 1 selected row."
+msgid_plural "%{action} applied to %{applied} of %{count} selected rows."
+msgstr[0] "تم تطبيق «%{action}» على %{applied} من أصل %{count} صفوف محددة."
+msgstr[1] "تم تطبيق «%{action}» على %{applied} من أصل صف محدد واحد."
+msgstr[2] "تم تطبيق «%{action}» على %{applied} من أصل صفين محددين."
+msgstr[3] "تم تطبيق «%{action}» على %{applied} من أصل %{count} صفوف محددة."
+msgstr[4] "تم تطبيق «%{action}» على %{applied} من أصل %{count} صفًا محددًا."
+msgstr[5] "تم تطبيق «%{action}» على %{applied} من أصل %{count} صف محدد."
+
+#, elixir-format
+msgid "External Client Failure"
+msgstr "تعذّر الرفع إلى خدمة التخزين"
+
+#, elixir-format
+msgid "Impersonation ended."
+msgstr "انتهى الدخول بحساب آخر."
+
+#, elixir-format
+msgid "It was recorded, but its PDF could not be produced. Print it again."
+msgstr "تم تسجيل العملية، لكن تعذّر إنشاء ملف PDF. اطبعه مرة أخرى."
+
+#, elixir-format
+msgid "Record deleted successfully"
+msgstr "تم حذف السجل بنجاح"
+
+#, elixir-format
+msgid "Record saved successfully"
+msgstr "تم حفظ السجل بنجاح"
+
+#, elixir-format
+msgid "Something went wrong on our end. Please try again, or contact support if it keeps happening."
+msgstr "حدث خطأ من جهتنا. حاول مرة أخرى، أو تواصل مع الدعم إذا تكرر ذلك."
+
+#, elixir-format
+msgid "That filter couldn't be applied to this list, so it was ignored."
+msgstr "تعذّر تطبيق هذا البحث على القائمة، لذا تم تجاهله."
+
+#, elixir-format
+msgid "That record no longer exists — it may have been deleted since you opened this page."
+msgstr "هذا السجل لم يعد موجودًا — ربما حُذف منذ أن فتحت هذه الصفحة."
+
+#, elixir-format
+msgid "That session has already ended."
+msgstr "انتهت هذه الجلسة بالفعل."
+
+#, elixir-format
+msgid "The other row was not changed and is still selected: check it and try again."
+msgid_plural "The other %{count} rows were not changed and are still selected: check them and try again."
+msgstr[0] "لم يتغير أي صف آخر."
+msgstr[1] "لم يتغير الصف الآخر وما زال محددًا: راجعه وحاول مرة أخرى."
+msgstr[2] "لم يتغير الصفان الآخران وما زالا محددين: راجعهما وحاول مرة أخرى."
+msgstr[3] "لم تتغير %{count} صفوف أخرى وما زالت محددة: راجعها وحاول مرة أخرى."
+msgstr[4] "لم يتغير %{count} صفًا آخر وما زالت محددة: راجعها وحاول مرة أخرى."
+msgstr[5] "لم يتغير %{count} صف آخر وما زالت محددة: راجعها وحاول مرة أخرى."
+
+#, elixir-format
+msgid "This file could not be uploaded"
+msgstr "تعذّر رفع هذا الملف"
+
+#, elixir-format
+msgid "This file was refused and has not been uploaded"
+msgstr "تم رفض هذا الملف ولم يُرفع"
+
+#, elixir-format
+msgid "This record changed since you opened it — reload to see the latest, then try again."
+msgstr "تغيّر هذا السجل منذ أن فتحته — أعد تحميل الصفحة لرؤية آخر نسخة، ثم حاول مرة أخرى."
+
+#, elixir-format
+msgid "Too large"
+msgstr "الملف كبير جدًا"
+
+#, elixir-format
+msgid "Unable to determine current user for export"
+msgstr "تعذّر تحديد المستخدم الحالي للتصدير"
+
+#, elixir-format
+msgid "You don't have permission to do that."
+msgstr "ليس لديك صلاحية للقيام بذلك."
+
+#, elixir-format
+msgid "You have selected an unacceptable file type"
+msgstr "نوع الملف الذي اخترته غير مقبول"
+
+#, elixir-format
+msgid "You have selected too many files"
+msgstr "لقد اخترت عددًا كبيرًا جدًا من الملفات"
+
+#, elixir-format
+msgid "No"
+msgstr "لا"
+
+#, elixir-format
+msgid "Yes"
+msgstr "نعم"
+
+#, elixir-format
+msgid "%{count} filter applied"
+msgid_plural "%{count} filters applied"
+msgstr[0] "لا فلاتر مطبقة"
+msgstr[1] "فلتر واحد مطبق"
+msgstr[2] "فلتران مطبقان"
+msgstr[3] "%{count} فلاتر مطبقة"
+msgstr[4] "%{count} فلترًا مطبقًا"
+msgstr[5] "%{count} فلتر مطبق"
+
+#, elixir-format
+msgid "Any of:"
+msgstr "أي مما يلي:"
+
+#, elixir-format
+msgid "Clear all"
+msgstr "مسح الكل"
+
+#, elixir-format
+msgid "Remove filter"
+msgstr "إزالة الفلتر"
+
+#, elixir-format
+msgid "All of %{count} condition"
+msgid_plural "All of %{count} conditions"
+msgstr[0] "لا شروط"
+msgstr[1] "شرط واحد"
+msgstr[2] "الشرطان معًا"
+msgstr[3] "كل الشروط الـ%{count}"
+msgstr[4] "كل الشروط الـ%{count}"
+msgstr[5] "كل الشروط الـ%{count}"
+
+#, elixir-format
+msgid "Any of %{count} condition"
+msgid_plural "Any of %{count} conditions"
+msgstr[0] "لا شروط"
+msgstr[1] "شرط واحد"
+msgstr[2] "أيٌّ من الشرطين"
+msgstr[3] "أيٌّ من %{count} شروط"
+msgstr[4] "أيٌّ من %{count} شرطًا"
+msgstr[5] "أيٌّ من %{count} شرط"
+
+#, elixir-format
+msgid "contains"
+msgstr "يحتوي على"
+
+#, elixir-format
+msgid "starts with"
+msgstr "يبدأ بـ"
+
+#, elixir-format
+msgid "Any Of"
+msgstr "أيٌّ من"
+
+#, elixir-format
+msgid "Ends With"
+msgstr "ينتهي بـ"
+
+#, elixir-format
+msgid "Is Empty"
+msgstr "فارغ"
+
+#, elixir-format
+msgid "Is Not Empty"
+msgstr "غير فارغ"
+
+#, elixir-format
+msgid "Not Contains"
+msgstr "لا يحتوي على"
+
+#, elixir-format
+msgid "On Day"
+msgstr "في يوم"
+
+#, elixir-format
+msgid "does not contain"
+msgstr "لا يحتوي على"
+
+#, elixir-format
+msgid "ends with"
+msgstr "ينتهي بـ"
+
+#, elixir-format
+msgid "is any of"
+msgstr "أيٌّ من"
+
+#, elixir-format
+msgid "is empty"
+msgstr "فارغ"
+
+#, elixir-format
+msgid "is not empty"
+msgstr "غير فارغ"
+
+#, elixir-format
+msgctxt "filter chip"
+msgid "on"
+msgstr "في"
+
+#, elixir-format
+msgid "Next"
+msgstr "التالي"
+
+#, elixir-format
+msgid "Open"
+msgstr "فتح"
+
+#, elixir-format
+msgid "Previous"
+msgstr "السابق"
+
+#, elixir-format
+msgid "View %{name}"
+msgstr "عرض %{name}"
+
+#, elixir-format
+msgid "Images"
+msgstr "الصور"
+
+#, elixir-format
+msgid "%{label} (%{hint})"
+msgstr "%{label} (%{hint})"
+
+#, elixir-format
+msgid "Leave blank to keep it"
+msgstr "اتركه فارغًا للإبقاء عليه"
+
+#, elixir-format
+msgid "redacted"
+msgstr "محجوب"
+
+#, elixir-format
+msgid "%{field}: %{message}"
+msgstr "%{field}: %{message}"
+
+#, elixir-format
+msgid "[%{resource}] %{action}"
+msgstr "[%{resource}] %{action}"
+
+#, elixir-format
+msgid "%{resource} - %{record}"
+msgstr "%{resource} - %{record}"
+
+msgid "Accepts"
+msgstr ""
+
+msgid "Action Name"
+msgstr ""
+
+msgid "Action Type"
+msgstr ""
+
+msgid "Activate"
+msgstr ""
+
+msgid "Active"
+msgstr ""
+
+msgid "Actor"
+msgstr ""
+
+msgid "Add Brand"
+msgstr ""
+
+msgid "Add Category"
+msgstr ""
+
+msgid "Add Images"
+msgstr ""
+
+msgid "Add Product"
+msgstr "إضافة منتج"
+
+msgid "Add User"
+msgstr ""
+
+msgid "Admin"
+msgstr ""
+
+msgid "Arguments"
+msgstr ""
+
+msgid "Attributes"
+msgstr ""
+
+msgid "Audit"
+msgstr ""
+
+msgid "Audit Log"
+msgstr ""
+
+msgid "Audit Logs"
+msgstr ""
+
+msgid "Brand"
+msgstr "العلامة التجارية"
+
+msgid "Brands"
+msgstr ""
+
+msgid "By Email"
+msgstr ""
+
+msgid "By Keys"
+msgstr ""
+
+msgid "Byte Size"
+msgstr ""
+
+msgid "Catalog"
+msgstr "الكتالوج"
+
+msgid "Categories"
+msgstr ""
+
+msgid "Category"
+msgstr ""
+
+msgid "Changes"
+msgstr ""
+
+msgid "Children"
+msgstr ""
+
+msgid "Clearance"
+msgstr ""
+
+msgid "Code"
+msgstr ""
+
+msgid "Content Type"
+msgstr ""
+
+msgid "Context"
+msgstr ""
+
+msgid "Create With Children"
+msgstr ""
+
+msgid "Deactivate"
+msgstr ""
+
+msgid "Delete"
+msgstr ""
+
+msgid "Description"
+msgstr "الوصف"
+
+msgid "Document"
+msgstr ""
+
+msgid "Documents"
+msgstr ""
+
+msgid "Editor"
+msgstr ""
+
+msgid "Email"
+msgstr ""
+
+msgid "English"
+msgstr ""
+
+msgid "File Object"
+msgstr ""
+
+msgid "File Objects"
+msgstr ""
+
+msgid "From Price"
+msgstr ""
+
+msgid "Home"
+msgstr ""
+
+msgid "Id"
+msgstr ""
+
+msgid "Image"
+msgstr ""
+
+msgid "Impersonate"
+msgstr ""
+
+msgid "Index"
+msgstr ""
+
+msgid "Inserted At"
+msgstr ""
+
+msgid "Inserted By"
+msgstr ""
+
+msgid "Ip"
+msgstr ""
+
+msgid "Key"
+msgstr ""
+
+msgid "Locale"
+msgstr ""
+
+msgid "Max Bytes"
+msgstr ""
+
+msgid "Name"
+msgstr "الاسم"
+
+msgid "New"
+msgstr ""
+
+msgid "New Images"
+msgstr ""
+
+msgid "On sale"
+msgstr "عليه تخفيض"
+
+msgid "Open a Store"
+msgstr ""
+
+msgid "Original Filename"
+msgstr ""
+
+msgid "Parent"
+msgstr ""
+
+msgid "Price"
+msgstr ""
+
+msgid "Price Change"
+msgstr ""
+
+msgid "Price Changes"
+msgstr ""
+
+msgid "Product"
+msgstr "منتج"
+
+msgid "Products"
+msgstr "المنتجات"
+
+msgid "Quick Add"
+msgstr ""
+
+msgid "Read"
+msgstr ""
+
+msgid "Ready"
+msgstr ""
+
+msgid "Real Actor"
+msgstr ""
+
+msgid "Real actor"
+msgstr ""
+
+msgid "Referenced At"
+msgstr ""
+
+msgid "Referenced By"
+msgstr ""
+
+msgid "Reprice"
+msgstr "تغيير السعر"
+
+msgid "Resource"
+msgstr ""
+
+msgid "Resource Name"
+msgstr ""
+
+msgid "Role"
+msgstr ""
+
+msgid "Sale"
+msgstr "تخفيض"
+
+msgid "Settings"
+msgstr ""
+
+msgid "Sku"
+msgstr ""
+
+msgid "Source"
+msgstr ""
+
+msgid "Staff Pick"
+msgstr ""
+
+msgid "State"
+msgstr ""
+
+msgid "Store"
+msgstr ""
+
+msgid "Stores"
+msgstr ""
+
+msgid "Tags"
+msgstr "الوسوم"
+
+msgid "Take Custody"
+msgstr ""
+
+msgid "Tenant"
+msgstr ""
+
+msgid "To Price"
+msgstr ""
+
+msgid "Update"
+msgstr "تعديل"
+
+msgid "Updated At"
+msgstr ""
+
+msgid "Updated By"
+msgstr ""
+
+msgid "Upload Form"
+msgstr ""
+
+msgid "Uploaded by"
+msgstr ""
+
+msgid "Uploads"
+msgstr ""
+
+msgid "User"
+msgstr ""
+
+msgid "Users"
+msgstr ""
+
+msgid "Version"
+msgstr "الإصدار"
+
+msgid "Video"
+msgstr ""
+
+msgid "Viewer"
+msgstr ""
+
+msgid "العربية"
+msgstr ""
+
+#: lib/example_web/live/product_live/quick.ex:92
+#, elixir-autogen, elixir-format
+msgid "Discount 10%"
+msgstr "خصم 10%"

@@ -202,6 +202,24 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
       refute diff(igniter) =~ "priv/gettext"
     end
 
+    test "points AshQuick at the application's Gettext backend, and says how to fill it" do
+      igniter =
+        install(%{
+          "lib/test_web/gettext.ex" =>
+            "defmodule TestWeb.Gettext do\n  use Gettext.Backend, otp_app: :test\nend\n"
+        })
+
+      assert diff(igniter) =~ "gettext: TestWeb.Gettext"
+      assert_has_notice(igniter, &(&1 =~ "mix ash_quick.gen.gettext"))
+    end
+
+    test "leaves the backend out when the application has none" do
+      igniter = install()
+
+      refute diff(igniter) =~ "gettext: "
+      refute_notice(igniter, "ash_quick.gen.gettext")
+    end
+
     test "takes an actor resource and a timezone from the command line" do
       igniter =
         install(%{}, ["--actor-resource", "Test.People.Person", "--timezone", "Africa/Cairo"])

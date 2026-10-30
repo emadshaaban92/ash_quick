@@ -39,9 +39,10 @@ defmodule ExampleWeb.Gettext do
   msgid as Gettext would. Each one is logged once per process, so a list
   page names an untranslated enum value once rather than once per row.
 
-  Every label AshQuick draws goes through `translate_label/1`, so a field,
-  action, enum value or nav entry `labels.po` lacks is named here as soon as
-  a page draws it.
+  AshQuick looks up its own strings and every label it draws here, in the
+  `ash_quick` domain, so an entry `ash_quick.po` lists but leaves empty is
+  named as soon as a page draws it: `mix ash_quick.gen.gettext --check` only
+  says the template is complete, not the translation.
   """
   @impl Gettext.Backend
   def handle_missing_translation(locale, domain, msgctxt, msgid, bindings) do
@@ -54,13 +55,4 @@ defmodule ExampleWeb.Gettext do
 
     super(locale, domain, msgctxt, msgid, bindings)
   end
-
-  @doc """
-  A label AshQuick draws, in the reader's language: the `:label_translator`.
-
-  The English label is the msgid, so a field, action or nav entry is
-  translated in `priv/gettext/<locale>/LC_MESSAGES/labels.po`, and one the
-  catalogue lacks is drawn in English, and logged in dev.
-  """
-  def translate_label(label), do: Gettext.dgettext(__MODULE__, "labels", label)
 end

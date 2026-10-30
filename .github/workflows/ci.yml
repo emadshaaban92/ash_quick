@@ -220,6 +220,14 @@ jobs:
       - name: AshQuick compliance (strict)
         run: mix ash_quick.check --strict
 
+      # The template the app translates AshQuick in, labels included: a field,
+      # action or nav entry added without regenerating it fails here. In dev,
+      # where it is generated: the test router also serves fixture pages.
+      - name: AshQuick translation template is up to date
+        run: mix ash_quick.gen.gettext --check
+        env:
+          MIX_ENV: dev
+
       - name: Set up the test database
         run: mix ash.setup
 

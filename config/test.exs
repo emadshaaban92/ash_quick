@@ -5,6 +5,9 @@ import Config
 # `:endpoint` are read with `compile_env`, so they belong here rather than in a
 # test's setup — see `AshQuick.Config`.
 #
+# `:gettext` is a backend over the Arabic seed, so the suite translates the way
+# a host does.
+#
 # `:storage` names a seam with a bucket of its own, so the two buckets are
 # distinguishable: what `AshQuick.Test.Uploads.ObjectStore` serves is the host's,
 # and `:s3_bucket` is only ever what `AshQuick.Storage.S3` falls back to.
@@ -12,6 +15,7 @@ config :ash_quick,
   actor_resource: AshQuick.Test.Actor,
   audit_resource: AshQuick.Test.AuditLog,
   storage: AshQuick.Test.Uploads.ObjectStore,
+  gettext: AshQuick.Test.Gettext,
   s3_bucket: "ash-quick-test-bucket",
   s3_host: "s3.example.invalid"
 

@@ -4,28 +4,44 @@
 
 ### Features
 
-- **Labels can be translated.** A new `:label_translator` config,
-  `{Mod, :fun}`, gets every label AshQuick draws in English and returns the
-  string to draw: field and action names (as humanized, after
-  `:humanize_overrides`), `label:` options, `new_action_label`, saved filter
-  labels, the titles of custom bulk items, nav entries and groups, page
-  titles, and the values of an enum or a `one_of` atom, on the list, the
-  details page, the forms, the filters, the sidebar and the apps grid. A label
-  that is not a string (markup in a `label:` option) is drawn as it is. It
-  runs where a label is drawn, so a reader in
+- **AshQuick translates through the host's Gettext backend.** A new
+  `:gettext` config names it (`MyAppWeb.Gettext`; the installer writes it
+  when the backend exists). Everything AshQuick draws is looked up there, in
+  the `ash_quick` domain and that backend's locale: its own buttons, flashes
+  and empty states, and every label, whether a field or action name (as
+  humanized, after `:humanize_overrides`), a `label:` option,
+  `new_action_label`, a saved filter's label, a custom bulk item's title, a
+  nav entry or group, a page title, or the value of an enum or a `one_of`
+  atom, on the list, the details page, the forms, the filters, the sidebar
+  and the apps grid. A label is translated where it is drawn, so a reader in
   Arabic gets Arabic labels on the same compiled QuickView an English reader
-  gets English ones on. An export's header is translated in the locale of the
-  reader who asked for it, the scope's (`AshQuick.Scope.locale/1`); the task
-  writing the file used to have none. `AshQuick.Nav.Info.sections/1` hands
-  out its labels translated, so a host drawing its own nav from it gets them
-  too. A
-  flashed error names its field through it too ("Field: message"), and the
-  "is invalid" a field-only error reads goes through `:error_translator` like
-  Ash's other messages. A form's title is one translatable message,
-  `[%{resource}] %{action}`, without the trailing space it had, and a details
-  page's is `%{resource} - %{record}`. With no translator, labels are drawn
-  as before. `AshQuick.Labels` (`translate/1`, `name/1`, `field/1`) is what
-  a custom template calls to match.
+  gets English ones on, and a label that is not a string (markup in a
+  `label:` option) is drawn as it is. The locale is the host's, set
+  process-wide or on its own backend. An export's header is in the locale of
+  the reader who asked for it, the scope's (`AshQuick.Scope.locale/1`); the
+  task writing the file used to have none. `AshQuick.Nav.Info.sections/1`
+  hands out its labels translated, so a host drawing its own nav from it gets
+  them too. A flashed error names its field translated ("Field: message"),
+  and the "is invalid" a field-only error reads goes through
+  `:error_translator` like Ash's other messages. A form's title is one
+  translatable message, `[%{resource}] %{action}`, without the trailing space
+  it had, and a details page's is `%{resource} - %{record}`. With no
+  backend, everything is drawn in English. `AshQuick.Labels` (`translate/1`,
+  `name/1`, `field/1`) is what a custom template calls to match.
+
+- **`mix ash_quick.gen.gettext` writes the template a host translates
+  AshQuick in.** Labels are not `gettext` call sites, so it reads them off
+  the nav and the QuickViews its router serves, with the resources they
+  reach, and writes them with AshQuick's own messages to the backend's
+  `priv/gettext/ash_quick.pot`; `mix gettext.merge` takes it from there.
+  `--check` fails when the template is out of date, for CI. `--locale ar`
+  copies the Arabic translation AshQuick ships, which lives in
+  `priv/gettext_seeds` and is not loaded by AshQuick itself. Messages the
+  host's own `mix gettext.extract` puts in the template, such as a bulk item
+  title marked with `dgettext_noop("ash_quick", ...)`, are kept (the host's
+  entry wins where it makes the same message), AshQuick's carry no
+  `elixir-autogen` flag, so `gettext.extract` keeps them, and the project's
+  `sort_by_msgid` orders both alike, so neither check undoes the other.
 
 - **A relationship dropdown shows each record's display hint.** On a line
   of its own under each option's label and each picked tag's in a
@@ -181,7 +197,7 @@
   generic error sentences, the refused-filter and failed-print flashes, the
   bulk run's skipped-rows count, the upload errors, the export and Live Users
   flashes and the Live Users page title now go through `AshQuick.Gettext`,
-  with Arabic translations. A test fails when a locale's `.po` lacks a
+  with an Arabic translation. A test fails when a locale's `.po` lacks a
   message, leaves one empty in any plural form, marks one fuzzy, or names a
   binding the English does not, so a message merged without a translation
   no longer ships in English with CI green.
@@ -376,6 +392,13 @@
   `@scope` in their assigns.
 
 ### Bug fixes
+
+- **Dates and times read in the reader's locale.** With Localize loaded,
+  `format_datetime/1`, `format_date/1` and `format_time/2` formatted in
+  Localize's own process locale, which nothing set, so every reader got its
+  default. They now pass the reader's locale (`AshQuick.Locale.current/0`),
+  and a locale Localize cannot parse falls back to the plain format rather
+  than raising.
 
 - **The filter's ✕ waits while Apply runs.** The Advanced filters and
   export modals now use the same modal as an action's form, so the filter's
