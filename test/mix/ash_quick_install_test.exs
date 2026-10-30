@@ -213,11 +213,58 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
       assert_has_notice(igniter, &(&1 =~ "mix ash_quick.gen.gettext"))
     end
 
+    # Localize ships English data alone, so dates and money read in English in
+    # any other locale until the host downloads it.
+    test "says how to have dates and money read in the backend's locales" do
+      igniter =
+        install(%{
+          "lib/test_web/gettext.ex" =>
+            "defmodule TestWeb.Gettext do\n  use Gettext.Backend, otp_app: :test\nend\n"
+        })
+
+      assert_has_notice(
+        igniter,
+        &(&1 =~ "config/config.exs" and &1 =~ "otp_app: :test" and
+            &1 =~ "mix localize.download_locales")
+      )
+    end
+
+    # A catalogue is not Elixir, so the installer reads the host's disk for it.
+    @tag :tmp_dir
+    test "lists the locales the backend has a catalogue for", %{tmp_dir: tmp_dir} do
+      for locale <- ~w(fr ar),
+          do: File.mkdir_p!(Path.join(tmp_dir, "priv/gettext/#{locale}/LC_MESSAGES"))
+
+      igniter =
+        File.cd!(tmp_dir, fn ->
+          install(%{
+            "lib/test_web/gettext.ex" =>
+              "defmodule TestWeb.Gettext do\n  use Gettext.Backend, otp_app: :test\nend\n"
+          })
+        end)
+
+      assert_has_notice(igniter, &(&1 =~ ~s(supported_locales: ["ar", "fr"])))
+    end
+
+    test "marks the locales as an example when the backend has no catalogue yet" do
+      igniter =
+        install(%{
+          "lib/test_web/gettext.ex" =>
+            "defmodule TestWeb.Gettext do\n  use Gettext.Backend, otp_app: :test\nend\n"
+        })
+
+      assert_has_notice(
+        igniter,
+        &(&1 =~ "supported_locales: [:en, :ar]  # for example: the locales TestWeb.Gettext has")
+      )
+    end
+
     test "leaves the backend out when the application has none" do
       igniter = install()
 
       refute diff(igniter) =~ "gettext: "
       refute_notice(igniter, "ash_quick.gen.gettext")
+      refute_notice(igniter, "localize.download_locales")
     end
 
     test "takes an actor resource and a timezone from the command line" do

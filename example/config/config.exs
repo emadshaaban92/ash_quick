@@ -93,6 +93,12 @@ config :ex_aws,
 # Nothing converts a currency either; the service would only reach the network.
 config :ex_money, auto_start_exchange_rate_service: false
 
+# The locales the pages are in, so dates and money read in Arabic for an Arabic
+# reader. Localize ships English data alone; `mix localize.download_locales`
+# (in `mix setup`, and in CI) fetches these into priv/localize, which is not
+# committed. It reads this file alone, so the list is written out here.
+config :localize, otp_app: :example, supported_locales: [:en, :ar]
+
 config :esbuild,
   version: "0.28.2",
   example: [
