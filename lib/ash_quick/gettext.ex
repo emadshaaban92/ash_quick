@@ -11,9 +11,9 @@ defmodule AshQuick.Gettext do
   template `mix gettext.extract` writes from the call sites, so every lookup
   misses, and a miss is looked up in the backend `config :ash_quick, gettext:`
   names, in the same domain and in that backend's locale. A host translates
-  AshQuick in its own `priv/gettext/<locale>/LC_MESSAGES/ash_quick.po`, written
-  by `mix ash_quick.gen.gettext`. With no backend configured, everything is
-  drawn in English.
+  AshQuick in its own `priv/gettext/<locale>/LC_MESSAGES/ash_quick.po`, merged
+  from the template `mix ash_quick.gen.gettext` writes. With no backend
+  configured, everything is drawn in English.
 
   ## Translating
 

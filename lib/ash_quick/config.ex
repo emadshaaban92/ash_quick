@@ -30,8 +30,9 @@ defmodule AshQuick.Config do
     page shows that zone and a form offers no zone to pick. See
     `AshQuick.Timezones`.
 
-  * `:locale` — The default locale. Defaults to `"en"`. A scope's own locale is
-    likewise reached through `AshQuick.Scope.locale/1` alone.
+  * `:locale` — The locale an export is written in when the scope states none
+    of its own (`AshQuick.Scope.locale/1`). Defaults to `"en"`. Pages are
+    drawn in the locale of the `:gettext` backend, which the host sets.
 
   * `:storage` — A module implementing `AshQuick.Storage` — everything
     that needs a bucket, a host or credentials, plus the optional lifecycle
@@ -63,9 +64,10 @@ defmodule AshQuick.Config do
     string AshQuick draws, its own and the labels it draws (field and action
     names, `label:` options, nav entries and groups, page titles and the values
     of an enum or a `one_of` atom), is looked up there in the `ash_quick`
-    domain, in that backend's locale. `mix ash_quick.gen.gettext` writes the
-    template. When `nil`, everything is drawn in English. See
-    `AshQuick.Gettext` and `AshQuick.Labels`.
+    domain, in that backend's locale, and dates, times and money are
+    formatted in the same locale (`format_datetime/1` and friends).
+    `mix ash_quick.gen.gettext` writes the template. When `nil`, everything is
+    drawn in English. See `AshQuick.Gettext` and `AshQuick.Labels`.
 
   * `:endpoint` — The host's `Phoenix.Endpoint`. AshQuick publishes resource
     notifications through it, signs impersonation tokens with its secret, and

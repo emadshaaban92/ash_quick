@@ -9,7 +9,8 @@ defmodule AshQuick.Locale do
 
   Directional CSS is written with logical properties, so `dir` is the only
   switch: set it on `<html>` and the sidebar, tables and forms follow, as do
-  daisyUI's own components.
+  daisyUI's own components, and every arrow or chevron that points a way turns
+  (`rtl:rotate-180`).
   """
 
   # Every language written right-to-left that this stack can render. Membership

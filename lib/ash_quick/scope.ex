@@ -48,7 +48,8 @@ defmodule AshQuick.Scope do
       applies. A QuickView shows timestamps in it, and a form's timestamp
       input starts at it as the zone a typed time is in.
     * `:locale` — the actor's own, read through `locale/1`. Omitted,
-      `AshQuick.Config.locale/0` applies.
+      `AshQuick.Config.locale/0` applies. An export, written in a task of its
+      own, is in it; a page is in the locale of the host's Gettext backend.
 
   ## Why a macro over a protocol
 
