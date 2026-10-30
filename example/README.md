@@ -24,7 +24,7 @@ Needs PostgreSQL 16+ reachable as `db` with an `admin`/`admin` superuser (see
 `config/dev.exs`).
 
 ```console
-$ mix setup          # deps, database, assets, seed data
+$ mix setup          # deps, Localize locale data, database, assets, seed data
 $ mix phx.server     # http://localhost:4000
 ```
 
@@ -56,6 +56,10 @@ a reader who belongs to no store sees every shop's products, which is what
 ```console
 $ mix test
 ```
+
+The Arabic scenarios need Localize's Arabic data, which `mix setup` downloads
+into `priv/localize` (not committed); on a checkout set up before it did, run
+`mix localize.download_locales` once.
 
 `test/ash_quick/` holds the library's host-bound tests — versioning, the audit
 transaction, the presign — and `test/example_web/` the scenarios: a QuickView

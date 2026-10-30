@@ -228,6 +228,18 @@ jobs:
         env:
           MIX_ENV: dev
 
+      # Localize ships English data alone; the Arabic pages' dates and money
+      # need the rest, fetched like deps rather than committed. Cached on the
+      # lock (Localize's version) and the config (the locale list).
+      - name: Cache Localize locale data
+        uses: actions/cache@v6
+        with:
+          path: example/priv/localize
+          key: ${{ runner.os }}-localize-${{ hashFiles('example/mix.lock', 'example/config/config.exs') }}
+
+      - name: Download Localize locale data
+        run: mix localize.download_locales
+
       - name: Set up the test database
         run: mix ash.setup
 

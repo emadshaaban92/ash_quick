@@ -32,18 +32,6 @@ defmodule AshQuick.LiveView.Utils do
     end
   end
 
-  @doc """
-  Formats a `Money` for display, rendering an em dash for a missing amount.
-  """
-  def format_money(%Money{} = money) do
-    case Money.to_string(money) do
-      {:ok, string} -> string
-      _ -> "—"
-    end
-  end
-
-  def format_money(_), do: "—"
-
   defp titleize(name) do
     name
     |> Phoenix.Naming.humanize()

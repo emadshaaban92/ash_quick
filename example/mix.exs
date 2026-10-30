@@ -112,7 +112,14 @@ defmodule Example.MixProject do
 
   defp aliases do
     [
-      setup: ["deps.get", "ash.setup", "assets.setup", "assets.build", "run priv/repo/seeds.exs"],
+      setup: [
+        "deps.get",
+        "localize.download_locales",
+        "ash.setup",
+        "assets.setup",
+        "assets.build",
+        "run priv/repo/seeds.exs"
+      ],
       # Overrides Ash's own `ash.reset` (tear_down + setup) to re-seed as well,
       # which is what makes it the one command to get back to a known state.
       "ash.reset": ["ash.tear_down", "ash.setup", "run priv/repo/seeds.exs"],

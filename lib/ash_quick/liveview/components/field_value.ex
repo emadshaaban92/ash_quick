@@ -235,6 +235,14 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     """
   end
 
+  # Left to `Phoenix.HTML.Safe`, a `Money` prints in Localize's own process
+  # locale, which nothing sets, so every reader got English.
+  def field_value(%{value: %{__struct__: Money}} = assigns) do
+    ~H"""
+    <span>{AshQuick.Config.format_money(@value)}</span>
+    """
+  end
+
   def field_value(%{ash_field: %{type: Ash.Type.Map}} = assigns) do
     ~H"""
     <pre>{Jason.encode!(@value, pretty: true)}</pre>

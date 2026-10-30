@@ -234,6 +234,7 @@ if Code.ensure_loaded?(Igniter) do
       )
       |> maybe_add_gettext_notice(translator)
       |> maybe_add_template_notice(backend)
+      |> maybe_add_localize_notice(backend)
     end
 
     # Copying Ash's messages writes into the host's `priv/gettext`, which is
@@ -270,6 +271,44 @@ if Code.ensure_loaded?(Igniter) do
       again when you add a field, an action or a nav entry; `--check` fails CI
       until you do.
       """)
+    end
+
+    # Downloading writes into the host's build, so it is stated too. Only with a
+    # backend: a host that translates nothing reads English dates already.
+    defp maybe_add_localize_notice(igniter, nil), do: igniter
+
+    defp maybe_add_localize_notice(igniter, backend) do
+      locales =
+        case gettext_locales() do
+          [] -> "[:en, :ar]  # for example: the locales #{inspect(backend)} has"
+          found -> inspect(found)
+        end
+
+      Igniter.add_notice(igniter, """
+      AshQuick formats dates, times and money with Localize, in the locale
+      #{inspect(backend)} translates in. Localize ships English data alone, and a
+      locale it has no data for reads in English. List the locales your backend
+      has in config/config.exs (the download task reads that file alone, before
+      anything is compiled):
+
+          config :localize,
+            otp_app: #{inspect(Igniter.Project.Application.app_name(igniter))},
+            supported_locales: #{locales}
+
+      and download their data when you build:
+
+          mix localize.download_locales
+      """)
+    end
+
+    # The locales with a catalogue under the backend's default priv, as Gettext
+    # finds them, read off the host's disk: a catalogue is not Elixir, so
+    # Igniter does not load it.
+    defp gettext_locales do
+      "priv/gettext/*/LC_MESSAGES"
+      |> Path.wildcard()
+      |> Enum.map(&(&1 |> Path.dirname() |> Path.basename()))
+      |> Enum.sort()
     end
 
     # There is no reporter to default to: each one that delivers anywhere is a

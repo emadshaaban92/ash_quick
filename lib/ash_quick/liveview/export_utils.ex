@@ -114,6 +114,10 @@ defmodule AshQuick.LiveView.ExportUtils do
     AshQuick.Config.format_time(value, format: :medium)
   end
 
+  defp field_export_value(%{__struct__: Money} = value, _path) do
+    AshQuick.Config.format_money(value)
+  end
+
   defp field_export_value(value, path) when is_list(value) do
     Enum.map_join(value, ", ", &field_export_value(&1, path))
   end

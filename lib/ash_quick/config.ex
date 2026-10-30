@@ -309,6 +309,16 @@ defmodule AshQuick.Config do
     localized(Localize.Date, value, [], fn -> Calendar.strftime(value, "%Y-%m-%d") end)
   end
 
+  @doc """
+  Formats a `Money` for display, in the reader's locale
+  (`AshQuick.Locale.current/0`): its digits, separators and where the
+  currency goes. A locale Localize cannot parse falls back to `Money`'s own
+  `to_string/1`.
+  """
+  def format_money(%{__struct__: Money} = value) do
+    localized(Money, value, [], fn -> to_string(value) end)
+  end
+
   # Localize keeps a locale of its own that nothing sets, so the reader's is
   # passed. A locale Localize has no data for falls back inside Localize; one it
   # cannot parse at all is an error, which reads as no Localize.

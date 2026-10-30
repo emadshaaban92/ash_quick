@@ -157,6 +157,73 @@ A custom template that draws a resource's labels itself calls `AshQuick.Labels`
 `translate/1` for an English string), so it reads the same as the pages around
 it.
 
+#### Dates, times and money
+
+Dates, times and money are formatted with Localize, when it is loaded, in the
+same locale. Localize ships English data alone and downloads nothing unless
+told to: a locale it has no data for is formatted in English, silently. So a
+host lists its locales and downloads their data, the way it fetches its deps:
+before it compiles in development, in CI, and in the build a release is cut
+from.
+
+1. List your locales in `config/config.exs`, the ones your Gettext backend
+   has. `mix localize.download_locales` loads that file alone, before anything
+   is compiled, so neither `runtime.exs` nor `Gettext.known_locales/1` works
+   here:
+
+   ```elixir
+   config :localize, otp_app: :my_app, supported_locales: [:en, :ar]
+   ```
+
+   `otp_app:` puts the data under your app's `priv/localize`, so a release
+   carries it.
+
+2. Keep the data out of git; it is fetched, like your deps:
+
+   ```gitignore
+   /priv/localize/
+   ```
+
+3. Download it in development, next to `deps.get` in your `setup` alias:
+
+   ```elixir
+   setup: ["deps.get", "localize.download_locales", "ecto.setup", ...]
+   ```
+
+   A locale already downloaded at Localize's version is skipped, so running it
+   again is cheap.
+
+4. Download it in CI before the tests, and cache `priv/localize` on your lock
+   file and config so a run fetches nothing new:
+
+   ```yaml
+   - uses: actions/cache@v6
+     with:
+       path: priv/localize
+       key: localize-${{ hashFiles('mix.lock', 'config/config.exs') }}
+   - run: mix localize.download_locales
+   ```
+
+5. Download it in the build a release is cut from, after `mix compile` and
+   before `mix release`, beside `mix assets.deploy`:
+
+   ```dockerfile
+   RUN mix compile
+   RUN mix localize.download_locales
+   RUN mix assets.deploy
+   RUN mix release
+   ```
+
+The data lands in every release. A locale's own data is small (`ar` is about
+140 KB), but the task also downloads each locale's inflection data, which for
+`ar` is about 11 MB. A host that would rather not ship it sets
+`allow_runtime_locale_download: true` instead, and Localize fetches a locale
+the first time a reader needs it, which needs the CDN reachable from
+production.
+
+Arabic (`ar`) is written in Latin digits (`460,000.00`); a locale of
+`ar-u-nu-arab` writes Arabic-Indic ones (`٤٦٠٬٠٠٠٫٠٠`).
+
 ### Error reporting
 
 An error a page cannot explain — anything but a validation, a stale record, a
@@ -753,7 +820,7 @@ broken.
 | `chromic_pdf`, `merge_pdf` | Printing (`AshQuick.Print`) |
 | `ex_aws`, `ex_aws_s3` | `AshQuick.Storage.S3`, the default object store |
 | `ex_money` | Rendering `Money` values |
-| `localize` | Locale-aware date and time formatting |
+| `localize` | Locale-aware date, time and money formatting |
 
 Export is feature-detected at runtime — `AshQuick.Config.exports_enabled?/0` —
 so its control simply does not appear. Printing has no control of its own: an

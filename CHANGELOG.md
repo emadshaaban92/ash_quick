@@ -398,7 +398,16 @@
   Localize's own process locale, which nothing set, so every reader got its
   default. They now pass the reader's locale (`AshQuick.Locale.current/0`),
   and a locale Localize cannot parse falls back to the plain format rather
-  than raising.
+  than raising. Localize ships English data alone, and formats a locale it
+  has no data for in English, so a host lists its locales and downloads their
+  data the way it fetches deps: in development, in CI and in its release build
+  (README, "Dates, times and money"; the installer says so too).
+
+- **Money reads in the reader's locale.** A `Money` on a list, a details
+  page or in an export printed through its own protocols, in Localize's
+  process locale, so every reader got English digits and separators. It now
+  goes through `AshQuick.Config.format_money/1`, in the reader's locale like
+  dates.
 
 - **The filter's ✕ waits while Apply runs.** The Advanced filters and
   export modals now use the same modal as an action's form, so the filter's
@@ -736,6 +745,12 @@
   default interpolation gets the same treatment.
 
 ### Breaking changes
+
+- **`AshQuick.LiveView.Utils.format_money/1` is removed.** AshQuick no longer
+  called it, and it matched `%Money{}`, which a host without ex_money could
+  not compile. A host calling it calls `AshQuick.Config.format_money/1`
+  instead, which formats in the reader's locale and leaves a missing amount
+  to the caller (the old one drew `—` for anything but a `Money`).
 
 - **`AshQuick.Components` has a public `attachment_viewer/1`.** Every
   QuickView imports that module, so one defining its own `attachment_viewer/1`

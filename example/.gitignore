@@ -35,3 +35,6 @@ example-*.tar
 npm-debug.log
 /assets/node_modules/
 
+
+# Localize data, fetched by `mix localize.download_locales` like deps.
+/priv/localize/
