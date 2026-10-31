@@ -4,6 +4,22 @@
 
 ### Features
 
+- **A label is translated under its resource's context.** One English label
+  had one translation everywhere, which a language whose words agree with
+  their noun cannot use: in Arabic a cancelled loan is ملغى and a cancelled
+  approval ملغاة. A label of a resource is now looked up under that
+  resource's `msgctxt` first, its short name for a field, relationship,
+  action or argument (`"loan"`) and that and the field's name for a value
+  (`"loan.status"`), and under no context after, so a catalogue adds a
+  contexted entry only where its language needs one. Which entry to ask for
+  is read off the locale's `ash_quick.po`, so a label costs one lookup and the
+  backend's `handle_missing_translation/5` hears only of a label translated
+  neither way, with its context. `mix ash_quick.gen.gettext --contexts` writes
+  every contexted variant too; without it, the template keeps each contexted
+  entry a locale translates, so `gettext.merge` keeps one added by hand. A
+  custom template gets the same through `AshQuick.Labels.name/2`, `field/2`
+  and `value/3`, or `translate/2` with `context/2`.
+
 - **A resource declares its labels once, for every page.** A `labels`
   section in `ash_quick` rewords a field, relationship, action or action
   argument (`label :borrower_national_id, "Borrower National ID"`), or one

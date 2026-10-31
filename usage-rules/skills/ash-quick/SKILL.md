@@ -944,9 +944,15 @@ writes; a QuickView's `label:` still wins on its page; a name or value the
 resource lacks does not compile. A custom template drawing a resource's
 labels itself calls `AshQuick.Labels`: `name/2` (the resource's label or the
 humanized name, then translated), `field/2` (a `:fields` entry) or
-`translate/1` (an English string), passing the resource, and `value/3`
-(`Labels.value(MyApp.Loan, :status, @record.status)`) for a value, so it
-reads the same as the pages. A non-string label (markup) passes through untranslated.
+`translate/2` (an English string and its context), passing the resource,
+and `value/3` (`Labels.value(MyApp.Loan, :status, @record.status)`) for a
+value, so it reads the same as the pages. A resource's label is looked up
+under its context first (`msgctxt "loan"`, `"loan.status"` for a value;
+`AshQuick.Labels.context/2`), then context-free, so a language whose words
+agree with their noun adds a contexted entry only where it needs one;
+`mix ash_quick.gen.gettext` keeps the contexted entries a locale translates
+in the template (so `gettext.merge` keeps them), and `--contexts` writes every
+variant. A non-string label (markup) passes through untranslated.
 
 ## What the host application provides
 

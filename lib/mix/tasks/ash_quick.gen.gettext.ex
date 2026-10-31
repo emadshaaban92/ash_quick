@@ -30,6 +30,15 @@ defmodule Mix.Tasks.AshQuick.Gen.Gettext do
       labels to it. A locale with no seed is created by
       `mix gettext.merge priv/gettext --locale <locale>`.
 
+    * `--contexts` — also write each label a resource draws under that
+      resource's context (`msgctxt "loan"` for a field or action, `"loan.status"`
+      for a value of `:status`; `AshQuick.Labels.context/2`). A label is looked
+      up under its context first and without it after, so translate only the
+      variants your language needs and leave the rest empty. Pass it to
+      `--check` too. Without it, the template still lists each contexted
+      entry some locale's `ash_quick.po` translates, so a contexted
+      translation added by hand survives `gettext.merge`.
+
     * `--check` — write nothing, and fail when the template on disk differs
       from the one this would write: a field, an action or a nav entry was
       added and nobody regenerated it. For CI, next to
@@ -51,7 +60,10 @@ defmodule Mix.Tasks.AshQuick.Gen.Gettext do
   @impl Mix.Task
   def run(argv) do
     {opts, _rest} =
-      OptionParser.parse!(argv, strict: [locale: :string, check: :boolean], aliases: [l: :locale])
+      OptionParser.parse!(argv,
+        strict: [locale: :string, check: :boolean, contexts: :boolean],
+        aliases: [l: :locale]
+      )
 
     priv = priv()
     path = Path.join(priv, "ash_quick.pot")
@@ -59,7 +71,11 @@ defmodule Mix.Tasks.AshQuick.Gen.Gettext do
 
     template =
       AshQuick.Config.nav()
-      |> Template.build(existing, sort_by_msgid: sort_by_msgid())
+      |> Template.build(existing,
+        sort_by_msgid: sort_by_msgid(),
+        contexts: opts[:contexts],
+        translated: Template.translated(priv)
+      )
       |> Expo.PO.compose()
       |> IO.iodata_to_binary()
 

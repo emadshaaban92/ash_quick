@@ -66,7 +66,7 @@ defmodule AshQuick.LabelsTest do
     end
 
     test "leaves what it does not label, and every other resource, humanized" do
-      assert Labels.name(:name, Loan) == "Name"
+      assert Labels.name(:kind, Loan) == "Kind"
       assert Labels.name(:destroy, Loan) == "Delete"
       assert Labels.name(:borrower_national_id) == "Borrower National"
 
@@ -108,7 +108,7 @@ defmodule AshQuick.LabelsTest do
       assert EnumOptions.options(status, Loan) == [
                {"Active", :active},
                {"مسدد بالكامل", :paid_off},
-               {"Cancelled", :cancelled}
+               {"ملغى", :cancelled}
              ]
 
       assert EnumOptions.label(status, :paid_off) == "Paid off"
@@ -127,6 +127,61 @@ defmodule AshQuick.LabelsTest do
 
       # A name, not a value: `name/2` reads the field's or action's label.
       assert Labels.name(:paid_off, Loan) == "Paid Off"
+    end
+  end
+
+  # A word agrees with the noun it describes: the catalogue translates
+  # "Cancelled" for a loan's status apart from everywhere else.
+  describe "a label's context" do
+    alias AshQuick.LiveView.EnumOptions
+    alias AshQuick.Test.Labels.{Borrower, Loan}
+
+    test "is the resource's short name, and its field's for a value" do
+      assert Labels.context(Loan) == "loan"
+      assert Labels.context(Loan, :status) == "loan.status"
+      assert Labels.context(nil) == nil
+    end
+
+    test "picks the translation the catalogue gives under it" do
+      status = Ash.Resource.Info.attribute(Loan, :status)
+
+      assert Labels.translate("Cancelled", "loan.status") == "ملغى"
+      assert EnumOptions.label(status, :cancelled, Loan) == "ملغى"
+      assert {"ملغى", :cancelled} in EnumOptions.options(status, Loan)
+      assert Labels.value(Loan, :status, :cancelled) == "ملغى"
+      assert Labels.name(:name, Loan) == "اسم القرض"
+      assert Labels.field(:name, Loan) == "اسم القرض"
+    end
+
+    test "falls back to the context-free translation" do
+      status = Ash.Resource.Info.attribute(Loan, :status)
+
+      assert Labels.translate("Cancelled", "approval.status") == "ملغاة"
+      assert Labels.translate("Cancelled") == "ملغاة"
+      assert EnumOptions.label(status, :cancelled) == "ملغاة"
+      assert Labels.name(:name, Borrower) == "Name"
+      assert Labels.field([borrower: :name], Loan) == "Name"
+    end
+
+    # An entry with an empty msgstr is untranslated: Gettext compiles it as
+    # missing, and the context-free translation stands.
+    test "is passed over where its entry is left empty" do
+      assert Labels.name(:borrower_national_id, Loan) == "الرقم القومي للمقترض"
+    end
+
+    test "costs the missing-translation hook nothing when either variant is translated" do
+      Labels.translate("Cancelled", "approval.status")
+      Labels.translate("Price", "loan")
+      Labels.name(:name, Loan)
+
+      refute_received {:missing_translation, _, _, _, _}
+    end
+
+    test "is named to the missing-translation hook when neither variant is translated" do
+      assert Labels.name(:reason_code, Loan) == "Reason"
+
+      assert_received {:missing_translation, "ar", "ash_quick", "loan", "Reason"}
+      refute_received {:missing_translation, _, _, nil, "Reason"}
     end
   end
 

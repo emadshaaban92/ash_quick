@@ -65,6 +65,53 @@ defmodule AshQuick.GettextTemplateTest do
     end
   end
 
+  describe "contexted/1" do
+    test "pairs each label a resource draws with its context" do
+      contexted = Template.contexted(@nav)
+
+      assert {"brand", "VAT Number"} in contexted
+      assert {"brand", "Name"} in contexted
+      assert {"brand", "Maker"} in contexted
+      assert {"brand", "Delete"} in contexted
+      assert {"brand.tier", "Premium Partner"} in contexted
+      assert {"brand.tier", "Standard"} in contexted
+      # Two hops away, under its own resource.
+      assert {"country.region", "North Africa"} in contexted
+      assert contexted == contexted |> Enum.uniq() |> Enum.sort()
+    end
+
+    test "has nothing to read without a nav" do
+      assert Template.contexted(nil) == []
+    end
+  end
+
+  describe "build/3 with contexts" do
+    defp keys(template), do: Enum.map(template.messages, &Message.key/1)
+
+    test "adds each contexted label beside the context-free one" do
+      template = Template.build(@nav, nil, contexts: true)
+
+      assert {"brand", "VAT Number"} in keys(template)
+      assert {"", "VAT Number"} in keys(template)
+      assert keys(template) == Enum.uniq(keys(template))
+    end
+
+    test "adds none by default" do
+      refute {"brand", "VAT Number"} in keys(Template.build(@nav))
+    end
+
+    # So the `gettext.merge` that follows keeps a contexted entry a translator
+    # added by hand instead of deleting it as obsolete.
+    test "adds the contexted labels a locale translates" do
+      translated = [{"brand", "VAT Number"}, {"brand", "Nobody Draws This"}]
+      keys = keys(Template.build(@nav, nil, translated: translated))
+
+      assert {"brand", "VAT Number"} in keys
+      refute {"brand", "Nobody Draws This"} in keys
+      refute {"brand", "Name"} in keys
+    end
+  end
+
   describe "build/2" do
     test "starts with AshQuick's own messages, then the labels it does not have" do
       library = Expo.PO.parse_file!(Template.library_pot())

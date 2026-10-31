@@ -12,6 +12,7 @@ defmodule AshQuick.Gettext.Template do
   # is drawn in English, so the walk errs towards listing.
 
   alias AshQuick.Labels
+  alias AshQuick.Labels.Catalogue
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.QuickField
   alias AshQuick.LiveView.Utils
@@ -35,6 +36,14 @@ defmodule AshQuick.Gettext.Template do
   `:sort_by_msgid` orders the messages the way the host's `gettext.extract`
   does under the same option (`:case_sensitive` or `:case_insensitive`), so
   neither undoes the other.
+
+  `contexts: true` adds each label a resource draws once more under that
+  resource's `msgctxt` (`contexted/1`), for a language that translates it
+  differently there. Without it, only the contexted entries in `:translated`
+  (`translated/1`, the ones some locale translates) are added, so the
+  `gettext.merge` that follows keeps a contexted translation a translator
+  added by hand rather than deleting it as obsolete. One whose label no
+  page draws any more under that context is left out, and becomes obsolete.
   """
   def build(nav, existing \\ nil, opts \\ []) do
     %Messages{} = library = Expo.PO.parse_file!(library_pot())
@@ -55,7 +64,14 @@ defmodule AshQuick.Gettext.Template do
           not MapSet.member?(own_keys, {"", label}),
           do: %Message.Singular{msgid: [label]}
 
-    ours = own ++ labels
+    translated = MapSet.new(List.wrap(opts[:translated]))
+
+    contexted =
+      for {msgctxt, label} = key <- contexted(nav),
+          opts[:contexts] || MapSet.member?(translated, key),
+          do: %Message.Singular{msgctxt: [msgctxt], msgid: [label]}
+
+    ours = own ++ labels ++ contexted
     ours_keys = MapSet.new(ours, &Message.key/1)
 
     messages =
@@ -66,16 +82,37 @@ defmodule AshQuick.Gettext.Template do
   end
 
   defp sort(messages, :case_sensitive),
-    do: Enum.sort_by(messages, &IO.chardata_to_string(&1.msgid))
+    do: Enum.sort_by(messages, &{IO.chardata_to_string(&1.msgid), msgctxt(&1)})
 
   defp sort(messages, :case_insensitive),
-    do: Enum.sort_by(messages, &String.downcase(IO.chardata_to_string(&1.msgid)))
+    do:
+      Enum.sort_by(
+        messages,
+        &{String.downcase(IO.chardata_to_string(&1.msgid)), msgctxt(&1)}
+      )
 
   defp sort(messages, _unsorted), do: messages
+
+  defp msgctxt(%{msgctxt: nil}), do: ""
+  defp msgctxt(%{msgctxt: msgctxt}), do: IO.chardata_to_string(msgctxt)
+  defp msgctxt(_message), do: ""
 
   defp unmark(message) do
     flags = Enum.map(message.flags, &List.delete(&1, "elixir-autogen"))
     %{message | flags: flags, references: []}
+  end
+
+  @doc """
+  The contexted `{msgctxt, msgid}` pairs any locale under `priv` translates in
+  its `ash_quick.po`.
+  """
+  def translated(priv) do
+    priv
+    |> Path.join("*/LC_MESSAGES/ash_quick.po")
+    |> Path.wildcard()
+    |> Enum.flat_map(&Catalogue.read_file/1)
+    |> Enum.reject(&match?({nil, _msgid}, &1))
+    |> Enum.uniq()
   end
 
   @doc "AshQuick's own template, inside this package."
@@ -111,6 +148,43 @@ defmodule AshQuick.Gettext.Template do
     |> Enum.filter(&(is_binary(&1) and &1 != ""))
     |> Enum.uniq()
     |> Enum.sort()
+  end
+
+  @doc """
+  Each label a resource draws, as `{msgctxt, msgid}` under that resource's
+  context (`AshQuick.Labels.context/2`): its fields, relationships, actions
+  and their inputs, and the label each QuickView field is drawn with, under
+  the resource's short name; each value under the short name and its field's.
+  Sorted and without duplicates.
+  """
+  def contexted(nil), do: []
+
+  def contexted(nav) do
+    views = nav |> Info.router() |> quick_views()
+    resources = views |> Enum.map(& &1.resource) |> reachable()
+
+    view_fields =
+      for options <- views,
+          %QuickField{label: label, context: context} <-
+            options.list_fields ++ options.details_fields ++ options.export_fields,
+          do: {context, label}
+
+    (view_fields ++ Enum.flat_map(resources, &resource_contexted/1))
+    |> Enum.filter(fn {context, label} ->
+      is_binary(context) and is_binary(label) and label != ""
+    end)
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
+  defp resource_contexted(resource) do
+    {fields, names} = names(resource)
+    context = Labels.context(resource)
+
+    Enum.map(names, &{context, Labels.english(&1.name, resource)}) ++
+      for field <- fields,
+          label <- values(field, resource),
+          do: {Labels.context(resource, field.name), label}
   end
 
   defp quick_views(nil), do: []
@@ -163,6 +237,19 @@ defmodule AshQuick.Gettext.Template do
   # humanized name too: a custom template calling `Labels.name/1` or
   # `EnumOptions.label/2`, which know no resource, still draws that one.
   defp resource_labels(resource) do
+    {fields, names} = names(resource)
+
+    [
+      Enum.map(names, &Labels.english(&1.name, resource)),
+      Enum.map(names, &Utils.humanize(&1.name)),
+      Enum.map(fields, &values(&1, resource)),
+      Enum.map(fields, &values(&1, nil))
+    ]
+  end
+
+  # What has values (fields and action inputs), and everything with a name:
+  # those, relationships and actions.
+  defp names(resource) do
     fields =
       Ash.Resource.Info.public_attributes(resource) ++
         Ash.Resource.Info.public_calculations(resource) ++
@@ -171,14 +258,8 @@ defmodule AshQuick.Gettext.Template do
     relationships = Ash.Resource.Info.public_relationships(resource)
     actions = Ash.Resource.Info.public_actions(resource)
     inputs = Enum.flat_map(actions, &Utils.action_fields(resource, &1.name))
-    names = fields ++ relationships ++ inputs ++ actions
 
-    [
-      Enum.map(names, &Labels.english(&1.name, resource)),
-      Enum.map(names, &Utils.humanize(&1.name)),
-      Enum.map(fields ++ inputs, &values(&1, resource)),
-      Enum.map(fields ++ inputs, &values(&1, nil))
-    ]
+    {fields ++ inputs, fields ++ relationships ++ inputs ++ actions}
   end
 
   defp values(field, resource),

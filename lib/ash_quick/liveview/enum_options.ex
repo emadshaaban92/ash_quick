@@ -8,7 +8,8 @@ defmodule AshQuick.LiveView.EnumOptions do
   of each value. Given the resource the field belongs to, a label the resource
   declares for a value (`label :status, :paid_off, "Paid Off in Full"`, see
   `AshQuick`) is drawn in place of either. Each is translated
-  (`AshQuick.Labels.translate/1`), so a value reads in the reader's language. A `Ash.Type.NewType` over either counts as what it wraps. An
+  (`AshQuick.Labels.translate/2`), under the resource's and field's context
+  when given the resource, so a value reads in the reader's language. A `Ash.Type.NewType` over either counts as what it wraps. An
   atom without `one_of` holds no fixed set: it is typed in, like a string.
 
   Forms, the custom filter and the list and details pages all read their
@@ -50,7 +51,9 @@ defmodule AshQuick.LiveView.EnumOptions do
   def options(field, resource \\ nil) do
     field
     |> english_options(resource)
-    |> Enum.map(fn {label, value} -> {Labels.translate(label), value} end)
+    |> Enum.map(fn {label, value} ->
+      {Labels.translate(label, context(field, resource)), value}
+    end)
   end
 
   @doc false
@@ -90,7 +93,7 @@ defmodule AshQuick.LiveView.EnumOptions do
   The label `value` shows as in `field` of `resource`: the label the resource
   declares for that value, else its enum's label when the field is typed by an
   `Ash.Type.Enum`, and `AshQuick.LiveView.Utils.humanize/1` otherwise, `field`
-  given or not, translated (`AshQuick.Labels.translate/1`).
+  given or not, translated (`AshQuick.Labels.translate/2`).
   """
   @spec label(field | nil, atom | String.t(), Ash.Resource.t() | nil) :: String.t()
   def label(field, value, resource \\ nil)
@@ -99,8 +102,12 @@ defmodule AshQuick.LiveView.EnumOptions do
 
   def label(field, value, resource) do
     {type, _constraints} = item_type(field)
-    type |> english_label(field, resource, value) |> Labels.translate()
+    type |> english_label(field, resource, value) |> Labels.translate(context(field, resource))
   end
+
+  # A value is translated under its resource and field: "Cancelled" agrees
+  # with the noun its field describes.
+  defp context(field, resource), do: Labels.context(resource, Map.get(field, :name))
 
   defp english_label(type, field, resource, value) do
     Labels.declared(resource, {Map.get(field, :name), value}) ||
