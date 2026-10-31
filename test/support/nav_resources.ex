@@ -70,8 +70,8 @@ defmodule AshQuick.Test.Nav.Brand do
     end
 
     labels do
-      label(:vat_no, "VAT Number")
-      label(:tier, :premium, "Premium Partner")
+      label :vat_no, "VAT Number"
+      label :tier, :premium, "Premium Partner"
     end
 
     liveness do

@@ -35,7 +35,7 @@ defmodule AshQuick.Test.Labels.Borrower do
 
   ash_quick do
     labels do
-      label(:national_id, "National ID")
+      label :national_id, "National ID"
     end
 
     liveness do
@@ -98,12 +98,12 @@ defmodule AshQuick.Test.Labels.Loan do
 
   ash_quick do
     labels do
-      label(:borrower_national_id, "Borrower National ID")
-      label(:borrower, "Applicant")
-      label(:issue_bill_of_sale, "Issue Bill of Sale")
-      label(:reason_code, "Reason")
-      label(:status, :paid_off, "Paid Off in Full")
-      label(:kind, :business, "Business Loan")
+      label :borrower_national_id, "Borrower National ID"
+      label :borrower, "Applicant"
+      label :issue_bill_of_sale, "Issue Bill of Sale"
+      label :reason_code, "Reason"
+      label :status, :paid_off, "Paid Off in Full"
+      label :kind, :business, "Business Loan"
     end
 
     liveness do
