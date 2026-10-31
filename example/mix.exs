@@ -54,7 +54,7 @@ defmodule Example.MixProject do
       {:picosat_elixir, "~> 0.2"},
       {:phoenix, "~> 1.8.5"},
       {:phoenix_ecto, "~> 4.7"},
-      {:phoenix_html, "~> 4.3"},
+      {:phoenix_html, "~> 4.4"},
       {:phoenix_live_view, "~> 1.2"},
       {:phoenix_live_reload, "~> 1.7", only: :dev},
       {:phoenix_live_dashboard, "~> 0.9"},
@@ -95,13 +95,13 @@ defmodule Example.MixProject do
       {:ex_aws, "~> 2.7"},
       {:ex_aws_s3, "~> 2.5"},
       {:ash_money, "~> 0.2"},
-      {:ex_money_sql, "~> 2.1"},
+      {:ex_money_sql, "~> 2.2"},
 
       # Tooling.
       {:igniter, "~> 0.8", only: [:dev, :test]},
       {:sourceror, "~> 1.13", only: [:dev, :test]},
       {:lazy_html, ">= 0.1.0", only: :test},
-      {:phoenix_test, "~> 0.13", only: :test, runtime: false},
+      {:phoenix_test, "~> 0.14", only: :test, runtime: false},
       # What ExAws parses a multipart upload's responses with. Only reached
       # through `Example.Test.S3Stub`, which is the only bucket this app talks to.
       {:sweet_xml, "~> 0.7", only: :test},

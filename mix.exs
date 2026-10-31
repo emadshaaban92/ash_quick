@@ -58,7 +58,7 @@ defmodule AshQuick.MixProject do
       {:spark, "~> 2.7"},
       {:phoenix, "~> 1.8"},
       {:phoenix_live_view, "~> 1.2"},
-      {:phoenix_html, "~> 4.3"},
+      {:phoenix_html, "~> 4.4"},
       {:gettext, "~> 1.0"},
       {:live_select, "~> 1.7"},
       {:jason, "~> 1.4"},
@@ -80,8 +80,8 @@ defmodule AshQuick.MixProject do
       {:chromic_pdf, "~> 1.17", optional: true},
       {:ex_aws, "~> 2.7", optional: true},
       {:ex_aws_s3, "~> 2.5", optional: true},
-      {:ex_money, "~> 6.2", optional: true},
-      {:localize, "~> 1.4", optional: true},
+      {:ex_money, "~> 6.3", optional: true},
+      {:localize, "~> 1.5", optional: true},
       {:merge_pdf, "~> 0.5", optional: true},
 
       # The installer and generators are mix tasks in this package, and a host
