@@ -9,18 +9,21 @@ defmodule AshQuick.LiveView.QuickField do
   """
   alias AshQuick.Labels
 
-  defstruct [:path, :label, :widget, :data_field]
+  defstruct [:path, :label, :context, :widget, :data_field]
 
   @doc false
   # A field as written under `:fields`, with the label it is drawn with: its
-  # `label:`, or the label `resource` declares for the field its path reaches
-  # (`AshQuick.Labels`), or that field's name humanized.
+  # `label:`, or the label the resource owning the field its path reaches
+  # declares for it (`AshQuick.Labels`), or that field's name humanized. The
+  # label is translated under that resource's context.
   def normalize(spec, resource \\ nil) do
     field = build(spec)
+    {owner, name} = labelled_by(field.path, resource)
 
     %{
       field
-      | label: field.label || default_label(field.path, resource),
+      | label: field.label || Labels.english(name, owner),
+        context: Labels.context(owner),
         data_field: path_name(field.path)
     }
   end
@@ -49,16 +52,16 @@ defmodule AshQuick.LiveView.QuickField do
     end
   end
 
-  # A field on the resource is labelled as the resource labels it. A path one
-  # hop into a relationship is labelled by the field it reaches there; a longer
-  # one, or one stopping at the related record, by the relationship.
-  defp default_label(field, resource) when is_atom(field), do: Labels.english(field, resource)
+  # The resource and the name a field is labelled by. A field on the resource
+  # is labelled as the resource labels it. A path one hop into a relationship
+  # is labelled by the field it reaches there; a longer one, or one stopping at
+  # the related record, by the relationship.
+  defp labelled_by(field, resource) when is_atom(field), do: {resource, field}
 
-  defp default_label([{relationship, nested}], resource) when is_atom(nested),
-    do: Labels.english(nested, destination(resource, relationship))
+  defp labelled_by([{relationship, nested}], resource) when is_atom(nested),
+    do: {destination(resource, relationship), nested}
 
-  defp default_label([{relationship, _nested}], resource),
-    do: Labels.english(relationship, resource)
+  defp labelled_by([{relationship, _nested}], resource), do: {resource, relationship}
 
   defp destination(nil, _relationship), do: nil
 

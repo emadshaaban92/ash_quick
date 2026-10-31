@@ -156,10 +156,40 @@ locale code `ar` reads "Ar". Reword one where it is drawn, or in the catalogue:
   `priv/gettext/en/LC_MESSAGES/ash_quick.po`
   (`mix gettext.merge priv/gettext --locale en` creates it).
 
+One English label has one translation, wherever it is drawn, which is wrong
+for a language whose words agree with the noun they describe: in Arabic a
+cancelled loan is ملغى and a cancelled approval ملغاة. So a label of a
+resource is looked up under that resource's context first, its short name for
+a field, action or argument (`msgctxt "loan"`) and that and the field's name
+for a value (`msgctxt "loan.status"`), and its context-free translation after.
+Translate the context-free entry as usual, and add a contexted one only where
+your language needs it:
+
+```po
+msgid "Cancelled"
+msgstr "ملغاة"
+
+msgctxt "loan.status"
+msgid "Cancelled"
+msgstr "ملغى"
+```
+
+`mix ash_quick.gen.gettext` keeps a contexted entry you add by hand: the
+template lists each one some locale's `ash_quick.po` translates, so
+`mix gettext.merge` does not delete it as obsolete (an entry whose label no
+page draws under that context any more is left out, and does become
+obsolete). `mix ash_quick.gen.gettext --contexts` writes every contexted
+variant into the template, so a translator can see where each label is drawn;
+leave the ones your language does not need empty. Two resources sharing a
+short name share their contexts. Labels with no resource behind them, a nav entry or a page
+title, have none.
+
 The template being complete does not make a locale's translation complete: an
 entry left with an empty `msgstr` is drawn in English. To hear about those in
 dev, override your backend's `handle_missing_translation/5`, which Gettext calls
-for every message a locale has no translation for, AshQuick's included:
+for every message a locale has no translation for, AshQuick's included. A
+label is reported once, under its context, and only when neither its
+contexted nor its context-free entry is translated:
 
 ```elixir
 # in MyAppWeb.Gettext, after `use Gettext.Backend`
@@ -183,9 +213,9 @@ end
 Keep it to dev (the example app gates it on a `compile_env` flag).
 
 A custom template that draws a resource's labels itself calls `AshQuick.Labels`
-(`name/1` for a field, action or value name, `field/1` for a `:fields` entry,
-`translate/1` for an English string), so it reads the same as the pages around
-it.
+with the resource (`name/2` for a field, action or argument, `value/3` for a
+value, `field/2` for a `:fields` entry, `translate/2` for an English string
+and its `context/2`), so it reads the same as the pages around it.
 
 #### Dates, times and money
 

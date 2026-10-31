@@ -15,6 +15,14 @@ defmodule AshQuick.Test.LabelGettext do
   `test/support/gettext`.
   """
   use Gettext.Backend, otp_app: :ash_quick, priv: "test/support/gettext"
+
+  # Tells the process that asked, so a test sees which variant of a label went
+  # untranslated.
+  @impl Gettext.Backend
+  def handle_missing_translation(locale, domain, msgctxt, msgid, bindings) do
+    send(self(), {:missing_translation, locale, domain, msgctxt, msgid})
+    super(locale, domain, msgctxt, msgid, bindings)
+  end
 end
 
 defmodule AshQuick.Test.TaskGettext do

@@ -44,6 +44,33 @@ defmodule Mix.Tasks.AshQuick.Gen.GettextTest do
     assert_raise Mix.Error, ~r/out of date/, fn -> Task.run(["--check"]) end
   end
 
+  test "--contexts writes the contexted labels too, and --check holds to them" do
+    Task.run(["--contexts"])
+
+    assert File.read!(@pot) =~ ~s(msgctxt "brand"\nmsgid "VAT Number")
+    Task.run(["--check", "--contexts"])
+    assert_raise Mix.Error, ~r/out of date/, fn -> Task.run(["--check"]) end
+  end
+
+  test "keeps a contexted translation added by hand through gettext.merge" do
+    Task.run(["--locale", "ar"])
+    Task.run([])
+    Mix.Tasks.Gettext.Merge.run([@priv, "--no-fuzzy"])
+
+    File.write!(
+      @ar,
+      File.read!(@ar) <> ~s(\nmsgctxt "brand"\nmsgid "VAT Number"\nmsgstr "رقم ضريبي"\n)
+    )
+
+    Task.run([])
+    assert File.read!(@pot) =~ ~s(msgctxt "brand"\nmsgid "VAT Number")
+    refute File.read!(@pot) =~ ~s(msgctxt "brand"\nmsgid "Name")
+
+    Mix.Tasks.Gettext.Merge.run([@priv, "--no-fuzzy"])
+    assert File.read!(@ar) =~ ~s(msgctxt "brand"\nmsgid "VAT Number"\nmsgstr "رقم ضريبي")
+    Task.run(["--check"])
+  end
+
   test "--check fails when there is no template" do
     assert_raise Mix.Error, ~r/out of date/, fn -> Task.run(["--check"]) end
     refute File.exists?(@pot)
@@ -53,9 +80,10 @@ defmodule Mix.Tasks.AshQuick.Gen.GettextTest do
     Task.run(["--locale", "ar"])
     assert File.read!(@ar) == File.read!("priv/gettext_seeds/ar/LC_MESSAGES/ash_quick.po")
 
-    File.write!(@ar, "mine")
+    mine = ~s(msgid "Mine"\nmsgstr "لي"\n)
+    File.write!(@ar, mine)
     Task.run(["--locale", "ar"])
-    assert File.read!(@ar) == "mine"
+    assert File.read!(@ar) == mine
   end
 
   test "--locale with no seed says how to start one, and copies nothing" do

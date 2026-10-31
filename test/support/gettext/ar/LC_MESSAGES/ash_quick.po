@@ -14,3 +14,18 @@ msgstr "الرقم القومي للمقترض"
 
 msgid "Paid Off in Full"
 msgstr "مسدد بالكامل"
+
+msgid "Cancelled"
+msgstr "ملغاة"
+
+msgctxt "loan.status"
+msgid "Cancelled"
+msgstr "ملغى"
+
+msgctxt "loan"
+msgid "Name"
+msgstr "اسم القرض"
+
+msgctxt "loan"
+msgid "Borrower National ID"
+msgstr ""
