@@ -130,6 +130,36 @@ defmodule AshQuick do
   derived and does not compile. `AshQuick.Nav.Info.details_path/2` resolves
   both.
 
+  ## Labels
+
+  A field, an action or a value is drawn under its name, humanized:
+  `borrower_national_id` reads "Borrower National". Where that is not what a
+  reader should see, the resource says so once:
+
+      ash_quick do
+        labels do
+          label :borrower_national_id, "Borrower National ID"
+          label :issue_bill_of_sale, "Issue Bill of Sale"
+          label :status, :paid_off, "Paid Off in Full"
+        end
+      end
+
+  `label name, text` names an attribute, calculation, aggregate or
+  relationship, an action, or an argument of one of its actions: one name
+  takes one label, wherever it is drawn. `label name, value, text` labels one
+  value of such a field, in place of its `Ash.Type.Enum` label or its
+  humanized name; a field with a fixed set of values has to offer `value`. A
+  name or value the resource does not have, or one labelled twice, does not
+  compile.
+
+  The label is drawn on every page that names the field, action or value on
+  this resource: list columns, details rows, form inputs, filters and their
+  chips, row and bulk actions, exports, error messages, and any custom
+  template that labels them through `AshQuick.Labels`. A QuickView's own
+  `label:` on a `:fields` entry still wins on that page. The label is English,
+  and the msgid it is translated under: `mix ash_quick.gen.gettext` lists it
+  in place of the humanized name.
+
   ## Lookup
 
   Names the read action AshQuick runs a search through, and the argument the
@@ -619,6 +649,43 @@ defmodule AshQuick do
     ]
   }
 
+  @label %Spark.Dsl.Entity{
+    name: :label,
+    describe:
+      "The label a field, action or argument of this resource is drawn with, or one value of a field.",
+    target: AshQuick.Labels.Label,
+    args: [:name, {:optional, :value}, :label],
+    examples: [
+      ~s(label :borrower_national_id, "Borrower National ID"),
+      ~s(label :status, :paid_off, "Paid Off in Full")
+    ],
+    schema: [
+      name: [
+        type: :atom,
+        required: true,
+        doc:
+          "An attribute, calculation, aggregate or relationship, an action, or an argument of one of the resource's actions."
+      ],
+      value: [
+        type: {:or, [:atom, :string]},
+        doc:
+          "One value of the field `name`, labelled in place of its enum label or humanized name. Left out, the label is the field's, action's or argument's own."
+      ],
+      label: [
+        type: :string,
+        required: true,
+        doc: "The label, in English: the msgid it is translated under."
+      ]
+    ]
+  }
+
+  @labels %Spark.Dsl.Section{
+    name: :labels,
+    describe:
+      "Declare the labels this resource's fields, actions and values are drawn with, on every page.",
+    entities: [@label]
+  }
+
   @activation %Spark.Dsl.Section{
     name: :activation,
     describe: "Declare that a record of this resource is deactivated rather than destroyed.",
@@ -756,6 +823,7 @@ defmodule AshQuick do
     sections: [
       @liveness,
       @display,
+      @labels,
       @lookup,
       @activation,
       @versioning,
@@ -765,7 +833,11 @@ defmodule AshQuick do
     ]
   }
 
+  # Spark writes a module for every section, named after it under the prefix.
+  # Under `AshQuick` itself, the `labels` section's would be `AshQuick.Labels`,
+  # which is the public module that draws labels.
   use Spark.Dsl.Extension,
+    module_prefix: AshQuick.Dsl,
     sections: [@ash_quick],
     transformers: [
       AshQuick.Audit.Transformer,
@@ -774,6 +846,7 @@ defmodule AshQuick do
       AshQuick.Bookkeeping.Transformer,
       AshQuick.Versioning.Transformer,
       AshQuick.Display.Transformer,
+      AshQuick.Labels.Transformer,
       AshQuick.FieldRestrictions.Transformer,
       AshQuick.PubSub.Transformer
     ],
@@ -784,7 +857,8 @@ defmodule AshQuick do
       AshQuick.Audit.Verifier,
       AshQuick.Impersonation.Verifier,
       AshQuick.Lookup.Verifier,
-      AshQuick.Print.Verifier
+      AshQuick.Print.Verifier,
+      AshQuick.Labels.Verifier
     ]
 
   @surface_sources [:ash_quick_details, :ash_quick_list, :ash_quick_list_bulk]

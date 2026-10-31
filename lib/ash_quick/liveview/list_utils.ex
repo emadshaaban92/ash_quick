@@ -639,7 +639,7 @@ defmodule AshQuick.LiveView.ListUtils do
       # `transaction: :all` rolled every row back, so the modal stays as it was
       # for the values to be corrected or the run abandoned.
       %{status: :error, errors: errors} ->
-        put_flash(socket, :error, bulk_error_message(errors))
+        put_flash(socket, :error, bulk_error_message(errors, options.resource))
 
       # A bulk write that matches no row (a stale one, say) is not an error, so
       # `:success` does not mean every selected row was written. The records it
@@ -656,7 +656,7 @@ defmodule AshQuick.LiveView.ListUtils do
           selected_rows:
             Map.take(socket.assigns.selected_rows, Enum.filter(skipped_ids, &(&1 in shown)))
         )
-        |> report_skipped_rows(action, length(selected), skipped_ids)
+        |> report_skipped_rows({options.resource, action}, length(selected), skipped_ids)
         |> Liveness.resync(:data, options)
         |> refresh_row_actions(options)
     end
@@ -665,17 +665,17 @@ defmodule AshQuick.LiveView.ListUtils do
   # A bulk result holds an error class per failed batch. Unwrapped into one
   # class, the errors inside are what `ActionErrors` words; left wrapped, a
   # class inside a class reads as an error of ours.
-  defp bulk_error_message([_ | _] = errors) do
+  defp bulk_error_message([_ | _] = errors, resource) do
     errors
     |> Enum.flat_map(fn
       %class{errors: [_ | _] = inner} when class in @error_classes -> inner
       error -> [error]
     end)
     |> Ash.Error.to_error_class()
-    |> ActionErrors.user_facing_message()
+    |> ActionErrors.user_facing_message(resource)
   end
 
-  defp bulk_error_message(_no_errors), do: ActionErrors.generic_message()
+  defp bulk_error_message(_no_errors, _resource), do: ActionErrors.generic_message()
 
   # Every action opens at its own URL, over this list, and runs from there: a
   # form for one that takes input, a confirmation for one that does not. What
@@ -766,13 +766,13 @@ defmodule AshQuick.LiveView.ListUtils do
     put_flash(socket, :error, skipped_rows_message(action, selected, length(skipped_ids)))
   end
 
-  defp skipped_rows_message(action, selected, skipped) do
+  defp skipped_rows_message({resource, action}, selected, skipped) do
     applied =
       ngettext(
         "%{action} applied to %{applied} of 1 selected row.",
         "%{action} applied to %{applied} of %{count} selected rows.",
         selected,
-        action: Labels.name(action.name),
+        action: Labels.name(action.name, resource),
         applied: selected - skipped
       )
 

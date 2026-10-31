@@ -232,6 +232,25 @@ defmodule AshQuick.LiveView.ActionErrorsTest do
       refute message == ActionErrors.generic_message()
     end
 
+    test "names a field as the action's resource labels it" do
+      error =
+        Ash.Error.Invalid.exception(
+          errors: [
+            Ash.Error.Changes.InvalidAttribute.exception(
+              field: :borrower_national_id,
+              message: "is required"
+            ),
+            Ash.Error.Changes.InvalidAttribute.exception(field: :reason_code)
+          ]
+        )
+
+      assert ActionErrors.user_facing_message(error, AshQuick.Test.Labels.Loan) ==
+               "Borrower National ID: is required\nReason: is invalid"
+
+      assert ActionErrors.user_facing_message(error) ==
+               "Borrower National: is required\nReason Code: is invalid"
+    end
+
     # The same for an error that refuses a combination rather than one field —
     # `InvalidChanges` carries `:fields` where `InvalidAttribute` carries
     # `:field`.
@@ -342,6 +361,14 @@ defmodule AshQuick.LiveView.ActionErrorsTest do
       error = Ash.Error.Changes.InvalidAttribute.exception(field: :price)
 
       assert ActionErrors.unplaced_message([error], MapSet.new([:price])) == "Price: is invalid"
+    end
+
+    test "names a field as the form's resource labels it" do
+      assert ActionErrors.unplaced_message(
+               [invalid(:borrower_national_id, "is required")],
+               MapSet.new([:name]),
+               AshQuick.Test.Labels.Loan
+             ) == "Borrower National ID: is required"
     end
 
     test "leaves an error a nested form shows to that form" do

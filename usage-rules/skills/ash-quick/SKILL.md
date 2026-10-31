@@ -200,7 +200,8 @@ atom (`:name`) or a relationship navigation (`[seller: :name]`).
 ```
 
 **Supported opts:**
-- `:label` — Custom display label (defaults to humanized field name)
+- `:label` — Custom display label for this page (defaults to the label the
+  resource declares under `labels`, else the humanized field name)
 - `:widget` — Custom rendering function (see Widgets section below)
 
 **Prefer `{path, opts}` over the legacy `{path, "label"}` format.**
@@ -934,10 +935,18 @@ the QuickViews and their resources (`--locale ar` copies the Arabic AshQuick
 ships; `--check` for CI); then `mix gettext.merge priv/gettext`. Mark a label
 the task cannot read (a bulk item title a function builds) with
 `dgettext_noop("ash_quick", "...")`. Without `:gettext`, everything is
-English. A custom template drawing a resource's labels itself calls
-`AshQuick.Labels`: `name/1` (humanize, then translate), `field/1` (a `:fields`
-entry) or `translate/1` (an English string), so it reads the same as the
-pages. A non-string label (markup) passes through untranslated.
+English. A resource rewords a humanized name once, for every page and form
+that names it, in `ash_quick do labels do ... end end`: `label :vat_no, "VAT
+Number"` for a field, relationship, action or action argument, `label
+:status, :paid_off, "Paid Off in Full"` for one value of a field. The
+declared label is the English drawn and the msgid `mix ash_quick.gen.gettext`
+writes; a QuickView's `label:` still wins on its page; a name or value the
+resource lacks does not compile. A custom template drawing a resource's
+labels itself calls `AshQuick.Labels`: `name/2` (the resource's label or the
+humanized name, then translated), `field/2` (a `:fields` entry) or
+`translate/1` (an English string), passing the resource, and `value/3`
+(`Labels.value(MyApp.Loan, :status, @record.status)`) for a value, so it
+reads the same as the pages. A non-string label (markup) passes through untranslated.
 
 ## What the host application provides
 

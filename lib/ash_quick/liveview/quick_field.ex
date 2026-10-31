@@ -7,23 +7,27 @@ defmodule AshQuick.LiveView.QuickField do
   name the details page gives each of its rows, and `resolve_value/2`, the
   value a widget is handed.
   """
-  alias AshQuick.LiveView.Utils
+  alias AshQuick.Labels
 
   defstruct [:path, :label, :widget, :data_field]
 
   @doc false
-  def normalize(spec) do
+  # A field as written under `:fields`, with the label it is drawn with: its
+  # `label:`, or the label `resource` declares for the field its path reaches
+  # (`AshQuick.Labels`), or that field's name humanized.
+  def normalize(spec, resource \\ nil) do
     field = build(spec)
-    %{field | data_field: path_name(field.path)}
+
+    %{
+      field
+      | label: field.label || default_label(field.path, resource),
+        data_field: path_name(field.path)
+    }
   end
 
-  defp build(field) when is_atom(field) do
-    %__MODULE__{path: field, label: Utils.humanize(field)}
-  end
+  defp build(field) when is_atom(field), do: %__MODULE__{path: field}
 
-  defp build([{_relationship, _nested}] = path) do
-    %__MODULE__{path: path, label: label_from_path(path)}
-  end
+  defp build([{_relationship, _nested}] = path), do: %__MODULE__{path: path}
 
   defp build({path, label}) when is_binary(label) do
     %__MODULE__{path: normalize_path(path), label: label}
@@ -31,25 +35,39 @@ defmodule AshQuick.LiveView.QuickField do
 
   defp build({path, opts}) when is_atom(path) and is_list(opts) do
     if Keyword.keyword?(opts) do
-      %__MODULE__{
-        path: path,
-        label: Keyword.get_lazy(opts, :label, fn -> Utils.humanize(path) end),
-        widget: Keyword.get(opts, :widget)
-      }
+      %__MODULE__{path: path, label: opts[:label], widget: opts[:widget]}
     else
-      %__MODULE__{path: [{path, opts}], label: Utils.humanize(path)}
+      %__MODULE__{path: [{path, opts}]}
     end
   end
 
   defp build({[{_, _}] = path, opts}) when is_list(opts) do
     if Keyword.keyword?(opts) do
-      %__MODULE__{
-        path: path,
-        label: Keyword.get_lazy(opts, :label, fn -> label_from_path(path) end),
-        widget: Keyword.get(opts, :widget)
-      }
+      %__MODULE__{path: path, label: opts[:label], widget: opts[:widget]}
     else
-      %__MODULE__{path: path, label: label_from_path(path)}
+      %__MODULE__{path: path}
+    end
+  end
+
+  # A field on the resource is labelled as the resource labels it. A path one
+  # hop into a relationship is labelled by the field it reaches there; a longer
+  # one, or one stopping at the related record, by the relationship.
+  defp default_label(field, resource) when is_atom(field), do: Labels.english(field, resource)
+
+  defp default_label([{relationship, nested}], resource) when is_atom(nested),
+    do: Labels.english(nested, destination(resource, relationship))
+
+  defp default_label([{relationship, _nested}], resource),
+    do: Labels.english(relationship, resource)
+
+  defp destination(nil, _relationship), do: nil
+
+  defp destination(resource, relationship) do
+    if Ash.Resource.Info.resource?(resource) do
+      case Ash.Resource.Info.relationship(resource, relationship) do
+        %{destination: destination} -> destination
+        nil -> nil
+      end
     end
   end
 
@@ -154,12 +172,4 @@ defmodule AshQuick.LiveView.QuickField do
   defp segments(field) when is_atom(field), do: [Atom.to_string(field)]
   defp segments([nested]), do: segments(nested)
   defp segments({relationship, nested}), do: [Atom.to_string(relationship) | segments(nested)]
-
-  defp label_from_path([{_relationship, nested}]) when is_atom(nested) do
-    Utils.humanize(nested)
-  end
-
-  defp label_from_path([{relationship, _nested}]) do
-    Utils.humanize(relationship)
-  end
 end

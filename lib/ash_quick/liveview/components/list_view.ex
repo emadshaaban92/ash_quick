@@ -426,7 +426,7 @@ defmodule AshQuick.LiveView.Components.ListView do
       id={"#{@record.id}-action-#{@action.name}"}
       phx-click={JS.push("row_action_click", value: %{id: @record.id, action_name: @action.name})}
     >
-      {Labels.name(@action.name)}
+      {Labels.name(@action.name, @record.__struct__)}
     </.link>
     """
   end

@@ -43,6 +43,18 @@ defmodule AshQuick.GettextTemplateTest do
       assert "North Africa" in labels
     end
 
+    # The humanized name stays listed: a custom template calling
+    # `Labels.name/1`, which knows no resource, still draws it.
+    test "reads a label the resource declares, beside the humanized name" do
+      labels = Template.labels(@nav)
+
+      assert "VAT Number" in labels
+      assert "Vat No" in labels
+      assert "Premium Partner" in labels
+      assert "Premium" in labels
+      assert "Standard" in labels
+    end
+
     test "lists each label once, sorted" do
       labels = Template.labels(@nav)
       assert labels == labels |> Enum.uniq() |> Enum.sort()

@@ -57,6 +57,7 @@ defmodule AshQuick.LiveView.Components.BulkActionView do
         :if={is_nil(@bulk.form)}
         id="ash-quick-bulk-action"
         ash_action={@bulk.action}
+        resource={@resource}
         close={@close}
         submit="bulk_save"
         applies_to={@applies_to}
@@ -67,7 +68,7 @@ defmodule AshQuick.LiveView.Components.BulkActionView do
         id="ash-quick-bulk-action"
         phx-change="bulk_validate"
         phx-submit="bulk_save"
-        form_title={Labels.name(@bulk.action.name)}
+        form_title={Labels.name(@bulk.action.name, @resource)}
       >
         <p class="sm:col-span-2 font-medium">
           {ngettext(

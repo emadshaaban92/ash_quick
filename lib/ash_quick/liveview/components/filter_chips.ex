@@ -49,6 +49,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
       <.chip
         :for={node <- @chips}
         node={node}
+        resource={@resource}
         fields={@fields}
         labels={@labels}
         params={@params}
@@ -77,6 +78,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
   # since a chip that read the same either way would make an `or` look stricter
   # than it is.
   attr :node, CustomFilter, required: true
+  attr :resource, :atom, required: true
   attr :fields, :map, required: true
   attr :labels, :map, required: true
   attr :params, :map, required: true
@@ -91,6 +93,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
         <.chip_box
           node={@node}
           leaf={@leaf}
+          resource={@resource}
           fields={@fields}
           labels={@labels}
           params={@params}
@@ -123,6 +126,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
     <.chip_box
       node={@node}
       leaf={@node}
+      resource={@resource}
       fields={@fields}
       labels={@labels}
       params={@params}
@@ -137,6 +141,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
   # than running past the card, which would clip it and its ✕.
   attr :node, CustomFilter, required: true
   attr :leaf, CustomFilter, default: nil
+  attr :resource, :atom, default: nil
   attr :fields, :map, default: %{}
   attr :labels, :map, default: %{}
   attr :params, :map, required: true
@@ -147,7 +152,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
     assigns =
       assign(assigns,
         id: "ash-quick-filter-chip-#{assigns.node.uuid}",
-        label: assigns.leaf && leaf_label(assigns.leaf, assigns.labels),
+        label: assigns.leaf && leaf_label(assigns.leaf, assigns.labels, assigns.resource),
         field: assigns.leaf && assigns.fields[assigns.leaf.field_name]
       )
 
@@ -158,7 +163,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
     >
       <span id={"#{@id}-text"} class="min-w-0 break-words">
         <%= if @leaf do %>
-          {@label} <.chip_value leaf={@leaf} field={@field} />
+          {@label} <.chip_value leaf={@leaf} field={@field} resource={@resource} />
         <% else %>
           {render_slot(@inner_block)}
         <% end %>
@@ -186,8 +191,9 @@ defmodule AshQuick.LiveView.Components.FilterChips do
 
   # "Price >", "Code starts with": the field as its column names it, or as
   # the form does when the list shows no column for it, and its operator.
-  defp leaf_label(%CustomFilter{field_name: name, operator: operator}, labels),
-    do: "#{FilterForm.field_label(name, labels)} #{FilterForm.operator_phrase(operator)}"
+  defp leaf_label(%CustomFilter{field_name: name, operator: operator}, labels, resource),
+    do:
+      "#{FilterForm.field_label(name, labels, resource)} #{FilterForm.operator_phrase(operator)}"
 
   # The value reads as `FieldValue` renders one of its field, as a column with
   # no widget of its own shows it: Yes or No, an enum's label, a timestamp in
@@ -197,6 +203,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
   # field the resource does not have, reads as written.
   attr :leaf, CustomFilter, required: true
   attr :field, :any, required: true
+  attr :resource, :atom, default: nil
 
   # Is Empty and Is Not Empty compare with nothing, so their phrase is the
   # whole chip.
@@ -220,6 +227,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
           value={item}
           path={[]}
           ash_field={@field}
+          resource={@resource}
         /></span></span>
         """
 

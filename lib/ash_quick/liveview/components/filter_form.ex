@@ -54,6 +54,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
           root={true}
           myself={@myself}
           group={@custom_filter}
+          resource={@resource}
           fields={@fields}
           emptiable={@emptiable}
           labels={@labels}
@@ -109,6 +110,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
               root={false}
               myself={@myself}
               group={filter}
+              resource={@resource}
               fields={@fields}
               emptiable={@emptiable}
               labels={@labels}
@@ -117,6 +119,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
           <% else %>
             <.filter_row
               filter={filter}
+              resource={@resource}
               fields={@fields}
               emptiable={@emptiable}
               labels={@labels}
@@ -164,7 +167,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
         class="select select-sm sm:w-auto"
       >
         {Phoenix.HTML.Form.options_for_select(
-          field_options(@fields, @filter.field_name, @labels),
+          field_options(@fields, @filter.field_name, @labels, @resource),
           @filter.field_name
         )}
       </select>
@@ -178,7 +181,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
             @filter.operator
           )}
         </select>
-        <.filter_value filter={@filter} field={@field} error={@error} />
+        <.filter_value filter={@filter} field={@field} resource={@resource} error={@error} />
 
         <button
           phx-click="remove_filter"
@@ -216,7 +219,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   defp filter_value(%{filter: %{operator: "in"}, choice: :single} = assigns) do
     assigns =
       assign(assigns,
-        options: EnumOptions.options(assigns.field),
+        options: EnumOptions.options(assigns.field, assigns.resource),
         selected: List.wrap(assigns.filter.value)
       )
 
@@ -283,7 +286,8 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # A value picked from a fixed set: an `Ash.Type.Enum`, or an atom with
   # `one_of`. A plain atom is typed in, below.
   defp filter_value(%{choice: :single} = assigns) do
-    assigns = assign(assigns, :options, [{"", nil} | EnumOptions.options(assigns.field)])
+    assigns =
+      assign(assigns, :options, [{"", nil} | EnumOptions.options(assigns.field, assigns.resource)])
 
     ~H"""
     <select
@@ -614,19 +618,37 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # actor who could see it, or by hand. The select holds it as a disabled
   # option, so it shows the field the row filters on instead of the first one
   # offered, which a browser would show and could not then be picked.
-  defp field_options(fields, field_name, labels) do
-    options = Enum.map(fields, &{field_label(&1.name, labels), to_string(&1.name)})
+  defp field_options(fields, field_name, labels, resource) do
+    options = Enum.map(fields, &{field_label(&1.name, labels, resource), to_string(&1.name)})
 
     if is_binary(field_name) and not Enum.any?(options, &(elem(&1, 1) == field_name)),
-      do: [[key: field_label(field_name, labels), value: field_name, disabled: true] | options],
+      do: [
+        [key: field_label(field_name, labels, resource), value: field_name, disabled: true]
+        | options
+      ],
       else: options
   end
 
   @doc """
-  What a field is called, here and on the list's chips: its column's label
-  when the list shows one, and its humanized name otherwise.
+  What a field of `resource` is called, here and on the list's chips: its
+  column's label when the list shows one, and otherwise the label the resource
+  declares for it or its humanized name.
   """
-  def field_label(name, labels), do: labels[to_string(name)] || Labels.name(name)
+  def field_label(name, labels, resource \\ nil)
+
+  def field_label(name, labels, resource) when is_binary(name) do
+    labels[name] || name |> known_atom() |> Labels.name(resource)
+  end
+
+  def field_label(name, labels, resource), do: field_label(to_string(name), labels, resource)
+
+  # A row's field name comes from a URL, so it is never made an atom: one the
+  # resource has is one already, and any other is drawn humanized as written.
+  defp known_atom(name) do
+    String.to_existing_atom(name)
+  rescue
+    ArgumentError -> name
+  end
 
   # A new row starts on the first field offered: no one field is one every
   # resource has, or one every actor may see.

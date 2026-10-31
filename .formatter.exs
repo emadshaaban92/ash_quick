@@ -16,6 +16,9 @@ spark_locals_without_parens = [
   inserted_at: 1,
   inserted_by: 1,
   label: 1,
+  label: 2,
+  label: 3,
+  label: 4,
   on: 1,
   path: 1,
   prefix: 1,
@@ -25,7 +28,8 @@ spark_locals_without_parens = [
   search_argument: 1,
   store: 1,
   updated_at: 1,
-  updated_by: 1
+  updated_by: 1,
+  value: 1
 ]
 
 # Non-Spark locals (the router macro) — kept separate so `mix spark.formatter`
