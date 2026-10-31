@@ -284,7 +284,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
         if(@action.type == :destroy, do: "btn-error", else: "btn-primary")
       ]}
     >
-      {Labels.name(@action.name)}
+      {Labels.name(@action.name, @row.__struct__)}
     </button>
     """
   end
@@ -312,7 +312,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
     <.link phx-click={
       JS.push("row_action_click", value: %{id: @record.id, action_name: @action.name})
     }>
-      {Labels.name(@action.name)}
+      {Labels.name(@action.name, @record.__struct__)}
     </.link>
     """
   end

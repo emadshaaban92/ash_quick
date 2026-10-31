@@ -11,6 +11,7 @@ defmodule AshQuick.Gettext.Template do
   # A label nothing draws is only an entry nobody reads; a label missing here
   # is drawn in English, so the walk errs towards listing.
 
+  alias AshQuick.Labels
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.QuickField
   alias AshQuick.LiveView.Utils
@@ -140,25 +141,25 @@ defmodule AshQuick.Gettext.Template do
       Enum.map(options.list_fields ++ options.details_fields ++ options.export_fields, &field/1),
       options.new_action_label,
       Enum.map(List.wrap(options.filters), &(&1["label"] || &1[:label])),
-      bulk_labels(options.bulk_actions)
+      bulk_labels(options.bulk_actions, resource)
     ]
   end
 
   defp field(%QuickField{label: label}), do: label
   defp field(field), do: field |> QuickField.normalize() |> field()
 
-  defp bulk_labels(items) when is_list(items) do
+  defp bulk_labels(items, resource) when is_list(items) do
     Enum.map(items, fn
       %{title: title} -> title
-      name when is_atom(name) and name not in [nil, false] -> Utils.humanize(name)
+      name when is_atom(name) and name not in [nil, false] -> Labels.english(name, resource)
       _item -> nil
     end)
   end
 
-  defp bulk_labels(_items_from_a_function), do: []
+  defp bulk_labels(_items_from_a_function, _resource), do: []
 
   # What a resource names: its fields, its actions and their inputs, and the
-  # values any of them picks from.
+  # values any of them picks from, each as the resource labels it.
   defp resource_labels(resource) do
     fields =
       Ash.Resource.Info.public_attributes(resource) ++
@@ -170,12 +171,13 @@ defmodule AshQuick.Gettext.Template do
     inputs = Enum.flat_map(actions, &Utils.action_fields(resource, &1.name))
 
     [
-      Enum.map(fields ++ relationships ++ inputs ++ actions, &Utils.humanize(&1.name)),
-      Enum.map(fields ++ inputs, &values/1)
+      Enum.map(fields ++ relationships ++ inputs ++ actions, &Labels.english(&1.name, resource)),
+      Enum.map(fields ++ inputs, &values(&1, resource))
     ]
   end
 
-  defp values(field), do: field |> EnumOptions.english_options() |> Enum.map(&elem(&1, 0))
+  defp values(field, resource),
+    do: field |> EnumOptions.english_options(resource) |> Enum.map(&elem(&1, 0))
 
   # Every resource a public relationship path leads to from `resources`, those
   # included: a column or a nested form can be any number of hops away.

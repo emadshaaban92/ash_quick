@@ -2,6 +2,7 @@ defmodule AshQuick.LiveView.Components.ChoiceInput do
   @moduledoc false
   # A field picked from a fixed set (`AshQuick.LiveView.EnumOptions`): an
   # `Ash.Type.Enum`, or an atom with `one_of`. `multiple` picks a list of them.
+  # `resource`, the form's, labels the values as it declares them.
   use Phoenix.LiveComponent
   import AshQuick.Components
   alias AshQuick.LiveView.EnumOptions
@@ -94,8 +95,9 @@ defmodule AshQuick.LiveView.Components.ChoiceInput do
   # as picked; a search narrows only the values on offer.
   defp get_options(socket, search \\ nil) do
     %{form: form, attribute: attribute} = socket.assigns
+    resource = socket.assigns[:resource]
 
-    on_offer = attribute |> EnumOptions.options() |> EnumOptions.search(search)
+    on_offer = attribute |> EnumOptions.options(resource) |> EnumOptions.search(search)
 
     case Ash.Resource.loaded?(form.data, attribute.name) do
       true ->
@@ -103,7 +105,7 @@ defmodule AshQuick.LiveView.Components.ChoiceInput do
         |> Map.fetch!(attribute.name)
         |> List.wrap()
         |> Enum.reject(&is_nil/1)
-        |> Enum.map(&{EnumOptions.label(attribute, &1), &1})
+        |> Enum.map(&{EnumOptions.label(attribute, &1, resource), &1})
         |> Enum.concat(on_offer)
         |> Enum.uniq_by(&elem(&1, 1))
 

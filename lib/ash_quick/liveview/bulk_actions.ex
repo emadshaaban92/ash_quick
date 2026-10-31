@@ -48,7 +48,7 @@ defmodule AshQuick.LiveView.BulkActions do
     |> Enum.filter(&Enum.empty?(Ash.Resource.Info.action_inputs(resource, &1.name)))
     |> Enum.map(& &1.name)
     |> Enum.filter(&offerable?(resource, &1, scope))
-    |> Enum.map(&item/1)
+    |> Enum.map(&item(&1, resource))
   end
 
   @doc "The action a `\"bulk_action\"` event names, if the menu offered it."
@@ -168,9 +168,14 @@ defmodule AshQuick.LiveView.BulkActions do
 
   defp resolve(items, resource, socket) do
     Enum.flat_map(items, fn
-      item when item in [nil, false] -> []
-      item when is_map(item) -> [Map.update(item, :title, nil, &Labels.translate/1)]
-      name -> if offerable?(resource, name, socket.assigns.scope), do: [item(name)], else: []
+      item when item in [nil, false] ->
+        []
+
+      item when is_map(item) ->
+        [Map.update(item, :title, nil, &Labels.translate/1)]
+
+      name ->
+        if offerable?(resource, name, socket.assigns.scope), do: [item(name, resource)], else: []
     end)
   end
 
@@ -178,9 +183,9 @@ defmodule AshQuick.LiveView.BulkActions do
     AshQuick.can?({resource, name}, scope, :ash_quick_list_bulk)
   end
 
-  defp item(name) do
+  defp item(name, resource) do
     %{
-      title: Labels.name(name),
+      title: Labels.name(name, resource),
       func: JS.push("bulk_action", value: %{"action_name" => Atom.to_string(name)}),
       ash_quick_action: name
     }

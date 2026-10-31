@@ -4,6 +4,23 @@
 
 ### Features
 
+- **A resource declares its labels once, for every page.** A `labels`
+  section in `ash_quick` rewords a field, relationship, action or action
+  argument (`label :borrower_national_id, "Borrower National ID"`), or one
+  value of a field (`label :status, :paid_off, "Paid Off in Full"`), in place
+  of its humanized name or its enum's label. The label is drawn wherever the
+  page names it on that resource: list columns and cells, details rows, form
+  inputs and their selects, the filter and its chips, row and bulk actions,
+  form titles and flashed errors. A QuickView's own `label:` still wins on
+  its page. `mix ash_quick.gen.gettext` writes the declared label as the
+  msgid, so translators work from the English readers see. A label naming
+  nothing the resource has, one for a value its field does not offer, or a
+  name or value labelled twice does not compile. A custom template passes the
+  resource: `AshQuick.Labels.name/2` and `field/2`, and
+  `AshQuick.LiveView.EnumOptions.label/3` and `options/2` for values.
+  `Labels.field/2` labels a relationship path by the field it reaches, as the
+  pages do (`[owner: :name]` reads "Name", not "Owner").
+
 - **AshQuick translates through the host's Gettext backend.** A new
   `:gettext` config names it (`MyAppWeb.Gettext`; the installer writes it
   when the backend exists). Everything AshQuick draws is looked up there, in

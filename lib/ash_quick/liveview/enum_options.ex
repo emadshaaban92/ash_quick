@@ -5,8 +5,10 @@ defmodule AshQuick.LiveView.EnumOptions do
   Two kinds of type hold a fixed set of values: an `Ash.Type.Enum` module,
   whose values and labels are its own (`values/0`, `label/1`), and an atom
   constrained by `one_of`, whose labels are `AshQuick.LiveView.Utils.humanize/1`
-  of each value. Either is translated (`AshQuick.Labels.translate/1`), so a
-  value reads in the reader's language. A `Ash.Type.NewType` over either counts as what it wraps. An
+  of each value. Given the resource the field belongs to, a label the resource
+  declares for a value (`label :status, :paid_off, "Paid Off in Full"`, see
+  `AshQuick`) is drawn in place of either. Each is translated
+  (`AshQuick.Labels.translate/1`), so a value reads in the reader's language. A `Ash.Type.NewType` over either counts as what it wraps. An
   atom without `one_of` holds no fixed set: it is typed in, like a string.
 
   Forms, the custom filter and the list and details pages all read their
@@ -40,26 +42,33 @@ defmodule AshQuick.LiveView.EnumOptions do
   def kind(_field), do: nil
 
   @doc """
-  The `{label, value}` pairs `field` offers, in the order its type lists
-  them, or `[]` when it holds no fixed set. For a list field, the pairs of one
-  item.
+  The `{label, value}` pairs `field` of `resource` offers, in the order its
+  type lists them, or `[]` when it holds no fixed set. For a list field, the
+  pairs of one item.
   """
-  @spec options(field) :: [{String.t(), atom | String.t()}]
-  def options(field) do
+  @spec options(field, Ash.Resource.t() | nil) :: [{String.t(), atom | String.t()}]
+  def options(field, resource \\ nil) do
     field
-    |> english_options()
+    |> english_options(resource)
     |> Enum.map(fn {label, value} -> {Labels.translate(label), value} end)
   end
 
   @doc false
   # The pairs before translating: the msgids `mix ash_quick.gen.gettext` lists.
-  def english_options(field) do
+  def english_options(field, resource \\ nil) do
     {type, constraints} = item_type(field)
 
     type
     |> values(constraints)
     |> List.wrap()
-    |> Enum.map(&{type |> enum() |> english_label(&1), &1})
+    |> Enum.map(&{english_label(type, field, resource, &1), &1})
+  end
+
+  @doc false
+  # The values `field` offers, or `nil` when it holds no fixed set.
+  def values(field) do
+    {type, constraints} = item_type(field)
+    values(type, constraints)
   end
 
   @doc """
@@ -78,23 +87,28 @@ defmodule AshQuick.LiveView.EnumOptions do
   end
 
   @doc """
-  The label `value` shows as in `field`: its enum's label when the field is
-  typed by an `Ash.Type.Enum`, and `AshQuick.LiveView.Utils.humanize/1`
-  otherwise, `field` given or not, translated (`AshQuick.Labels.translate/1`).
+  The label `value` shows as in `field` of `resource`: the label the resource
+  declares for that value, else its enum's label when the field is typed by an
+  `Ash.Type.Enum`, and `AshQuick.LiveView.Utils.humanize/1` otherwise, `field`
+  given or not, translated (`AshQuick.Labels.translate/1`).
   """
-  @spec label(field | nil, atom | String.t()) :: String.t()
-  def label(nil, value), do: Labels.name(value)
+  @spec label(field | nil, atom | String.t(), Ash.Resource.t() | nil) :: String.t()
+  def label(field, value, resource \\ nil)
 
-  def label(field, value) do
+  def label(nil, value, _resource), do: Labels.name(value)
+
+  def label(field, value, resource) do
     {type, _constraints} = item_type(field)
-    label_for(type, value)
+    type |> english_label(field, resource, value) |> Labels.translate()
   end
 
-  defp label_for(type, value),
-    do: type |> enum() |> english_label(value) |> Labels.translate()
-
-  defp english_label(nil, value), do: Utils.humanize(value)
-  defp english_label(enum, value), do: enum_label(enum, value)
+  defp english_label(type, field, resource, value) do
+    Labels.declared(resource, {Map.get(field, :name), value}) ||
+      case enum(type) do
+        nil -> Utils.humanize(value)
+        enum -> enum_label(enum, value)
+      end
+  end
 
   # An enum's `label/1` matches only its own values, and an overridden one may
   # answer nil. A stored value the enum no longer lists still shows.

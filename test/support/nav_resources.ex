@@ -34,6 +34,11 @@ defmodule AshQuick.Test.Nav.Brand do
   attributes do
     uuid_primary_key :id
     attribute :name, :string, public?: true
+
+    # Labelled by the resource, for `mix ash_quick.gen.gettext`: the template
+    # lists the declared label, not the humanized name.
+    attribute :vat_no, :string, public?: true
+    attribute :tier, :atom, public?: true, constraints: [one_of: [:standard, :premium]]
   end
 
   # Two hops to a value set, for `mix ash_quick.gen.gettext`: a label can be
@@ -62,6 +67,11 @@ defmodule AshQuick.Test.Nav.Brand do
   ash_quick do
     display do
       label :name
+    end
+
+    labels do
+      label(:vat_no, "VAT Number")
+      label(:tier, :premium, "Premium Partner")
     end
 
     liveness do

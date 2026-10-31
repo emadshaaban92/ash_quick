@@ -123,14 +123,18 @@ defmodule AshQuick.LiveView.ActionErrors do
   - `Ash.Error.Invalid` is rendered from its sub-errors, one sentence per thing
     that was wrong with the input;
   - everything else is reported to Tower and reduced to `generic_message/0`.
-  """
-  def user_facing_message(message) when is_binary(message), do: message
 
-  def user_facing_message(error) do
+  A field is named as `resource`, the action's, labels it (`AshQuick.Labels`).
+  """
+  def user_facing_message(error, resource \\ nil)
+
+  def user_facing_message(message, _resource) when is_binary(message), do: message
+
+  def user_facing_message(error, resource) do
     cond do
       stale_record?(error) -> stale_message()
       forbidden?(error) -> forbidden_message(error)
-      match?(%Ash.Error.Invalid{}, error) -> invalid_message(error)
+      match?(%Ash.Error.Invalid{}, error) -> invalid_message(error, resource)
       not_found?(error) -> not_found_message()
       true -> report_unexpected(error)
     end
@@ -154,9 +158,9 @@ defmodule AshQuick.LiveView.ActionErrors do
   # copy rather than reporting a deleted record to Tower. But when a real
   # validation error rides alongside it, that message is what the user needs to
   # see and act on, so it wins — checking `not_found?` first would drop it.
-  defp invalid_message(%Ash.Error.Invalid{errors: errors} = error) do
+  defp invalid_message(%Ash.Error.Invalid{errors: errors} = error, resource) do
     {input_errors, ours} = Enum.split_with(List.wrap(errors), &input_error?/1)
-    messages = input_errors |> Enum.flat_map(&error_sentences/1) |> Enum.uniq()
+    messages = input_errors |> Enum.flat_map(&error_sentences(&1, resource)) |> Enum.uniq()
 
     cond do
       messages != [] ->
@@ -176,14 +180,14 @@ defmodule AshQuick.LiveView.ActionErrors do
 
   defp input_error?(error), do: not is_nil(AshPhoenix.FormData.Error.impl_for(error))
 
-  defp error_sentences(error) do
+  defp error_sentences(error, resource) do
     error
     |> AshPhoenix.FormData.Error.to_form_error()
     |> List.wrap()
-    |> Enum.map(&sentence/1)
+    |> Enum.map(&sentence(&1, resource))
     |> Enum.reject(&(&1 == ""))
     |> case do
-      [] -> field_sentences(error)
+      [] -> field_sentences(error, resource)
       sentences -> sentences
     end
   end
@@ -194,20 +198,22 @@ defmodule AshQuick.LiveView.ActionErrors do
   # sentence a person can act on, and without one the error contributes no
   # message at all: `invalid_message/1` finds nothing to show, reports the
   # refusal as our bug, and answers a bad input with `generic_message/0`.
-  defp field_sentences(%{field: field}) when not is_nil(field),
-    do: [invalid_field_sentence(field)]
+  defp field_sentences(%{field: field}, resource) when not is_nil(field),
+    do: [invalid_field_sentence(field, resource)]
 
-  defp field_sentences(%{fields: [_ | _] = fields}),
-    do: Enum.map(fields, &invalid_field_sentence/1)
+  defp field_sentences(%{fields: [_ | _] = fields}, resource),
+    do: Enum.map(fields, &invalid_field_sentence(&1, resource))
 
   # A validation returning `{:error, "..."}` names no field, and AshPhoenix
   # renders such an error to nothing at all. Its message is what it says.
-  defp field_sentences(%{message: message} = error) when is_binary(message) and message != "",
-    do: [translate(message, Map.get(error, :vars))]
+  defp field_sentences(%{message: message} = error, _resource)
+       when is_binary(message) and message != "",
+       do: [translate(message, Map.get(error, :vars))]
 
-  defp field_sentences(_), do: []
+  defp field_sentences(_error, _resource), do: []
 
-  defp invalid_field_sentence(field), do: field_sentence(field, translate("is invalid", []))
+  defp invalid_field_sentence(field, resource),
+    do: field_sentence(field, translate("is invalid", []), resource)
 
   @doc """
   Words the input errors among a form's `errors` that `inputs` (a set of field
@@ -217,10 +223,11 @@ defmodule AshQuick.LiveView.ActionErrors do
   Read from the errors themselves rather than from `AshPhoenix.Form.errors/2`,
   which drops every var with no `String.Chars` — the `%Regex{}` a message
   naming `%{match}` needs. Only the form's own errors are read: one with a path
-  belongs to a nested form, which shows it.
+  belongs to a nested form, which shows it. A field is named as `resource`, the
+  form's, labels it.
   """
-  def unplaced_message(errors, inputs) do
-    case unplaced_sentences(errors, inputs) do
+  def unplaced_message(errors, inputs, resource \\ nil) do
+    case unplaced_sentences(errors, inputs, resource) do
       [] -> nil
       sentences -> Enum.join(sentences, "\n")
     end
@@ -232,7 +239,7 @@ defmodule AshQuick.LiveView.ActionErrors do
   against its own inputs, and the person still needs to read which item each
   one is about.
   """
-  def unplaced_sentences(errors, inputs) do
+  def unplaced_sentences(errors, inputs, resource \\ nil) do
     errors
     |> List.wrap()
     |> case do
@@ -240,25 +247,25 @@ defmodule AshQuick.LiveView.ActionErrors do
       errors -> Ash.Error.to_error_class(errors).errors
     end
     |> Enum.filter(&(input_error?(&1) and Map.get(&1, :path, []) in [nil, []]))
-    |> Enum.flat_map(&error_unplaced_sentences(&1, inputs))
+    |> Enum.flat_map(&error_unplaced_sentences(&1, inputs, resource))
     |> Enum.uniq()
   end
 
   # An error that says nothing has nothing to show under an input either, so it
   # is named by its field wherever that is, as `invalid_message/1` names it.
-  defp error_unplaced_sentences(error, inputs) do
+  defp error_unplaced_sentences(error, inputs, resource) do
     error
     |> AshPhoenix.FormData.Error.to_form_error()
     |> List.wrap()
     |> Enum.filter(fn {_field, message, _vars} -> is_binary(message) and message != "" end)
     |> case do
       [] ->
-        field_sentences(error)
+        field_sentences(error, resource)
 
       said ->
         said
         |> Enum.reject(fn {field, _message, _vars} -> field in inputs end)
-        |> Enum.map(&sentence/1)
+        |> Enum.map(&sentence(&1, resource))
         |> Enum.reject(&(&1 == ""))
     end
   end
@@ -270,22 +277,22 @@ defmodule AshQuick.LiveView.ActionErrors do
   # in its text says which: a first capital letter is absent from Arabic, and a
   # sentence may open with a digit or a fragment with an acronym. Translated
   # first, so the field goes in front of the message the person reads.
-  defp sentence({field, message, vars}) when is_binary(message) do
+  defp sentence({field, message, vars}, resource) when is_binary(message) do
     message = translate(message, vars)
 
     cond do
       message == "" -> ""
       field in [nil, :_form] -> message
-      true -> field_sentence(field, message)
+      true -> field_sentence(field, message, resource)
     end
   end
 
-  defp sentence(_), do: ""
+  defp sentence(_error, _resource), do: ""
 
-  defp field_sentence(field, message),
+  defp field_sentence(field, message, resource),
     do:
       gettext("%{field}: %{message}",
-        field: Labels.name(field),
+        field: Labels.name(field, resource),
         message: message
       )
 

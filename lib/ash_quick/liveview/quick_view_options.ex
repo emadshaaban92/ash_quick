@@ -105,7 +105,8 @@ defmodule AshQuick.LiveView.QuickView.Options do
       liveness_options: opts[:liveness_options] || [],
       filters: opts[:filters] || %{},
       sidebar: opts[:sidebar],
-      export_fields: normalize_fields(opts[:export_fields] || list_opts[:fields], default_attrs)
+      export_fields:
+        normalize_fields(opts[:export_fields] || list_opts[:fields], default_attrs, resource)
     }
     |> put_list_options(list_opts, default_attrs)
     |> put_details_options(details_opts, default_attrs)
@@ -320,7 +321,7 @@ defmodule AshQuick.LiveView.QuickView.Options do
   defp put_list_options(options, list_opts, default_attrs) do
     %{
       options
-      | list_fields: normalize_fields(list_opts[:fields], default_attrs),
+      | list_fields: normalize_fields(list_opts[:fields], default_attrs, options.resource),
         list_load: list_opts[:load] || [],
         list_default_action:
           list_opts[:default_action] || AshQuick.Info.lookup_action(options.resource),
@@ -414,7 +415,7 @@ defmodule AshQuick.LiveView.QuickView.Options do
   defp put_details_options(options, details_opts, default_attrs) do
     %{
       options
-      | details_fields: normalize_fields(details_opts[:fields], default_attrs),
+      | details_fields: normalize_fields(details_opts[:fields], default_attrs, options.resource),
         details_load: details_opts[:load] || [],
         details_default_action: details_opts[:default_action] || :read,
         details_featured_actions: details_opts[:featured_actions] || [:update, :destroy]
@@ -428,8 +429,8 @@ defmodule AshQuick.LiveView.QuickView.Options do
     %{options | form_widgets: form_opts[:widgets] || %{}}
   end
 
-  defp normalize_fields(fields, default_attrs) do
+  defp normalize_fields(fields, default_attrs, resource) do
     (fields || default_attrs)
-    |> Enum.map(&QuickField.normalize/1)
+    |> Enum.map(&QuickField.normalize(&1, resource))
   end
 end

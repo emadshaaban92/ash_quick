@@ -53,6 +53,70 @@ defmodule AshQuick.LabelsTest do
     assert Labels.field([:price]) == "السعر"
   end
 
+  describe "a label the resource declares" do
+    alias AshQuick.LiveView.EnumOptions
+    alias AshQuick.LiveView.QuickField
+    alias AshQuick.Test.Labels.Loan
+
+    test "names its field, relationship, action and argument, translated" do
+      assert Labels.name(:borrower_national_id, Loan) == "الرقم القومي للمقترض"
+      assert Labels.name(:borrower, Loan) == "Applicant"
+      assert Labels.name(:issue_bill_of_sale, Loan) == "Issue Bill of Sale"
+      assert Labels.name(:reason_code, Loan) == "Reason"
+    end
+
+    test "leaves what it does not label, and every other resource, humanized" do
+      assert Labels.name(:name, Loan) == "Name"
+      assert Labels.name(:destroy, Loan) == "Delete"
+      assert Labels.name(:borrower_national_id) == "Borrower National"
+
+      assert Labels.name(:borrower_national_id, AshQuick.Test.Labels.Borrower) ==
+               "Borrower National"
+    end
+
+    test "is the English it is translated from" do
+      Gettext.put_locale(AshQuick.Test.LabelGettext, "en")
+
+      assert Labels.name(:borrower_national_id, Loan) == "Borrower National ID"
+    end
+
+    test "labels a field entry, under its own label: option" do
+      assert Labels.field(:borrower_national_id, Loan) == "الرقم القومي للمقترض"
+      assert Labels.field({:borrower_national_id, widget: nil}, Loan) == "الرقم القومي للمقترض"
+      assert Labels.field({:borrower_national_id, "ID"}, Loan) == "ID"
+      assert Labels.field({:borrower_national_id, label: "ID"}, Loan) == "ID"
+    end
+
+    # A path is labelled by the field it reaches, as the related resource
+    # labels it; one stopping at the related record, by the relationship.
+    test "labels a relationship path by what it reaches" do
+      assert Labels.field([borrower: :national_id], Loan) == "National ID"
+      assert Labels.field([borrower: :name], Loan) == "Name"
+      assert Labels.field([borrower: []], Loan) == "Applicant"
+    end
+
+    test "is the label a QuickView's field is normalized with" do
+      assert QuickField.normalize(:borrower_national_id, Loan).label == "Borrower National ID"
+      assert QuickField.normalize([borrower: :national_id], Loan).label == "National ID"
+      assert QuickField.normalize(:borrower_national_id).label == "Borrower National"
+    end
+
+    test "labels a value, in place of its enum's label or its humanized name" do
+      status = Ash.Resource.Info.attribute(Loan, :status)
+      kind = Ash.Resource.Info.attribute(Loan, :kind)
+
+      assert EnumOptions.options(status, Loan) == [
+               {"Active", :active},
+               {"مسدد بالكامل", :paid_off},
+               {"Cancelled", :cancelled}
+             ]
+
+      assert EnumOptions.label(status, :paid_off) == "Paid off"
+      assert EnumOptions.label(kind, :business, Loan) == "Business Loan"
+      assert EnumOptions.label(kind, :personal, Loan) == "Personal"
+    end
+  end
+
   test "in the host's default locale, a label is drawn as it is" do
     Gettext.put_locale(AshQuick.Test.LabelGettext, "en")
 

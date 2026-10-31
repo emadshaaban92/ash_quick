@@ -11,6 +11,10 @@ defmodule AshQuick.LiveView.Components.FieldValue do
   attr :path, :any, required: true
   attr :ash_field, :any, default: nil
 
+  attr :resource, :atom,
+    default: nil,
+    doc: "the resource `ash_field` belongs to, whose declared labels name its values"
+
   attr :scope, :any,
     default: nil,
     doc: "the page's request scope, which an attachment's state is read for"
@@ -65,7 +69,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     <AshQuick.Components.attachment_viewer
       :if={@viewer}
       id={@viewer}
-      label={@viewer_label || Labels.name(@ash_field.name)}
+      label={@viewer_label || Labels.name(@ash_field.name, @resource)}
       values={List.wrap(@value)}
       states={@states}
     />
@@ -81,7 +85,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     <AshQuick.Components.attachment_viewer
       :if={@viewer}
       id={@viewer}
-      label={@viewer_label || Labels.name(@ash_field.name)}
+      label={@viewer_label || Labels.name(@ash_field.name, @resource)}
       values={@value}
       states={@states}
     />
@@ -104,7 +108,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
   def field_value(%{choice: choice, value: value} = assigns)
       when choice != nil and (is_atom(value) or is_binary(value)) do
     ~H"""
-    <span>{EnumOptions.label(@ash_field, @value)}</span>
+    <span>{EnumOptions.label(@ash_field, @value, @resource)}</span>
     """
   end
 
@@ -118,6 +122,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
         value={item}
         path={@path}
         ash_field={@ash_field}
+        resource={@resource}
         scope={@scope}
         linker={@linker}
       />
@@ -135,7 +140,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
 
   def field_value(%{value: value} = assigns) when is_atom(value) do
     ~H"""
-    <span>{Labels.name(@value)}</span>
+    <span>{EnumOptions.label(@ash_field, @value, @resource)}</span>
     """
   end
 
@@ -158,6 +163,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     assigns =
       assigns
       |> assign(ash_field: Ash.Resource.Info.field(assigns.value, field_name))
+      |> assign(resource: Map.get(assigns.value, :__struct__))
       |> assign(value: Map.get(assigns.value, field_name))
       |> assign(path: [])
 
@@ -166,6 +172,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
       value={@value}
       path={@path}
       ash_field={@ash_field}
+      resource={@resource}
       scope={@scope}
       viewer={@viewer}
       viewer_label={@viewer_label}
@@ -181,6 +188,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     assigns =
       assigns
       |> assign(ash_field: relationship)
+      |> assign(resource: Map.get(assigns.value, :__struct__))
       |> assign(value: Map.get(assigns.value, relationship_name))
       |> assign(path: rest)
       |> assign(:links_label?, assigns.linker != nil and label_path?(relationship, rest))
@@ -199,6 +207,7 @@ defmodule AshQuick.LiveView.Components.FieldValue do
           value={@value}
           path={@path}
           ash_field={@ash_field}
+          resource={@resource}
           scope={@scope}
           viewer={@viewer}
           viewer_label={@viewer_label}

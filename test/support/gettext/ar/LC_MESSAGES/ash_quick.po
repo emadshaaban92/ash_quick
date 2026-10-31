@@ -8,3 +8,9 @@ msgstr "السعر"
 
 msgid "Shelf Life"
 msgstr "مدة الصلاحية"
+
+msgid "Borrower National ID"
+msgstr "الرقم القومي للمقترض"
+
+msgid "Paid Off in Full"
+msgstr "مسدد بالكامل"

@@ -45,7 +45,7 @@ defmodule AshQuick.LiveView.FormUtils do
     title =
       gettext("[%{resource}] %{action}",
         resource: Labels.name(resource_name),
-        action: Labels.name(action_name)
+        action: Labels.name(action_name, resource)
       )
 
     socket |> assign(page_title: title)
@@ -901,8 +901,11 @@ defmodule AshQuick.LiveView.FormUtils do
   # is not put down to the policy either.
   defp failed_save_message(form) do
     case raw_errors(form) do
-      [] -> ActionErrors.generic_message()
-      errors -> errors |> Ash.Error.to_error_class() |> ActionErrors.user_facing_message()
+      [] ->
+        ActionErrors.generic_message()
+
+      errors ->
+        errors |> Ash.Error.to_error_class() |> ActionErrors.user_facing_message(form.resource)
     end
   end
 
@@ -923,8 +926,8 @@ defmodule AshQuick.LiveView.FormUtils do
     |> Enum.sort_by(&elem(&1, 0))
     |> Enum.flat_map(fn {path, errors} ->
       errors
-      |> ActionErrors.unplaced_sentences(drawn_inputs(form, path, scope))
-      |> Enum.map(&located(&1, path))
+      |> ActionErrors.unplaced_sentences(drawn_inputs(form, path, scope), resource_at(form, path))
+      |> Enum.map(&located(&1, form, path))
     end)
     |> Enum.uniq()
     |> case do
@@ -933,18 +936,43 @@ defmodule AshQuick.LiveView.FormUtils do
     end
   end
 
-  defp located(sentence, []), do: sentence
-  defp located(sentence, path), do: "#{path_label(path)} › #{sentence}"
+  defp located(sentence, _form, []), do: sentence
+  defp located(sentence, form, path), do: "#{path_label(form, path)} › #{sentence}"
 
+  # Each field is named as the resource of the form holding it labels it.
   # People count items from one.
-  defp path_label(path) do
-    path
-    |> Enum.reduce([], fn
-      index, [field | labels] when is_integer(index) -> ["#{field} #{index + 1}" | labels]
-      field, labels -> [Labels.name(field) | labels]
-    end)
-    |> Enum.reverse()
-    |> Enum.join(" › ")
+  defp path_label(form, path), do: form |> path_labels(path) |> Enum.join(" › ")
+
+  defp path_labels(_form, []), do: []
+
+  defp path_labels(form, [field | path]) do
+    label = Labels.name(field, form && form.resource)
+    sub_forms = form && Map.get(form.forms, field)
+
+    case path do
+      [index | path] when is_integer(index) ->
+        sub_form = if is_list(sub_forms), do: Enum.at(sub_forms, index)
+        ["#{label} #{index + 1}" | path_labels(sub_form, path)]
+
+      path ->
+        [label | path_labels(if(is_list(sub_forms), do: nil, else: sub_forms), path)]
+    end
+  end
+
+  # The resource of the sub-form at `path`, as `drawn_inputs/3` walks it.
+  defp resource_at(form, []), do: form.resource
+
+  defp resource_at(form, [field | path]) do
+    case {Map.get(form.forms, field), path} do
+      {forms, [index | path]} when is_list(forms) ->
+        forms |> Enum.at(index) |> then(&(&1 && resource_at(&1, path)))
+
+      {nil, _path} ->
+        nil
+
+      {sub_form, path} ->
+        resource_at(sub_form, path)
+    end
   end
 
   # The inputs the page draws for the sub-form at `path`, a path as AshPhoenix

@@ -128,10 +128,28 @@ task keeps:
 A humanized name is only a default: `vat_number` reads "Vat Number", and a
 locale code `ar` reads "Ar". Reword one where it is drawn, or in the catalogue:
 
+* a `label` in the resource's `ash_quick` block, for a field, relationship,
+  action, action argument or value, on every page that names it: list
+  columns, details rows, form inputs, filters, row and bulk actions, error
+  messages, and custom templates labelling it through `AshQuick.Labels`. The
+  task writes the declared label as the msgid, so a translator works from the
+  English your readers see:
+
+  ```elixir
+  ash_quick do
+    labels do
+      label :vat_number, "VAT number"
+      label :issue_bill_of_sale, "Issue Bill of Sale"
+      label :status, :paid_off, "Paid off in full"
+    end
+  end
+  ```
+
+  A name or value the resource does not have does not compile;
 * a `label:` on the QuickView's field, `{:vat_number, label: "VAT number"}`,
-  for that page;
+  for that page, over the resource's;
 * a `label:` on an `Ash.Type.Enum`'s value (`ar: [label: "العربية"]`), for
-  that value everywhere it shows;
+  that value everywhere it shows, unless the resource labels it;
 * a translation, for every page that draws the label, English included: give
   `"Vat Number"` a `msgstr` of `"VAT number"` in
   `priv/gettext/en/LC_MESSAGES/ash_quick.po`
@@ -390,8 +408,8 @@ running it.
 
 It also attaches the audit change to every create, update and destroy, and
 wires the resource's PubSub publications. See the `AshQuick` moduledoc for each
-section: `liveness`, `display`, `lookup`, `activation`, `versioning`,
-`bookkeeping`, `audit`, `field_restrictions`.
+section: `liveness`, `display`, `labels`, `lookup`, `activation`,
+`versioning`, `bookkeeping`, `audit`, `field_restrictions`.
 
 ### Versioning is on by default
 
