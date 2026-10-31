@@ -409,6 +409,14 @@
   goes through `AshQuick.Config.format_money/1`, in the reader's locale like
   dates.
 
+- **An attachment argument no longer takes a same-named field's value.**
+  On an update form, an attachment argument given no upload was filled with
+  whatever the record held under its name: an unloaded calculation crashed
+  the save with `Ash.NotLoaded`, and a loaded field of another type was
+  posted as the argument. The field also showed, and posted back, that
+  value as its own. Now only the record's own attachment attribute keeps
+  what it holds; an argument takes its default (#103).
+
 - **The filter's ✕ waits while Apply runs.** The Advanced filters and
   export modals now use the same modal as an action's form, so the filter's
   ✕ is swapped for a disabled twin while Apply submits, as the action
