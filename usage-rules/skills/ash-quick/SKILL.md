@@ -233,7 +233,7 @@ def state_widget(assigns) do
       _ -> "badge-ghost"
     end
   ]}>
-    {Utils.humanize(@value)}
+    {AshQuick.Labels.name(@value)}
   </span>
   """
 end
@@ -898,6 +898,7 @@ config :ash_quick,
   audit_resource: MyApp.AuditLog,
   nav: MyAppWeb.Nav,
   storage: MyApp.Uploads.ObjectStore,
+  gettext: MyAppWeb.Gettext,
   error_translator: {MyAppWeb.CoreComponents, :translate_error},
   timezone: "Etc/UTC"
 ```
@@ -926,18 +927,32 @@ else it draws there, in the `ash_quick` domain and that backend's locale: its
 own buttons and flashes, and every label (humanized field and action names,
 `label:` options, `new_action_label`, saved filter labels, custom bulk item
 titles, nav entries and groups as `AshQuick.Nav.Info.sections/1` hands them
-out, page titles, enum and `one_of` values, export headers). The English label is
-the msgid, translated at render, so it reads
-in the reader's locale. Labels are not `gettext` call sites, so
-`mix ash_quick.gen.gettext` writes `priv/gettext/ash_quick.pot` from the nav,
-the QuickViews and their resources (`--locale ar` copies the Arabic AshQuick
-ships; `--check` for CI); then `mix gettext.merge priv/gettext`. Mark a label
-the task cannot read (a bulk item title a function builds) with
-`dgettext_noop("ash_quick", "...")`. Without `:gettext`, everything is
-English. A custom template drawing a resource's labels itself calls
-`AshQuick.Labels`: `name/1` (humanize, then translate), `field/1` (a `:fields`
-entry) or `translate/1` (an English string), so it reads the same as the
-pages. A non-string label (markup) passes through untranslated.
+out, page titles, enum and `one_of` values, export headers). The English label
+is the msgid, translated at render, so it reads in the reader's locale. Labels
+are not `gettext` call sites, so `mix ash_quick.gen.gettext` writes
+`priv/gettext/ash_quick.pot` from the nav, the QuickViews and their resources
+(`--locale ar` copies the Arabic AshQuick ships; `--check` for CI); then
+`mix gettext.merge priv/gettext`. Mark a label the task cannot read (a bulk
+item title a function builds) with `dgettext_noop("ash_quick", "...")`.
+Without `:gettext`, everything is English. A custom template drawing a
+resource's labels itself calls `AshQuick.Labels`: `name/1` (humanize, then
+translate), `field/1` (a `:fields` entry) or `translate/1` (an English
+string), so it reads the same as the pages. A non-string label (markup)
+passes through untranslated.
+
+A humanized name is title-cased words (`vat_number` reads "Vat Number").
+Reword one with a `label:` on the QuickView's field, a `label:` on an
+`Ash.Type.Enum` value, or a translation in the catalogue, English included
+(`priv/gettext/en/LC_MESSAGES/ash_quick.po`).
+
+The root layout sets `<html lang={AshQuick.Locale.current()}
+dir={AshQuick.Locale.direction()}>`; `dir` is the only switch for a
+right-to-left locale, since AshQuick's markup uses logical CSS properties.
+Dates, times and money are formatted with Localize in the same locale (a
+`DateTime` in `:timezone`). Localize ships English data alone, so the host
+lists `supported_locales` in `config/config.exs` and runs
+`mix localize.download_locales` in its `setup` alias, CI and release build,
+with `priv/localize` gitignored (README, "Dates, times and money").
 
 ## What the host application provides
 

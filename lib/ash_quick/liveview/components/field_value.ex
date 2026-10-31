@@ -235,8 +235,8 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     """
   end
 
-  # Left to `Phoenix.HTML.Safe`, a `Money` prints in Localize's own process
-  # locale, which nothing sets, so every reader got English.
+  # In the reader's locale. `Phoenix.HTML.Safe` would print it in Localize's
+  # own process locale, which nothing sets.
   def field_value(%{value: %{__struct__: Money}} = assigns) do
     ~H"""
     <span>{AshQuick.Config.format_money(@value)}</span>
