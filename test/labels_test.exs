@@ -115,6 +115,19 @@ defmodule AshQuick.LabelsTest do
       assert EnumOptions.label(kind, :business, Loan) == "Business Loan"
       assert EnumOptions.label(kind, :personal, Loan) == "Personal"
     end
+
+    # What a custom template holds is the value, not the field struct.
+    test "labels a value by its field's name" do
+      assert Labels.value(Loan, :status, :paid_off) == "مسدد بالكامل"
+      assert Labels.value(Loan, :status, :active) == "Active"
+      assert Labels.value(Loan, :kind, :business) == "Business Loan"
+      assert Labels.value(Loan, :kind, :personal) == "Personal"
+      assert Labels.value(Loan, :no_such_field, :paid_off) == "Paid Off"
+      assert Labels.value(Loan, :status, nil) == nil
+
+      # A name, not a value: `name/2` reads the field's or action's label.
+      assert Labels.name(:paid_off, Loan) == "Paid Off"
+    end
   end
 
   test "in the host's default locale, a label is drawn as it is" do

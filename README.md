@@ -131,9 +131,10 @@ locale code `ar` reads "Ar". Reword one where it is drawn, or in the catalogue:
 * a `label` in the resource's `ash_quick` block, for a field, relationship,
   action, action argument or value, on every page that names it: list
   columns, details rows, form inputs, filters, row and bulk actions, error
-  messages, and custom templates labelling it through `AshQuick.Labels`. The
-  task writes the declared label as the msgid, so a translator works from the
-  English your readers see:
+  messages, and custom templates labelling it through `AshQuick.Labels`
+  (`name/2`, `field/2`, `value/3`, given the resource). The task writes the
+  declared label as the msgid, beside the humanized name, so a translator
+  works from the English your readers see:
 
   ```elixir
   ash_quick do

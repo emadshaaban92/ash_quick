@@ -16,8 +16,10 @@
   msgid, so translators work from the English readers see. A label naming
   nothing the resource has, one for a value its field does not offer, or a
   name or value labelled twice does not compile. A custom template passes the
-  resource: `AshQuick.Labels.name/2` and `field/2`, and
-  `AshQuick.LiveView.EnumOptions.label/3` and `options/2` for values.
+  resource: `AshQuick.Labels.name/2` and `field/2`, and `Labels.value/3` for a
+  value (`AshQuick.LiveView.EnumOptions.label/3` and `options/2` given the
+  field). The template keeps listing the humanized name beside the declared
+  label, for a template still calling `Labels.name/1`.
   `Labels.field/2` labels a relationship path by the field it reaches, as the
   pages do (`[owner: :name]` reads "Name", not "Owner").
 

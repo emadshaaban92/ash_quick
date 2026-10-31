@@ -14,10 +14,11 @@ defmodule AshQuick.Labels do
 
   A custom template that draws a resource's fields, actions or values calls
   these with the resource, so it reads the same as the pages around it: a
-  label the resource declares is drawn in place of the humanized name. A
-  value's label is `AshQuick.LiveView.EnumOptions.label/3`.
+  label the resource declares is drawn in place of the humanized name, and
+  `value/3` labels a value the way the pages do.
   """
 
+  alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.QuickField
   alias AshQuick.LiveView.Utils
 
@@ -68,6 +69,35 @@ defmodule AshQuick.Labels do
   def field(%QuickField{label: label}, _resource), do: translate(label)
   def field([field], resource) when is_atom(field), do: field(field, resource)
   def field(field, resource), do: field |> QuickField.normalize(resource) |> field()
+
+  @doc """
+  The label `value` of the field, or action argument, `field_name` of
+  `resource` is drawn with: the label the resource declares for that value
+  (`label :status, :paid_off, "Paid Off in Full"`), else its enum's label when
+  the field is typed by an `Ash.Type.Enum`, else its name humanized,
+  translated. A field the resource lacks labels `value` humanized. `nil` is
+  drawn as nothing.
+
+      Labels.value(MyApp.Loan, :status, @record.status)
+  """
+  def value(resource, field_name, value)
+
+  def value(_resource, _field_name, nil), do: nil
+
+  def value(resource, field_name, value) do
+    field = value_field(resource, field_name) || %{name: field_name, type: nil}
+    EnumOptions.label(field, value, resource)
+  end
+
+  # A value belongs to a field, or to an argument of one of the actions.
+  defp value_field(resource, name) do
+    if Ash.Resource.Info.resource?(resource) do
+      Ash.Resource.Info.field(resource, name) ||
+        resource
+        |> Ash.Resource.Info.actions()
+        |> Enum.find_value(fn action -> Enum.find(action.arguments, &(&1.name == name)) end)
+    end
+  end
 
   @doc false
   # The English label of `name` on `resource`, before translating: the msgid.

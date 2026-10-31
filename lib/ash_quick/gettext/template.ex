@@ -159,7 +159,9 @@ defmodule AshQuick.Gettext.Template do
   defp bulk_labels(_items_from_a_function, _resource), do: []
 
   # What a resource names: its fields, its actions and their inputs, and the
-  # values any of them picks from, each as the resource labels it.
+  # values any of them picks from. Each as the resource labels it, and as its
+  # humanized name too: a custom template calling `Labels.name/1` or
+  # `EnumOptions.label/2`, which know no resource, still draws that one.
   defp resource_labels(resource) do
     fields =
       Ash.Resource.Info.public_attributes(resource) ++
@@ -169,10 +171,13 @@ defmodule AshQuick.Gettext.Template do
     relationships = Ash.Resource.Info.public_relationships(resource)
     actions = Ash.Resource.Info.public_actions(resource)
     inputs = Enum.flat_map(actions, &Utils.action_fields(resource, &1.name))
+    names = fields ++ relationships ++ inputs ++ actions
 
     [
-      Enum.map(fields ++ relationships ++ inputs ++ actions, &Labels.english(&1.name, resource)),
-      Enum.map(fields ++ inputs, &values(&1, resource))
+      Enum.map(names, &Labels.english(&1.name, resource)),
+      Enum.map(names, &Utils.humanize(&1.name)),
+      Enum.map(fields ++ inputs, &values(&1, resource)),
+      Enum.map(fields ++ inputs, &values(&1, nil))
     ]
   end
 
