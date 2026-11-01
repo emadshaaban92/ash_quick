@@ -442,6 +442,46 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       assert texts(view, "select[name^='field_name-'] option[selected]") == ["Stamped"]
     end
 
+    # A filter casts an atom's value as Ash compares it, as the string it was
+    # picked as, and the chip still reads it as the select offered it: by the
+    # label the resource declares for that value.
+    test "reads an atom's value by the label the resource declares", %{conn: conn} do
+      code = unique("CL")
+      failed = filter_field(code: "#{code}-failed", ocr_status: :failed)
+      done = filter_field(code: "#{code}-done", ocr_status: :done)
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      uuid = filter_uuid(view)
+      filter_change(view, "field_name-#{uuid}", "ocr_status")
+
+      assert texts(view, "select[name='value-#{uuid}'] option") ==
+               ["", "Pending", "Done", "Couldn't read"]
+
+      filter_change(view, "value-#{uuid}", "failed")
+      view |> element("#custom-filter-form") |> render_submit()
+
+      cells = texts(view, "td")
+      assert failed.code in cells
+      refute done.code in cells
+      assert chips(view) == ["Status = Couldn't read"]
+      refute Enum.any?(chips(view), &String.contains?(&1, "Failed"))
+    end
+
+    # Any Of from a link reads each value the same, and one the resource
+    # labels nothing for reads humanized.
+    test "reads an atom's values from a link, labelled or humanized", %{conn: conn} do
+      filter =
+        encode_filter([
+          %{"field_name" => "ocr_status", "operator" => "in", "value" => ["failed", "pending"]},
+          %{"field_name" => "ocr_status", "operator" => "equals", "value" => "pending"}
+        ])
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+      assert chips(view) == ["Status is any of Couldn't read, Pending", "Status = Pending"]
+      refute Enum.any?(chips(view), &String.contains?(&1, "Failed"))
+    end
+
     test "drops a row by its chip's ✕, and the list widens", %{conn: conn} do
       code = unique("CX")
       yes = filter_field(code: "#{code}-yes", active: true)
