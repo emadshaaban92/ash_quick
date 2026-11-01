@@ -12,7 +12,8 @@ defmodule Example.Test.FilterFields do
   A resource for the list's filter: a code to match the start of, a timestamp
   to compare, a salary only an admin may see, which the filter offers to no
   one else, a flag picked as Yes or No, a state typed in as an atom, a stage
-  picked from a fixed set, a note that may be left empty or blank, a memo
+  picked from a fixed set, an OCR status picked from a fixed set one of whose
+  values the resource labels, a note that may be left empty or blank, a memo
   hidden on some rows, a sum that is never empty, and tags, which it offers
   to no one.
 
@@ -45,7 +46,17 @@ defmodule Example.Test.FilterFields do
   actions do
     defaults [
       :read,
-      create: [:code, :stamped_at, :salary, :active, :stage, :note, :memo, :parent_id]
+      create: [
+        :code,
+        :stamped_at,
+        :salary,
+        :active,
+        :stage,
+        :ocr_status,
+        :note,
+        :memo,
+        :parent_id
+      ]
     ]
 
     read :index do
@@ -69,6 +80,11 @@ defmodule Example.Test.FilterFields do
   ash_quick do
     display do
       label :code
+    end
+
+    labels do
+      label :ocr_status, "Status"
+      label :ocr_status, :failed, "Couldn't read"
     end
 
     versioning do
@@ -97,6 +113,11 @@ defmodule Example.Test.FilterFields do
     # VM knows.
     attribute :state, :atom, public?: true
     attribute :stage, :atom, public?: true, constraints: [one_of: [:draft, :live, :archived]]
+
+    attribute :ocr_status, :atom,
+      public?: true,
+      constraints: [one_of: [:pending, :done, :failed]]
+
     # Kept as typed, so a row can hold `""`, which Is Empty counts as empty.
     attribute :note, :string, public?: true, constraints: [allow_empty?: true]
     attribute :memo, :string, public?: true

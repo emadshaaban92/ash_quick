@@ -94,6 +94,10 @@ defmodule AshQuick.LiveView.EnumOptions do
   declares for that value, else its enum's label when the field is typed by an
   `Ash.Type.Enum`, and `AshQuick.LiveView.Utils.humanize/1` otherwise, `field`
   given or not, translated (`AshQuick.Labels.translate/2`).
+
+  A string naming one of the atoms `field` offers reads as that atom: a filter
+  casts its value as Ash compares it (`Ash.Type.coerce/3`), which leaves an
+  atom's the string it was picked as.
   """
   @spec label(field | nil, atom | String.t(), Ash.Resource.t() | nil) :: String.t()
   def label(field, value, resource \\ nil)
@@ -101,9 +105,17 @@ defmodule AshQuick.LiveView.EnumOptions do
   def label(nil, value, _resource), do: Labels.name(value)
 
   def label(field, value, resource) do
-    {type, _constraints} = item_type(field)
+    {type, constraints} = item_type(field)
+    value = offered(values(type, constraints), value)
     type |> english_label(field, resource, value) |> Labels.translate(context(field, resource))
   end
+
+  # The atom among `values` a string names, or the value as given. A string
+  # enum's values are strings, so none of them is matched here.
+  defp offered(values, value) when is_binary(value) and is_list(values),
+    do: Enum.find(values, value, &(is_atom(&1) and Atom.to_string(&1) == value))
+
+  defp offered(_values, value), do: value
 
   # A value is translated under its resource and field: "Cancelled" agrees
   # with the noun its field describes.

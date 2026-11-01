@@ -19,6 +19,11 @@ defmodule AshQuick.LiveView.EnumOptionsTest do
     use Ash.Type.NewType, subtype_of: Stage
   end
 
+  defmodule Door do
+    @moduledoc false
+    use Ash.Type.Enum, values: ["open", "closed_now"]
+  end
+
   defmodule Size do
     @moduledoc false
     use Ash.Type.NewType, subtype_of: :atom, constraints: [one_of: [:small, :extra_large]]
@@ -97,6 +102,20 @@ defmodule AshQuick.LiveView.EnumOptionsTest do
       assert EnumOptions.label(field(Stage), :retired) == "Retired"
       assert EnumOptions.label(field(Ash.Type.Atom), :extra_large) == "Extra Large"
       assert EnumOptions.label(nil, :extra_large) == "Extra Large"
+    end
+
+    # A filter's value is cast with `Ash.Type.coerce/3`, which leaves an atom
+    # the string it was picked as.
+    test "a string naming an offered atom reads as that atom" do
+      assert EnumOptions.label(field(Stage), "live") == "On air"
+      assert EnumOptions.label(field({:array, Stage}), "live") == "On air"
+      assert EnumOptions.label(field(Size), "extra_large") == "Extra Large"
+      assert EnumOptions.label(field(Ash.Type.Atom, one_of: [:small]), "small") == "Small"
+    end
+
+    test "a string enum's value, and a string no atom names, read as written" do
+      assert EnumOptions.label(field(Door), "closed_now") == "Closed now"
+      assert EnumOptions.label(field(Stage), "retired") == "Retired"
     end
   end
 end

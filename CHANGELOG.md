@@ -428,6 +428,18 @@
 
 ### Bug fixes
 
+- **A filter chip reads an atom's value by its declared label.** A chip on
+  an `:atom` field with `one_of` read the humanized value ("Status =
+  Failed") where the filter's select offered the label the resource declares
+  ("Couldn't read"), and Any Of read each value the same way. The filter
+  casts its value as Ash compares it, with `Ash.Type.coerce/3`, which leaves
+  an atom's value the string it was picked as, and the declared label is
+  keyed by the atom. `AshQuick.LiveView.EnumOptions.label/3` now reads a
+  string naming one of the atoms a field offers as that atom, so the chip
+  shows the declared label and its translation, as the select and the list
+  cells do. A string-valued `Ash.Type.Enum` is unchanged, and the filter
+  still reads with the string.
+
 - **Dates and times read in the reader's locale.** With Localize loaded,
   `format_datetime/1`, `format_date/1` and `format_time/2` formatted in
   Localize's own process locale, which nothing set, so every reader got its
