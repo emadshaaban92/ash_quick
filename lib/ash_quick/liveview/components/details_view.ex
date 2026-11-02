@@ -66,7 +66,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
         </.link>
         {AshQuick.Info.display_value(@record) || Map.get(@record, :id)}
         <:subtitle>
-          <.bookkeeping_header record={@record} linker={@linker} />
+          <.bookkeeping_header record={@record} linker={@linker} scope={@scope} />
         </:subtitle>
         <:actions>
           <div class="flex items-center gap-1">
@@ -127,7 +127,9 @@ defmodule AshQuick.LiveView.Components.DetailsView do
   # goes with the link, so a reader the route is not granted to sees the bare
   # name, and a hint that is personal data is shown no further than the page
   # it describes.
-  defp bookkeeping_header(%{record: %resource{} = record, linker: linker} = assigns) do
+  defp bookkeeping_header(%{record: %resource{} = record, linker: linker, scope: scope} = assigns) do
+    timezone = AshQuick.Scope.timezone(scope)
+
     halves = [
       {:created, AshQuick.Info.inserted_at_field(resource),
        AshQuick.Info.inserted_by_field(resource)},
@@ -142,7 +144,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
       halves
       |> Enum.zip(Enum.zip(writers, paths))
       |> Enum.map(fn {{kind, at, _by}, {writer, path}} ->
-        half(kind, timestamp(record, at), actor(writer, path))
+        half(kind, timestamp(record, at, timezone), actor(writer, path))
       end)
       |> Enum.reject(&is_nil/1)
       |> Enum.intersperse([" · "])
@@ -210,11 +212,11 @@ defmodule AshQuick.LiveView.Components.DetailsView do
   defp sentence(:updated, actor, at),
     do: gettext("Last updated by %{actor} on %{at}", actor: actor, at: at)
 
-  defp timestamp(_record, nil), do: nil
+  defp timestamp(_record, nil, _timezone), do: nil
 
-  defp timestamp(record, field) do
+  defp timestamp(record, field, timezone) do
     case Map.get(record, field) do
-      %DateTime{} = at -> AshQuick.Config.format_datetime(at)
+      %DateTime{} = at -> AshQuick.Config.format_datetime(at, timezone)
       _ -> nil
     end
   end

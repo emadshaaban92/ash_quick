@@ -15,7 +15,7 @@ defmodule AshQuick.LiveView.ListUtils do
   alias AshQuick.LiveView.FormUtils
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.CustomFilter
-  alias AshQuick.LiveView.FilterDatetime
+  alias AshQuick.LiveView.LocalDatetime
   alias AshQuick.LiveView.Components.FilterForm
   alias AshQuick.LiveView.Liveness
   alias AshQuick.LiveView.PrintUtils
@@ -87,7 +87,7 @@ defmodule AshQuick.LiveView.ListUtils do
     )
     |> maybe_apply_base_filter(options.base_filter)
     |> maybe_apply_filters(options.filters, params.selected_filters)
-    |> maybe_apply_custom_filter(params.custom_filter)
+    |> maybe_apply_custom_filter(params.custom_filter, socket.assigns.scope)
     |> apply_sort(params, options)
     |> Utils.load_fields(options.list_fields, strict?: true)
     |> Ash.Query.load(options.load ++ options.list_load, strict?: true)
@@ -109,11 +109,14 @@ defmodule AshQuick.LiveView.ListUtils do
     |> maybe_apply_filters(filters, rest)
   end
 
-  defp maybe_apply_custom_filter(query, nil), do: query
+  defp maybe_apply_custom_filter(query, nil, _scope), do: query
 
-  defp maybe_apply_custom_filter(query, custom_filter) do
+  # On Day reads its date in the reader's zone, the one the list shows
+  # timestamps in.
+  defp maybe_apply_custom_filter(query, custom_filter, scope) do
     case CustomFilter.build_ash_filter(custom_filter,
-           fields: emptiness_fields(query, custom_filter)
+           fields: emptiness_fields(query, custom_filter),
+           timezone: AshQuick.Scope.timezone(scope)
          ) do
       nil -> query
       ash_filter -> Ash.Query.filter_input(query, ash_filter)
@@ -171,7 +174,7 @@ defmodule AshQuick.LiveView.ListUtils do
     refused? = fn row ->
       case CustomFilter.value_shape(row.operator) do
         :none -> row.field_name in partly_hidden
-        :day -> unreadable_day?(row)
+        :day -> unreadable_day?(row, scope)
         _ -> false
       end
     end
@@ -192,9 +195,9 @@ defmodule AshQuick.LiveView.ListUtils do
   end
 
   # A row left without a value filters by nothing, and is not refused.
-  defp unreadable_day?(%CustomFilter{value: value} = row) do
+  defp unreadable_day?(%CustomFilter{value: value} = row, scope) do
     CustomFilter.applied?(row) and
-      FilterDatetime.day_range(value, AshQuick.Config.timezone()) == :error
+      LocalDatetime.day_range(value, AshQuick.Scope.timezone(scope)) == :error
   end
 
   # Those of `names` that are fields of `resource`, `by_name`, the actor may
@@ -378,7 +381,7 @@ defmodule AshQuick.LiveView.ListUtils do
     )
     |> maybe_apply_base_filter(options.base_filter)
     |> maybe_apply_filters(options.filters, params.selected_filters)
-    |> maybe_apply_custom_filter(params.custom_filter)
+    |> maybe_apply_custom_filter(params.custom_filter, socket.assigns.scope)
     |> apply_sort(params, options)
   end
 
@@ -448,6 +451,7 @@ defmodule AshQuick.LiveView.ListUtils do
     # inherits no locale. The scope's is the one a host puts on its pages;
     # set process-wide, the host's backend falls back to it.
     locale = AshQuick.Scope.locale(socket.assigns.scope)
+    timezone = AshQuick.Scope.timezone(socket.assigns.scope)
 
     socket =
       case Ash.Scope.ToOpts.get_actor(socket.assigns.scope) do
@@ -461,7 +465,8 @@ defmodule AshQuick.LiveView.ListUtils do
                 export_query,
                 actor,
                 options,
-                format |> String.to_existing_atom()
+                format |> String.to_existing_atom(),
+                timezone
               )
 
             {:ok, %{export_data: %{url: url}}}

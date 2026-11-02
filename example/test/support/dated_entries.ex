@@ -21,7 +21,11 @@ defmodule Example.Test.DatedEntries do
     extensions: [AshQuick]
 
   actions do
-    defaults [:read, create: [:code, :due_on, :opens_at, :logged_at, :stamped_at]]
+    defaults [
+      :read,
+      create: [:code, :due_on, :opens_at, :logged_at, :stamped_at],
+      update: [:stamped_at]
+    ]
 
     read :index do
       argument :search, :string

@@ -433,13 +433,15 @@ defmodule AshQuick.LiveView.Components.FormView do
     """
   end
 
+  # Typed in the zone picked beside it, the reader's to begin with, and posted
+  # as the instant that means: the input itself names no zone.
   defp field_input(%{field: %{type: field_type}} = assigns)
        when field_type in [Ash.Type.DateTime, Ash.Type.UtcDatetimeUsec, Ash.Type.UtcDatetime] do
     ~H"""
-    <.input
+    <.zoned_datetime_input
       required={not @field.allow_nil?}
       field={@phx_field}
-      type="datetime-local"
+      timezone={AshQuick.Scope.timezone(@scope)}
       label={Labels.name(@field.name, @resource)}
       phx-debounce="blur"
     />

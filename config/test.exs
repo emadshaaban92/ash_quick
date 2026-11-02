@@ -32,3 +32,9 @@ config :ex_aws,
 # The ETS data layer logs every write at :debug; the suite writes on purpose and
 # the output buries a real failure.
 config :logger, level: :warning
+
+# A reader's zone is any IANA zone, which only a full database can shift into.
+# The suite reads pages in several, so it allows them all;
+# `AshQuick.TimezonesTest` sets the list it tests itself.
+config :elixir, :time_zone_database, Tz.TimeZoneDatabase
+config :ash_quick, timezones: :all

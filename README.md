@@ -413,6 +413,73 @@ end
 
 QuickView sets no layout of its own; the `live_session` does.
 
+### Timezones
+
+Lists, details pages, exports, print file names and the filter show a
+timestamp in the zone of the reader's scope, `AshQuick.Scope.timezone/1`, and
+`config :ash_quick, timezone:` when the scope names none. Which zone that is,
+is yours to decide: one kept on the user, one for the whole organisation, or
+the one the browser reports, which the LiveSocket can send beside the rest of
+its params:
+
+```javascript
+params: () => ({
+  _csrf_token: csrfToken,
+  ...browserSessionParams(),
+  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+})
+```
+
+and the scope stage hands to the scope, which names the field
+(`use AshQuick.Scope, timezone: :timezone`):
+
+```elixir
+timezone: Phoenix.LiveView.get_connect_params(socket)["timezone"]
+```
+
+A zone kept on the user is there on the first render as well; the browser's
+arrives only once the socket connects. Any zone but UTC needs a full time zone
+database, such as `tz`'s (`config :elixir, :time_zone_database,
+Tz.TimeZoneDatabase`). A zone the database does not know reads as the
+configured one, so a made-up one from a browser costs nothing. A page of your
+own formats in the same zone by passing it:
+`AshQuick.Config.format_datetime(value, AshQuick.Scope.timezone(scope))`.
+
+`config :ash_quick, timezones:` says which zones a reader may have. Left
+out, `:timezone` is the only one: every reader sees that zone, whatever their
+scope names, which suits an application whose readers keep one clock. A list
+(holding `:timezone`) allows those, and `:all` allows any zone the database
+knows. A scope's zone outside them reads as `:timezone`, so a page never shows
+a zone its forms will not take.
+
+```elixir
+config :ash_quick,
+  timezone: "Europe/London",
+  timezones: ["Europe/London", "Asia/Tokyo"]
+```
+
+A form's timestamp is typed into `AshQuick.Components.zoned_datetime_input/1`:
+the time, and beside it the zone it is in, the reader's to begin with. With
+one zone allowed there is nothing to pick, and no picker is drawn. A list is
+offered in its own order. `:all` offers one zone per clock the world keeps
+today, each named by its offset and the places that keep it (`(UTC+01:00)
+Berlin, Paris, Madrid, …`), plus the reader's own: the server decides the
+list, so every browser is offered the same. A hook composes the time and the
+zone into the instant they mean and posts it under the field's own name, so
+the action receives an ordinary timestamp. A custom form template, or a page
+of your own, uses the same component:
+
+```heex
+<.zoned_datetime_input
+  field={@form[:starts_at]}
+  timezone={AshQuick.Scope.timezone(@scope)}
+  label="Starts at"
+/>
+```
+
+A plain `datetime-local` input still works as it always has: its time is read
+as UTC, and it shows the held value in UTC.
+
 ## The extension on a resource
 
 ```elixir
@@ -707,7 +774,7 @@ reference.
 
 | Seam | What it is |
 |---|---|
-| `AshQuick.Scope` | `use` it on the host's scope struct. Generates `Ash.Scope.ToOpts` and the provenance AshQuick needs on top of it: the real actor behind an impersonation, the request IP, the actor's timezone and locale. Fails the compile if a named field is not on the struct. The IP is the peer address unless `:client_ip` names another source; behind a proxy, see `AshQuick.LiveView.Mount`. A controller reads the same address with `AshQuick.ClientIp.from_conn/1`. |
+| `AshQuick.Scope` | `use` it on the host's scope struct. Generates `Ash.Scope.ToOpts` and the provenance AshQuick needs on top of it: the real actor behind an impersonation, the request IP, the reader's timezone and the actor's locale. Fails the compile if a named field is not on the struct. The IP is the peer address unless `:client_ip` names another source; behind a proxy, see `AshQuick.LiveView.Mount`. A controller reads the same address with `AshQuick.ClientIp.from_conn/1`. |
 | The audit store | An Ash resource in the host app, named app-wide as `:audit_resource` or per resource under `audit do store ... end`. It must accept `resource_name`, `resource_id`, `action_type`, `action_name`, `attributes`, `arguments`, `context`, `actor_id`, `real_actor_id`, `ip`, `tenant`, and may also accept a `:map` `changes` — the only optional column. `actor_id` and `real_actor_id` must allow `nil`: a write with no actor is recorded with both `nil`. Keep it dumb — no policies, no validations: it is written inside the transaction of every audited write. |
 | `AshQuick.Storage` | Resolves attachment values to fetchable URLs, plus optional lifecycle callbacks for routing an arriving upload and withholding objects that are not servable yet. Defaults to `AshQuick.Storage.S3`, which serves straight from the key and implements no lifecycle. |
 | `AshQuick.AccessControl` | Answers which routes a scope may navigate to. Named on the nav, and what every rendering of it filters through. Not `Ash.can?`: a filter policy allows the action and returns no rows, so `can?` says yes for a page that would be empty. |

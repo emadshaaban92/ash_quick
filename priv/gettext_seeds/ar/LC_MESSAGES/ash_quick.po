@@ -764,3 +764,8 @@ msgstr "[%{resource}] %{action}"
 #, elixir-autogen, elixir-format
 msgid "%{resource} - %{record}"
 msgstr "%{resource} - %{record}"
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Time zone"
+msgstr "المنطقة الزمنية"

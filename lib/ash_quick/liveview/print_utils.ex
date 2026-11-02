@@ -66,13 +66,14 @@ defmodule AshQuick.LiveView.PrintUtils do
         scope: scope
       )
 
-    {filename(template, resource, records),
+    {filename(template, resource, records, AshQuick.Scope.timezone(scope)),
      AshQuick.Config.pdf_renderer().render(template.render(records))}
   end
 
-  defp filename(template, resource, records) do
+  # Dated in the reader's zone, the one the page they printed from shows.
+  defp filename(template, resource, records, timezone) do
     label = template.label() |> String.downcase() |> String.replace(" ", "_")
-    date = AshQuick.Config.now_in_timezone() |> Calendar.strftime("%y-%m-%d-%H-%M-%S")
+    date = timezone |> AshQuick.Config.now_in_timezone() |> Calendar.strftime("%y-%m-%d-%H-%M-%S")
 
     name =
       case records do

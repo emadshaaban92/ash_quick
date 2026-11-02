@@ -8,7 +8,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.CustomFilter
   alias AshQuick.LiveView.EnumOptions
-  alias AshQuick.LiveView.FilterDatetime
+  alias AshQuick.LiveView.LocalDatetime
   alias AshQuick.LiveView.Utils
 
   @datetime_types [Ash.Type.DateTime, Ash.Type.UtcDatetimeUsec, Ash.Type.UtcDatetime]
@@ -59,6 +59,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
           emptiable={@emptiable}
           labels={@labels}
           value_errors={@value_errors}
+          timezone={@timezone}
         />
 
         <div class="flex w-full gap-2 pt-4 pb-1">
@@ -115,6 +116,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
               emptiable={@emptiable}
               labels={@labels}
               value_errors={@value_errors}
+              timezone={@timezone}
             />
           <% else %>
             <.filter_row
@@ -125,6 +127,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
               labels={@labels}
               field={field_for(@fields, filter.field_name)}
               error={@value_errors[filter.uuid]}
+              timezone={@timezone}
               myself={@myself}
             />
           <% end %>
@@ -181,7 +184,13 @@ defmodule AshQuick.LiveView.Components.FilterForm do
             @filter.operator
           )}
         </select>
-        <.filter_value filter={@filter} field={@field} resource={@resource} error={@error} />
+        <.filter_value
+          filter={@filter}
+          field={@field}
+          resource={@resource}
+          error={@error}
+          timezone={@timezone}
+        />
 
         <button
           phx-click="remove_filter"
@@ -243,7 +252,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     <input
       type="text"
       name={"value-#{@filter.uuid}"}
-      value={typed_list(@filter.value, @field)}
+      value={typed_list(@filter.value, @field, @timezone)}
       class={["input input-sm min-w-0 flex-1", @error && "input-error"]}
       {invalid_attrs(@filter, @error)}
     />
@@ -259,7 +268,8 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     <input
       type="datetime-local"
       name={"value-#{@filter.uuid}"}
-      value={FilterDatetime.to_local(@filter.value, AshQuick.Config.timezone())}
+      value={LocalDatetime.to_local(@filter.value, @timezone)}
+      step="1"
       class={["input input-sm min-w-0 flex-1", @error && "input-error"]}
       {invalid_attrs(@filter, @error)}
     />
@@ -308,7 +318,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     <input
       type="text"
       name={"value-#{@filter.uuid}"}
-      value={typed_list(@filter.value, @field)}
+      value={typed_list(@filter.value, @field, @timezone)}
       class={["input input-sm min-w-0 flex-1", @error && "input-error"]}
       {invalid_attrs(@filter, @error)}
     />
@@ -330,15 +340,15 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # A value as a text input shows it: as a chip writes one, a list's values
   # joined by commas, and a timestamp in the zone the list shows it in.
   # `Phoenix.HTML` would read a list as iodata, which raises for most.
-  defp typed_list(nil, _field), do: nil
+  defp typed_list(nil, _field, _timezone), do: nil
 
-  defp typed_list(values, field) when is_list(values),
-    do: values |> Enum.map(&typed_list(&1, field)) |> CustomFilter.as_written()
+  defp typed_list(values, field, timezone) when is_list(values),
+    do: values |> Enum.map(&typed_list(&1, field, timezone)) |> CustomFilter.as_written()
 
-  defp typed_list(value, %{type: type}) when type in @datetime_types,
-    do: FilterDatetime.to_local(value, AshQuick.Config.timezone())
+  defp typed_list(value, %{type: type}, timezone) when type in @datetime_types,
+    do: LocalDatetime.to_local(value, timezone)
 
-  defp typed_list(value, _field), do: CustomFilter.as_written(value)
+  defp typed_list(value, _field, _timezone), do: CustomFilter.as_written(value)
 
   # Ties a value's input to the error under its row, for a screen reader.
   defp invalid_attrs(_filter, nil), do: []
@@ -351,6 +361,8 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     socket =
       socket
       |> assign(assigns)
+      # The zone the list shows timestamps in, which a timestamp is typed in.
+      |> assign(:timezone, AshQuick.Scope.timezone(assigns[:scope] || socket.assigns[:scope]))
       |> assign_new(:value_errors, fn -> %{} end)
       |> assign_fields()
       |> maybe_assign_new_filter()
@@ -488,7 +500,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # it was. Each such row says so under itself instead.
   def handle_event("apply_filter", _, socket) do
     %{custom_filter: custom_filter, fields: fields} = socket.assigns
-    errors = value_errors(custom_filter, fields)
+    errors = value_errors(custom_filter, fields, socket.assigns.timezone)
 
     if errors == %{}, do: notify_parent(custom_filter)
 
@@ -516,19 +528,19 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # A row with no value is left out of the filter, so it is not checked. Nor
   # is one on a field the form does not offer, which only a link carries: the
   # read decides that one, and drops the filter with a flash if it fails.
-  defp value_errors(filter, fields) do
+  defp value_errors(filter, fields, timezone) do
     for %CustomFilter{uuid: uuid, field_name: name, operator: operator, value: value} <-
           CustomFilter.applied_leaves(filter),
         field = field_for(fields, name),
         not is_nil(field),
-        message = cast_error(field, operator, value),
+        message = cast_error(field, operator, value, timezone),
         not is_nil(message),
         into: %{},
         do: {uuid, message}
   end
 
-  defp cast_error(field, operator, value) do
-    case CustomFilter.cast_row_value(field, operator, value) do
+  defp cast_error(field, operator, value, timezone) do
+    case CustomFilter.cast_row_value(field, operator, value, timezone) do
       {:ok, _} -> nil
       {:error, error} -> error_message(error)
     end
@@ -553,13 +565,13 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   defp field_for(fields, name), do: Enum.find(fields, &(to_string(&1.name) == name))
 
   # A timestamp is typed in the zone the list shows it in, and held as the UTC
-  # instant that means. See `AshQuick.LiveView.FilterDatetime`. On Day holds
+  # instant that means. See `AshQuick.LiveView.LocalDatetime`. On Day holds
   # its date as typed, and reads it in that zone when the filter is built.
   defp held_value(socket, uuid, value) do
     case CustomFilter.find(socket.assigns.custom_filter, uuid) do
       %CustomFilter{field_name: name, operator: operator} ->
         field = field_for(socket.assigns.fields, name)
-        hold(CustomFilter.value_shape(operator), field, value)
+        hold(CustomFilter.value_shape(operator), field, value, socket.assigns.timezone)
 
       nil ->
         value
@@ -568,20 +580,20 @@ defmodule AshQuick.LiveView.Components.FilterForm do
 
   # Any Of's select sends a list, and nothing at all once every value is
   # unpicked; its text input, on a field without a fixed set, one string.
-  defp hold(:list, field, value) when is_binary(value) do
+  defp hold(:list, field, value, timezone) when is_binary(value) do
     value
     |> String.split(",")
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
-    |> Enum.map(&hold(:scalar, field, &1))
+    |> Enum.map(&hold(:scalar, field, &1, timezone))
   end
 
-  defp hold(:list, _field, value), do: List.wrap(value)
+  defp hold(:list, _field, value, _timezone), do: List.wrap(value)
 
-  defp hold(:scalar, %{type: type}, value) when type in @datetime_types,
-    do: FilterDatetime.to_utc(value, AshQuick.Config.timezone())
+  defp hold(:scalar, %{type: type}, value, timezone) when type in @datetime_types,
+    do: LocalDatetime.to_utc(value, timezone)
 
-  defp hold(_shape, _field, value), do: value
+  defp hold(_shape, _field, value, _timezone), do: value
 
   # Asked only when what it depends on changed, rather than on every render,
   # event or re-render of the modal: a field policy is a check against the

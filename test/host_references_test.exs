@@ -12,6 +12,10 @@ defmodule AshQuick.HostReferencesTest do
   @host_names ~w(Commerce AshIntegration Halan Cairo)
   @pattern ~r/\b(#{Enum.join(@host_names, "|")})/
 
+  # `AshQuick.Timezones` offers the world's clocks by the places that keep
+  # them, and a city a host is in is one of those places.
+  @world_clock ~s({"Africa/Cairo", "Cairo"})
+
   @files ["lib/ash_quick.ex"] ++ Path.wildcard("lib/ash_quick/**/*.{ex,exs,heex}")
 
   test "no file names a host application" do
@@ -19,6 +23,7 @@ defmodule AshQuick.HostReferencesTest do
       for file <- @files,
           {line, number} <- file |> File.read!() |> String.split("\n") |> Enum.with_index(1),
           Regex.match?(@pattern, line),
+          String.trim(line) != @world_clock <> ",",
           do: "#{file}:#{number}: #{String.trim(line)}"
 
     assert offenders == [], """

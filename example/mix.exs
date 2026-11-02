@@ -46,6 +46,9 @@ defmodule Example.MixProject do
     [
       # The library under test, from the checkout this app lives in.
       {:ash_quick, path: ".."},
+      # Shows timestamps in the zone the reader's browser reports, which only a
+      # full time zone database can shift into.
+      {:tz, "~> 0.28"},
       {:ash, "~> 3.37"},
       {:ash_phoenix, "~> 2.3"},
       {:ash_postgres, "~> 2.15"},

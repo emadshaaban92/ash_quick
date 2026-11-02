@@ -69,7 +69,11 @@ config :ash_quick,
   storage: Example.Uploads.ObjectStore,
   error_translator: {ExampleWeb.CoreComponents, :translate_error},
   gettext: ExampleWeb.Gettext,
-  timezone: "Etc/UTC"
+  timezone: "Etc/UTC",
+  # Readers anywhere: pages show the zone their browser reports, and a form
+  # offers a zone per clock the world keeps. An application whose readers
+  # keep one clock leaves this out.
+  timezones: :all
 
 # `Example.Uploads.ObjectStore` delegates the signing to `AshQuick.Storage.S3`
 # but names its own bucket, so these are only the fallback the library would use
@@ -86,6 +90,10 @@ config :ex_aws,
   access_key_id: "example-key",
   secret_access_key: "example-secret",
   region: "us-east-1"
+
+# Pages show timestamps in the zone the reader's browser reports, and only a
+# full time zone database can shift into one.
+config :elixir, :time_zone_database, Tz.TimeZoneDatabase
 
 # Nothing converts a currency either; the service would only reach the network.
 config :ex_money, auto_start_exchange_rate_service: false

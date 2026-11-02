@@ -7,8 +7,8 @@ defmodule AshQuick.LiveView.ExportUtils do
   alias AshQuick.LiveView.Utils
 
   # sobelow_skip ["Traversal.FileModule"]
-  def generate_export_url(query, actor, %Options{} = options, :xlsx) do
-    {header, body} = generate_stream_data(query, options)
+  def generate_export_url(query, actor, %Options{} = options, :xlsx, timezone) do
+    {header, body} = generate_stream_data(query, options, timezone)
 
     resource_name = Ash.Resource.Info.plural_name(options.resource)
 
@@ -24,7 +24,7 @@ defmodule AshQuick.LiveView.ExportUtils do
     |> Stream.run()
 
     date_part =
-      AshQuick.Config.now_in_timezone()
+      AshQuick.Config.now_in_timezone(timezone)
       |> Calendar.strftime("%y-%m-%d-%H-%M-%S")
 
     key = "exports/#{actor.id}/#{resource_name}-#{date_part}.xlsx"
@@ -38,8 +38,8 @@ defmodule AshQuick.LiveView.ExportUtils do
   end
 
   # sobelow_skip ["Traversal.FileModule"]
-  def generate_export_url(query, actor, %Options{} = options, :csv) do
-    {header, body} = generate_stream_data(query, options)
+  def generate_export_url(query, actor, %Options{} = options, :csv, timezone) do
+    {header, body} = generate_stream_data(query, options, timezone)
 
     {:ok, csv_tmp_file_name} = Briefly.create(extname: ".csv")
 
@@ -51,7 +51,7 @@ defmodule AshQuick.LiveView.ExportUtils do
     resource_name = Ash.Resource.Info.plural_name(options.resource)
 
     date_part =
-      AshQuick.Config.now_in_timezone()
+      AshQuick.Config.now_in_timezone(timezone)
       |> Calendar.strftime("%y-%m-%d-%H-%M-%S")
 
     key = "exports/#{actor.id}/#{resource_name}-#{date_part}.csv"
@@ -61,7 +61,7 @@ defmodule AshQuick.LiveView.ExportUtils do
     {:ok, AshQuick.Storage.presigned_get_url(key, expires_in: 3600)}
   end
 
-  defp generate_stream_data(query, options) do
+  defp generate_stream_data(query, options, timezone) do
     rows = Ash.stream!(query, timeout: :infinity)
 
     header =
@@ -72,76 +72,76 @@ defmodule AshQuick.LiveView.ExportUtils do
       rows
       |> Stream.map(fn row ->
         options.export_fields
-        |> Enum.map(&field_export_value(row, Utils.field_path(&1)))
+        |> Enum.map(&field_export_value(row, Utils.field_path(&1), timezone))
       end)
 
     {header, body}
   end
 
-  defp field_export_value(nil, _path) do
+  defp field_export_value(nil, _path, _timezone) do
     ""
   end
 
-  defp field_export_value(value, _path) when is_number(value) do
+  defp field_export_value(value, _path, _timezone) when is_number(value) do
     value
   end
 
-  defp field_export_value(value, _path) when is_atom(value) do
+  defp field_export_value(value, _path, _timezone) when is_atom(value) do
     Atom.to_string(value)
   end
 
-  defp field_export_value(value, _path) when is_binary(value) do
+  defp field_export_value(value, _path, _timezone) when is_binary(value) do
     value
   end
 
-  defp field_export_value(value, _path) when is_non_struct_map(value) do
+  defp field_export_value(value, _path, _timezone) when is_non_struct_map(value) do
     Jason.encode!(value, pretty: true)
   end
 
-  defp field_export_value(%DateTime{} = value, _path) do
-    AshQuick.Config.format_datetime(value)
+  defp field_export_value(%DateTime{} = value, _path, timezone) do
+    AshQuick.Config.format_datetime(value, timezone)
   end
 
-  defp field_export_value(%Date{} = value, _path) do
+  defp field_export_value(%Date{} = value, _path, _timezone) do
     AshQuick.Config.format_date(value)
   end
 
-  defp field_export_value(%NaiveDateTime{} = value, _path) do
+  defp field_export_value(%NaiveDateTime{} = value, _path, _timezone) do
     AshQuick.Config.format_datetime(value)
   end
 
-  defp field_export_value(%Time{} = value, _path) do
-    AshQuick.Config.format_time(value, format: :medium)
+  defp field_export_value(%Time{} = value, _path, timezone) do
+    AshQuick.Config.format_time(value, format: :medium, timezone: timezone)
   end
 
-  defp field_export_value(%{__struct__: Money} = value, _path) do
+  defp field_export_value(%{__struct__: Money} = value, _path, _timezone) do
     AshQuick.Config.format_money(value)
   end
 
-  defp field_export_value(value, path) when is_list(value) do
-    Enum.map_join(value, ", ", &field_export_value(&1, path))
+  defp field_export_value(value, path, timezone) when is_list(value) do
+    Enum.map_join(value, ", ", &field_export_value(&1, path, timezone))
   end
 
-  defp field_export_value(value, [path]) do
-    field_export_value(value, path)
+  defp field_export_value(value, [path], timezone) do
+    field_export_value(value, path, timezone)
   end
 
   # A `sensitive?` field is redacted in a file the way it is on the page. A
   # plain map has gone to JSON above, so a struct is all that reaches here.
-  defp field_export_value(%resource{} = value, field_name) when is_atom(field_name) do
+  defp field_export_value(%resource{} = value, field_name, timezone) when is_atom(field_name) do
     case {AshQuick.Info.sensitive?(resource, field_name), Map.get(value, field_name)} do
       {true, nil} -> ""
       {true, field_value} -> AshQuick.Info.mask(field_value)
-      {false, field_value} -> field_export_value(field_value, [])
+      {false, field_value} -> field_export_value(field_value, [], timezone)
     end
   end
 
-  defp field_export_value(value, {relationship_name, rest})
+  defp field_export_value(value, {relationship_name, rest}, timezone)
        when is_map(value) and is_atom(relationship_name) do
-    field_export_value(Map.get(value, relationship_name), rest)
+    field_export_value(Map.get(value, relationship_name), rest, timezone)
   end
 
-  defp field_export_value(value, _path) do
+  defp field_export_value(value, _path, _timezone) do
     if String.Chars.impl_for(value) do
       to_string(value)
     else

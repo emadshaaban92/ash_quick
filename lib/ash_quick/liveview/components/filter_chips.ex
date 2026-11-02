@@ -23,6 +23,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
   attr :resource, :atom, required: true
   attr :params, :map, required: true
   attr :path, :string, required: true
+  attr :scope, :any, default: nil, doc: "the reader's scope, whose zone a timestamp reads in"
 
   attr :columns, :list,
     default: [],
@@ -54,6 +55,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
         labels={@labels}
         params={@params}
         path={@path}
+        scope={@scope}
       />
       <.link
         :if={length(@chips) > 1}
@@ -83,6 +85,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
   attr :labels, :map, required: true
   attr :params, :map, required: true
   attr :path, :string, required: true
+  attr :scope, :any, default: nil
 
   defp chip(%{node: %CustomFilter{children: [_ | _]} = group} = assigns) do
     case CustomFilter.applied_leaves(group) do
@@ -98,6 +101,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
           labels={@labels}
           params={@params}
           path={@path}
+          scope={@scope}
         />
         """
 
@@ -131,6 +135,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
       labels={@labels}
       params={@params}
       path={@path}
+      scope={@scope}
     />
     """
   end
@@ -146,6 +151,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
   attr :labels, :map, default: %{}
   attr :params, :map, required: true
   attr :path, :string, required: true
+  attr :scope, :any, default: nil
   slot :inner_block
 
   defp chip_box(assigns) do
@@ -163,7 +169,13 @@ defmodule AshQuick.LiveView.Components.FilterChips do
     >
       <span id={"#{@id}-text"} class="min-w-0 break-words">
         <%= if @leaf do %>
-          {@label} <.chip_value leaf={@leaf} field={@field} resource={@resource} />
+          {@label}
+          <.chip_value
+            leaf={@leaf}
+            field={@field}
+            resource={@resource}
+            scope={@scope}
+          />
         <% else %>
           {render_slot(@inner_block)}
         <% end %>
@@ -204,6 +216,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
   attr :leaf, CustomFilter, required: true
   attr :field, :any, required: true
   attr :resource, :atom, default: nil
+  attr :scope, :any, default: nil
 
   # Is Empty and Is Not Empty compare with nothing, so their phrase is the
   # whole chip.
@@ -217,7 +230,12 @@ defmodule AshQuick.LiveView.Components.FilterChips do
          %{field: %{type: type} = field, leaf: %{operator: operator, value: value}} = assigns
        )
        when not is_nil(type) do
-    case CustomFilter.cast_row_value(field, operator, value) do
+    case CustomFilter.cast_row_value(
+           field,
+           operator,
+           value,
+           AshQuick.Scope.timezone(assigns.scope)
+         ) do
       {:ok, cast} when cast not in [nil, []] ->
         items = if CustomFilter.value_shape(operator) == :list, do: cast, else: [cast]
         assigns = assign(assigns, :items, items)
@@ -228,6 +246,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
           path={[]}
           ash_field={@field}
           resource={@resource}
+          scope={@scope}
         /></span></span>
         """
 

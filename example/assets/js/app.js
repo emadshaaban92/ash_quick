@@ -39,8 +39,14 @@ import {initLocale} from "../../../assets/js/locale"
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
-  // A function, so every reconnect re-reads the tab's identity.
-  params: () => ({_csrf_token: csrfToken, ...browserSessionParams()}),
+  // A function, so every reconnect re-reads the tab's identity. `timezone` is
+  // this app's choice of zone to show times in, the browser's own, which
+  // `ExampleWeb.UserAuth` puts on the scope.
+  params: () => ({
+    _csrf_token: csrfToken,
+    ...browserSessionParams(),
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }),
   hooks: {...colocatedHooks, ...ashQuickHooks, ...live_select},
 })
 

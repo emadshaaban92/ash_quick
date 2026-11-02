@@ -591,6 +591,10 @@ msgstr ""
 msgid "%{resource} - %{record}"
 msgstr ""
 
+#, elixir-format
+msgid "Time zone"
+msgstr ""
+
 msgid "Accepts"
 msgstr ""
 

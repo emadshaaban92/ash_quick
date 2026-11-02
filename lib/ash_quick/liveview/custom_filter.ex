@@ -4,7 +4,7 @@ defmodule AshQuick.LiveView.CustomFilter do
   @enforce_keys [:uuid, :operator]
   defstruct [:uuid, :operator, :field_name, :value, :children]
 
-  alias AshQuick.LiveView.FilterDatetime
+  alias AshQuick.LiveView.LocalDatetime
 
   # The operators that compare a field with no value.
   @valueless ~w(is_nil is_not_nil)
@@ -213,7 +213,7 @@ defmodule AshQuick.LiveView.CustomFilter do
   the error.
 
   On Day's date is read as `build_ash_filter/2` reads it, by
-  `FilterDatetime.day_range/3`: an ISO 8601 date, and a day in `timezone`,
+  `LocalDatetime.day_range/3`: an ISO 8601 date, and a day in `timezone`,
   which a zone the time zone database cannot load has none of. The row says
   so, rather than the read refusing the whole filter.
   """
@@ -223,7 +223,7 @@ defmodule AshQuick.LiveView.CustomFilter do
         {:ok, nil}
 
       :day ->
-        case FilterDatetime.day_range(value, timezone) do
+        case LocalDatetime.day_range(value, timezone) do
           {:ok, _from, _to} -> Date.from_iso8601(value)
           :error -> {:error, "is invalid"}
         end
@@ -252,7 +252,8 @@ defmodule AshQuick.LiveView.CustomFilter do
 
     * `:timezone` — the zone On Day reads its date in, as the instants from
       that day's first moment up to the next day's: the zone the list shows
-      timestamps in, `AshQuick.Config.timezone/0`, by default.
+      timestamps in, `AshQuick.Scope.timezone/1`, which the list passes;
+      `AshQuick.Config.timezone/0` when none is given.
     * `:fields` — the resource's fields by name, as `fields_by_name/1` gives
       them. Is Empty on a string also keeps one holding `""`, which reads as
       empty in the list, and only a field's type says it is a string.
@@ -312,7 +313,7 @@ defmodule AshQuick.LiveView.CustomFilter do
   # datetime string as that instant.
   defp build(%__MODULE__{field_name: field_name, operator: "on", value: value}, timezone, _fields)
        when is_binary(field_name) do
-    case FilterDatetime.day_range(value, timezone) do
+    case LocalDatetime.day_range(value, timezone) do
       {:ok, from, to} -> %{field_name => %{"gte" => from, "lt" => to}}
       :error -> nil
     end

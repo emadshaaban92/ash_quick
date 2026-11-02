@@ -414,6 +414,15 @@ def roles_widget(assigns) do
 end
 ```
 
+A timestamp a template or widget takes is drawn with
+`<.zoned_datetime_input field={f[:starts_at]} timezone={AshQuick.Scope.timezone(@scope)} label="Starts at" />`,
+not a bare `datetime-local` input: it shows the held instant in the reader's
+zone beside a zone picker of the zones `config :ash_quick, timezones:` allows
+(none drawn when that is one zone, the default), and a hook posts the instant
+the two mean under the field's own name (to the microsecond when untouched). The time and zone
+post as `<field>__local` / `<field>__zone`, which the action never sees. A
+bare `datetime-local` input is read as UTC, as Ash reads one.
+
 To use host app components, import them in the QuickView module **before** `use`:
 
 ```elixir
@@ -961,7 +970,15 @@ covers wiring them up.
 
 - `AshQuick.Scope` — `use` it on the host's scope struct. Generates
   `Ash.Scope.ToOpts` plus the provenance audit needs: real actor behind an
-  impersonation, request IP, timezone, locale.
+  impersonation, request IP, timezone, locale. The scope's `:timezone` is the
+  zone every page shows timestamps in (`AshQuick.Scope.timezone/1`, which
+  reads a zone the database cannot load as `config :ash_quick, timezone:`);
+  the host fills it, from the user, the organisation or the browser
+  (`Intl.DateTimeFormat().resolvedOptions().timeZone` in the LiveSocket's
+  params). A zone but UTC needs a full database (`tz`).
+  `config :ash_quick, timezones:` lists the zones a reader may have (default
+  `[timezone]`, a list holding `:timezone`, or `:all`); a scope's zone outside
+  it reads as `:timezone`.
 - **The audit store** — an Ash resource taking `resource_name`, `resource_id`,
   `action_type`, `action_name`, `attributes`, `arguments`, `context`,
   `actor_id`, `real_actor_id`, `ip`, `tenant`, and optionally a `:map`

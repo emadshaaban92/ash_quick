@@ -55,7 +55,7 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
 
     # The example shows times in UTC, so the instant held is the one typed; the
     # conversion to another zone is pinned in the library's
-    # `AshQuick.LiveView.FilterDatetimeTest`.
+    # `AshQuick.LiveView.LocalDatetimeTest`.
     test "is held as a UTC instant and shown back as it was typed", %{conn: conn} do
       code = unique("TS")
       later = filter_field(code: "#{code}-later", stamped_at: ~U[2026-10-22 11:00:00.000000Z])
@@ -979,7 +979,7 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
     end
 
     # The example shows times in UTC; the day read in another zone is pinned
-    # in the library's `AshQuick.LiveView.FilterDatetimeTest`.
+    # in the library's `AshQuick.LiveView.LocalDatetimeTest`.
     test "keeps the rows stamped on that day, from its first moment to its last", %{
       conn: conn
     } do

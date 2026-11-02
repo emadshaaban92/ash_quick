@@ -17,7 +17,8 @@ defmodule AshQuick.LiveView.Components.FieldValue do
 
   attr :scope, :any,
     default: nil,
-    doc: "the page's request scope, which an attachment's state is read for"
+    doc:
+      "the page's request scope, which an attachment's state is read for, and whose zone a timestamp reads in"
 
   attr :viewer, :string,
     default: nil,
@@ -218,11 +219,12 @@ defmodule AshQuick.LiveView.Components.FieldValue do
   end
 
   # Dates and times read the way `AshQuick.Config` formats them, the same as
-  # an export writes them. Left to `Phoenix.HTML.Safe`, a `Date`, `Time` or
-  # `NaiveDateTime` would print as ISO 8601 instead.
+  # an export writes them, a timestamp in the reader's zone. Left to
+  # `Phoenix.HTML.Safe`, a `Date`, `Time` or `NaiveDateTime` would print as
+  # ISO 8601 instead.
   def field_value(%{value: %DateTime{}} = assigns) do
     ~H"""
-    <span>{AshQuick.Config.format_datetime(@value)}</span>
+    <span>{AshQuick.Config.format_datetime(@value, AshQuick.Scope.timezone(@scope))}</span>
     """
   end
 

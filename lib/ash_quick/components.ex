@@ -20,6 +20,7 @@ defmodule AshQuick.Components do
   * `header/1` — Page header with title and actions
   * `simple_form/1` — Form wrapper with submit button
   * `input/1` — Form input (text, checkbox, select, textarea, etc.)
+  * `zoned_datetime_input/1` — A timestamp input beside the zone it is typed in
 
   ## Error translation
 
@@ -907,6 +908,201 @@ defmodule AshQuick.Components do
       />
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
+    """
+  end
+
+  @doc """
+  A timestamp input that says which zone its time is typed in.
+
+  A `datetime-local` input names no zone, and Ash casts its bare value as UTC.
+  This draws one beside a zone picker, and posts neither: a hook composes the
+  two into the instant they mean, with its offset, in a hidden input under the
+  field's own name, which Ash casts as it casts any timestamp. So it drops into
+  any form, a custom template's or a page of the host's own, and the action
+  needs nothing of it.
+
+  The picker starts at `timezone`, the reader's
+  (`AshQuick.Scope.timezone(@scope)`), and offers the zones
+  `config :ash_quick, timezones:` allows (`AshQuick.Timezones.options/1`).
+  When that is one zone, as it is by default, there is nothing to pick and no
+  picker is drawn: the time is typed in that zone. The hidden input starts at
+  the held value to the microsecond, so a field nobody touches posts back
+  exactly what the record holds.
+
+      <.zoned_datetime_input
+        field={@form[:starts_at]}
+        timezone={AshQuick.Scope.timezone(@scope)}
+        label="Starts at"
+      />
+
+  The time and the zone post as `<field>__local` and `<field>__zone` beside
+  the field, which an Ash form leaves out of the action's input. A QuickView
+  reads them back to keep what was picked across a re-render, and marks the
+  field used when either changes (`AshQuick.LiveView.FieldErrors`).
+  """
+  attr :field, Phoenix.HTML.FormField, required: true
+  attr :timezone, :string, required: true, doc: "the zone the picker starts at"
+  attr :id, :string, default: nil
+  attr :label, :string, default: nil
+  attr :required, :boolean, default: false
+  attr :rest, :global, include: ~w(disabled readonly min max phx-debounce)
+
+  def zoned_datetime_input(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
+    params = field.form.params || %{}
+    name = to_string(field.field)
+    # The zone picked, else the reader's. One the picker never offers, which
+    # only a forged post or a host's slip holds, is not one to show a time in.
+    zone =
+      Enum.find([params[name <> "__zone"], assigns.timezone], &AshQuick.Timezones.allowed?/1) ||
+        AshQuick.Config.timezone()
+
+    # The held instant, which is what posts, as the wall time in the zone.
+    local = AshQuick.LiveView.LocalDatetime.to_local(field.value, zone)
+
+    assigns =
+      assign(assigns,
+        id: assigns.id || field.id,
+        name: field.name,
+        local_name: Phoenix.HTML.Form.input_name(field.form, name <> "__local"),
+        zone_name: Phoenix.HTML.Form.input_name(field.form, name <> "__zone"),
+        local: local,
+        instant: AshQuick.LiveView.LocalDatetime.instant(field.value),
+        zone: zone,
+        zones: AshQuick.Timezones.options(zone),
+        errors: AshQuick.LiveView.FieldErrors.for_select(field)
+      )
+
+    ~H"""
+    <div class="sm:col-span-2" id={"#{@id}-zoned"} phx-hook=".ZonedDatetime">
+      <.label for={@id}>{@label}</.label>
+      <span :if={@required} class="text-error"> &ast;</span>
+      <div class="flex gap-2">
+        <input
+          type="datetime-local"
+          id={@id}
+          name={@local_name}
+          value={@local}
+          step="1"
+          required={@required}
+          data-local
+          class={[
+            "input min-w-0 flex-1 phx-submit-loading:pointer-events-none",
+            @errors != [] && "input-error"
+          ]}
+          {@rest}
+        />
+        <select
+          :if={match?([_, _ | _], @zones)}
+          id={"#{@id}-zone"}
+          name={@zone_name}
+          aria-label={gettext("Time zone")}
+          data-zone
+          class="select w-auto max-w-48 phx-submit-loading:pointer-events-none"
+        >
+          <option :for={{label, zone} <- @zones} value={zone} selected={zone == @zone}>
+            {label}
+          </option>
+        </select>
+      </div>
+      <%!-- One zone allowed is nothing to pick, yet the hook still reads the
+      time in it. --%>
+      <input
+        :if={!match?([_, _ | _], @zones)}
+        type="hidden"
+        name={@zone_name}
+        value={@zone}
+        data-zone
+      />
+      <input type="hidden" name={@name} value={@instant} data-instant />
+      <AshQuick.LiveView.FieldErrors.used_marker field={@field} />
+      <.error :for={msg <- @errors}>{msg}</.error>
+    </div>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".ZonedDatetime">
+      // A wall time and a zone, as the instant they mean. The time is read the
+      // way the server reads one: a wall time the zone skips (a spring-forward
+      // gap) is the first instant after it, and one it repeats is the earlier.
+      // A zone this browser cannot load reads as UTC. The zone is the
+      // picker's, or the hidden input's when one zone is allowed.
+      const formatters = new Map()
+
+      function formatter(zone) {
+        if (!formatters.has(zone)) {
+          formatters.set(zone, new Intl.DateTimeFormat("en-US", {
+            timeZone: zone, hourCycle: "h23", year: "numeric", month: "numeric",
+            day: "numeric", hour: "numeric", minute: "numeric", second: "numeric"
+          }))
+        }
+        return formatters.get(zone)
+      }
+
+      function utc(year, month, day, hour, minute, second) {
+        const date = new Date(0)
+        date.setUTCFullYear(year, month - 1, day)
+        date.setUTCHours(hour, minute, second, 0)
+        return date.getTime()
+      }
+
+      // How far the zone's clock is ahead of UTC at `at`, a whole second.
+      function offset(at, zone) {
+        const p = {}
+        for (const {type, value} of formatter(zone).formatToParts(new Date(at))) p[type] = Number(value)
+        return utc(p.year, p.month, p.day, p.hour, p.minute, p.second) - at
+      }
+
+      const DAY = 864e5
+
+      function toInstant(local, zone) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/.exec(local)
+        // Empty, or what the input will not parse: the action refuses it.
+        if (!m) return local
+        const wall = utc(+m[1], +m[2], +m[3], +m[4], +m[5], +(m[6] || 0))
+        let at
+        try {
+          const offsets = [...new Set([-DAY, 0, DAY].map(d => offset(wall + d, zone)))]
+          const fits = offsets.map(o => wall - o).filter(u => offset(u, zone) === wall - u)
+          at = fits.length ? Math.min(...fits) : gapEnd(wall, offsets, zone)
+        } catch (_unknownZone) {
+          at = wall
+        }
+        return new Date(at).toISOString().replace(".000Z", "Z")
+      }
+
+      // The instant the clock jumps over `wall`: between the wall time read
+      // in the offset after the jump and in the one before it.
+      function gapEnd(wall, offsets, zone) {
+        let lo = wall - Math.max(...offsets)
+        let hi = wall - Math.min(...offsets)
+        const before = offset(lo, zone)
+        while (hi - lo > 1000) {
+          const mid = lo + Math.floor((hi - lo) / 2000) * 1000
+          if (offset(mid, zone) === before) lo = mid
+          else hi = mid
+        }
+        return hi
+      }
+
+      export default {
+        mounted() {
+          this.onEdit = e => {
+            if (e.target.matches?.("[data-local], [data-zone]")) this.compose()
+          }
+          // On the element, so it runs before LiveView's listener on the
+          // window reads the form.
+          this.el.addEventListener("input", this.onEdit)
+          this.el.addEventListener("change", this.onEdit)
+        },
+        // A re-render answering an earlier post can put back the instant that
+        // post held while the time is still being typed; the typing wins.
+        updated() {
+          if (document.activeElement === this.el.querySelector("[data-local]")) this.compose()
+        },
+        compose() {
+          const local = this.el.querySelector("[data-local]").value
+          const zone = this.el.querySelector("[data-zone]").value
+          this.el.querySelector("[data-instant]").value = toInstant(local, zone)
+        }
+      }
+    </script>
     """
   end
 

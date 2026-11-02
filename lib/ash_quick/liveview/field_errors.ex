@@ -71,13 +71,15 @@ defmodule AshQuick.LiveView.FieldErrors do
   @doc """
   Marks the field the change event's `_target` names as used, in the form
   params it posted (`params["form"]` for a QuickView). A multi-select emptied
-  of its last pick fires from its `<name>_empty_selection` input, which marks
-  `<name>`. Anything else, such as a target in no posted form, is left alone.
+  of its last pick fires from its `<name>_empty_selection` input, and
+  `AshQuick.Components.zoned_datetime_input/1` from its `<name>__local` and
+  `<name>__zone` inputs, each of which marks `<name>`. Anything else, such as
+  a target in no posted form, is left alone.
   """
   def mark_used(params, [_form_name | path]) when is_map(params) do
     case Enum.split(path, -1) do
       {parents, [name]} when is_binary(name) and name != "" ->
-        put_used(params, parents, used_key(String.replace_suffix(name, "_empty_selection", "")))
+        put_used(params, parents, used_key(field_of(name)))
 
       _no_field ->
         params
@@ -85,6 +87,14 @@ defmodule AshQuick.LiveView.FieldErrors do
   end
 
   def mark_used(params, _target), do: params
+
+  @input_suffixes ["_empty_selection", "__local", "__zone"]
+
+  defp field_of(name) do
+    Enum.find_value(@input_suffixes, name, fn suffix ->
+      if String.ends_with?(name, suffix), do: String.replace_suffix(name, suffix, "")
+    end)
+  end
 
   defp put_used(params, [], key), do: Map.put(params, key, "true")
 
