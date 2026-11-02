@@ -93,6 +93,9 @@ defmodule AshQuick.MixProject do
 
       # Tooling.
       {:lazy_html, ">= 0.0.0", only: :test},
+      # A full time zone database, so the suite shows timestamps in a reader's
+      # zone; Elixir's own knows UTC alone.
+      {:tz, "~> 0.28", only: :test},
       {:simple_sat, "~> 0.1", only: [:test]},
       {:ex_doc, "~> 0.40", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

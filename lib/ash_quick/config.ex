@@ -20,10 +20,15 @@ defmodule AshQuick.Config do
     `[exempt: [tileless_route: ["/"]]]` keeps a divergence the application has
     decided to live with out of the report. See `AshQuick.Check`.
 
-  * `:timezone` — The timezone the formatters in this module display dates and
-    timestamps in (e.g. `"America/New_York"`). Defaults to `"Etc/UTC"`. A scope
-    can name a timezone field of its own, but only `AshQuick.Scope.timezone/1`
-    reads it — `format_datetime/1` and friends are application-wide.
+  * `:timezone` — The timezone timestamps are shown in when the reader's scope
+    names none (e.g. `"America/New_York"`). Defaults to `"Etc/UTC"`. A scope's
+    own zone is read through `AshQuick.Scope.timezone/1`, which pages pass to
+    `format_datetime/2` and friends.
+
+  * `:timezones` — The zones a reader may read and type timestamps in: a list
+    holding `:timezone`, or `:all`. Defaults to `[:timezone]` alone, so every
+    page shows that zone and a form offers no zone to pick. See
+    `AshQuick.Timezones`.
 
   * `:locale` — The default locale. Defaults to `"en"`. A scope's own locale is
     likewise reached through `AshQuick.Scope.locale/1` alone.
@@ -149,6 +154,38 @@ defmodule AshQuick.Config do
   end
 
   @doc """
+  Returns the zones a reader may read timestamps in: the configured list, or
+  `:all`. Defaults to `[timezone()]`.
+
+  Raises when the list leaves out `timezone/0`, the zone a reader whose own is
+  not allowed falls back to.
+  """
+  def timezones do
+    case get(:timezones) do
+      nil ->
+        [timezone()]
+
+      :all ->
+        :all
+
+      [_ | _] = zones ->
+        if timezone() in zones do
+          zones
+        else
+          raise ArgumentError,
+                "config :ash_quick, timezones: must hold the default zone, " <>
+                  "config :ash_quick, timezone: (#{inspect(timezone())}), " <>
+                  "which a reader whose own zone is not allowed reads timestamps in"
+        end
+
+      other ->
+        raise ArgumentError,
+              "config :ash_quick, timezones: takes a list of zones or :all, got: " <>
+                inspect(other)
+    end
+  end
+
+  @doc """
   Returns the configured default locale. Defaults to `"en"`.
 
   The application-wide fallback for a scope that states no locale of its own —
@@ -243,19 +280,23 @@ defmodule AshQuick.Config do
   @doc """
   Formats a `DateTime` or `NaiveDateTime` for display.
 
-  Shifts a `DateTime` to the configured timezone; a `NaiveDateTime` names no
-  zone, so it is formatted as it is. Formats with `Localize.DateTime` in the
-  reader's locale (`AshQuick.Locale.current/0`) when Localize is loaded;
-  otherwise, or for a locale Localize does not know, falls back to
+  Shifts a `DateTime` to `timezone`, the configured one unless given: a page
+  passes the reader's, `AshQuick.Scope.timezone/1`. A zone the time zone
+  database cannot shift into reads as the configured one. A `NaiveDateTime`
+  names no zone, so it is formatted as it is. Formats with `Localize.DateTime`
+  in the reader's locale (`AshQuick.Locale.current/0`) when Localize is
+  loaded; otherwise, or for a locale Localize does not know, falls back to
   `Calendar.strftime/2`.
   """
-  def format_datetime(nil), do: ""
+  def format_datetime(value, timezone \\ timezone())
 
-  def format_datetime(%DateTime{} = value) do
-    value |> DateTime.shift_zone!(timezone()) |> localize_datetime()
+  def format_datetime(nil, _timezone), do: ""
+
+  def format_datetime(%DateTime{} = value, timezone) do
+    value |> shift(timezone) |> localize_datetime()
   end
 
-  def format_datetime(%NaiveDateTime{} = value), do: localize_datetime(value)
+  def format_datetime(%NaiveDateTime{} = value, _timezone), do: localize_datetime(value)
 
   defp localize_datetime(value) do
     localized(Localize.DateTime, value, [], fn ->
@@ -266,8 +307,9 @@ defmodule AshQuick.Config do
   @doc """
   Formats a `Time`, or the time-of-day part of a `DateTime`, for display.
 
-  Shifts a `DateTime` to the configured timezone; a `Time` names no zone, so
-  it is formatted as it is. Defaults to a short time (`"9:32 PM"`); pass
+  Shifts a `DateTime` to the `:timezone` option, the configured one unless
+  given, as `format_datetime/2` does; a `Time` names no zone, so it is
+  formatted as it is. Defaults to a short time (`"9:32 PM"`); pass
   `format: :medium` for second precision.
   """
   def format_time(value, opts \\ [])
@@ -275,7 +317,7 @@ defmodule AshQuick.Config do
   def format_time(nil, _opts), do: ""
 
   def format_time(%DateTime{} = value, opts) do
-    value |> DateTime.shift_zone!(timezone()) |> localize_time(opts)
+    value |> shift(Keyword.get_lazy(opts, :timezone, &timezone/0)) |> localize_time(opts)
   end
 
   def format_time(%Time{} = value, opts), do: localize_time(value, opts)
@@ -327,13 +369,25 @@ defmodule AshQuick.Config do
   end
 
   @doc """
-  Shifts `DateTime.utc_now()` to the configured timezone.
+  Shifts `DateTime.utc_now()` to `timezone`, the configured one unless given.
 
   Useful for generating timezone-aware file names for exports and prints.
   """
-  def now_in_timezone do
-    DateTime.utc_now() |> DateTime.shift_zone!(timezone())
+  def now_in_timezone(timezone \\ timezone()) do
+    shift(DateTime.utc_now(), timezone)
   end
+
+  # A zone the database cannot load, such as one a browser reported to a host
+  # on Elixir's own database, which knows UTC alone, reads as the configured
+  # one rather than failing the page.
+  defp shift(datetime, timezone) when is_binary(timezone) do
+    case DateTime.shift_zone(datetime, timezone) do
+      {:ok, shifted} -> shifted
+      {:error, _} -> DateTime.shift_zone!(datetime, timezone())
+    end
+  end
+
+  defp shift(datetime, _no_zone), do: DateTime.shift_zone!(datetime, timezone())
 
   @doc """
   Returns the configured `AshQuick.Storage` implementation.

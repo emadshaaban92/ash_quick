@@ -41,11 +41,14 @@ defmodule AshQuick.Scope do
       actor.
     * `:ip` — the address the request came from. Omitted, provenance carries
       `nil` — correct for a scope built off a request, which has no IP.
-    * `:timezone` / `:locale` — the actor's own, read through `timezone/1` and
-      `locale/1`. Omitted, `AshQuick.Config.timezone/0` and
-      `AshQuick.Config.locale/0` apply. Note that the formatters in
-      `AshQuick.Config` render off those application-wide values, not off the
-      scope.
+    * `:timezone` — the reader's zone, whichever the host decides on: one kept
+      on the user, one for the organisation, or the one their browser reports.
+      Read through `timezone/1`; omitted, or not one
+      `config :ash_quick, timezones:` allows, `AshQuick.Config.timezone/0`
+      applies. A QuickView shows timestamps in it, and a form's timestamp
+      input starts at it as the zone a typed time is in.
+    * `:locale` — the actor's own, read through `locale/1`. Omitted,
+      `AshQuick.Config.locale/0` applies.
 
   ## Why a macro over a protocol
 
@@ -294,9 +297,15 @@ defmodule AshQuick.Scope do
   def ip(subject), do: provenance(subject).ip
 
   @doc """
-  The actor's timezone, falling back to `AshQuick.Config.timezone/0`.
+  The reader's timezone: the scope's, when `AshQuick.Timezones.allowed?/1`,
+  and `AshQuick.Config.timezone/0` otherwise. So a scope naming none, a zone
+  the time zone database cannot load (a browser reports whatever it says), or
+  one the configuration does not offer, reads as the configured zone.
   """
-  def timezone(subject), do: provenance(subject).timezone || AshQuick.Config.timezone()
+  def timezone(subject) do
+    zone = provenance(subject).timezone
+    if AshQuick.Timezones.allowed?(zone), do: zone, else: AshQuick.Config.timezone()
+  end
 
   @doc """
   The actor's locale, falling back to `AshQuick.Config.locale/0`.

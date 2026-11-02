@@ -1,10 +1,12 @@
-defmodule AshQuick.LiveView.FilterDatetime do
+defmodule AshQuick.LiveView.LocalDatetime do
   @moduledoc false
 
-  # A `datetime-local` input names no zone. The list shows timestamps in
-  # `AshQuick.Config.timezone/0`, so that is the zone a visitor types one in,
-  # and Ash would cast the bare value as UTC. The filter therefore holds the
-  # UTC instant, with its `Z`, and the input shows it back in the list's zone.
+  # A `datetime-local` input names no zone, and Ash would cast its bare value
+  # as UTC. The list shows timestamps in the reader's zone
+  # (`AshQuick.Scope.timezone/1`), so that is the zone a visitor types one into
+  # a filter in. The filter therefore holds the UTC instant, with its `Z`, and
+  # the input shows it back in the reader's zone. A form's input names its
+  # zone beside it instead; see `AshQuick.Components.zoned_datetime_input/1`.
   #
   # A value from before the filter held instants has no zone either, and was
   # read as UTC, so it is still read that way. Anything that will not parse is
@@ -30,21 +32,37 @@ defmodule AshQuick.LiveView.FilterDatetime do
   def to_utc(value, _timezone, _database), do: value
 
   @doc """
-  What a `datetime-local` input shows for a held value: the instant in
-  `timezone`, to the minute, or to the second when it has seconds.
+  What a `datetime-local` input shows for a held value, a `DateTime` or an
+  ISO 8601 string: the instant in `timezone`, to the minute, or to the second
+  when it has seconds. An instant the zone cannot hold shows in UTC.
   """
   def to_local(value, timezone, database \\ Calendar.get_time_zone_database())
 
+  def to_local(%DateTime{} = datetime, timezone, database) do
+    case DateTime.shift_zone(datetime, timezone, database) do
+      {:ok, local} -> wall_time(local)
+      {:error, _} -> wall_time(datetime)
+    end
+  end
+
   def to_local(value, timezone, database) when is_binary(value) do
-    with {:ok, datetime} <- parse_instant(value),
-         {:ok, local} <- DateTime.shift_zone(datetime, timezone, database) do
-      local |> DateTime.to_naive() |> NaiveDateTime.truncate(:second) |> wall_time()
-    else
-      _ -> value
+    case parse_instant(value) do
+      {:ok, datetime} -> to_local(datetime, timezone, database)
+      _unparseable -> value
     end
   end
 
   def to_local(value, _timezone, _database), do: value
+
+  @doc """
+  What a form posts for a held value: a `DateTime` as ISO 8601, to the
+  microsecond it holds, so a field nobody touched posts back exactly what the
+  record holds. Anything else, such as a value that did not cast, as it is.
+  """
+  def instant(%DateTime{} = datetime), do: DateTime.to_iso8601(datetime)
+  def instant(nil), do: ""
+  def instant(value) when is_binary(value), do: value
+  def instant(value), do: to_string(value)
 
   @doc """
   The day a `date` value names in `timezone`, as the UTC instants it starts
@@ -99,8 +117,13 @@ defmodule AshQuick.LiveView.FilterDatetime do
     end
   end
 
-  defp wall_time(%NaiveDateTime{second: 0} = naive),
-    do: naive |> NaiveDateTime.to_iso8601() |> binary_part(0, 16)
+  defp wall_time(datetime) do
+    case datetime |> DateTime.to_naive() |> NaiveDateTime.truncate(:second) do
+      %NaiveDateTime{second: 0} = naive ->
+        naive |> NaiveDateTime.to_iso8601() |> binary_part(0, 16)
 
-  defp wall_time(naive), do: NaiveDateTime.to_iso8601(naive)
+      naive ->
+        NaiveDateTime.to_iso8601(naive)
+    end
+  end
 end

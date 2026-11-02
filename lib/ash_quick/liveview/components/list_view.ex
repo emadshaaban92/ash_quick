@@ -114,6 +114,7 @@ defmodule AshQuick.LiveView.Components.ListView do
             resource={@resource}
             params={@params}
             path={@path}
+            scope={@scope}
             columns={@fields}
           />
           <.form for={%{}} id="table-form" phx-change="table-form-change">

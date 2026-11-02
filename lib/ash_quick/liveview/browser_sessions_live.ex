@@ -436,7 +436,12 @@ defmodule AshQuick.LiveView.BrowserSessionsLive do
                         </.field>
 
                         <.field label={gettext("Started")} class="min-w-0 sm:flex-1">
-                          <p class="text-sm">{Config.format_datetime(session.started_at)}</p>
+                          <p class="text-sm">
+                            {Config.format_datetime(
+                              session.started_at,
+                              AshQuick.Scope.timezone(@scope)
+                            )}
+                          </p>
                           <p :if={session.ip} class="text-sm text-base-content/60">
                             {gettext("from %{ip}", ip: session.ip)}
                           </p>

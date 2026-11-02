@@ -6,7 +6,7 @@ defprotocol AshQuick.Scope.ToProvenance do
   Ash's protocol answers actor, tenant, context, tracer and `authorize?`. This
   one answers the five things AshQuick needs and Ash has no standard place for:
   the real actor behind an impersonation, whether one is in progress, the
-  request's IP, and the actor's timezone and locale.
+  request's IP, the reader's timezone and the actor's locale.
 
   It is deliberately a second protocol rather than a fork of Ash's. A scope
   implements both, `AshQuick.Scope` reads both, and if Ash ever standardises
@@ -31,7 +31,7 @@ defprotocol AshQuick.Scope.ToProvenance do
   @doc "The IP the request came from. `:error` falls back to `nil`."
   def get_ip(scope)
 
-  @doc "The actor's timezone. `:error` falls back to `AshQuick.Config.timezone/0`."
+  @doc "The reader's timezone. `:error` falls back to `AshQuick.Config.timezone/0`."
   def get_timezone(scope)
 
   @doc "The actor's locale. `:error` falls back to `AshQuick.Config.locale/0`."

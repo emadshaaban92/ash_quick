@@ -1,12 +1,13 @@
-defmodule AshQuick.LiveView.FilterDatetimeTest do
+defmodule AshQuick.LiveView.LocalDatetimeTest do
   @moduledoc """
   A filter's timestamp is typed in the zone the list shows it in and held as
   the UTC instant, so "after 10:00" means 10:00 where the visitor reads the
-  list rather than 10:00 UTC.
+  list rather than 10:00 UTC. A form's input shows a held instant the same
+  way, and posts it back to the microsecond.
   """
   use ExUnit.Case, async: true
 
-  alias AshQuick.LiveView.FilterDatetime
+  alias AshQuick.LiveView.LocalDatetime
 
   # Two zones, enough to pin the conversion without a real time zone database:
   # one three hours ahead all year, and one that springs forward at 02:00 on
@@ -65,87 +66,115 @@ defmodule AshQuick.LiveView.FilterDatetimeTest do
 
   describe "to_utc/3" do
     test "reads a browser's value, which has no seconds, in the list's zone" do
-      assert FilterDatetime.to_utc("2026-10-22T10:00", "Test/Plus3", Zones) ==
+      assert LocalDatetime.to_utc("2026-10-22T10:00", "Test/Plus3", Zones) ==
                "2026-10-22T07:00:00Z"
 
-      assert FilterDatetime.to_utc("2026-10-22T10:00:30", "Test/Plus3", Zones) ==
+      assert LocalDatetime.to_utc("2026-10-22T10:00:30", "Test/Plus3", Zones) ==
                "2026-10-22T07:00:30Z"
     end
 
     test "is the value as typed in UTC" do
-      assert FilterDatetime.to_utc("2026-10-22T10:00", "Etc/UTC") == "2026-10-22T10:00:00Z"
+      assert LocalDatetime.to_utc("2026-10-22T10:00", "Etc/UTC") == "2026-10-22T10:00:00Z"
     end
 
     test "reads a skipped wall time as the first instant after the gap" do
-      assert FilterDatetime.to_utc("2026-03-29T02:30", "Test/Shifting", Zones) ==
+      assert LocalDatetime.to_utc("2026-03-29T02:30", "Test/Shifting", Zones) ==
                "2026-03-29T01:00:00Z"
     end
 
     test "reads a repeated wall time as the earlier instant" do
-      assert FilterDatetime.to_utc("2026-10-25T02:30", "Test/Shifting", Zones) ==
+      assert LocalDatetime.to_utc("2026-10-25T02:30", "Test/Shifting", Zones) ==
                "2026-10-25T00:30:00Z"
     end
 
     test "leaves what will not parse as it was typed, for the read to refuse" do
       for value <- ["", "tomorrow", "2026-13-01T10:00"] do
-        assert FilterDatetime.to_utc(value, "Test/Plus3", Zones) == value
+        assert LocalDatetime.to_utc(value, "Test/Plus3", Zones) == value
       end
 
-      assert FilterDatetime.to_utc(nil, "Test/Plus3", Zones) == nil
+      assert LocalDatetime.to_utc(nil, "Test/Plus3", Zones) == nil
 
-      assert FilterDatetime.to_utc("2026-10-22T10:00", "Test/Nowhere", Zones) ==
+      assert LocalDatetime.to_utc("2026-10-22T10:00", "Test/Nowhere", Zones) ==
                "2026-10-22T10:00"
     end
   end
 
   describe "to_local/3" do
     test "shows a held instant in the list's zone, to the minute" do
-      assert FilterDatetime.to_local("2026-10-22T07:00:00Z", "Test/Plus3", Zones) ==
+      assert LocalDatetime.to_local("2026-10-22T07:00:00Z", "Test/Plus3", Zones) ==
                "2026-10-22T10:00"
     end
 
     test "keeps seconds the instant has" do
-      assert FilterDatetime.to_local("2026-10-22T07:00:30Z", "Test/Plus3", Zones) ==
+      assert LocalDatetime.to_local("2026-10-22T07:00:30Z", "Test/Plus3", Zones) ==
                "2026-10-22T10:00:30"
     end
 
     test "reads a value with no zone, from a URL written before, as UTC" do
-      assert FilterDatetime.to_local("2026-10-22T07:00", "Test/Plus3", Zones) ==
+      assert LocalDatetime.to_local("2026-10-22T07:00", "Test/Plus3", Zones) ==
                "2026-10-22T10:00"
     end
 
     test "is the inverse of to_utc/3" do
       for typed <- ["2026-01-05T09:15", "2026-07-05T23:59", "2026-10-22T10:00:30"] do
-        held = FilterDatetime.to_utc(typed, "Test/Shifting", Zones)
-        assert FilterDatetime.to_local(held, "Test/Shifting", Zones) == typed
+        held = LocalDatetime.to_utc(typed, "Test/Shifting", Zones)
+        assert LocalDatetime.to_local(held, "Test/Shifting", Zones) == typed
       end
     end
 
     test "shows what will not parse as it was typed" do
-      assert FilterDatetime.to_local("tomorrow", "Test/Plus3", Zones) == "tomorrow"
-      assert FilterDatetime.to_local(nil, "Test/Plus3", Zones) == nil
+      assert LocalDatetime.to_local("tomorrow", "Test/Plus3", Zones) == "tomorrow"
+      assert LocalDatetime.to_local(nil, "Test/Plus3", Zones) == nil
+    end
+
+    test "shows a DateTime, to the second it holds" do
+      assert LocalDatetime.to_local(~U[2026-10-22 07:00:00.123456Z], "Test/Plus3", Zones) ==
+               "2026-10-22T10:00"
+
+      assert LocalDatetime.to_local(~U[2026-10-22 07:00:05.5Z], "Test/Plus3", Zones) ==
+               "2026-10-22T10:00:05"
+    end
+
+    test "shows an instant the zone cannot hold in UTC" do
+      assert LocalDatetime.to_local(~U[2026-10-22 07:00:00Z], "Test/Nowhere", Zones) ==
+               "2026-10-22T07:00"
+
+      assert LocalDatetime.to_local("2026-10-22T07:00:00Z", "Test/Nowhere", Zones) ==
+               "2026-10-22T07:00"
+    end
+  end
+
+  describe "instant/1" do
+    test "is a held instant to the microsecond, so an untouched field posts it back" do
+      assert LocalDatetime.instant(~U[2026-10-22 07:00:00.123456Z]) ==
+               "2026-10-22T07:00:00.123456Z"
+    end
+
+    test "is what did not cast as it was posted, and nothing as empty" do
+      assert LocalDatetime.instant("tomorrow") == "tomorrow"
+      assert LocalDatetime.instant(nil) == ""
     end
   end
 
   describe "day_range/3" do
     test "is the day from its first moment in the zone up to the next day's" do
-      assert FilterDatetime.day_range("2026-10-22", "Test/Plus3", Zones) ==
+      assert LocalDatetime.day_range("2026-10-22", "Test/Plus3", Zones) ==
                {:ok, "2026-10-21T21:00:00Z", "2026-10-22T21:00:00Z"}
     end
 
     # The day the clocks spring forward is an hour short, and the day they fall
     # back an hour long.
     test "follows the zone's shifts, so a day need not be 24 hours" do
-      assert FilterDatetime.day_range("2026-03-29", "Test/Shifting", Zones) ==
+      assert LocalDatetime.day_range("2026-03-29", "Test/Shifting", Zones) ==
                {:ok, "2026-03-28T23:00:00Z", "2026-03-29T22:00:00Z"}
 
-      assert FilterDatetime.day_range("2026-10-25", "Test/Shifting", Zones) ==
+      assert LocalDatetime.day_range("2026-10-25", "Test/Shifting", Zones) ==
                {:ok, "2026-10-24T22:00:00Z", "2026-10-25T23:00:00Z"}
     end
 
     test "is no range for a value that is no date" do
-      assert FilterDatetime.day_range("2026-13-45", "Test/Plus3", Zones) == :error
-      assert FilterDatetime.day_range(nil, "Test/Plus3", Zones) == :error
+      assert LocalDatetime.day_range("2026-13-45", "Test/Plus3", Zones) == :error
+      assert LocalDatetime.day_range(nil, "Test/Plus3", Zones) == :error
     end
   end
 end

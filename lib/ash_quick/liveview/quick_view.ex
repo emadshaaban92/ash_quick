@@ -303,6 +303,16 @@ defmodule AshQuick.LiveView.QuickView do
   `@params`, `@scope`, and `@options`. It also has `AshQuick.Components`
   imported (for `<.icon>`, `<.button>`, etc.) and `Phoenix.LiveView.JS` aliased.
 
+  A timestamp a template takes is drawn with
+  `AshQuick.Components.zoned_datetime_input/1`, which shows it in the reader's
+  zone and posts the instant the time typed beside a zone means:
+
+      <.zoned_datetime_input
+        field={f[:starts_at]}
+        timezone={AshQuick.Scope.timezone(@scope)}
+        label="Starts at"
+      />
+
   If you need components from your host application (e.g. `CoreComponents.table/1`),
   import them explicitly in your QuickView module:
 

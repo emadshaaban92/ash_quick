@@ -100,7 +100,8 @@ defmodule ExampleWeb.UserAuth do
       Scope.new(
         actor: socket.assigns.current_user,
         impersonating: Mount.actor(socket),
-        ip: Mount.ip(socket)
+        ip: Mount.ip(socket),
+        timezone: browser_timezone(socket)
       )
 
     locale = put_locale(scope)
@@ -166,6 +167,17 @@ defmodule ExampleWeb.UserAuth do
             raise ExampleWeb.NotAllowedError, path: path, user: scope.current_user
         end
     end)
+  end
+
+  # This application shows times in the zone the reader's browser is in, which
+  # `assets/js/app.js` sends in the connect params. The dead render has none,
+  # and `AshQuick.Scope.timezone/1` reads a zone the time zone database does
+  # not know as `config :ash_quick, timezone:`, so either shows that zone.
+  defp browser_timezone(socket) do
+    case Phoenix.LiveView.get_connect_params(socket) do
+      %{"timezone" => timezone} when is_binary(timezone) -> timezone
+      _no_zone -> nil
+    end
   end
 
   # On this application's backend, which AshQuick translates through, so its

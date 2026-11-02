@@ -736,3 +736,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "%{resource} - %{record}"
 msgstr ""
+
+#: lib/ash_quick/components.ex
+#, elixir-autogen, elixir-format
+msgid "Time zone"
+msgstr ""

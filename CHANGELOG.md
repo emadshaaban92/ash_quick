@@ -4,6 +4,34 @@
 
 ### Features
 
+- **Timestamps show in the reader's timezone, and a form says which zone a
+  time is typed in.** The list, the details page, the live sessions page,
+  exports, print file names and the filter read the zone of the reader's
+  scope (`AshQuick.Scope.timezone/1`), which the host fills: one kept on the
+  user, one for the organisation, or the one the browser reports
+  (`Intl.DateTimeFormat().resolvedOptions().timeZone` in the LiveSocket's
+  params). A zone the time zone database cannot load reads as
+  `config :ash_quick, timezone:`, so a host on Elixir's own database, which
+  knows UTC alone, sees no change until it adds one such as `tz`.
+  `AshQuick.Config.format_datetime/2`, `format_time/2` (`:timezone`) and
+  `now_in_timezone/1` take the zone; without it they use the configured one,
+  as before. A form's timestamp is drawn with the new
+  `AshQuick.Components.zoned_datetime_input/1`: a `datetime-local` input
+  beside a zone picker that starts at the reader's zone. The new
+  `config :ash_quick, timezones:` says which zones a reader may have: left
+  out, `:timezone` alone, so every page shows that zone whatever the scope
+  names and the form draws no picker; a list holding `:timezone`, offered in
+  its order; or `:all`, which offers one zone per clock the world keeps,
+  named by its offset and the places that keep it, plus the reader's own.
+  A scope's zone outside them reads as `:timezone`. A hook composes the time
+  and the zone into the instant they mean, with its offset, in a hidden input
+  under the field's own name, so the action receives an ordinary timestamp
+  and needs nothing of it; a field nobody touches posts back the stored
+  instant to the microsecond. A custom template draws the same component; a
+  bare `datetime-local` input is read as UTC, as before. The input takes
+  `step="1"`, so a value with seconds is no longer refused by the browser,
+  and the filter's does too.
+
 - **A label is translated under its resource's context.** One English label
   had one translation everywhere, which a language whose words agree with
   their noun cannot use: in Arabic a cancelled loan is ملغى and a cancelled
