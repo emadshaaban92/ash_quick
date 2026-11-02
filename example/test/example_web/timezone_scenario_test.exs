@@ -78,6 +78,30 @@ defmodule ExampleWeb.TimezoneScenarioTest do
       assert input_value(view, "stamped_at") == "2026-11-12T22:14:15"
     end
 
+    # A value with seconds fails the browser's default step of a minute as soon
+    # as its seconds are edited, and Save then posts nothing.
+    test "takes a value to the second", %{conn: conn} do
+      record = dated_entry()
+
+      {:ok, view, _html} =
+        conn |> in_timezone("Asia/Tokyo") |> live(~p"/test/dated_entries/#{record.id}/update")
+
+      assert input_attribute(view, "stamped_at", "step") == "1"
+    end
+
+    # The input shows the second, so a save of the value it showed would drop
+    # the microseconds, and Ash would count the field as changed.
+    test "keeps an untouched timestamp to the microsecond", %{conn: conn} do
+      record = dated_entry()
+
+      conn
+      |> in_timezone("Asia/Tokyo")
+      |> visit(~p"/test/dated_entries/#{record.id}/update")
+      |> click_button("Save")
+
+      assert Ash.get!(DatedEntries, record.id).stamped_at == ~U[2026-11-12 13:14:15.123456Z]
+    end
+
     test "saves a timestamp typed in the browser's zone as that instant", %{conn: conn} do
       record = dated_entry()
 
@@ -115,13 +139,15 @@ defmodule ExampleWeb.TimezoneScenarioTest do
     end
   end
 
-  defp input_value(view, name) do
+  defp input_value(view, name), do: input_attribute(view, name, "value")
+
+  defp input_attribute(view, name, attribute) do
     [value] =
       view
       |> render()
       |> LazyHTML.from_fragment()
       |> LazyHTML.query(~s(input[name="form[#{name}]"]))
-      |> LazyHTML.attribute("value")
+      |> LazyHTML.attribute(attribute)
 
     value
   end

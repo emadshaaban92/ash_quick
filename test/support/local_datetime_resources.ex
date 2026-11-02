@@ -45,5 +45,10 @@ defmodule AshQuick.Test.LocalDatetime.Event do
       accept [:title, :starts_at, :on_day, :stamps]
       argument :remind_at, :datetime
     end
+
+    update :update do
+      accept [:starts_at]
+      argument :remind_at, :datetime
+    end
   end
 end

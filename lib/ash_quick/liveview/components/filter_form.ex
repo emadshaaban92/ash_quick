@@ -11,7 +11,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   alias AshQuick.LiveView.LocalDatetime
   alias AshQuick.LiveView.Utils
 
-  @datetime_types [Ash.Type.DateTime, Ash.Type.UtcDatetimeUsec, Ash.Type.UtcDatetime]
+  require LocalDatetime
 
   @supported_types [
     Ash.Type.UUID,
@@ -254,12 +254,13 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   defp filter_value(%{filter: %{operator: "on"}} = assigns), do: date_input(assigns)
 
   defp filter_value(%{field: %{type: t}} = assigns)
-       when t in @datetime_types do
+       when LocalDatetime.is_instant_type(t) do
     ~H"""
     <input
       type="datetime-local"
       name={"value-#{@filter.uuid}"}
       value={LocalDatetime.to_local(@filter.value, AshQuick.Timezone.current())}
+      step="1"
       class={["input input-sm min-w-0 flex-1", @error && "input-error"]}
       {invalid_attrs(@filter, @error)}
     />
@@ -335,7 +336,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   defp typed_list(values, field) when is_list(values),
     do: values |> Enum.map(&typed_list(&1, field)) |> CustomFilter.as_written()
 
-  defp typed_list(value, %{type: type}) when type in @datetime_types,
+  defp typed_list(value, %{type: type}) when LocalDatetime.is_instant_type(type),
     do: LocalDatetime.to_local(value, AshQuick.Timezone.current())
 
   defp typed_list(value, _field), do: CustomFilter.as_written(value)
@@ -578,7 +579,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
 
   defp hold(:list, _field, value), do: List.wrap(value)
 
-  defp hold(:scalar, %{type: type}, value) when type in @datetime_types,
+  defp hold(:scalar, %{type: type}, value) when LocalDatetime.is_instant_type(type),
     do: LocalDatetime.to_utc(value, AshQuick.Timezone.current())
 
   defp hold(_shape, _field, value), do: value
@@ -786,7 +787,8 @@ defmodule AshQuick.LiveView.Components.FilterForm do
        when t in [Ash.Type.Date, Ash.Type.Integer, Ash.Type.Decimal],
        do: @equality ++ @comparisons
 
-  defp type_operators(%{type: t}) when t in @datetime_types, do: @comparisons ++ ["on"]
+  defp type_operators(%{type: t}) when LocalDatetime.is_instant_type(t),
+    do: @comparisons ++ ["on"]
 
   defp type_operators(%{type: Ash.Type.Float}), do: @comparisons
 

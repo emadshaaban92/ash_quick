@@ -86,6 +86,14 @@ defmodule AshQuick.LiveView.LocalDatetimeTest do
                "2026-10-22T10:00:30"
     end
 
+    test "shows an instant the zone cannot hold in UTC" do
+      assert LocalDatetime.to_local(~U[2026-10-22 07:00:00Z], "Test/Nowhere", Zones) ==
+               "2026-10-22T07:00"
+
+      assert LocalDatetime.to_local("2026-10-22T07:00:00Z", "Test/Nowhere", Zones) ==
+               "2026-10-22T07:00"
+    end
+
     test "shows what will not parse as it was typed" do
       assert LocalDatetime.to_local("tomorrow", "Test/Plus3", Zones) == "tomorrow"
       assert LocalDatetime.to_local(nil, "Test/Plus3", Zones) == nil
@@ -154,6 +162,29 @@ defmodule AshQuick.LiveView.LocalDatetimeTest do
                  "1" => %{"at" => "2026-10-22T08:00:00Z", "label" => "b"}
                }
              } = LocalDatetime.form_params_to_utc(params, form, "Test/Plus3", Zones)
+    end
+
+    # The input shows the second, so the record's microseconds would be lost
+    # on every save, and Ash would record the field as changed.
+    test "keeps the record's own instant when posted back as the input showed it" do
+      record =
+        Ash.create!(Event, %{starts_at: ~U[2026-10-22 07:00:05.123456Z]}, action: :create)
+
+      form = AshPhoenix.Form.for_update(record, :update, as: "form")
+
+      assert LocalDatetime.form_params_to_utc(
+               %{"starts_at" => "2026-10-22T10:00:05"},
+               form,
+               "Test/Plus3",
+               Zones
+             ) == %{"starts_at" => "2026-10-22T07:00:05.123456Z"}
+
+      assert LocalDatetime.form_params_to_utc(
+               %{"starts_at" => "2026-10-22T10:00:30", "remind_at" => "2026-10-22T10:00:05"},
+               form,
+               "Test/Plus3",
+               Zones
+             ) == %{"starts_at" => "2026-10-22T07:00:30Z", "remind_at" => "2026-10-22T07:00:05Z"}
     end
 
     test "changes nothing on a second pass" do

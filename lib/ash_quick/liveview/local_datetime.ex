@@ -12,13 +12,15 @@ defmodule AshQuick.LiveView.LocalDatetime do
   # instants. Anything that will not parse is left as it was typed, for the
   # read or the action to refuse.
 
-  # The types a form draws a `datetime-local` input for.
+  # The types a form and a filter draw a `datetime-local` input for, and so
+  # the ones whose posted value is read in the reader's zone. The one list:
+  # an input drawn for a type this misses would be saved as UTC.
   @instant_types [Ash.Type.DateTime, Ash.Type.UtcDatetime, Ash.Type.UtcDatetimeUsec]
 
   @doc """
   Whether a field of `type` is an instant, typed into a `datetime-local` input.
   """
-  def instant_type?(type), do: type in @instant_types
+  defguard is_instant_type(type) when type in @instant_types
 
   @doc """
   `params` posted to an `AshPhoenix.Form`, with every instant typed into the
@@ -29,6 +31,10 @@ defmodule AshQuick.LiveView.LocalDatetime do
   the form already, so every input a person typed into is covered; params for
   one the form does not hold are left alone. Converting is idempotent, so
   params already converted pass through unchanged.
+
+  The input shows a held value to the second, so a value posted back as the
+  input showed the record's own is that stored instant, microseconds and all:
+  an untouched field is no change.
   """
   def form_params_to_utc(
         params,
@@ -50,7 +56,7 @@ defmodule AshQuick.LiveView.LocalDatetime do
 
         names ->
           path = Enum.drop(name_path(sub_form.name), length(root))
-          update_at(acc, path, &inputs_to_utc(&1, names, timezone, database))
+          update_at(acc, path, &inputs_to_utc(&1, sub_form, names, timezone, database))
       end
     end)
   end
@@ -83,14 +89,34 @@ defmodule AshQuick.LiveView.LocalDatetime do
 
   defp update_at(params, _path, _fun), do: params
 
-  defp inputs_to_utc(params, names, timezone, database) do
+  defp inputs_to_utc(params, form, names, timezone, database) do
     Enum.reduce(names, params, fn name, acc ->
       case acc do
-        %{^name => value} -> Map.put(acc, name, to_utc(value, timezone, database))
+        %{^name => value} -> Map.put(acc, name, posted_utc(value, form, name, timezone, database))
         _absent -> acc
       end
     end)
   end
+
+  defp posted_utc(value, form, name, timezone, database) do
+    case stored(form, name) do
+      %DateTime{} = stored ->
+        if value == to_local(stored, timezone, database),
+          do: DateTime.to_iso8601(stored),
+          else: to_utc(value, timezone, database)
+
+      _none ->
+        to_utc(value, timezone, database)
+    end
+  end
+
+  # The record's own value of an attribute, which an argument, and a form
+  # with no record, has none of. `name` is one of the action's inputs, so its
+  # atom exists.
+  defp stored(%AshPhoenix.Form{data: %{} = data}, name),
+    do: Map.get(data, String.to_existing_atom(name))
+
+  defp stored(_form, _name), do: nil
 
   # The accepted attributes and arguments of the form's action a form draws a
   # `datetime-local` input for.
@@ -103,12 +129,12 @@ defmodule AshQuick.LiveView.LocalDatetime do
         accepted =
           for name <- Map.get(action, :accept) || [],
               %{type: type} <- [Ash.Resource.Info.attribute(resource, name)],
-              instant_type?(type),
+              is_instant_type(type),
               do: to_string(name)
 
         arguments =
           for %{type: type, name: name} <- action.arguments,
-              instant_type?(type),
+              is_instant_type(type),
               do: to_string(name)
 
         accepted ++ arguments
@@ -145,7 +171,7 @@ defmodule AshQuick.LiveView.LocalDatetime do
   @doc """
   What a `datetime-local` input shows for a held value, a `DateTime` or an
   ISO 8601 string: the instant in `timezone`, to the minute, or to the second
-  when it has seconds.
+  when it has seconds. An instant the zone cannot hold shows in UTC.
   """
   def to_local(value, timezone, database \\ Calendar.get_time_zone_database())
 
@@ -157,11 +183,9 @@ defmodule AshQuick.LiveView.LocalDatetime do
   end
 
   def to_local(value, timezone, database) when is_binary(value) do
-    with {:ok, datetime} <- parse_instant(value),
-         {:ok, local} <- DateTime.shift_zone(datetime, timezone, database) do
-      wall_time(local)
-    else
-      _ -> value
+    case parse_instant(value) do
+      {:ok, datetime} -> to_local(datetime, timezone, database)
+      _unparseable -> value
     end
   end
 

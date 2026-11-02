@@ -723,7 +723,6 @@ defmodule AshQuick.LiveView.FormUtils do
   defp handle_form_events("validate", %{"form" => params} = event, socket, _options) do
     params =
       params
-      |> LocalDatetime.form_params_to_utc(socket.assigns.form, AshQuick.Timezone.current())
       |> FieldErrors.mark_used(event["_target"])
       |> put_emptied_selections()
       |> carry_uploaded_attachments(socket.assigns.form)
@@ -736,11 +735,7 @@ defmodule AshQuick.LiveView.FormUtils do
   end
 
   defp handle_form_events("save", %{"form" => params}, socket, _options) do
-    params =
-      params
-      |> LocalDatetime.form_params_to_utc(socket.assigns.form, AshQuick.Timezone.current())
-      |> put_emptied_selections()
-      |> carry_uploaded_attachments(socket.assigns.form)
+    params = params |> put_emptied_selections() |> carry_uploaded_attachments(socket.assigns.form)
 
     case validate_issued(socket.assigns.form, params, socket) do
       {params, form} -> submit_form(form, params, socket)
@@ -1074,7 +1069,10 @@ defmodule AshQuick.LiveView.FormUtils do
   #
   # Returns the params to go on with and the form validated with them, or
   # `:refused` when even that holds such a key.
+  # Every post a person makes reaches the form through here, so this is where
+  # a timestamp typed in the reader's zone becomes the instant it means.
   defp validate_issued(form, params, socket) do
+    params = LocalDatetime.form_params_to_utc(params, form, AshQuick.Timezone.current())
     validated = AshPhoenix.Form.validate(form, params)
 
     case unissued_fields(validated, socket) do

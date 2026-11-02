@@ -607,7 +607,6 @@ defmodule AshQuick.LiveView.ListUtils do
       %{form: %AshPhoenix.Form{} = form, action: action} = bulk ->
         params =
           params
-          |> LocalDatetime.form_params_to_utc(form, AshQuick.Timezone.current())
           |> FieldErrors.mark_used(target)
           |> FormUtils.put_emptied_selections()
           |> FormUtils.maybe_put_has_many(form)

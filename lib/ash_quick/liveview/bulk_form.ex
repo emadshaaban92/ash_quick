@@ -16,6 +16,7 @@ defmodule AshQuick.LiveView.BulkForm do
   # required one present. What depends on a record is the run's to refuse.
 
   alias Ash.Error.Changes.Required
+  alias AshQuick.LiveView.LocalDatetime
 
   @doc "A blank form for `action` over `resource`."
   def new(resource, action, scope) do
@@ -30,8 +31,14 @@ defmodule AshQuick.LiveView.BulkForm do
     |> check_inputs(action)
   end
 
-  @doc "`form` with `params` posted to it."
+  @doc """
+  `form` with `params` posted to it, a timestamp typed in the reader's zone
+  read as the instant it means.
+  """
   def validate(form, params, action) do
+    params =
+      LocalDatetime.form_params_to_utc(params, form, AshQuick.Timezone.current())
+
     form |> AshPhoenix.Form.validate(params) |> check_inputs(action)
   end
 
