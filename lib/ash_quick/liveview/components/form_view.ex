@@ -436,19 +436,15 @@ defmodule AshQuick.LiveView.Components.FormView do
     """
   end
 
-  # Shown in the reader's zone, and read back in it when posted
-  # (`LocalDatetime.form_params_to_utc/4`): the input itself names no zone. A
-  # value can hold seconds, which the browser's default step of a minute
-  # refuses once they are edited.
+  # `.input` shows it in the reader's zone, to the second, and the post is
+  # read back in that zone (`LocalDatetime.form_params_to_utc/4`).
   defp field_input(%{field: %{type: field_type}} = assigns)
        when LocalDatetime.is_instant_type(field_type) do
     ~H"""
     <.input
       required={not @field.allow_nil?}
       field={@phx_field}
-      value={LocalDatetime.to_local(@phx_field.value, AshQuick.Timezone.current())}
       type="datetime-local"
-      step="1"
       label={Labels.name(@field.name, @resource)}
       phx-debounce="blur"
     />

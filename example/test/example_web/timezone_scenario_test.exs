@@ -1,17 +1,18 @@
 defmodule ExampleWeb.TimezoneScenarioTest do
   @moduledoc """
-  A timestamp reads in the zone the reader's browser reports, on the list, the
+  A timestamp reads in the zone of the reader's scope, on the list, the
   details page and in an export, and a form reads one typed into it in that
   zone too, so what is saved is the instant the reader meant.
 
-  The browser names its zone in the connect params (`in_timezone/2`), and
-  `ExampleWeb.UserAuth` hands it to the scope. Tokyo keeps no daylight saving,
+  This app fills the scope with the zone the browser reports: it names it in
+  the connect params (`in_timezone/2`), and `ExampleWeb.UserAuth` hands it to
+  the scope. Tokyo keeps no daylight saving,
   so the offset is nine hours all year. `Example.Test.DatedEntries` holds the
   rows; `ExampleWeb.DatedEntriesScenarioTest` reads the same fields in UTC.
   """
   use ExampleWeb.FeatureCase, async: true
 
-  alias Example.Test.{DatedEntries, S3Stub}
+  alias Example.Test.{DatedEntries, S3Stub, StampedTemplates}
 
   @export_timeout to_timeout(second: 5)
 
@@ -136,6 +137,34 @@ defmodule ExampleWeb.TimezoneScenarioTest do
 
       assert [%{stamped_at: ~U[2026-11-13 00:30:00.000000Z]}] =
                DatedEntries |> Ash.Query.filter_input(%{code: code}) |> Ash.read!()
+    end
+  end
+
+  # A custom template draws the input itself, and the page reads what it posts
+  # in the reader's zone, so the template has to show the held value in that
+  # zone too, or an untouched field moves by the offset on every save.
+  describe "a custom form template" do
+    for {action, drawn_by} <- [update: "AshQuick's .input", restamp: "the app's own .input"] do
+      test "drawing it with #{drawn_by} saves an untouched timestamp unmoved", %{conn: conn} do
+        record =
+          Ash.create!(StampedTemplates, %{
+            code: unique("ST"),
+            stamped_at: ~U[2026-11-12 13:14:15.123456Z]
+          })
+
+        {:ok, view, _html} =
+          conn
+          |> in_timezone("Asia/Tokyo")
+          |> live(~p"/test/stamped_templates/#{record.id}/#{unquote(action)}")
+
+        assert input_attribute(view, "stamped_at", "value") == "2026-11-12T22:14:15"
+        assert input_attribute(view, "stamped_at", "step") == "1"
+
+        view |> form("#stamped-form") |> render_submit()
+
+        assert Ash.get!(StampedTemplates, record.id).stamped_at ==
+                 ~U[2026-11-12 13:14:15.123456Z]
+      end
     end
   end
 

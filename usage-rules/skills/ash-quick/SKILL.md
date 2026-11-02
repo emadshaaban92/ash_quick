@@ -962,11 +962,15 @@ covers wiring them up.
 - `AshQuick.Scope` — `use` it on the host's scope struct. Generates
   `Ash.Scope.ToOpts` plus the provenance audit needs: real actor behind an
   impersonation, request IP, timezone, locale. Pages show timestamps in the
-  scope's timezone and read typed ones in it; the scope stage fills it with
-  `AshQuick.LiveView.Mount.timezone(socket)`, the zone the browser reports,
-  and `config :ash_quick, timezone:` applies without one. Any zone but UTC
-  needs a full time zone database
-  (`config :elixir, :time_zone_database, Tz.TimeZoneDatabase`).
+  scope's timezone and read typed ones in it, `config :ash_quick, timezone:`
+  without one. Which zone is the host's choice (one kept on the user, the
+  browser's from its connect params), filled by the scope stage;
+  `AshQuick.LiveView.Timezone` goes after that stage in `on_mount`. Any zone
+  but UTC needs a full time zone database
+  (`config :elixir, :time_zone_database, Tz.TimeZoneDatabase`). A custom form
+  template or widget drawing a timestamp with anything but AshQuick's `.input`
+  passes `value={AshQuick.Timezone.input_value(field.value)}` and
+  `step="1"`, or an untouched field moves by the zone's offset on save.
 - **The audit store** — an Ash resource taking `resource_name`, `resource_id`,
   `action_type`, `action_name`, `attributes`, `arguments`, `context`,
   `actor_id`, `real_actor_id`, `ip`, `tenant`, and optionally a `:map`
@@ -992,8 +996,9 @@ covers wiring them up.
   the `"ash_quick:pdf"` push event. A template that writes nothing
   prints from an update with
   `manual fn changeset, _context -> {:ok, changeset.data} end`.
-- `AshQuick.BrowserSessionPresence` in the supervision tree, and
-  `AshQuick.LiveView.Mount` **first** in the live session's `on_mount`.
+- `AshQuick.BrowserSessionPresence` in the supervision tree,
+  `AshQuick.LiveView.Mount` **first** in the live session's `on_mount`, and
+  `AshQuick.LiveView.Timezone` after the host's scope stage.
 - In `app.js`: `browserSessionParams` / `initBrowserSession` and `initLocale`
   from `deps/ash_quick/assets/js/`, and the library's colocated hooks
   (`import { hooks as ashQuickHooks } from "phoenix-colocated/ash_quick"`,

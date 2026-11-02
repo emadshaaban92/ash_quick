@@ -161,7 +161,8 @@ defmodule AshQuick.LiveView.QuickView do
       inputs get: `@field` (the Ash attribute, argument or relationship),
       `@phx_field` (the `Phoenix.HTML.FormField`), `@form` (the
       `AshPhoenix.Form`), `@uploads`, `@scope` and `@resource`. It is responsible
-      for rendering its own inputs and errors.
+      for rendering its own inputs and errors. A widget drawing a timestamp
+      shows it as a custom template does; see "Custom action templates".
 
       The key is the field's `name` as QuickView sees it — for a `belongs_to`
       that is the relationship (`:brand`), not the source attribute
@@ -310,6 +311,12 @@ defmodule AshQuick.LiveView.QuickView do
         import MyAppWeb.CoreComponents
         use AshQuick.LiveView.QuickView, ...
       end
+
+  A form reads a posted `datetime-local` value in the reader's timezone, so a
+  template shows it in that zone too. AshQuick's `.input` does; any other
+  input passes `value={AshQuick.Timezone.input_value(f[:starts_at].value)}`
+  and `step="1"`, or an untouched timestamp moves by the zone's offset on
+  every save. See `AshQuick.Timezone`.
 
   ## Testing a details page
 

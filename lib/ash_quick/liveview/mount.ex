@@ -3,9 +3,9 @@ defmodule AshQuick.LiveView.Mount do
   What AshQuick establishes on every mount, before the host has a scope.
 
   A host's scope is built out of things only the connection knows: who this tab
-  is standing in for, the address it came from, and the timezone its browser
-  is in. None can be worked out from the session cookie, and all have to exist
-  before `MyApp.Scope.new/1` is called. This is the stage that puts them there.
+  is standing in for, and the address it came from. Neither can be worked out
+  from the session cookie, and both have to exist before `MyApp.Scope.new/1` is
+  called. This is the stage that puts them there.
 
       on_mount: [
         AshQuick.LiveView.Mount,
@@ -19,8 +19,7 @@ defmodule AshQuick.LiveView.Mount do
         MyApp.Scope.new(
           actor: socket.assigns.current_user,
           impersonating: AshQuick.LiveView.Mount.actor(socket),
-          ip: AshQuick.LiveView.Mount.ip(socket),
-          timezone: AshQuick.LiveView.Mount.timezone(socket)
+          ip: AshQuick.LiveView.Mount.ip(socket)
         )
 
   The actor it reads is `socket.assigns.current_user` unless the host says
@@ -96,15 +95,6 @@ defmodule AshQuick.LiveView.Mount do
   refuses the hook outright rather than dropping it quietly — so such a mount
   registers once, without a path, and reports nowhere rather than crashing.
 
-  ## The timezone
-
-  The browser names its zone in the same connect params, as
-  `Intl.DateTimeFormat().resolvedOptions().timeZone` reads it, and `timezone/1`
-  hands it to the host's scope. Pages show timestamps in it, and read the ones
-  typed into a form or a filter in it; see `AshQuick.Timezone`. A zone the time
-  zone database does not know is dropped here, so a host with no database
-  beyond Elixir's own keeps showing `config :ash_quick, timezone:`.
-
   ## The IP
 
   `connect_ip/1` is here because it shares the scope's deadline and comes off
@@ -154,13 +144,12 @@ defmodule AshQuick.LiveView.Mount do
 
   @session_assign :ash_quick_browser_session
   @ip_assign :ash_quick_connect_ip
-  @timezone_assign :ash_quick_browser_timezone
 
   @required_connect_info [:peer_data, :x_headers]
 
   @doc """
-  Resolves the tab's browser session, the connection's address and the
-  browser's timezone, and assigns all three.
+  Resolves the tab's browser session and the connection's address, and assigns
+  both.
 
   Assigns them whether or not there was a session to find: a mount with nobody
   signed in still came from somewhere, and `ip/1` has to answer for it.
@@ -176,7 +165,6 @@ defmodule AshQuick.LiveView.Mount do
      socket
      |> Component.assign(@session_assign, session)
      |> Component.assign(@ip_assign, ip)
-     |> Component.assign(@timezone_assign, connect_timezone(socket))
      |> attach_hooks(session)}
   end
 
@@ -208,30 +196,6 @@ defmodule AshQuick.LiveView.Mount do
   `:peer_data`.
   """
   def ip(socket), do: socket.assigns[@ip_assign]
-
-  @doc """
-  The timezone the browser reported on connect, such as `"Asia/Tokyo"`, or
-  `nil`.
-
-  What the host passes to its scope as the reader's timezone; see
-  `AshQuick.Timezone`. `nil` on the disconnected render, which has no connect
-  params, and for a zone the time zone database does not know, which is every
-  zone but UTC until the host configures one.
-  """
-  def timezone(socket), do: socket.assigns[@timezone_assign]
-
-  # The browser's claim about where it is. Shown, never trusted: it decides
-  # nothing but how a timestamp is written, so a zone it made up costs only
-  # itself. One the database cannot load is no zone at all.
-  defp connect_timezone(socket) do
-    case LiveView.get_connect_params(socket) do
-      %{"timezone" => timezone} when is_binary(timezone) ->
-        if AshQuick.Timezone.known?(timezone), do: timezone
-
-      _no_zone ->
-        nil
-    end
-  end
 
   @doc """
   The address `socket` connected from, read from wherever `:client_ip` says.

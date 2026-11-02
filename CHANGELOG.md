@@ -4,18 +4,21 @@
 
 ### Features
 
-- **Timestamps show in the reader's timezone.** The browser reports its zone
-  on connect (`browserSessionParams` reads it from `Intl`), and
-  `AshQuick.LiveView.Mount.timezone/1` hands it to the host's scope stage for
-  the scope's `:timezone` field. A QuickView puts the scope's zone
-  (`AshQuick.Scope.timezone/1`) on its process when it mounts, and the list,
-  the details page, the live sessions page, exports, print file names, filters
-  and forms all read `AshQuick.Timezone.current/0`, which falls back to
-  `config :ash_quick, timezone:`. A zone the time zone database does not know
-  is ignored, so a host on Elixir's own database, which knows UTC alone, keeps
-  its configured zone until it adds one such as `tz`. A host page that formats
-  with `AshQuick.Config` reads the same zone once it calls
-  `AshQuick.Timezone.put/1`.
+- **Timestamps show in the reader's timezone.** The list, the details page,
+  the live sessions page, exports, print file names, filters and forms show a
+  timestamp in `AshQuick.Timezone.current/0`, the zone of the reader's scope
+  (`AshQuick.Scope.timezone/1`), and `config :ash_quick, timezone:` without
+  one. Which zone the scope names is the host's: one kept on the user, one
+  for the organisation, or the one the browser reports in the connect params.
+  The new `AshQuick.LiveView.Timezone` stage, placed after the host's scope
+  stage in `on_mount`, puts the zone on every LiveView of the session, so a
+  host page formatting with `AshQuick.Config` reads it too; a QuickView puts
+  it on mount as well. A zone the time zone database does not know is
+  ignored, so a host on Elixir's own database, which knows UTC alone, keeps
+  its configured zone until it adds one such as `tz`. AshQuick's `.input`
+  shows a `datetime-local` field in the reader's zone with `step="1"`, and a
+  custom form template or widget drawing one any other way passes its value
+  through `AshQuick.Timezone.input_value/1`.
 
 - **A label is translated under its resource's context.** One English label
   had one translation everywhere, which a language whose words agree with
@@ -447,7 +450,8 @@
   showed them in the configured zone: a time typed as read off the list was
   saved hours off. A form now shows a held timestamp in the reader's zone and
   reads a typed one in it, in a sub-form and a bulk action's form too, as the
-  filter already did.
+  filter already did. The input takes seconds, and an untouched field keeps
+  its stored instant to the microsecond, so a save records no change to it.
 
 - **A filter chip reads an atom's value by its declared label.** A chip on
   an `:atom` field with `one_of` read the humanized value ("Status =

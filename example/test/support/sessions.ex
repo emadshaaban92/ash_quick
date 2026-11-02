@@ -58,8 +58,8 @@ defmodule ExampleWeb.Sessions do
   end
 
   @doc """
-  Has `conn`'s browser report `zone` as its own, the way
-  `browser_session.js` reads it from `Intl` on every connect.
+  Has `conn`'s browser report `zone` as its own, the way this app's
+  `assets/js/app.js` reads it from `Intl` on every connect.
   """
   def in_timezone(conn, zone), do: merge_connect_params(conn, %{"timezone" => zone})
 

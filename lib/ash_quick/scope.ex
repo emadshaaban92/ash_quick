@@ -41,11 +41,11 @@ defmodule AshQuick.Scope do
       actor.
     * `:ip` — the address the request came from. Omitted, provenance carries
       `nil` — correct for a scope built off a request, which has no IP.
-    * `:timezone` — the reader's zone: the one their browser reports
-      (`AshQuick.LiveView.Mount.timezone/1`), or one the actor keeps. Read
-      through `timezone/1`; omitted, `AshQuick.Config.timezone/0` applies. A
-      QuickView shows timestamps in it and reads typed ones in it; see
-      `AshQuick.Timezone`.
+    * `:timezone` — the reader's zone, whichever the host decides on: one kept
+      on the user, one for the organisation, or the one their browser reports.
+      Read through `timezone/1`; omitted, `AshQuick.Config.timezone/0`
+      applies. A QuickView shows timestamps in it and reads typed ones in it;
+      see `AshQuick.Timezone`.
     * `:locale` — the actor's own, read through `locale/1`. Omitted,
       `AshQuick.Config.locale/0` applies. The host puts it on its Gettext
       backend, which the formatters in `AshQuick.Config` read.

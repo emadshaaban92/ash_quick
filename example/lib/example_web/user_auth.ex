@@ -93,15 +93,15 @@ defmodule ExampleWeb.UserAuth do
   end
 
   # Runs after `AshQuick.LiveView.Mount`, which turned this tab's token into an
-  # actor and read the address it connected from and the zone its browser is
-  # in. All are read back here rather than worked out again.
+  # actor and read the address it connected from. Both are read back here rather
+  # than worked out again.
   def on_mount(:assign_scope, _params, _session, socket) do
     scope =
       Scope.new(
         actor: socket.assigns.current_user,
         impersonating: Mount.actor(socket),
         ip: Mount.ip(socket),
-        timezone: Mount.timezone(socket)
+        timezone: browser_timezone(socket)
       )
 
     locale = put_locale(scope)
@@ -167,6 +167,18 @@ defmodule ExampleWeb.UserAuth do
             raise ExampleWeb.NotAllowedError, path: path, user: scope.current_user
         end
     end)
+  end
+
+  # This application shows times in the zone the reader's browser is in, which
+  # `assets/js/app.js` sends in the connect params. Which zone to show is the
+  # host's choice; AshQuick reads the scope's. The dead render has no connect
+  # params, and a zone the time zone database does not know is ignored when
+  # it is put on the process, so either reads as `config :ash_quick, timezone:`.
+  defp browser_timezone(socket) do
+    case Phoenix.LiveView.get_connect_params(socket) do
+      %{"timezone" => timezone} when is_binary(timezone) -> timezone
+      _no_zone -> nil
+    end
   end
 
   # On this application's backend, which AshQuick translates through, so its

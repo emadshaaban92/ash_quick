@@ -4,22 +4,14 @@ defmodule AshQuick.Timezone do
 
   Lists, details pages, filters, forms and exports show a timestamp in
   `current/0`, and read one typed into a form or a filter in it too. It is the
-  reader's scope's zone (`AshQuick.Scope.timezone/1`), which a QuickView puts
-  on its process when it mounts, and `AshQuick.Config.timezone/0` before then.
+  reader's scope's zone (`AshQuick.Scope.timezone/1`), put on the LiveView's
+  process by `AshQuick.LiveView.Timezone` and by a QuickView when it mounts,
+  and `AshQuick.Config.timezone/0` without one.
 
-  A browser reports its own zone when the socket connects, and
-  `AshQuick.LiveView.Mount.timezone/1` reads it back for the host's scope:
-
-      scope =
-        MyApp.Scope.new(
-          actor: socket.assigns.current_user,
-          ip: AshQuick.LiveView.Mount.ip(socket),
-          timezone: AshQuick.LiveView.Mount.timezone(socket)
-        )
-
-  with the scope naming the field (`use AshQuick.Scope, timezone: :timezone`).
-  A host that keeps a zone on the user prefers it there:
-  `user.timezone || AshQuick.LiveView.Mount.timezone(socket)`.
+  Which zone the scope names is the host's decision: a zone kept on the user,
+  one for the whole organisation, or the one the reader's browser reports. The
+  scope names the field (`use AshQuick.Scope, timezone: :timezone`) and the
+  host's scope stage fills it.
 
   A zone is only ever one the time zone database knows (`known?/1`). Elixir
   ships a database that knows UTC alone, so a host showing any other zone
@@ -27,9 +19,25 @@ defmodule AshQuick.Timezone do
 
       config :elixir, :time_zone_database, Tz.TimeZoneDatabase
 
-  A page of the host's own that formats with `AshQuick.Config` reads the same
-  zone once it puts it: `AshQuick.Timezone.put(AshQuick.Scope.timezone(scope))`.
+  ## Custom form templates and widgets
+
+  A `datetime-local` input names no zone, and a QuickView reads what it posts
+  in `current/0`. So it has to show the held value in that zone too, or an
+  untouched field moves by the zone's offset on every save.
+  `AshQuick.Components.input/1` does that for a `type="datetime-local"` field.
+  A template or form widget drawing the input any other way, such as with the
+  host's own `core_components`, passes the value through `input_value/1`, and
+  `step="1"` so a value with seconds stays valid:
+
+      <.input
+        field={@form[:starts_at]}
+        type="datetime-local"
+        value={AshQuick.Timezone.input_value(@form[:starts_at].value)}
+        step="1"
+      />
   """
+
+  alias AshQuick.LiveView.LocalDatetime
 
   @key {__MODULE__, :current}
 
@@ -66,4 +74,13 @@ defmodule AshQuick.Timezone do
   end
 
   def known?(_timezone, _database), do: false
+
+  @doc """
+  What a `datetime-local` input shows for a form field's value: a `DateTime`,
+  or an ISO 8601 string naming its offset, as the wall time in `current/0`, to
+  the minute or to the second when it has seconds (`"2026-10-22T10:00"`). A
+  value with no zone is read as UTC; one that will not parse, or `nil`, is
+  returned as it is.
+  """
+  def input_value(value), do: LocalDatetime.to_local(value, current())
 end

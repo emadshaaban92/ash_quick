@@ -34,6 +34,7 @@ defmodule ExampleWeb.Router do
         {ExampleWeb.UserAuth, :assign_current_user},
         AshQuick.LiveView.Mount,
         {ExampleWeb.UserAuth, :assign_scope},
+        AshQuick.LiveView.Timezone,
         {ExampleWeb.UserAuth, :require_no_user}
       ] do
       live "/login", LoginLive, :index
@@ -47,13 +48,15 @@ defmodule ExampleWeb.Router do
     pipe_through [:browser, :user_required]
 
     # AshQuick's mount goes first: it resolves the tab's impersonation and reads
-    # the connection's address, and `:assign_scope` is what consumes both.
+    # the connection's address, and `:assign_scope` is what consumes both. The
+    # timezone stage goes after it, and puts the scope's zone on every page.
     live_session :authenticated,
       layout: {ExampleWeb.Layouts, :app},
       on_mount: [
         {ExampleWeb.UserAuth, :assign_current_user},
         AshQuick.LiveView.Mount,
         {ExampleWeb.UserAuth, :assign_scope},
+        AshQuick.LiveView.Timezone,
         {ExampleWeb.UserAuth, :require_user}
       ] do
       live "/", HomeLive, :index
@@ -95,7 +98,8 @@ defmodule ExampleWeb.Router do
         on_mount: [
           {ExampleWeb.UserAuth, :assign_current_user},
           AshQuick.LiveView.Mount,
-          {ExampleWeb.UserAuth, :assign_scope}
+          {ExampleWeb.UserAuth, :assign_scope},
+          AshQuick.LiveView.Timezone
         ] do
         quick_view "/bulk_guarded", Example.Test.BulkGuardedLive.Quick
         quick_view "/bulk_named", Example.Test.BulkNamedLive.Quick
@@ -117,6 +121,7 @@ defmodule ExampleWeb.Router do
         quick_view "/required_entries", Example.Test.RequiredEntriesLive.Quick
         quick_view "/required_picks", Example.Test.RequiredPicksLive.Quick
         quick_view "/secrets", Example.Test.SecretsLive.Quick
+        quick_view "/stamped_templates", Example.Test.StampedTemplatesLive.Quick
         quick_view "/second_lists", Example.Test.SecondListsLive.Quick
         quick_view "/shelved_crates", Example.Test.ShelvedCratesLive.Quick
         quick_view "/small_pages", Example.Test.SmallPagesLive.Quick

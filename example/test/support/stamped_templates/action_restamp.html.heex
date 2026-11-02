@@ -1,0 +1,9 @@
+<.simple_form :let={f} for={@form} id="stamped-form" phx-change="validate" phx-submit="save">
+  <ExampleWeb.CoreComponents.input
+    field={f[:stamped_at]}
+    type="datetime-local"
+    label="Stamped at"
+    value={AshQuick.Timezone.input_value(f[:stamped_at].value)}
+    step="1"
+  />
+</.simple_form>

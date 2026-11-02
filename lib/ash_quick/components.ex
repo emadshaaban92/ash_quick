@@ -775,6 +775,10 @@ defmodule AshQuick.Components do
   which is used to retrieve the input name, id, and values.
   Otherwise all attributes may be passed explicitly.
 
+  A `type="datetime-local"` field shows its value in the reader's timezone,
+  which is the zone a QuickView reads the posted value in, and takes
+  `step="1"` unless given another; see `AshQuick.Timezone`.
+
   ## Types
 
   This function accepts all HTML input types, considering that:
@@ -817,7 +821,8 @@ defmodule AshQuick.Components do
     |> assign(field: nil, id: assigns.id || field.id)
     |> assign(:errors, AshQuick.LiveView.FieldErrors.for_field(field))
     |> assign_new(:name, fn -> if assigns.multiple, do: field.name <> "[]", else: field.name end)
-    |> assign_new(:value, fn -> field.value end)
+    |> assign_new(:value, fn -> field_value(assigns.type, field.value) end)
+    |> local_step()
     |> input()
   end
 
@@ -911,6 +916,17 @@ defmodule AshQuick.Components do
   end
 
   ## Error translation
+
+  # A QuickView reads a posted `datetime-local` value in the reader's zone, so
+  # the input shows the held one in it too (`AshQuick.Timezone`), to the
+  # second: the step allows the seconds the value may hold.
+  defp field_value("datetime-local", value), do: AshQuick.Timezone.input_value(value)
+  defp field_value(_type, value), do: value
+
+  defp local_step(%{type: "datetime-local"} = assigns),
+    do: update(assigns, :rest, &Map.put_new(&1, :step, "1"))
+
+  defp local_step(assigns), do: assigns
 
   @doc """
   Translates an error message tuple into a human-readable string.

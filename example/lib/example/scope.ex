@@ -19,10 +19,11 @@ defmodule Example.Scope do
   `AshQuick.Config.locale/0` behind it. `ExampleWeb.UserAuth` is what puts it on
   the process and tells the browser about it; nothing in a resource has to know.
 
-  `:timezone` is the one the reader's browser reports
-  (`AshQuick.LiveView.Mount.timezone/1`), read back by
-  `AshQuick.Scope.timezone/1` with `AshQuick.Config.timezone/0` behind it. A
-  QuickView shows timestamps in it and reads typed ones in it.
+  `:timezone` is the one the reader's browser reports, which
+  `ExampleWeb.UserAuth` reads off the connect params, read back by
+  `AshQuick.Scope.timezone/1` with `AshQuick.Config.timezone/0` behind it.
+  Pages show timestamps in it and forms read typed ones in it. Another app
+  might keep a zone on the user, or one for the whole organisation.
   """
 
   use AshQuick.Scope,

@@ -2,7 +2,7 @@
 // user record — is what makes that true: every tab gets its own, and closing one
 // ends it.
 //
-// The values here have to be in the connect params before the socket connects,
+// Both values here have to be in the connect params before the socket connects,
 // which is why this is a module the host spreads into `params` rather than a
 // hook: a hook binds to a DOM element inside an already-connected socket.
 const TAB_KEY = "ash_quick:tab"
@@ -26,25 +26,10 @@ function tab() {
   return tab
 }
 
-// The zone the browser is in, such as "Asia/Tokyo", which pages show
-// timestamps in and read typed ones in. Undefined when the browser cannot say,
-// and then the server's configured zone applies.
-function timezone() {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone
-  } catch (_error) {
-    return undefined
-  }
-}
-
 // Spread into the LiveSocket's `params`, which must stay a function so each
-// (re)connect re-reads them.
+// (re)connect re-reads both.
 export function browserSessionParams() {
-  return {
-    tab: tab(),
-    impersonation: sessionStorage.getItem(IMPERSONATION_KEY),
-    timezone: timezone()
-  }
+  return { tab: tab(), impersonation: sessionStorage.getItem(IMPERSONATION_KEY) }
 }
 
 // The DOM events this module owns. Dispatch them from your own menu markup:

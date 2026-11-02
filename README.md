@@ -342,7 +342,7 @@ initPrinting()
 
 `browserSessionParams` is the id a tab mints for itself and replays on every
 connect — the unit `AshQuick.BrowserSessionPresence` registers, and the one its
-`revoke/1` cuts an impersonation off at — and the timezone the browser is in. `initLocale` applies the `lang` and
+`revoke/1` cuts an impersonation off at. `initLocale` applies the `lang` and
 `dir` the connected mount pushes, which the dead render could not have known.
 `initPrinting` receives the PDF an action carrying `AshQuick.Print` sends over
 the socket, and saves it or opens the print dialog on it.
@@ -396,8 +396,9 @@ children = [
 ```
 
 `AshQuick.LiveView.Mount` goes **first** in the live session's `on_mount`. It
-resolves the tab's impersonation and reads the connection's address and the
-browser's timezone, and the host's scope stage is what consumes them:
+resolves the tab's impersonation and reads the connection's address, and the
+host's scope stage is what consumes both. `AshQuick.LiveView.Timezone` goes
+after the scope stage (see below):
 
 ```elixir
 live_session :authenticated,
@@ -405,6 +406,7 @@ live_session :authenticated,
   on_mount: [
     AshQuick.LiveView.Mount,
     {MyAppWeb.UserAuth, :assign_scope},
+    AshQuick.LiveView.Timezone,
     {MyAppWeb.UserAuth, :require_user}
   ] do
   quick_view "/products", MyAppWeb.ProductLive.Quick
@@ -417,27 +419,30 @@ QuickView sets no layout of its own; the `live_session` does.
 
 A QuickView shows a timestamp in its reader's timezone, on the list, the
 details page and in an export, and reads one typed into a form or a filter in
-it too. That zone is the scope's (`AshQuick.Scope.timezone/1`), and the
-browser reports its own on connect for the scope stage to hand over:
+it too. That zone is the scope's (`AshQuick.Scope.timezone/1`, with the scope
+naming the field: `use AshQuick.Scope, timezone: :timezone`), and
+`config :ash_quick, timezone:` without one. `AshQuick.LiveView.Timezone`, after
+the scope stage, puts it on every LiveView of the session, so a page of your
+own that formats with `AshQuick.Config` reads the same zone.
 
-```elixir
-def on_mount(:assign_scope, _params, _session, socket) do
-  scope =
-    MyApp.Scope.new(
-      actor: socket.assigns.current_user,
-      impersonating: AshQuick.LiveView.Mount.actor(socket),
-      ip: AshQuick.LiveView.Mount.ip(socket),
-      timezone: AshQuick.LiveView.Mount.timezone(socket)
-    )
+Which zone that is, is yours to decide, and the scope stage fills it: one kept
+on the user, one for the whole organisation, or the one the browser reports,
+which the LiveSocket can send beside the rest of its params:
 
-  {:cont, Phoenix.Component.assign(socket, :scope, scope)}
-end
+```javascript
+params: () => ({
+  _csrf_token: csrfToken,
+  ...browserSessionParams(),
+  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+})
 ```
 
-with the scope naming the field (`use AshQuick.Scope, timezone: :timezone`).
-A host that keeps a zone on the user can prefer it:
-`user.timezone || AshQuick.LiveView.Mount.timezone(socket)`. A scope with no
-zone reads `config :ash_quick, timezone:`.
+```elixir
+timezone: Phoenix.LiveView.get_connect_params(socket)["timezone"]
+```
+
+A zone kept on the user is there on the first render as well; the browser's
+arrives only once the socket connects.
 
 Elixir's own time zone database knows UTC alone, and a zone the database does
 not know is ignored, so showing any other takes a full one, such as `tz`'s:
@@ -450,7 +455,11 @@ not know is ignored, so showing any other takes a full one, such as `tz`'s:
 config :elixir, :time_zone_database, Tz.TimeZoneDatabase
 ```
 
-See `AshQuick.Timezone`.
+A custom form template or form widget drawing a timestamp's input with
+anything but AshQuick's own `.input` shows the value through
+`AshQuick.Timezone.input_value/1`, with `step="1"`: the post is read in the
+reader's zone, so the input has to show it in that zone too. See
+`AshQuick.Timezone`.
 
 ## The extension on a resource
 

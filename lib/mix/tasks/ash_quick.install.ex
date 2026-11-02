@@ -693,14 +693,8 @@ if Code.ensure_loaded?(Igniter) do
       PDF over the socket.
 
       Then put `AshQuick.LiveView.Mount` first in the `on_mount` of the
-      live_session serving the QuickViews, and route one with
-      `mix ash_quick.gen.quick_view`.
-
-      `browserSessionParams` also carries the browser's timezone. Pass
-      `AshQuick.LiveView.Mount.timezone(socket)` to the scope's `:timezone`
-      field and pages show timestamps in it; any zone but UTC needs a time zone
-      database, such as `tz` with
-      `config :elixir, :time_zone_database, Tz.TimeZoneDatabase`.
+      live_session serving the QuickViews and `AshQuick.LiveView.Timezone`
+      after your scope stage, and route one with `mix ash_quick.gen.quick_view`.
       """
     end
   end

@@ -62,6 +62,7 @@ config :ash_quick,
         "/test/secrets",
         "/test/shelved_crates",
         "/test/small_pages",
+        "/test/stamped_templates",
         "/test/sorted_rows",
         "/test/sorted_rows_named",
         "/test/worded_policy"

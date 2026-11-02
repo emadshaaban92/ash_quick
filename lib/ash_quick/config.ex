@@ -22,8 +22,8 @@ defmodule AshQuick.Config do
 
   * `:timezone` — The timezone timestamps are shown in when the reader's scope
     names none (e.g. `"America/New_York"`). Defaults to `"Etc/UTC"`. A scope's
-    own zone, such as the one the browser reports, is put on the reader's
-    process by a QuickView and read by `format_datetime/1` and friends through
+    own zone is put on the reader's process by `AshQuick.LiveView.Timezone`
+    and by a QuickView, and read by `format_datetime/1` and friends through
     `AshQuick.Timezone.current/0`.
 
   * `:locale` — The default locale. Defaults to `"en"`. A scope's own locale is
