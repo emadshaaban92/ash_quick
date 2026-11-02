@@ -17,7 +17,7 @@ defmodule AshQuick.Scope.Provenance do
     * `:impersonating?` — whether the two differ.
     * `:ip` — where the request came from, or `nil` off a request (a job, a
       console).
-    * `:timezone` / `:locale` — the actor's own, or `nil` to mean the host
+    * `:timezone` / `:locale` — the reader's, or `nil` to mean the host
       states none and the application-wide `AshQuick.Config` values apply.
       Read them through `AshQuick.Scope.timezone/1` and
       `AshQuick.Scope.locale/1`, which apply that fallback.

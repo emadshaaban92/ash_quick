@@ -861,6 +861,10 @@ defmodule AshQuick.LiveView.QuickView do
   end
 
   def do_mount(socket, _params, _session, %Options{} = options) do
+    # Every timestamp this process draws, and every one typed into its forms
+    # and filters, is in the reader's zone.
+    AshQuick.Timezone.put(AshQuick.Scope.timezone(socket.assigns[:scope]))
+
     socket
     # The layout renders the nav, so the option has to reach it from here — a
     # view is what knows it wants the width, and the layout is what wraps it.

@@ -4,6 +4,19 @@
 
 ### Features
 
+- **Timestamps show in the reader's timezone.** The browser reports its zone
+  on connect (`browserSessionParams` reads it from `Intl`), and
+  `AshQuick.LiveView.Mount.timezone/1` hands it to the host's scope stage for
+  the scope's `:timezone` field. A QuickView puts the scope's zone
+  (`AshQuick.Scope.timezone/1`) on its process when it mounts, and the list,
+  the details page, the live sessions page, exports, print file names, filters
+  and forms all read `AshQuick.Timezone.current/0`, which falls back to
+  `config :ash_quick, timezone:`. A zone the time zone database does not know
+  is ignored, so a host on Elixir's own database, which knows UTC alone, keeps
+  its configured zone until it adds one such as `tz`. A host page that formats
+  with `AshQuick.Config` reads the same zone once it calls
+  `AshQuick.Timezone.put/1`.
+
 - **A label is translated under its resource's context.** One English label
   had one translation everywhere, which a language whose words agree with
   their noun cannot use: in Arabic a cancelled loan is ملغى and a cancelled
@@ -427,6 +440,14 @@
   `@scope` in their assigns.
 
 ### Bug fixes
+
+- **A timestamp typed into a form is read in the zone the page shows it in.**
+  A `datetime-local` input names no zone, so a form showed a timestamp in
+  UTC and Ash read a typed one as UTC, while the list and the details page
+  showed them in the configured zone: a time typed as read off the list was
+  saved hours off. A form now shows a held timestamp in the reader's zone and
+  reads a typed one in it, in a sub-form and a bulk action's form too, as the
+  filter already did.
 
 - **A filter chip reads an atom's value by its declared label.** A chip on
   an `:atom` field with `one_of` read the humanized value ("Status =

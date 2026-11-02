@@ -71,6 +71,7 @@ defmodule AshQuick.LiveView.BrowserSessionsLive do
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket), do: BrowserSessionPresence.subscribe()
+    AshQuick.Timezone.put(AshQuick.Scope.timezone(socket.assigns[:scope]))
 
     {:ok,
      socket

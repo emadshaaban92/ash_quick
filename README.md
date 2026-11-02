@@ -342,7 +342,7 @@ initPrinting()
 
 `browserSessionParams` is the id a tab mints for itself and replays on every
 connect — the unit `AshQuick.BrowserSessionPresence` registers, and the one its
-`revoke/1` cuts an impersonation off at. `initLocale` applies the `lang` and
+`revoke/1` cuts an impersonation off at — and the timezone the browser is in. `initLocale` applies the `lang` and
 `dir` the connected mount pushes, which the dead render could not have known.
 `initPrinting` receives the PDF an action carrying `AshQuick.Print` sends over
 the socket, and saves it or opens the print dialog on it.
@@ -396,8 +396,8 @@ children = [
 ```
 
 `AshQuick.LiveView.Mount` goes **first** in the live session's `on_mount`. It
-resolves the tab's impersonation and reads the connection's address, and the
-host's scope stage is what consumes both:
+resolves the tab's impersonation and reads the connection's address and the
+browser's timezone, and the host's scope stage is what consumes them:
 
 ```elixir
 live_session :authenticated,
@@ -412,6 +412,45 @@ end
 ```
 
 QuickView sets no layout of its own; the `live_session` does.
+
+### Timestamps in the reader's timezone
+
+A QuickView shows a timestamp in its reader's timezone, on the list, the
+details page and in an export, and reads one typed into a form or a filter in
+it too. That zone is the scope's (`AshQuick.Scope.timezone/1`), and the
+browser reports its own on connect for the scope stage to hand over:
+
+```elixir
+def on_mount(:assign_scope, _params, _session, socket) do
+  scope =
+    MyApp.Scope.new(
+      actor: socket.assigns.current_user,
+      impersonating: AshQuick.LiveView.Mount.actor(socket),
+      ip: AshQuick.LiveView.Mount.ip(socket),
+      timezone: AshQuick.LiveView.Mount.timezone(socket)
+    )
+
+  {:cont, Phoenix.Component.assign(socket, :scope, scope)}
+end
+```
+
+with the scope naming the field (`use AshQuick.Scope, timezone: :timezone`).
+A host that keeps a zone on the user can prefer it:
+`user.timezone || AshQuick.LiveView.Mount.timezone(socket)`. A scope with no
+zone reads `config :ash_quick, timezone:`.
+
+Elixir's own time zone database knows UTC alone, and a zone the database does
+not know is ignored, so showing any other takes a full one, such as `tz`'s:
+
+```elixir
+# mix.exs
+{:tz, "~> 0.28"}
+
+# config/config.exs
+config :elixir, :time_zone_database, Tz.TimeZoneDatabase
+```
+
+See `AshQuick.Timezone`.
 
 ## The extension on a resource
 
@@ -707,7 +746,7 @@ reference.
 
 | Seam | What it is |
 |---|---|
-| `AshQuick.Scope` | `use` it on the host's scope struct. Generates `Ash.Scope.ToOpts` and the provenance AshQuick needs on top of it: the real actor behind an impersonation, the request IP, the actor's timezone and locale. Fails the compile if a named field is not on the struct. The IP is the peer address unless `:client_ip` names another source; behind a proxy, see `AshQuick.LiveView.Mount`. A controller reads the same address with `AshQuick.ClientIp.from_conn/1`. |
+| `AshQuick.Scope` | `use` it on the host's scope struct. Generates `Ash.Scope.ToOpts` and the provenance AshQuick needs on top of it: the real actor behind an impersonation, the request IP, the reader's timezone and locale. Fails the compile if a named field is not on the struct. The IP is the peer address unless `:client_ip` names another source; behind a proxy, see `AshQuick.LiveView.Mount`. A controller reads the same address with `AshQuick.ClientIp.from_conn/1`. |
 | The audit store | An Ash resource in the host app, named app-wide as `:audit_resource` or per resource under `audit do store ... end`. It must accept `resource_name`, `resource_id`, `action_type`, `action_name`, `attributes`, `arguments`, `context`, `actor_id`, `real_actor_id`, `ip`, `tenant`, and may also accept a `:map` `changes` — the only optional column. `actor_id` and `real_actor_id` must allow `nil`: a write with no actor is recorded with both `nil`. Keep it dumb — no policies, no validations: it is written inside the transaction of every audited write. |
 | `AshQuick.Storage` | Resolves attachment values to fetchable URLs, plus optional lifecycle callbacks for routing an arriving upload and withholding objects that are not servable yet. Defaults to `AshQuick.Storage.S3`, which serves straight from the key and implements no lifecycle. |
 | `AshQuick.AccessControl` | Answers which routes a scope may navigate to. Named on the nav, and what every rendering of it filters through. Not `Ash.can?`: a filter policy allows the action and returns no rows, so `can?` says yes for a page that would be empty. |

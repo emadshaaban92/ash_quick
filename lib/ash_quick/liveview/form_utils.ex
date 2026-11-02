@@ -9,6 +9,7 @@ defmodule AshQuick.LiveView.FormUtils do
   alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.FieldErrors
+  alias AshQuick.LiveView.LocalDatetime
   alias AshQuick.LiveView.PrintUtils
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.QuickView.Options
@@ -722,6 +723,7 @@ defmodule AshQuick.LiveView.FormUtils do
   defp handle_form_events("validate", %{"form" => params} = event, socket, _options) do
     params =
       params
+      |> LocalDatetime.form_params_to_utc(socket.assigns.form, AshQuick.Timezone.current())
       |> FieldErrors.mark_used(event["_target"])
       |> put_emptied_selections()
       |> carry_uploaded_attachments(socket.assigns.form)
@@ -734,7 +736,11 @@ defmodule AshQuick.LiveView.FormUtils do
   end
 
   defp handle_form_events("save", %{"form" => params}, socket, _options) do
-    params = params |> put_emptied_selections() |> carry_uploaded_attachments(socket.assigns.form)
+    params =
+      params
+      |> LocalDatetime.form_params_to_utc(socket.assigns.form, AshQuick.Timezone.current())
+      |> put_emptied_selections()
+      |> carry_uploaded_attachments(socket.assigns.form)
 
     case validate_issued(socket.assigns.form, params, socket) do
       {params, form} -> submit_form(form, params, socket)

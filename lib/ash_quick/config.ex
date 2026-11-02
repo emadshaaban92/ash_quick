@@ -20,10 +20,11 @@ defmodule AshQuick.Config do
     `[exempt: [tileless_route: ["/"]]]` keeps a divergence the application has
     decided to live with out of the report. See `AshQuick.Check`.
 
-  * `:timezone` — The timezone the formatters in this module display dates and
-    timestamps in (e.g. `"America/New_York"`). Defaults to `"Etc/UTC"`. A scope
-    can name a timezone field of its own, but only `AshQuick.Scope.timezone/1`
-    reads it — `format_datetime/1` and friends are application-wide.
+  * `:timezone` — The timezone timestamps are shown in when the reader's scope
+    names none (e.g. `"America/New_York"`). Defaults to `"Etc/UTC"`. A scope's
+    own zone, such as the one the browser reports, is put on the reader's
+    process by a QuickView and read by `format_datetime/1` and friends through
+    `AshQuick.Timezone.current/0`.
 
   * `:locale` — The default locale. Defaults to `"en"`. A scope's own locale is
     likewise reached through `AshQuick.Scope.locale/1` alone.
@@ -143,6 +144,9 @@ defmodule AshQuick.Config do
 
   @doc """
   Returns the configured default timezone. Defaults to `"Etc/UTC"`.
+
+  The application-wide fallback for a reader whose scope states no zone of its
+  own — see `AshQuick.Timezone.current/0`.
   """
   def timezone do
     get(:timezone, "Etc/UTC")
@@ -243,16 +247,16 @@ defmodule AshQuick.Config do
   @doc """
   Formats a `DateTime` or `NaiveDateTime` for display.
 
-  Shifts a `DateTime` to the configured timezone; a `NaiveDateTime` names no
-  zone, so it is formatted as it is. Formats with `Localize.DateTime` in the
-  reader's locale (`AshQuick.Locale.current/0`) when Localize is loaded;
-  otherwise, or for a locale Localize does not know, falls back to
-  `Calendar.strftime/2`.
+  Shifts a `DateTime` to the reader's timezone (`AshQuick.Timezone.current/0`);
+  a `NaiveDateTime` names no zone, so it is formatted as it is. Formats with
+  `Localize.DateTime` in the reader's locale (`AshQuick.Locale.current/0`) when
+  Localize is loaded; otherwise, or for a locale Localize does not know, falls
+  back to `Calendar.strftime/2`.
   """
   def format_datetime(nil), do: ""
 
   def format_datetime(%DateTime{} = value) do
-    value |> DateTime.shift_zone!(timezone()) |> localize_datetime()
+    value |> DateTime.shift_zone!(AshQuick.Timezone.current()) |> localize_datetime()
   end
 
   def format_datetime(%NaiveDateTime{} = value), do: localize_datetime(value)
@@ -266,7 +270,7 @@ defmodule AshQuick.Config do
   @doc """
   Formats a `Time`, or the time-of-day part of a `DateTime`, for display.
 
-  Shifts a `DateTime` to the configured timezone; a `Time` names no zone, so
+  Shifts a `DateTime` to the reader's timezone; a `Time` names no zone, so
   it is formatted as it is. Defaults to a short time (`"9:32 PM"`); pass
   `format: :medium` for second precision.
   """
@@ -275,7 +279,7 @@ defmodule AshQuick.Config do
   def format_time(nil, _opts), do: ""
 
   def format_time(%DateTime{} = value, opts) do
-    value |> DateTime.shift_zone!(timezone()) |> localize_time(opts)
+    value |> DateTime.shift_zone!(AshQuick.Timezone.current()) |> localize_time(opts)
   end
 
   def format_time(%Time{} = value, opts), do: localize_time(value, opts)
@@ -327,12 +331,12 @@ defmodule AshQuick.Config do
   end
 
   @doc """
-  Shifts `DateTime.utc_now()` to the configured timezone.
+  Shifts `DateTime.utc_now()` to the reader's timezone.
 
   Useful for generating timezone-aware file names for exports and prints.
   """
   def now_in_timezone do
-    DateTime.utc_now() |> DateTime.shift_zone!(timezone())
+    DateTime.utc_now() |> DateTime.shift_zone!(AshQuick.Timezone.current())
   end
 
   @doc """

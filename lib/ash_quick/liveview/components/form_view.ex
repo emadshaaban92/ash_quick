@@ -13,6 +13,7 @@ defmodule AshQuick.LiveView.Components.FormView do
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.FieldErrors
   alias AshQuick.LiveView.FormUtils
+  alias AshQuick.LiveView.LocalDatetime
   alias AshQuick.LiveView.Utils
   alias AshQuick.LiveView.URLParams
 
@@ -433,12 +434,15 @@ defmodule AshQuick.LiveView.Components.FormView do
     """
   end
 
+  # Shown in the reader's zone, and read back in it when posted
+  # (`LocalDatetime.form_params_to_utc/4`): the input itself names no zone.
   defp field_input(%{field: %{type: field_type}} = assigns)
        when field_type in [Ash.Type.DateTime, Ash.Type.UtcDatetimeUsec, Ash.Type.UtcDatetime] do
     ~H"""
     <.input
       required={not @field.allow_nil?}
       field={@phx_field}
+      value={LocalDatetime.to_local(@phx_field.value, AshQuick.Timezone.current())}
       type="datetime-local"
       label={Labels.name(@field.name, @resource)}
       phx-debounce="blur"

@@ -97,6 +97,10 @@ defmodule Example.MixProject do
       {:ash_money, "~> 0.2"},
       {:ex_money_sql, "~> 2.2"},
 
+      # A time zone database. Elixir's own knows UTC alone, and pages show
+      # timestamps in the zone the reader's browser reports.
+      {:tz, "~> 0.28"},
+
       # Tooling.
       {:igniter, "~> 0.8", only: [:dev, :test]},
       {:sourceror, "~> 1.13", only: [:dev, :test]},

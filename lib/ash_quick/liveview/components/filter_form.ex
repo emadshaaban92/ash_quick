@@ -8,7 +8,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.CustomFilter
   alias AshQuick.LiveView.EnumOptions
-  alias AshQuick.LiveView.FilterDatetime
+  alias AshQuick.LiveView.LocalDatetime
   alias AshQuick.LiveView.Utils
 
   @datetime_types [Ash.Type.DateTime, Ash.Type.UtcDatetimeUsec, Ash.Type.UtcDatetime]
@@ -259,7 +259,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     <input
       type="datetime-local"
       name={"value-#{@filter.uuid}"}
-      value={FilterDatetime.to_local(@filter.value, AshQuick.Config.timezone())}
+      value={LocalDatetime.to_local(@filter.value, AshQuick.Timezone.current())}
       class={["input input-sm min-w-0 flex-1", @error && "input-error"]}
       {invalid_attrs(@filter, @error)}
     />
@@ -336,7 +336,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     do: values |> Enum.map(&typed_list(&1, field)) |> CustomFilter.as_written()
 
   defp typed_list(value, %{type: type}) when type in @datetime_types,
-    do: FilterDatetime.to_local(value, AshQuick.Config.timezone())
+    do: LocalDatetime.to_local(value, AshQuick.Timezone.current())
 
   defp typed_list(value, _field), do: CustomFilter.as_written(value)
 
@@ -553,7 +553,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   defp field_for(fields, name), do: Enum.find(fields, &(to_string(&1.name) == name))
 
   # A timestamp is typed in the zone the list shows it in, and held as the UTC
-  # instant that means. See `AshQuick.LiveView.FilterDatetime`. On Day holds
+  # instant that means. See `AshQuick.LiveView.LocalDatetime`. On Day holds
   # its date as typed, and reads it in that zone when the filter is built.
   defp held_value(socket, uuid, value) do
     case CustomFilter.find(socket.assigns.custom_filter, uuid) do
@@ -579,7 +579,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   defp hold(:list, _field, value), do: List.wrap(value)
 
   defp hold(:scalar, %{type: type}, value) when type in @datetime_types,
-    do: FilterDatetime.to_utc(value, AshQuick.Config.timezone())
+    do: LocalDatetime.to_utc(value, AshQuick.Timezone.current())
 
   defp hold(_shape, _field, value), do: value
 

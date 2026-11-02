@@ -55,8 +55,8 @@ if Code.ensure_loaded?(Igniter) do
         has exactly one `User`-shaped resource.
       * `--audit-resource` - Where to generate the audit store. Defaults to
         `MyApp.AuditLogs.AuditLog`; its domain is taken from the name.
-      * `--timezone` - The timezone dates and timestamps are displayed in.
-        Defaults to `Etc/UTC`.
+      * `--timezone` - The timezone timestamps are shown in for a reader whose
+        scope names none. Defaults to `Etc/UTC`.
     """
 
     use Igniter.Mix.Task
@@ -695,6 +695,12 @@ if Code.ensure_loaded?(Igniter) do
       Then put `AshQuick.LiveView.Mount` first in the `on_mount` of the
       live_session serving the QuickViews, and route one with
       `mix ash_quick.gen.quick_view`.
+
+      `browserSessionParams` also carries the browser's timezone. Pass
+      `AshQuick.LiveView.Mount.timezone(socket)` to the scope's `:timezone`
+      field and pages show timestamps in it; any zone but UTC needs a time zone
+      database, such as `tz` with
+      `config :elixir, :time_zone_database, Tz.TimeZoneDatabase`.
       """
     end
   end

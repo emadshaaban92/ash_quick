@@ -18,6 +18,11 @@ defmodule Example.Scope do
   `:locale` is the actor's own, read back by `AshQuick.Scope.locale/1` with
   `AshQuick.Config.locale/0` behind it. `ExampleWeb.UserAuth` is what puts it on
   the process and tells the browser about it; nothing in a resource has to know.
+
+  `:timezone` is the one the reader's browser reports
+  (`AshQuick.LiveView.Mount.timezone/1`), read back by
+  `AshQuick.Scope.timezone/1` with `AshQuick.Config.timezone/0` behind it. A
+  QuickView shows timestamps in it and reads typed ones in it.
   """
 
   use AshQuick.Scope,
@@ -26,9 +31,18 @@ defmodule Example.Scope do
     impersonating?: :impersonating_mode,
     ip: :ip,
     locale: :locale,
+    timezone: :timezone,
     tenant: :tenant
 
-  defstruct [:current_user, :real_user, :ip, :locale, :tenant, impersonating_mode: false]
+  defstruct [
+    :current_user,
+    :real_user,
+    :ip,
+    :locale,
+    :timezone,
+    :tenant,
+    impersonating_mode: false
+  ]
 
   @doc """
   Builds the scope an action runs under.
@@ -47,6 +61,9 @@ defmodule Example.Scope do
       real_user: real_user,
       impersonating_mode: impersonating_mode,
       ip: Keyword.get(opts, :ip),
+      # The tab's, not the actor's: an admin standing in for a shopkeeper in
+      # another country still reads the clock on their own wall.
+      timezone: Keyword.get(opts, :timezone),
       # Both read off whoever the tab is *acting as*, not whoever is at it. An
       # admin standing in for a shopkeeper sees that shop's catalogue in that
       # shopkeeper's language, which is the point of standing in for them.

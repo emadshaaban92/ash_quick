@@ -93,14 +93,15 @@ defmodule ExampleWeb.UserAuth do
   end
 
   # Runs after `AshQuick.LiveView.Mount`, which turned this tab's token into an
-  # actor and read the address it connected from. Both are read back here rather
-  # than worked out again.
+  # actor and read the address it connected from and the zone its browser is
+  # in. All are read back here rather than worked out again.
   def on_mount(:assign_scope, _params, _session, socket) do
     scope =
       Scope.new(
         actor: socket.assigns.current_user,
         impersonating: Mount.actor(socket),
-        ip: Mount.ip(socket)
+        ip: Mount.ip(socket),
+        timezone: Mount.timezone(socket)
       )
 
     locale = put_locale(scope)

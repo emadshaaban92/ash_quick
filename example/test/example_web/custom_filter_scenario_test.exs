@@ -53,9 +53,9 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       {:ok, conn: log_in(conn, admin)}
     end
 
-    # The example shows times in UTC, so the instant held is the one typed; the
-    # conversion to another zone is pinned in the library's
-    # `AshQuick.LiveView.FilterDatetimeTest`.
+    # With no zone from the browser the example shows times in UTC, so the
+    # instant held is the one typed; the conversion's edges are pinned in the
+    # library's `AshQuick.LiveView.LocalDatetimeTest`.
     test "is held as a UTC instant and shown back as it was typed", %{conn: conn} do
       code = unique("TS")
       later = filter_field(code: "#{code}-later", stamped_at: ~U[2026-10-22 11:00:00.000000Z])
@@ -72,6 +72,28 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
 
       view |> element("a[title='Advanced filters']") |> render_click()
       assert attribute(view, "input[type='datetime-local']", "value") == ["2026-10-22T10:00"]
+    end
+
+    # Tokyo is nine hours ahead all year, so 19:00 there is 10:00 UTC.
+    test "is typed in the zone the browser reports", %{conn: conn} do
+      code = unique("TZ")
+      later = filter_field(code: "#{code}-later", stamped_at: ~U[2026-10-22 11:00:00.000000Z])
+      earlier = filter_field(code: "#{code}-earlier", stamped_at: ~U[2026-10-22 09:00:00.000000Z])
+
+      view =
+        conn
+        |> in_timezone("Asia/Tokyo")
+        |> apply_filter("/test/filter_fields", "stamped_at", "gt", "2026-10-22T19:00")
+
+      cells = texts(view, "td")
+      assert later.code in cells
+      refute earlier.code in cells
+
+      %{custom_filter: filter} = :sys.get_state(view.pid).socket.assigns.params
+      assert [%CustomFilter{value: "2026-10-22T10:00:00Z"}] = filter.children
+
+      view |> element("a[title='Advanced filters']") |> render_click()
+      assert attribute(view, "input[type='datetime-local']", "value") == ["2026-10-22T19:00"]
     end
   end
 
@@ -978,8 +1000,9 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       {:ok, conn: log_in(conn, admin)}
     end
 
-    # The example shows times in UTC; the day read in another zone is pinned
-    # in the library's `AshQuick.LiveView.FilterDatetimeTest`.
+    # With no zone from the browser the example shows times in UTC; a day that
+    # shifts in its zone is pinned in the library's
+    # `AshQuick.LiveView.LocalDatetimeTest`.
     test "keeps the rows stamped on that day, from its first moment to its last", %{
       conn: conn
     } do
@@ -1000,6 +1023,26 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
 
       view |> element("a[title='Advanced filters']") |> render_click()
       assert attribute(view, "input[type='date'][name^='value-']", "value") == ["2026-10-22"]
+    end
+
+    # A day in Tokyo runs from 15:00 UTC the day before to 15:00 UTC that day.
+    test "is the day in the zone the browser reports", %{conn: conn} do
+      code = unique("OZ")
+      before = filter_field(code: "#{code}-before", stamped_at: ~U[2026-10-21 14:59:59.999999Z])
+      first = filter_field(code: "#{code}-first", stamped_at: ~U[2026-10-21 15:00:00.000000Z])
+      last = filter_field(code: "#{code}-last", stamped_at: ~U[2026-10-22 14:59:59.999999Z])
+      next = filter_field(code: "#{code}-next", stamped_at: ~U[2026-10-22 15:00:00.000000Z])
+
+      view =
+        conn
+        |> in_timezone("Asia/Tokyo")
+        |> apply_filter("/test/filter_fields", "stamped_at", "on", "2026-10-22")
+
+      cells = texts(view, "td")
+      assert first.code in cells
+      assert last.code in cells
+      refute before.code in cells
+      refute next.code in cells
     end
 
     # Dropped before the read, rather than matching one instant of the day,

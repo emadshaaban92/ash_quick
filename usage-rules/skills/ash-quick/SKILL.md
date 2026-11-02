@@ -961,7 +961,12 @@ covers wiring them up.
 
 - `AshQuick.Scope` — `use` it on the host's scope struct. Generates
   `Ash.Scope.ToOpts` plus the provenance audit needs: real actor behind an
-  impersonation, request IP, timezone, locale.
+  impersonation, request IP, timezone, locale. Pages show timestamps in the
+  scope's timezone and read typed ones in it; the scope stage fills it with
+  `AshQuick.LiveView.Mount.timezone(socket)`, the zone the browser reports,
+  and `config :ash_quick, timezone:` applies without one. Any zone but UTC
+  needs a full time zone database
+  (`config :elixir, :time_zone_database, Tz.TimeZoneDatabase`).
 - **The audit store** — an Ash resource taking `resource_name`, `resource_id`,
   `action_type`, `action_name`, `attributes`, `arguments`, `context`,
   `actor_id`, `real_actor_id`, `ip`, `tenant`, and optionally a `:map`

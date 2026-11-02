@@ -87,6 +87,10 @@ config :ex_aws,
   secret_access_key: "example-secret",
   region: "us-east-1"
 
+# Pages show timestamps in the zone the reader's browser reports
+# (`AshQuick.Timezone`), and only a full time zone database can shift into one.
+config :elixir, :time_zone_database, Tz.TimeZoneDatabase
+
 # Nothing converts a currency either; the service would only reach the network.
 config :ex_money, auto_start_exchange_rate_service: false
 

@@ -244,6 +244,29 @@ defmodule AshQuick.LiveView.MountTest do
       assert Mount.ip(socket) == "203.0.113.7"
       assert Mount.browser_session(socket).ip == "203.0.113.7"
     end
+
+    defp with_connect_params(socket, params),
+      do: put_in(socket.private.connect_params, Map.merge(socket.private.connect_params, params))
+
+    test "reads the zone the browser reports" do
+      socket = with_connect_params(signed_in_tab(), %{"timezone" => "Etc/UTC"})
+
+      assert {:cont, socket} = Mount.on_mount(:default, %{}, %{}, socket)
+      assert Mount.timezone(socket) == "Etc/UTC"
+    end
+
+    # The suite runs on Elixir's own database, which knows UTC alone.
+    test "drops a zone the time zone database does not know, or none at all" do
+      for zone <- ["Asia/Tokyo", "", 42] do
+        socket = with_connect_params(signed_in_tab(), %{"timezone" => zone})
+
+        assert {:cont, socket} = Mount.on_mount(:default, %{}, %{}, socket)
+        assert Mount.timezone(socket) == nil
+      end
+
+      assert {:cont, socket} = Mount.on_mount(:default, %{}, %{}, signed_in_tab())
+      assert Mount.timezone(socket) == nil
+    end
   end
 
   describe "connect_info_violations/1" do

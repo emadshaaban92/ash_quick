@@ -57,6 +57,12 @@ defmodule ExampleWeb.Sessions do
     |> merge_connect_params(%{"impersonation" => token})
   end
 
+  @doc """
+  Has `conn`'s browser report `zone` as its own, the way
+  `browser_session.js` reads it from `Intl` on every connect.
+  """
+  def in_timezone(conn, zone), do: merge_connect_params(conn, %{"timezone" => zone})
+
   defp ensure_tab(conn) do
     case conn.private[:live_view_connect_params] do
       %{"tab" => _tab} -> conn

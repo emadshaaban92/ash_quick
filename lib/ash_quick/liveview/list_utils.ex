@@ -15,7 +15,7 @@ defmodule AshQuick.LiveView.ListUtils do
   alias AshQuick.LiveView.FormUtils
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.CustomFilter
-  alias AshQuick.LiveView.FilterDatetime
+  alias AshQuick.LiveView.LocalDatetime
   alias AshQuick.LiveView.Components.FilterForm
   alias AshQuick.LiveView.Liveness
   alias AshQuick.LiveView.PrintUtils
@@ -194,7 +194,7 @@ defmodule AshQuick.LiveView.ListUtils do
   # A row left without a value filters by nothing, and is not refused.
   defp unreadable_day?(%CustomFilter{value: value} = row) do
     CustomFilter.applied?(row) and
-      FilterDatetime.day_range(value, AshQuick.Config.timezone()) == :error
+      LocalDatetime.day_range(value, AshQuick.Timezone.current()) == :error
   end
 
   # Those of `names` that are fields of `resource`, `by_name`, the actor may
@@ -444,10 +444,11 @@ defmodule AshQuick.LiveView.ListUtils do
       |> build_export_query(selected_ids, socket, options)
       |> Utils.load_fields(options.export_fields, strict?: true)
 
-    # The header and the dates are in the reader's language, and a task
-    # inherits no locale. The scope's is the one a host puts on its pages;
-    # set process-wide, the host's backend falls back to it.
+    # The header and the dates are in the reader's language and zone, and a
+    # task inherits neither. The scope's locale is the one a host puts on its
+    # pages; set process-wide, the host's backend falls back to it.
     locale = AshQuick.Scope.locale(socket.assigns.scope)
+    timezone = AshQuick.Timezone.current()
 
     socket =
       case Ash.Scope.ToOpts.get_actor(socket.assigns.scope) do
@@ -455,6 +456,7 @@ defmodule AshQuick.LiveView.ListUtils do
           socket
           |> assign_async(:export_data, fn ->
             Gettext.put_locale(locale)
+            AshQuick.Timezone.put(timezone)
 
             {:ok, url} =
               AshQuick.LiveView.ExportUtils.generate_export_url(
@@ -605,6 +607,7 @@ defmodule AshQuick.LiveView.ListUtils do
       %{form: %AshPhoenix.Form{} = form, action: action} = bulk ->
         params =
           params
+          |> LocalDatetime.form_params_to_utc(form, AshQuick.Timezone.current())
           |> FieldErrors.mark_used(target)
           |> FormUtils.put_emptied_selections()
           |> FormUtils.maybe_put_has_many(form)

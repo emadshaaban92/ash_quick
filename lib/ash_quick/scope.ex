@@ -4,11 +4,11 @@ defmodule AshQuick.Scope do
 
   `Ash.Scope.ToOpts` answers *which actor* an action runs as. It has nothing to
   say about the human behind that actor when someone is impersonating, the IP
-  the request arrived on, or the actor's own timezone and locale. AshQuick
-  needs all four — audit records the first two on every row, and an
-  impersonation banner and a localised UI need the rest — so it declares them
-  itself, additively, and generates the wiring rather than documenting a
-  convention and hoping.
+  the request arrived on, or the reader's timezone and locale. AshQuick needs
+  all four — audit records the first two on every row, and an impersonation
+  banner and a localised UI need the rest — so it declares them itself,
+  additively, and generates the wiring rather than documenting a convention
+  and hoping.
 
       defmodule MyApp.Scope do
         use AshQuick.Scope,
@@ -41,11 +41,14 @@ defmodule AshQuick.Scope do
       actor.
     * `:ip` — the address the request came from. Omitted, provenance carries
       `nil` — correct for a scope built off a request, which has no IP.
-    * `:timezone` / `:locale` — the actor's own, read through `timezone/1` and
-      `locale/1`. Omitted, `AshQuick.Config.timezone/0` and
-      `AshQuick.Config.locale/0` apply. Note that the formatters in
-      `AshQuick.Config` render off those application-wide values, not off the
-      scope.
+    * `:timezone` — the reader's zone: the one their browser reports
+      (`AshQuick.LiveView.Mount.timezone/1`), or one the actor keeps. Read
+      through `timezone/1`; omitted, `AshQuick.Config.timezone/0` applies. A
+      QuickView shows timestamps in it and reads typed ones in it; see
+      `AshQuick.Timezone`.
+    * `:locale` — the actor's own, read through `locale/1`. Omitted,
+      `AshQuick.Config.locale/0` applies. The host puts it on its Gettext
+      backend, which the formatters in `AshQuick.Config` read.
 
   ## Why a macro over a protocol
 
@@ -294,7 +297,7 @@ defmodule AshQuick.Scope do
   def ip(subject), do: provenance(subject).ip
 
   @doc """
-  The actor's timezone, falling back to `AshQuick.Config.timezone/0`.
+  The reader's timezone, falling back to `AshQuick.Config.timezone/0`.
   """
   def timezone(subject), do: provenance(subject).timezone || AshQuick.Config.timezone()
 
