@@ -4,6 +4,25 @@
 
 ### Features
 
+- **An audit entry keeps the expression an `atomic_update` asked for.** An
+  attribute a change set by an expression has `expr` in `changes` beside
+  `from` and `to`, as text: `count: %{from: 0, to: 6, expr: "count + 5"}`.
+  `from` is what the actor loaded, which on an unversioned resource another
+  write may have moved, and `count + 5` stays true whatever it was. The text
+  holds the values the action was given and reads as the change wrote it,
+  without the required and constraint checks Ash adds on the way to the data
+  layer, or `Ash.Type.String`'s trim. An accepted input, an update default
+  and a versioned resource's counter keep none, even where they arrive as
+  expressions. A sensitive attribute's `expr` is `"**redacted**"`. Once an
+  action is given a sensitive argument every value inside its expressions is
+  `**redacted**`, since Ash folds `1 + ^arg(:bonus)` into a single number;
+  otherwise a value equal to a sensitive attribute's is, and an expression
+  holding such a value where the redaction cannot reach is replaced whole.
+  That hides how a value was built, not the value: a non-sensitive
+  attribute's `to` is what its expression came to. The text is Ash's
+  rendering of the expression, with an operator inside another always
+  parenthesised, and can change between Ash versions.
+
 - **Versioned resources run their updates atomically.** The optimistic lock
   now works on Ash's atomic path as well as in memory, so versioning no
   longer turns `require_atomic?` off: an update that can run atomically does,

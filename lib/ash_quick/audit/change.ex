@@ -94,6 +94,32 @@ defmodule AshQuick.Audit.Change do
   On a versioned resource the optimistic lock refuses a write against a stale
   copy on this path too, so `from` there is what the row held.
 
+  An attribute a change set by an expression keeps that expression in
+  `changes`, as text beside what it came to, which stays true even where
+  `from` is stale:
+
+      count: %{from: 0, to: 2, expr: "count + 1"}
+
+  Text, because nothing will evaluate a stored expression again and Ash has
+  no serializer for one: what an entry needs is the intent. It is Ash's own
+  rendering (its `Inspect` implementations), on one line and never cut short,
+  so it can change between Ash versions. Ash prints an operator's operands
+  without parentheses, so every operand that is itself an operator gets them:
+  `(count + 1) * 2` is not stored as `count + 1 * 2`.
+
+  Values in the expression read as Elixir writes them: `Decimal.new("1.50")`,
+  `~U[2026-11-03 10:00:00Z]`.
+
+  By the time it is written Ash has put the action's arguments, the actor
+  and any `^atomic_ref(...)` into the expression as values, so
+  `count + ^arg(:by)` reads `count + 5` — see "Secrets" below for the ones
+  that must not. It is kept as the action's changes left it, before Ash wraps
+  it for the data layer in a required check and a check per constraint, and
+  without `Ash.Type.String`'s trim and empty check, so it reads as the change
+  wrote it. Only an expression a change asked for is kept: an accepted input,
+  an update default or a versioned resource's counter that Ash or the lock
+  turned into an expression is a value on the other path, and keeps none.
+
   Only attributes appear. A `has_many` or `many_to_many` change is not one — it
   is a write to the other resource, recorded in that resource's own entries, and
   visible here in `arguments` as the input the action was given. An embedded
@@ -126,10 +152,28 @@ defmodule AshQuick.Audit.Change do
 
   `changes` is redacted the same way, on both sides: a sensitive attribute not
   named in `record_sensitive` reads `%{from: "**redacted**", to: "**redacted**"}`
-  rather than either value. Whether it changed at all is still asked of the real
-  values, which is why the map is worked out before the changeset is redacted —
-  a secret rotated to what it already held leaves no entry, and one that really
-  changed is not hidden behind two identical redactions.
+  rather than either value, and its `expr` is `"**redacted**"` too. Whether it
+  changed at all is still asked of the real values, which is why the map is
+  worked out before the changeset is redacted — a secret rotated to what it
+  already held leaves no entry, and one that really changed is not hidden
+  behind two identical redactions.
+
+  An expression on any other attribute can still hold a secret, put in as a
+  value where the change pinned a sensitive argument or read a sensitive
+  attribute. Once the action is given a sensitive argument, every value in
+  its expressions reads `**redacted**` — `count + **redacted**` — because Ash
+  folds an all-value part such as `1 + ^arg(:bonus)` into one number that no
+  comparison with the secret would find. Otherwise a value equal to a
+  sensitive attribute's on either side is redacted, and so is a string that
+  contains one at least four characters long. A secret of that length still
+  showing in the text after that, somewhere the redaction does not reach such
+  as inside an `exists`, takes the whole expression with it. A shorter one is
+  only ever matched whole: inside other text it turns up by chance.
+
+  What an expression came to is another matter. A redacted `expr` hides how
+  the value was built, not the value: `name <> "/" <> ^atomic_ref(:pin)`
+  records `expr: ~s[name <> ("/" <> **redacted**)]` and a `to` holding the pin,
+  because `name` is not sensitive and redaction is by attribute.
 
   Redaction is flat. A sensitive attribute nested inside an embedded resource,
   or inside a managed relationship's params, is not reached.
@@ -147,6 +191,7 @@ defmodule AshQuick.Audit.Change do
   require Ash.Tracer
 
   alias AshQuick.Audit.Declaration
+  alias AshQuick.Audit.Expression
   alias AshQuick.Audit.Row
   alias AshQuick.Audit.Store
 
@@ -154,16 +199,21 @@ defmodule AshQuick.Audit.Change do
   # a redacted entry reads the same as a redacted changeset.
   @redacted "**redacted**"
 
-  @impl true
-  def batch_change(changesets, _opts, _context) do
-    changesets
-  end
-
   # Nothing to add to the write itself: the entry is built in `after_batch/3`,
   # which Ash runs on the atomic path too, handing it the record the write
   # returned. So an audited action needs no `require_atomic? false` of its own.
+  #
+  # What is kept is the expressions the action's changes asked for, as they
+  # stand here, after those changes ran: by `after_batch/3` Ash has wrapped each
+  # in checks for the attribute's constraints — see
+  # `AshQuick.Audit.Expression`.
   @impl true
-  def atomic(changeset, _opts, _context), do: {:ok, changeset}
+  def batch_change(changesets, _opts, _context) do
+    Enum.map(changesets, &Expression.remember/1)
+  end
+
+  @impl true
+  def atomic(changeset, _opts, _context), do: {:ok, Expression.remember(changeset)}
 
   @impl true
   def after_batch([{changeset, _record} | _] = changesets_and_results, _opts, context) do
@@ -195,9 +245,9 @@ defmodule AshQuick.Audit.Change do
 
   # `changes` is worked out first, against the changeset as the action left it:
   # whether a sensitive attribute changed at all is a question about the real
-  # values, and one line further down they are gone. `AshQuick.Audit.Row` is
-  # handed the names to redact so it answers that question before it records
-  # anything about them.
+  # values, and one line further down they are gone. So are the secrets an
+  # expression in `changes` must not show. `AshQuick.Audit.Row` is handed the
+  # names to redact so it answers both before it records anything about them.
   #
   # What the action was given is settled here too, for the same reason: which
   # atomics count as input is a question about what they are, and once a
@@ -208,15 +258,16 @@ defmodule AshQuick.Audit.Change do
     given = Row.given(changeset, record)
 
     {redact(%{changeset | attributes: given}, attributes, arguments), record,
-     Row.changes(changeset, record, attributes)}
+     Row.changes(changeset, record, attributes, arguments)}
   end
 
   # `atomics` is where an atomic update holds what it was given, so a secret
   # accepted there is as much in the changeset as one in `attributes`, and an
-  # expression may carry one pinned inside it.
+  # expression may carry one pinned inside it — as may the copies of those
+  # expressions kept in the context.
   defp redact(%Ash.Changeset{} = changeset, attributes, arguments) do
     %{
-      changeset
+      Expression.forget(changeset)
       | attributes: redact(changeset.attributes, attributes),
         atomics: redact_atomics(changeset.atomics, attributes),
         arguments: redact(changeset.arguments, arguments),

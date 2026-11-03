@@ -24,6 +24,7 @@ defmodule AshQuick.AuditTest do
   alias Example.Accounts.AuditLog
   alias Example.Catalog.Brand
   alias Example.Catalog.Product
+  alias Example.Test.FileTally
   alias Example.Uploads.FileObject
 
   defp entries(record) do
@@ -234,6 +235,47 @@ defmodule AshQuick.AuditTest do
       # The in-memory path records it as a value, and so does this one, read
       # off the row the update returned.
       assert entry.attributes["updated_at"] == DateTime.to_iso8601(released.updated_at)
+    end
+
+    test "an expression is recorded as written, beside what it came to", %{admin: admin} do
+      key = unique("tally-")
+
+      tally =
+        FileTally
+        |> Ash.Changeset.for_create(:create, %{key: key}, actor: admin, authorize?: false)
+        |> Ash.create!()
+
+      # Each from the record as created, so each `from` is what that held.
+      for action <- [:bump, :measure, :name_after_key] do
+        assert Ash.Resource.Info.action(FileTally, action).require_atomic?
+
+        tally
+        |> Ash.Changeset.for_update(action, %{}, actor: admin, authorize?: false)
+        |> Ash.update!()
+      end
+
+      assert [_created, bumped, measured, named] = entries(tally)
+
+      # By the time the entry is written Ash has wrapped each of these in a
+      # required check and a check for `min: 0`, and the string in a trim and a
+      # check for an empty result. The entry keeps them as written.
+      assert bumped.changes["byte_size"] == %{"from" => 0, "to" => 1, "expr" => "byte_size + 1"}
+
+      assert measured.changes["byte_size"] == %{
+               "from" => 0,
+               "to" => String.length(key),
+               "expr" => ~s[fragment("length(?)", key)]
+             }
+
+      assert named.changes["original_filename"] == %{
+               "from" => nil,
+               "to" => key <> ".pdf",
+               "expr" => ~s(key <> ".pdf")
+             }
+
+      # `updated_at` is an expression on this path too — `now()` when anything
+      # changed — and a value on the other, so it keeps none.
+      refute Map.has_key?(bumped.changes["updated_at"], "expr")
     end
 
     test "a bulk destroy by query records the rows it deleted as they stood",

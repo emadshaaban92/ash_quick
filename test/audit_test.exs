@@ -32,13 +32,16 @@ defmodule AshQuick.AuditTest do
   require Ash.Expr
   require Ash.Query
 
+  alias AshQuick.Audit.Expression
   alias AshQuick.Audit.Row
   alias AshQuick.Test.Actor
   alias AshQuick.Test.AuditLog
   alias AshQuick.Test.Credential
   alias AshQuick.Test.LegacyAuditStore
   alias AshQuick.Test.LegacyCredential
+  alias AshQuick.Test.StampedTally
   alias AshQuick.Test.Tally
+  alias AshQuick.Test.VersionedTally
 
   setup do
     actor =
@@ -328,7 +331,7 @@ defmodule AshQuick.AuditTest do
           actor: actor
         )
 
-      assert Row.changes(changeset, built, []) == %{
+      assert Row.changes(changeset, built, [], []) == %{
                name: %{from_unknown: true, to: "Gateway 2"},
                masked_card_number: %{from_unknown: true, to: "**** 1111"}
              }
@@ -398,7 +401,17 @@ defmodule AshQuick.AuditTest do
     test "Tally's actions really are atomic" do
       # Without this, everything below would pass just as well on the
       # in-memory path the audit change has always handled.
-      for name <- [:rename, :bump, :remove] do
+      for name <- [
+            :rename,
+            :bump,
+            :bump_by,
+            :bump_secretly,
+            :measure,
+            :exclaim,
+            :double_up,
+            :sign,
+            :remove
+          ] do
         assert Ash.Resource.Info.action(Tally, name).require_atomic?
       end
     end
@@ -436,9 +449,74 @@ defmodule AshQuick.AuditTest do
       assert [_created, entry] = entries(record)
 
       # `count + 1` is something a change asked of the data layer rather than
-      # something the action was given.
+      # something the action was given, and `changes` keeps it beside what it
+      # came to.
       assert entry.attributes == %{}
-      assert entry.changes == %{count: %{from: 0, to: 1}}
+      assert entry.changes == %{count: %{from: 0, to: 1, expr: "count + 1"}}
+    end
+
+    test "an expression holds the value of an argument it was given",
+         %{actor: actor, record: record} do
+      record
+      |> Ash.Changeset.for_update(:bump_by, %{by: 5}, actor: actor)
+      |> Ash.update!()
+
+      assert [_created, entry] = entries(record)
+
+      assert entry.changes == %{count: %{from: 0, to: 5, expr: "count + 5"}}
+    end
+
+    test "an expression reads as written, without the checks Ash wraps it in",
+         %{actor: actor, record: record} do
+      # A required attribute set by something that can come to nil, which Ash
+      # wraps in a required check …
+      record
+      |> Ash.Changeset.for_update(:measure, %{}, actor: actor)
+      |> Ash.update!()
+
+      # … and a string, which `Ash.Type.String` trims and turns nil when empty.
+      record
+      |> Ash.Changeset.for_update(:exclaim, %{}, actor: actor)
+      |> Ash.update!()
+
+      assert [_created, measured, exclaimed] = entries(record)
+
+      assert measured.changes == %{count: %{from: 0, to: 4, expr: "string_length(name)"}}
+      assert exclaimed.changes == %{name: %{from: "Gate", to: "Gate!", expr: ~s(name <> "!")}}
+    end
+
+    test "a sensitive argument in an expression never appears in the entry",
+         %{actor: actor, record: record} do
+      record
+      |> Ash.Changeset.for_update(:bump_secretly, %{bonus: 4242}, actor: actor)
+      |> Ash.update!()
+
+      assert [_created, entry] = entries(record)
+
+      # `count + (1 + 4242)` is folded into `count + 4243`: a literal derived
+      # from the secret, which no comparison with it would find. `to` is the
+      # count, not a secret.
+      assert entry.changes == %{count: %{from: 0, to: 4243, expr: "count + **redacted**"}}
+      assert entry.arguments == %{bonus: "**redacted**"}
+      refute inspect(entry) =~ "4242"
+    end
+
+    test "a secret another attribute's expression reads is redacted there too",
+         %{actor: actor, record: record} do
+      record
+      |> Ash.Changeset.for_update(:sign, %{pin: "9876"}, actor: actor)
+      |> Ash.update!()
+
+      assert [_created, entry] = entries(record)
+
+      # `^atomic_ref(:pin)` is the new pin itself. `<>` groups to the right, as
+      # in Elixir.
+      assert entry.changes == %{
+               name: %{from: "Gate", to: "Gate/9876", expr: ~s[name <> ("/" <> **redacted**)]},
+               pin: %{from: "**redacted**", to: "**redacted**"}
+             }
+
+      refute inspect(entry.changes.name.expr) =~ "9876"
     end
 
     test "a sensitive expression is redacted, and not recorded as input",
@@ -455,7 +533,11 @@ defmodule AshQuick.AuditTest do
       # Redacted in `atomics` like any other secret there — and the action was
       # given nothing, so `attributes` still says so.
       assert entry.attributes == %{}
-      assert entry.changes == %{pin: %{from: "**redacted**", to: "**redacted**"}}
+
+      assert entry.changes == %{
+               pin: %{from: "**redacted**", to: "**redacted**", expr: "**redacted**"}
+             }
+
       refute inspect(entry) =~ "Gate-0000"
     end
 
@@ -471,10 +553,161 @@ defmodule AshQuick.AuditTest do
 
       assert Row.given(changeset, %{record | name: "Gate 2"}) == %{name: "Gate 2"}
 
+      # Nor is its expression one to keep: what the caller passed is the value.
+      assert Row.changes(changeset, %{record | name: "Gate 2"}, [], []) == %{
+               name: %{from: "Gate", to: "Gate 2"}
+             }
+
       # One a change asked for is not input on either path.
       bumped = Ash.Changeset.for_update(record, :bump, %{})
 
       assert Row.given(bumped, %{record | count: 1}) == %{}
+    end
+
+    test "an expression renders on one line, whole, with values as Elixir writes them" do
+      attributes = Ash.Resource.Info.attributes(Tally)
+      count = Ash.Resource.Info.attribute(Tally, :count)
+      long = String.duplicate("x", 120)
+
+      expression =
+        Ash.Expr.expr(
+          if count > ^Decimal.new("1.50") and ^~U[2026-11-03 10:00:00Z] > now() do
+            count + 1
+          else
+            string_length(^long)
+          end
+        )
+
+      # Ash renders an `if` over several lines; nothing is cut short.
+      assert Expression.render(expression, count, attributes, %{given: [], held: []}) ==
+               ~s{if (count > Decimal.new("1.50")) and (~U[2026-11-03 10:00:00Z] > now()) } <>
+                 ~s{do count + 1 else string_length("#{long}") end}
+    end
+
+    test "a short secret is not looked for inside other text", %{actor: actor} do
+      record =
+        Tally
+        |> Ash.Changeset.for_create(:create, %{name: "Gate", pin: "nt"}, actor: actor)
+        |> Ash.create!()
+
+      record
+      |> Ash.Changeset.for_update(:bump, %{}, actor: actor)
+      |> Ash.update!()
+
+      assert [_created, entry] = entries(record)
+
+      # "nt" is inside `count`, by chance rather than because the pin is.
+      assert entry.changes == %{count: %{from: 0, to: 1, expr: "count + 1"}}
+    end
+
+    test "an expression Ash has not resolved is walked all the same" do
+      attributes = Ash.Resource.Info.attributes(Tally)
+      count = Ash.Resource.Info.attribute(Tally, :count)
+      bonus = 4242
+
+      # Calls by name, as written: their arguments are a list.
+      expression = Ash.Expr.expr(count + (1 + ^bonus))
+
+      assert Expression.render(expression, count, attributes, %{given: [bonus], held: []}) ==
+               "count + (**redacted** + **redacted**)"
+    end
+
+    test "an expression keeps its grouping", %{actor: actor, record: record} do
+      record
+      |> Ash.Changeset.for_update(:double_up, %{}, actor: actor)
+      |> Ash.update!()
+
+      assert [_created, entry] = entries(record)
+
+      # Ash prints an operator's operands without parentheses, which here would
+      # read `count + 1 * 2`: a different formula from the one that ran.
+      assert entry.changes == %{count: %{from: 0, to: 2, expr: "(count + 1) * 2"}}
+
+      attributes = Ash.Resource.Info.attributes(Tally)
+      count = Ash.Resource.Info.attribute(Tally, :count)
+      none = %{given: [], held: []}
+
+      {:ok, regrouped} =
+        Ash.Filter.hydrate_refs(Ash.Expr.expr(count - (count - 1)), %{
+          resource: Tally,
+          public?: false
+        })
+
+      assert Expression.render(regrouped, count, attributes, none) == "count - (count - 1)"
+    end
+
+    test "a secret where the walk does not reach takes the whole expression with it" do
+      attributes = Ash.Resource.Info.attributes(Tally)
+      count = Ash.Resource.Info.attribute(Tally, :count)
+
+      # An `exists` is left to whoever walks an expression to look inside.
+      expression = Ash.Expr.expr(count + exists(items, name == ^"9876"))
+
+      assert Expression.render(expression, count, attributes, %{given: [], held: ["9876"]}) ==
+               "**redacted**"
+    end
+
+    test "a versioned resource's counter keeps no expression, and is recorded as set",
+         %{actor: actor} do
+      record =
+        VersionedTally
+        |> Ash.Changeset.for_create(:create, %{name: "Gate", pin: "1111"}, actor: actor)
+        |> Ash.create!()
+
+      for action <- [:bump, :scramble] do
+        assert Ash.Resource.Info.action(VersionedTally, action).require_atomic?
+      end
+
+      bumped =
+        record
+        |> Ash.Changeset.for_update(:bump, %{}, actor: actor)
+        |> Ash.update!()
+
+      scrambled =
+        bumped
+        |> Ash.Changeset.for_update(:scramble, %{}, actor: actor)
+        |> Ash.update!()
+
+      assert [_created, bump, scramble] = entries(record)
+
+      # The lock's `if <changed> do version + 1 else version end` is bookkeeping
+      # rather than something a change asked for, and the in-memory path
+      # records the counter as a value.
+      assert bump.changes == %{
+               count: %{from: 0, to: 1, expr: "count + 1"},
+               version: %{from: record.version, to: bumped.version}
+             }
+
+      assert bump.attributes == %{version: bumped.version}
+
+      # That expression repeats `name <> "-0000"`, which says how the secret
+      # was built.
+      assert scramble.changes == %{
+               pin: %{from: "**redacted**", to: "**redacted**", expr: "**redacted**"},
+               version: %{from: bumped.version, to: scrambled.version}
+             }
+
+      refute inspect(scramble) =~ "-0000"
+    end
+
+    test "an update default keeps no expression", %{actor: actor} do
+      record =
+        StampedTally
+        |> Ash.Changeset.for_create(:create, %{name: "Gate"}, actor: actor)
+        |> Ash.create!()
+
+      assert Ash.Resource.Info.action(StampedTally, :bump).require_atomic?
+
+      bumped =
+        record
+        |> Ash.Changeset.for_update(:bump, %{}, actor: actor)
+        |> Ash.update!()
+
+      assert [_created, entry] = entries(record)
+
+      # `touched_at` arrived as `if <changed> do now() else touched_at end`.
+      assert entry.changes.count == %{from: 0, to: 1, expr: "count + 1"}
+      assert entry.changes.touched_at == %{from: record.touched_at, to: bumped.touched_at}
     end
 
     test "a new value the write did not return is unknown rather than recorded",
@@ -484,7 +717,9 @@ defmodule AshQuick.AuditTest do
       # A `select` that leaves the attribute out of what an atomic write returns.
       returned = %{record | count: %Ash.NotLoaded{field: :count, type: :attribute}}
 
-      assert Row.changes(changeset, returned, []) == %{count: %{from: 0, to_unknown: true}}
+      assert Row.changes(changeset, returned, [], []) == %{
+               count: %{from: 0, to_unknown: true, expr: "count + 1"}
+             }
     end
 
     test "an expression on an action that is not atomic is recorded the same way",
@@ -502,7 +737,7 @@ defmodule AshQuick.AuditTest do
 
       # `changeset.attributes` is empty here too: an `atomic_update` sends its
       # attribute through `changeset.atomics` on either path.
-      assert entry.changes == %{count: %{from: 0, to: 1}}
+      assert entry.changes == %{count: %{from: 0, to: 1, expr: "count + 1"}}
     end
 
     test "a bulk update by query has no record to read `from` off",
@@ -521,6 +756,32 @@ defmodule AshQuick.AuditTest do
       # The rows were never read into memory, so the previous value is unknown
       # rather than `nil` — and `to` still is what the row now holds.
       assert entry.changes == %{name: %{from_unknown: true, to: "Gate 3"}}
+    end
+
+    test "a bulk update by query keeps its expression beside an unknown `from`",
+         %{actor: actor, record: record} do
+      for {action, input} <- [bump_by: %{by: 5}, bump_secretly: %{bonus: 4242}] do
+        assert %Ash.BulkResult{status: :success} =
+                 Tally
+                 |> Ash.Query.filter(id == ^record.id)
+                 |> Ash.bulk_update!(action, input,
+                   strategy: :atomic,
+                   actor: actor,
+                   return_errors?: true
+                 )
+      end
+
+      assert [_created, by, secretly] = entries(record)
+
+      # Which is when `expr` says most: `from` is unknown, and `count + 5` is
+      # still what happened.
+      assert by.changes == %{count: %{from_unknown: true, to: 5, expr: "count + 5"}}
+
+      assert secretly.changes == %{
+               count: %{from_unknown: true, to: 4248, expr: "count + **redacted**"}
+             }
+
+      refute inspect(secretly) =~ "4242"
     end
 
     test "a bulk destroy by query records the rows it deleted as they stood",

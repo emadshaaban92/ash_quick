@@ -130,6 +130,47 @@ defmodule AshQuick.Test.Tally do
       change atomic_update(:pin, expr(name <> "-0000"))
     end
 
+    # The value the caller passed lands in the expression as a literal.
+    update :bump_by do
+      accept []
+      argument :by, :integer, allow_nil?: false
+      change atomic_update(:count, expr(count + ^arg(:by)))
+    end
+
+    # The same with a sensitive argument, which Ash puts in as a literal too —
+    # and on a bulk update folds `1 + ^arg(:bonus)` into a single one.
+    update :bump_secretly do
+      accept []
+      argument :bonus, :integer, allow_nil?: false, sensitive?: true
+      change atomic_update(:count, expr(count + (1 + ^arg(:bonus))))
+    end
+
+    # A required attribute set by an expression that can come to nil, which Ash
+    # wraps in a required check before the data layer sees it.
+    update :measure do
+      accept []
+      change atomic_update(:count, expr(string_length(name)))
+    end
+
+    # A string set by an expression, which `Ash.Type.String` wraps in a trim and
+    # a check for an empty result.
+    update :exclaim do
+      accept []
+      change atomic_update(:name, expr(name <> "!"))
+    end
+
+    # Grouping Ash prints no parentheses for.
+    update :double_up do
+      accept []
+      change atomic_update(:count, expr((count + 1) * 2))
+    end
+
+    # A secret carried into another attribute's expression by `^atomic_ref/1`.
+    update :sign do
+      accept [:pin]
+      change atomic_update(:name, expr(name <> "/" <> ^atomic_ref(:pin)))
+    end
+
     # The same expression on the in-memory path: the anonymous change has no
     # `atomic/3`, so the update cannot run atomically, and the expression still
     # reaches the data layer through `changeset.atomics`.
@@ -142,6 +183,114 @@ defmodule AshQuick.Test.Tally do
     end
 
     destroy :remove
+  end
+
+  ash_quick do
+    display do
+      label :name
+    end
+
+    liveness do
+      enabled? false
+    end
+
+    versioning do
+      enabled? false
+    end
+
+    bookkeeping do
+      inserted_at false
+      updated_at false
+      inserted_by false
+      updated_by false
+    end
+  end
+end
+
+defmodule AshQuick.Test.VersionedTally do
+  @moduledoc """
+  `AshQuick.Test.Tally` with versioning on. Its updates still run atomically,
+  and there the lock sets the counter by an expression of its own —
+  `if <anything written changed> do version + 1 else version end` — which
+  repeats every expression the write set, a sensitive one included.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.AuditDomain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshQuick]
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true
+    attribute :count, :integer, public?: true, allow_nil?: false, default: 0
+    attribute :pin, :string, public?: true, sensitive?: true
+  end
+
+  actions do
+    defaults [:read, create: [:name, :pin]]
+
+    update :bump do
+      accept []
+      change atomic_update(:count, expr(count + 1))
+    end
+
+    update :scramble do
+      accept []
+      change atomic_update(:pin, expr(name <> "-0000"))
+    end
+  end
+
+  ash_quick do
+    display do
+      label :name
+    end
+
+    liveness do
+      enabled? false
+    end
+
+    bookkeeping do
+      inserted_at false
+      updated_at false
+      inserted_by false
+      updated_by false
+    end
+  end
+end
+
+defmodule AshQuick.Test.StampedTally do
+  @moduledoc """
+  `AshQuick.Test.Tally` with an update timestamp. On Ash's atomic path an update
+  default arrives as an expression too — `if <changed> do now() else
+  touched_at end` — which the in-memory path records as a value.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.AuditDomain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshQuick]
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true
+    attribute :count, :integer, public?: true, allow_nil?: false, default: 0
+    update_timestamp :touched_at, public?: true
+  end
+
+  actions do
+    defaults [:read, create: [:name]]
+
+    update :bump do
+      accept []
+      change atomic_update(:count, expr(count + 1))
+    end
   end
 
   ash_quick do

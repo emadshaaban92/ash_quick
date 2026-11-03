@@ -595,7 +595,7 @@ attribute :changes, :map, allow_nil?: false, default: %{}, public?: true
 $ mix ash.codegen add_audit_log_changes
 ```
 
-Five things to know about what it holds:
+Six things to know about what it holds:
 
 * **`from` is the record the actor loaded**, never a fresh read — the entry is
   written inside the transaction of the write it describes. On an unversioned
@@ -618,14 +618,27 @@ Five things to know about what it holds:
   as on the in-memory path. On an unversioned resource `from` is still the
   record the actor loaded, so two `count + 1` writes at once can leave an
   entry reading `from: 0, to: 2`.
+* **An expression a change asked for is kept as `expr`**, as text beside the
+  `from` and `to` it came to: `count: %{from: 0, to: 2, expr: "count + 1"}`
+  stays true even where `from` is stale. It holds the values the action was
+  given, `count + 5` for `^arg(:by)`, and reads as written, without the
+  required and constraint checks Ash wraps it in for the data layer. An
+  input, an update default such as `updated_at` and a versioned resource's
+  counter keep none, even where they arrive as expressions. Once the action is
+  given a sensitive argument, every value in its expressions reads
+  `**redacted**`, since Ash can fold one into another; otherwise only a
+  sensitive attribute's value does. That hides how a value was built, not the
+  value: an attribute that is not sensitive still records in `to` what its
+  expression came to, secret or not. The text is Ash's own rendering of the
+  expression, which may change between Ash versions.
 * **`has_many` and `many_to_many` changes are not in `changes`.** They are
   writes to the other resource: they show up in `arguments` as the input this
   action was given, and in that resource's own audit rows. An embedded resource
   is an attribute and is recorded whole on both sides.
-* **A sensitive attribute is `"**redacted**"` on both sides**, unless it is named
-  in `record_sensitive`. Whether it changed is still decided on the real values,
-  so one that did not change is left out rather than shown as a change between
-  two redactions.
+* **A sensitive attribute is `"**redacted**"` on both sides**, and in its
+  `expr`, unless it is named in `record_sensitive`. Whether it changed is still
+  decided on the real values, so one that did not change is left out rather
+  than shown as a change between two redactions.
 
 ### What a resource must satisfy
 
