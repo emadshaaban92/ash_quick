@@ -56,9 +56,7 @@ defmodule AshQuick.Test.Credential do
 
     # Excluded below, so the tests have an action that records nothing whoever
     # runs it.
-    update :touch do
-      require_atomic? false
-    end
+    update :touch
   end
 
   ash_quick do
@@ -67,6 +65,86 @@ defmodule AshQuick.Test.Credential do
       exclude_actions [:touch]
     end
 
+    display do
+      label :name
+    end
+
+    liveness do
+      enabled? false
+    end
+
+    versioning do
+      enabled? false
+    end
+
+    bookkeeping do
+      inserted_at false
+      updated_at false
+      inserted_by false
+      updated_by false
+    end
+  end
+end
+
+defmodule AshQuick.Test.Tally do
+  @moduledoc """
+  An audited resource whose updates and destroys run atomically.
+
+  Nothing here says `require_atomic? false`, and versioning is off, so nothing
+  turns it off either: `AshQuick.Audit.Change` runs on Ash's atomic path. There
+  an accepted input arrives in `changeset.atomics` rather than in
+  `changeset.attributes`, and an `atomic_update` is an expression only the data
+  layer evaluates — which is what the entry has to be built from.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.AuditDomain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshQuick]
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true
+    attribute :count, :integer, public?: true, allow_nil?: false, default: 0
+    attribute :pin, :string, public?: true, sensitive?: true
+  end
+
+  actions do
+    default_accept [:name, :pin]
+    defaults [:read, :create]
+
+    update :rename, accept: [:name, :pin]
+
+    update :bump do
+      accept []
+      change atomic_update(:count, expr(count + 1))
+    end
+
+    # A secret worked out by the data layer rather than given: an expression on
+    # a sensitive attribute, which is neither input nor something to print.
+    update :scramble do
+      accept []
+      change atomic_update(:pin, expr(name <> "-0000"))
+    end
+
+    # The same expression on the in-memory path: the anonymous change has no
+    # `atomic/3`, so the update cannot run atomically, and the expression still
+    # reaches the data layer through `changeset.atomics`.
+    update :bump_in_memory do
+      accept []
+      require_atomic? false
+
+      change atomic_update(:count, expr(count + 1))
+      change fn changeset, _context -> changeset end
+    end
+
+    destroy :remove
+  end
+
+  ash_quick do
     display do
       label :name
     end

@@ -57,8 +57,8 @@ defmodule AshQuick.Audit.Store do
   resource and the store if the batch does not land.
 
   The third element is what the write changed, worked out by
-  `AshQuick.Audit.Change` before it redacts the changeset — see
-  `AshQuick.Audit.Row.changes/2`.
+  `AshQuick.Audit.Change` before it redacts the changeset; its moduledoc says
+  what the map holds.
   """
   def write([{changeset, _record, _changes} | _] = changes, actor) do
     resource = changeset.resource

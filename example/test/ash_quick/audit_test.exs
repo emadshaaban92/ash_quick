@@ -24,6 +24,7 @@ defmodule AshQuick.AuditTest do
   alias Example.Accounts.AuditLog
   alias Example.Catalog.Brand
   alias Example.Catalog.Product
+  alias Example.Uploads.FileObject
 
   defp entries(record) do
     AuditLog
@@ -207,6 +208,67 @@ defmodule AshQuick.AuditTest do
       assert from_image["featured"] == true
       assert to_image["alt"] == "back"
       assert to_image["featured"] == false
+    end
+  end
+
+  # `FileObject` is audited and unversioned, and its pipeline updates keep
+  # Ash's default `require_atomic? true` — so on Postgres they run as one
+  # `UPDATE ... RETURNING`, and the entry is built from what that returned.
+  describe "an atomic write" do
+    test "an update records what changed, read off the row it returned", %{admin: admin} do
+      assert Ash.Resource.Info.action(FileObject, :release).require_atomic?
+
+      object = file_object(actor: admin)
+
+      released = FileObject.release!(object, actor: admin, authorize?: false)
+
+      assert released.state == :ready
+
+      assert [_custody, entry] = entries(object)
+
+      assert entry.action_name == :release
+      assert entry.attributes["state"] == "ready"
+      assert entry.changes["state"] == %{"from" => "processing", "to" => "ready"}
+
+      # On this path `updated_at` is an expression the data layer evaluates.
+      # The in-memory path records it as a value, and so does this one, read
+      # off the row the update returned.
+      assert entry.attributes["updated_at"] == DateTime.to_iso8601(released.updated_at)
+    end
+
+    test "a bulk destroy by query records the rows it deleted as they stood",
+         %{admin: admin} do
+      object = file_object(actor: admin)
+
+      assert %Ash.BulkResult{status: :success} =
+               FileObject
+               |> Ash.Query.filter(id == ^object.id)
+               |> Ash.bulk_destroy!(:destroy, %{},
+                 strategy: :atomic,
+                 actor: admin,
+                 authorize?: false,
+                 return_errors?: true
+               )
+
+      assert [_custody, entry] = entries(object)
+
+      # What `DELETE ... RETURNING` handed back is the row as it stood.
+      assert entry.changes["key"] == %{"from" => object.key}
+      assert entry.changes["state"] == %{"from" => "processing"}
+    end
+
+    test "a destroy records the record as it stood", %{admin: admin} do
+      assert Ash.Resource.Info.action(FileObject, :destroy).require_atomic?
+
+      object = file_object(actor: admin)
+
+      Ash.destroy!(object, action: :destroy, actor: admin, authorize?: false)
+
+      assert [_custody, entry] = entries(object)
+
+      assert entry.action_type == :destroy
+      assert entry.changes["key"] == %{"from" => object.key}
+      assert entry.changes["state"] == %{"from" => "processing"}
     end
   end
 

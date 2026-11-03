@@ -29,6 +29,7 @@ defmodule AshQuick.AuditTest do
   """
   use ExUnit.Case, async: true
 
+  require Ash.Expr
   require Ash.Query
 
   alias AshQuick.Audit.Row
@@ -37,6 +38,7 @@ defmodule AshQuick.AuditTest do
   alias AshQuick.Test.Credential
   alias AshQuick.Test.LegacyAuditStore
   alias AshQuick.Test.LegacyCredential
+  alias AshQuick.Test.Tally
 
   setup do
     actor =
@@ -326,7 +328,7 @@ defmodule AshQuick.AuditTest do
           actor: actor
         )
 
-      assert Row.changes(changeset, []) == %{
+      assert Row.changes(changeset, built, []) == %{
                name: %{from_unknown: true, to: "Gateway 2"},
                masked_card_number: %{from_unknown: true, to: "**** 1111"}
              }
@@ -376,6 +378,187 @@ defmodule AshQuick.AuditTest do
       # what it always said.
       refute Map.has_key?(entry, :changes)
       assert entry.attributes[:name] == "Gateway"
+    end
+  end
+
+  # An unversioned resource keeps Ash's default, `require_atomic? true`, and an
+  # atomic update builds no in-memory changeset: what it was given is in
+  # `changeset.atomics`, and what an expression came to is only in the record
+  # the write returned.
+  describe "an atomic write" do
+    setup %{actor: actor} do
+      record =
+        Tally
+        |> Ash.Changeset.for_create(:create, %{name: "Gate", pin: "1111"}, actor: actor)
+        |> Ash.create!()
+
+      %{record: record}
+    end
+
+    test "Tally's actions really are atomic" do
+      # Without this, everything below would pass just as well on the
+      # in-memory path the audit change has always handled.
+      for name <- [:rename, :bump, :remove] do
+        assert Ash.Resource.Info.action(Tally, name).require_atomic?
+      end
+    end
+
+    test "an update records what it was given and what changed, with secrets redacted",
+         %{actor: actor, record: record} do
+      record
+      |> Ash.Changeset.for_update(:rename, %{name: "Gate 2", pin: "2222"}, actor: actor)
+      |> Ash.update!()
+
+      assert [_created, entry] = entries(record)
+
+      assert entry.action_name == :rename
+      assert entry.actor_id == actor.id
+      assert entry.attributes == %{name: "Gate 2", pin: "**redacted**"}
+
+      assert entry.changes == %{
+               name: %{from: "Gate", to: "Gate 2"},
+               pin: %{from: "**redacted**", to: "**redacted**"}
+             }
+
+      refute inspect(entry) =~ "1111"
+      refute inspect(entry) =~ "2222"
+    end
+
+    test "an expression is recorded as what it came to, and not as input",
+         %{actor: actor, record: record} do
+      bumped =
+        record
+        |> Ash.Changeset.for_update(:bump, %{}, actor: actor)
+        |> Ash.update!()
+
+      assert bumped.count == 1
+
+      assert [_created, entry] = entries(record)
+
+      # `count + 1` is something a change asked of the data layer rather than
+      # something the action was given.
+      assert entry.attributes == %{}
+      assert entry.changes == %{count: %{from: 0, to: 1}}
+    end
+
+    test "a sensitive expression is redacted, and not recorded as input",
+         %{actor: actor, record: record} do
+      scrambled =
+        record
+        |> Ash.Changeset.for_update(:scramble, %{}, actor: actor)
+        |> Ash.update!()
+
+      assert scrambled.pin == "Gate-0000"
+
+      assert [_created, entry] = entries(record)
+
+      # Redacted in `atomics` like any other secret there — and the action was
+      # given nothing, so `attributes` still says so.
+      assert entry.attributes == %{}
+      assert entry.changes == %{pin: %{from: "**redacted**", to: "**redacted**"}}
+      refute inspect(entry) =~ "Gate-0000"
+    end
+
+    test "an input the type cast to an expression is recorded as what it came to",
+         %{record: record} do
+      # A type can cast an input atomically into an expression, which the
+      # in-memory path would have recorded as a value. ETS keeps a string a
+      # string, so the expression is put in place by hand.
+      changeset =
+        record
+        |> Ash.Changeset.for_update(:rename, %{name: "Gate 2"})
+        |> Ash.Changeset.atomic_update(:name, Ash.Expr.expr(name <> " 2"))
+
+      assert Row.given(changeset, %{record | name: "Gate 2"}) == %{name: "Gate 2"}
+
+      # One a change asked for is not input on either path.
+      bumped = Ash.Changeset.for_update(record, :bump, %{})
+
+      assert Row.given(bumped, %{record | count: 1}) == %{}
+    end
+
+    test "a new value the write did not return is unknown rather than recorded",
+         %{record: record} do
+      changeset = Ash.Changeset.for_update(record, :bump, %{})
+
+      # A `select` that leaves the attribute out of what an atomic write returns.
+      returned = %{record | count: %Ash.NotLoaded{field: :count, type: :attribute}}
+
+      assert Row.changes(changeset, returned, []) == %{count: %{from: 0, to_unknown: true}}
+    end
+
+    test "an expression on an action that is not atomic is recorded the same way",
+         %{actor: actor, record: record} do
+      refute Ash.Resource.Info.action(Tally, :bump_in_memory).require_atomic?
+
+      bumped =
+        record
+        |> Ash.Changeset.for_update(:bump_in_memory, %{}, actor: actor)
+        |> Ash.update!()
+
+      assert bumped.count == 1
+
+      assert [_created, entry] = entries(record)
+
+      # `changeset.attributes` is empty here too: an `atomic_update` sends its
+      # attribute through `changeset.atomics` on either path.
+      assert entry.changes == %{count: %{from: 0, to: 1}}
+    end
+
+    test "a bulk update by query has no record to read `from` off",
+         %{actor: actor, record: record} do
+      assert %Ash.BulkResult{status: :success} =
+               Tally
+               |> Ash.Query.filter(id == ^record.id)
+               |> Ash.bulk_update!(:rename, %{name: "Gate 3"},
+                 strategy: :atomic,
+                 actor: actor,
+                 return_errors?: true
+               )
+
+      assert [_created, entry] = entries(record)
+
+      # The rows were never read into memory, so the previous value is unknown
+      # rather than `nil` — and `to` still is what the row now holds.
+      assert entry.changes == %{name: %{from_unknown: true, to: "Gate 3"}}
+    end
+
+    test "a bulk destroy by query records the rows it deleted as they stood",
+         %{actor: actor, record: record} do
+      assert %Ash.BulkResult{status: :success} =
+               Tally
+               |> Ash.Query.filter(id == ^record.id)
+               |> Ash.bulk_destroy!(:remove, %{},
+                 strategy: :atomic,
+                 actor: actor,
+                 return_errors?: true
+               )
+
+      assert [_created, entry] = entries(record)
+
+      # Nothing was read into memory, but the rows the data layer deleted come
+      # back as they stood, so every `from` is known.
+      assert entry.changes == %{
+               id: %{from: record.id},
+               name: %{from: "Gate"},
+               count: %{from: 0},
+               pin: %{from: "**redacted**"}
+             }
+    end
+
+    test "a destroy records the record as it stood", %{actor: actor, record: record} do
+      Ash.destroy!(record, action: :remove, actor: actor)
+
+      assert [_created, entry] = entries(record)
+
+      assert entry.action_name == :remove
+
+      assert entry.changes == %{
+               id: %{from: record.id},
+               name: %{from: "Gate"},
+               count: %{from: 0},
+               pin: %{from: "**redacted**"}
+             }
     end
   end
 end

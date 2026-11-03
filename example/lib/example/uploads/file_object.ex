@@ -63,7 +63,6 @@ defmodule Example.Uploads.FileObject do
 
     destroy :destroy do
       public? false
-      require_atomic? false
     end
 
     read :index do
@@ -119,12 +118,9 @@ defmodule Example.Uploads.FileObject do
       ]
     end
 
-    # `require_atomic? false` throughout: the audit change builds its row from
-    # the changeset, which the atomic path never produces.
     update :release do
       public? false
       accept []
-      require_atomic? false
 
       change set_attribute(:state, :ready)
     end
@@ -132,7 +128,6 @@ defmodule Example.Uploads.FileObject do
     update :reject do
       public? false
       accept []
-      require_atomic? false
 
       change set_attribute(:state, :rejected)
     end
