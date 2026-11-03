@@ -92,7 +92,7 @@ defmodule AshQuick.LiveView.DetailsUtils do
   end
 
   @doc false
-  # The display hint of each record a details field names — see
+  # The display hint of each record a details or list field names — see
   # `QuickField.names_record?/2` — since the page links that record and the
   # hint is the link's tooltip. Merged into the field's own load rather than
   # strict, so it adds the hint without narrowing what the field selected.
@@ -104,8 +104,8 @@ defmodule AshQuick.LiveView.DetailsUtils do
   end
 
   @doc false
-  # Every record the details `fields` name, as the relationships reaching it
-  # and its resource.
+  # Every record the details or list `fields` name, as the relationships
+  # reaching it and its resource.
   def linked_records(resource, fields) do
     fields
     |> Enum.flat_map(&QuickField.named_records(resource, &1.path))

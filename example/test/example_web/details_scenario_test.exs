@@ -175,15 +175,43 @@ defmodule ExampleWeb.DetailsScenarioTest do
       )
     end
 
-    # The list renders the same fields without linking them.
-    test "is not linked on a list page", ctx do
-      %{conn: conn, admin: admin, product: product, brand: brand} = ctx
+    # A list column naming a record links it the way the details page does,
+    # beside the row's own "View details" link rather than inside a row that
+    # navigates on a click.
+    test "links from a list row too, with its hint", ctx do
+      %{conn: conn, admin: admin, brand: brand, category: category} = ctx
+
+      store = store(name: "Harbour Street", actor: admin)
+
+      product =
+        product(name: "Trail tent", brand: brand, category: category, store: store, actor: admin)
 
       conn
       |> log_in(admin)
       |> visit(~p"/products")
-      |> assert_has("td", text: product.name)
-      |> refute_has("td a[href='/brands/#{brand.id}']")
+      |> assert_has(row_link(product, "brands", brand), text: brand.name)
+      |> assert_has(row_link(product, "stores", store), text: store.name)
+      |> click_link(row_link(product, "stores", store), store.name)
+      |> assert_path(~p"/stores/#{store.id}")
+    end
+
+    test "is plain text on a list row, hint and all, for a reader without that page", ctx do
+      %{conn: conn, admin: admin, editor: editor, brand: brand, category: category} = ctx
+
+      store = store(name: "Harbour Street", actor: admin)
+
+      product =
+        product(name: "Trail tent", brand: brand, category: category, store: store, actor: admin)
+
+      # An editor holds `/brands` but not `/stores`.
+      conn
+      |> log_in(editor)
+      |> visit(~p"/products")
+      |> assert_has(row_link(product, "brands", brand), text: brand.name)
+      |> assert_has(~s{tr[id="#{product.id}"] td}, text: store.name)
+      |> refute_has(~s{tr[id="#{product.id}"] td a[href="/stores/#{store.id}"]})
+      |> refute_has(~s{tr[id="#{product.id}"] [title="#{store.code}"]})
+      |> refute_has(~s{tr[id="#{product.id}"] td}, text: store.code)
     end
   end
 
@@ -369,6 +397,11 @@ defmodule ExampleWeb.DetailsScenarioTest do
 
   defp related_link(base, record) do
     ~s{dd a[href="/#{base}/#{record.id}"][title="#{record.code}"]} <>
+      ~s{[aria-label="#{record.name} (#{record.code})"]}
+  end
+
+  defp row_link(row, base, record) do
+    ~s{tr[id="#{row.id}"] td a[href="/#{base}/#{record.id}"][title="#{record.code}"]} <>
       ~s{[aria-label="#{record.name} (#{record.code})"]}
   end
 end

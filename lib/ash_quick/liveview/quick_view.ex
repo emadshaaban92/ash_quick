@@ -918,7 +918,7 @@ defmodule AshQuick.LiveView.QuickView do
 
   # Assigns what the generic templates render from, beyond what
   # `load_params/4` loaded: the component id, the field list, the bulk action
-  # menu, and the pagination path builder. After the load because the
+  # menu, the pagination path builder, and the list's linker. After the load because the
   # list read can still drop a refused filter from `:params`, and
   # `path_for_page` has to build from what the page rendered; before
   # `after_handle_params/2` so a host can still override any of these.
@@ -952,6 +952,7 @@ defmodule AshQuick.LiveView.QuickView do
     |> assign(:new_click, fn -> JS.push("new_click") end)
     |> assign(:actions, socket.assigns[:bulk_actions] || [])
     |> assign(:path_for_page, &URLParams.path_for_page(path, params, &1))
+    |> assign(:linker, list_linker(socket, options))
   end
 
   defp do_prepare_assigns(socket, %{id: id}, %Actions.Read{} = action, %Options{} = options) do
@@ -969,6 +970,18 @@ defmodule AshQuick.LiveView.QuickView do
        when type in [Actions.Update, Actions.Destroy] do
     socket
     |> assign(:id, "#{id}-form")
+  end
+
+  # What a record a list column names links to, the way the details page
+  # links it: one `AshQuick.Nav.Info.details_linker/3` over the resources the
+  # columns name, asked of every cell. Built again it is an equal function,
+  # so a navigation that changes neither the scope nor the routes leaves the
+  # rows untouched.
+  defp list_linker(socket, %Options{} = options) do
+    options.resource
+    |> DetailsUtils.linked_records(options.list_fields)
+    |> Enum.map(&elem(&1, 1))
+    |> AshQuick.Nav.Info.details_linker(socket.assigns[:scope])
   end
 
   # A column every row would show as hidden is left out instead. Recomputed per

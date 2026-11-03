@@ -727,7 +727,8 @@ and what to write.
   See `AshQuick.Info.display_label/1`. Keep the label short — it is a dropdown
   option — and put what tells two same-labelled records apart in `hint`
   (a field, plain text: the tooltip on a details page's links to its writers
-  and related records, shown only with the link; shown beside the label in
+  and related records, and a list's links to related records, shown only
+  with the link; shown beside the label in
   the Live Users register, the impersonation banner and every relationship
   dropdown onto the resource, where it is loaded with each option, so an
   aggregate hint costs a subquery per dropdown read; the lookup action

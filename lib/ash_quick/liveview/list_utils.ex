@@ -15,6 +15,7 @@ defmodule AshQuick.LiveView.ListUtils do
   alias AshQuick.LiveView.FormUtils
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.CustomFilter
+  alias AshQuick.LiveView.DetailsUtils
   alias AshQuick.LiveView.LocalDatetime
   alias AshQuick.LiveView.Components.FilterForm
   alias AshQuick.LiveView.Liveness
@@ -91,6 +92,12 @@ defmodule AshQuick.LiveView.ListUtils do
     |> apply_sort(params, options)
     |> Utils.load_fields(options.list_fields, strict?: true)
     |> Ash.Query.load(options.load ++ options.list_load, strict?: true)
+    |> then(
+      &Ash.Query.load(
+        &1,
+        DetailsUtils.related_hint_load(options.resource, options.list_fields, &1.tenant)
+      )
+    )
     |> maybe_load_active(options.resource)
     |> Ash.Query.page(limit: limit, offset: offset)
     |> Ash.read!()

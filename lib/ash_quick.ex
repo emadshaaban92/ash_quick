@@ -108,9 +108,10 @@ defmodule AshQuick do
   searches through the resource's lookup action, never by what it shows, so
   that action should match whatever the hint shows. A details page links the
   records it names — the writers in its header, and a field that stops at a
-  relationship or reaches the related record's label — and puts the hint on
-  each link, as a tooltip and in the link's accessible name, so a reader who
-  may not open that record's page sees neither. The Live Users register and
+  relationship or reaches the related record's label — and a list page links
+  such a column in each row; each puts the hint on its link, as a tooltip and
+  in the link's accessible name, so a reader who may not open that record's
+  page sees neither. The Live Users register and
   the impersonation banner show the hint beside a person's label, plainly,
   since they are where two people sharing a name must never be confused, and
   the register's search matches it. A field policy narrows all of these: a
@@ -656,7 +657,7 @@ defmodule AshQuick do
       hint: [
         type: :atom,
         doc:
-          "An attribute, calculation or aggregate shown beside the label where one record has to be told from another with the same label — the tooltip on a details page's link to the record, shown only to a reader who gets the link; beside a person's label in the Live Users register and the impersonation banner; and in every relationship dropdown onto the resource, under each option's label and each picked tag's. Loaded with each option a dropdown reads, so prefer an attribute or a cheap calculation, and have the lookup action search what it shows. Blank is no hint. Plain text. Naming anything else does not compile."
+          "An attribute, calculation or aggregate shown beside the label where one record has to be told from another with the same label — the tooltip on a details or list page's link to the record, shown only to a reader who gets the link; beside a person's label in the Live Users register and the impersonation banner; and in every relationship dropdown onto the resource, under each option's label and each picked tag's. Loaded with each option a dropdown reads, so prefer an attribute or a cheap calculation, and have the lookup action search what it shows. Blank is no hint. Plain text. Naming anything else does not compile."
       ],
       path: [
         type: :string,

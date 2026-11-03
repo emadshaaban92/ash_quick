@@ -690,11 +690,11 @@ A details page links the records it names — the writers in its "Created by"
 header, and any field that stops at a relationship (`:store`) or reaches the
 related record's label (`{[brand: :name], label: "Maker"}`) — for a reader
 the nav's access control grants the record's page, with the hint as the
-link's tooltip and in its accessible name. A reader with no link sees
-neither. The grant is a route grant: it does not ask whether the reader may
-read that record. List pages do not link. The Live Users register and the
-impersonation banner show a person's hint beside their label, and the
-register's search matches it.
+link's tooltip and in its accessible name. A list page links such columns the
+same way, in each row. A reader with no link sees neither. The grant is a
+route grant: it does not ask whether the reader may read that record. The
+Live Users register and the impersonation banner show a person's hint beside
+their label, and the register's search matches it.
 
 Every relationship dropdown pointing at the resource shows the hint too: under
 each option's label and each picked tag's, on a line of its own, and as
