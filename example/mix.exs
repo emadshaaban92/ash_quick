@@ -6,7 +6,7 @@ defmodule Example.MixProject do
 
   It exists to be a *host*: the library has no Repo, no endpoint and no router
   of its own, so the paths that only exist inside a real Phoenix + AshPostgres
-  application — the optimistic lock's `before_action` filter reaching SQL, a
+  application — the optimistic lock reaching SQL on both of Ash's paths, a
   presign taking custody in a transaction, a QuickView rendered end to end
   behind a session — can only be tested here. Everything it demonstrates is a
   by-product of that.

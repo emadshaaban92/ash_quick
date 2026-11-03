@@ -305,6 +305,30 @@ defmodule ExampleWeb.FormScenarioTest do
       assert reloaded.version == 2
     end
 
+    # The same race through a named action that runs atomically, where the
+    # lock is a condition inside PostgreSQL's `UPDATE` rather than a filter set
+    # in memory: a stale save matches no row, and reads the same.
+    test "the second editor is told on the atomic path too", ctx do
+      %{conn: conn, admin: admin, brand: brand} = ctx
+
+      first = conn |> log_in(admin) |> visit(~p"/test/atomic_brands/#{brand.id}/rename")
+      second = conn |> log_in(admin) |> visit(~p"/test/atomic_brands/#{brand.id}/rename")
+
+      first
+      |> fill_in("Name", with: "Renamed by the first")
+      |> click_button("Save")
+      |> assert_has("h1", text: "Renamed by the first")
+
+      second
+      |> fill_in("Name", with: "Renamed by the second")
+      |> click_button("Save")
+      |> assert_has("*", text: AshQuick.LiveView.ActionErrors.stale_message())
+
+      reloaded = Ash.reload!(brand, authorize?: false)
+      assert reloaded.name == "Renamed by the first"
+      assert reloaded.version == 2
+    end
+
     test "an editor working alone is never blocked", ctx do
       %{conn: conn, admin: admin, brand: brand} = ctx
 

@@ -39,6 +39,7 @@ config :ash_quick,
       # No role is granted those pages, which is what keeps them out of every
       # nav — and exactly what the check reports about a page the router serves.
       unreachable_entry: [
+        "/test/atomic_brands",
         "/test/bulk_guarded",
         "/test/bulk_named",
         "/test/dated_entries",

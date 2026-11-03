@@ -9,11 +9,18 @@ defmodule AshQuick.VersioningTest do
 
   Driven against `Example.Catalog.Brand`, which carries nothing but the
   extension's defaults: a stale write here fails because of versioning and not
-  because of anything the resource says.
+  because of anything the resource says. Its actions are Ash's defaults, which
+  run in memory; `Example.Test.AtomicBrand` writes the same rows through named
+  actions that run atomically, where the lock is an expression PostgreSQL
+  evaluates inside the `UPDATE`.
   """
   use Example.DataCase, async: true
 
+  require Ash.Query
+
+  alias Example.Accounts.AuditLog
   alias Example.Catalog.Brand
+  alias Example.Test.AtomicBrand
 
   describe "optimistic lock" do
     test "rejects a stale write (a filter set in a before_action is honored)", %{admin: admin} do
@@ -101,6 +108,203 @@ defmodule AshQuick.VersioningTest do
 
       assert :ok = Ash.destroy(brand, actor: admin, authorize?: false)
       assert {:error, _} = Ash.get(Brand, brand.id, actor: admin, authorize?: false)
+    end
+  end
+
+  describe "on the atomic path" do
+    setup %{admin: admin} do
+      brand = brand(actor: admin)
+      %{brand: Ash.get!(AtomicBrand, brand.id)}
+    end
+
+    defp rename(record, input, actor) do
+      record
+      |> Ash.Changeset.for_update(:rename, input, actor: actor)
+      |> Ash.update()
+    end
+
+    defp stale?(%{errors: errors}),
+      do: Enum.any?(errors, &match?(%Ash.Error.Changes.StaleRecord{}, &1))
+
+    defp stale?(errors) when is_list(errors), do: Enum.any?(errors, &stale?/1)
+    defp stale?(%Ash.Error.Changes.StaleRecord{}), do: true
+    defp stale?(_), do: false
+
+    defp row(record), do: Ash.get!(AtomicBrand, record.id)
+
+    test "the actions keep require_atomic?, so a write that lands ran atomically" do
+      for name <- [:rename, :shout, :remove] do
+        assert Ash.Resource.Info.action(AtomicBrand, name).require_atomic?
+      end
+    end
+
+    test "bumps the version", %{brand: brand, admin: admin} do
+      assert {:ok, %{version: 2}} = rename(brand, %{name: unique("Renamed ")}, admin)
+    end
+
+    test "refuses a stale copy, and the row keeps the other write", %{brand: brand, admin: admin} do
+      first = unique("First ")
+      {:ok, _} = rename(brand, %{name: first}, admin)
+
+      assert {:error, error} = rename(brand, %{name: unique("Second ")}, admin)
+      assert stale?(error)
+      assert %{name: ^first, version: 2} = row(brand)
+    end
+
+    test "re-submitting what the row holds neither bumps nor refuses", %{
+      brand: brand,
+      admin: admin
+    } do
+      assert {:ok, %{version: 1}} = rename(brand, %{code: brand.code, name: brand.name}, admin)
+      assert %{version: 1} = row(brand)
+    end
+
+    test "a bookkeeping-only difference is not a change", %{
+      brand: brand,
+      admin: admin,
+      editor: editor
+    } do
+      # The editor stamps a different `updated_by`, and that is all that moves.
+      assert {:ok, %{version: 1}} = rename(brand, %{name: brand.name}, editor)
+      assert %{version: 1} = row(brand)
+      assert {:ok, %{version: 2}} = rename(brand, %{name: unique("By admin ")}, admin)
+    end
+
+    test "a value unchanged from the copy but not from the row is locked", %{
+      brand: brand,
+      admin: admin
+    } do
+      theirs = unique("Theirs ")
+      {:ok, _} = rename(brand, %{name: theirs}, admin)
+
+      # The atomic path writes every accepted input, so this would put the old
+      # name back over theirs.
+      assert {:error, error} = rename(brand, %{name: brand.name}, admin)
+      assert stale?(error)
+      assert %{name: ^theirs} = row(brand)
+    end
+
+    test "an expression PostgreSQL works out is locked", %{brand: brand, admin: admin} do
+      shout = fn record ->
+        record |> Ash.Changeset.for_update(:shout, %{}, actor: admin) |> Ash.update()
+      end
+
+      assert {:ok, %{version: 2} = shouted} = shout.(brand)
+      assert shouted.name == brand.name <> "!"
+
+      assert {:error, error} = shout.(brand)
+      assert stale?(error)
+    end
+
+    test "a restricted field is dropped on this path too", %{brand: brand, editor: editor} do
+      name = unique("Editor's ")
+
+      assert {:ok, %{code: code, name: ^name}} =
+               rename(brand, %{code: unique("FORGED"), name: name}, editor)
+
+      assert code == brand.code
+    end
+
+    test "the audit entry records the bump", %{brand: brand, admin: admin} do
+      name = unique("Audited ")
+      {:ok, _} = rename(brand, %{name: name}, admin)
+
+      assert %{changes: %{"version" => %{"from" => 1, "to" => 2}, "name" => %{"to" => ^name}}} =
+               AuditLog
+               |> Ash.Query.filter(resource_id == ^brand.id and action_name == :rename)
+               |> Ash.read_one!(authorize?: false)
+    end
+
+    # Three rows: one loaded and current, one loaded and since moved on, and
+    # one named by id only, also moved on.
+    defp update_many_rows(admin) do
+      fresh = Ash.get!(AtomicBrand, brand(actor: admin).id)
+      stale = Ash.get!(AtomicBrand, brand(actor: admin).id)
+      {:ok, _} = rename(stale, %{name: unique("Moved on ")}, admin)
+      by_id = brand(actor: admin)
+      {:ok, _} = rename(Ash.get!(AtomicBrand, by_id.id), %{name: unique("Moved on ")}, admin)
+
+      inputs = [
+        {fresh, %{name: unique("Many ")}},
+        {stale, %{name: unique("Many ")}},
+        {by_id.id, %{name: unique("Many ")}}
+      ]
+
+      {inputs, fresh, stale, by_id}
+    end
+
+    defp written(result), do: result.records |> Enum.map(&{&1.id, &1.version}) |> Enum.sort()
+
+    # `Ash.update_many/4` writes in one `MERGE`, which needs the PostgreSQL 17
+    # that `Example.Repo` declares.
+    test "update_many's MERGE locks each loaded record and bumps each identifier", %{
+      admin: admin
+    } do
+      {inputs, fresh, stale, by_id} = update_many_rows(admin)
+
+      result =
+        Ash.update_many(inputs, AtomicBrand, :rename,
+          actor: admin,
+          return_records?: true,
+          return_errors?: true
+        )
+
+      assert written(result) == Enum.sort([{fresh.id, 2}, {by_id.id, 3}])
+      assert stale?(result.errors)
+      assert %{version: 2} = row(stale)
+    end
+
+    test "a bulk write by query declines the atomic strategy and streams, locked", %{
+      brand: brand,
+      admin: admin
+    } do
+      query = Ash.Query.filter(AtomicBrand, id == ^brand.id)
+
+      assert %Ash.BulkResult{status: :error} =
+               Ash.bulk_update(query, :rename, %{name: unique("Bulk ")},
+                 actor: admin,
+                 strategy: :atomic
+               )
+
+      assert %Ash.BulkResult{status: :success, records: [%{version: 2}]} =
+               Ash.bulk_update(query, :rename, %{name: unique("Bulk ")},
+                 actor: admin,
+                 strategy: [:atomic, :stream],
+                 return_records?: true
+               )
+    end
+
+    test "a stale destroy is still refused", %{brand: brand, admin: admin} do
+      {:ok, _} = rename(brand, %{name: unique("Moved on ")}, admin)
+
+      assert {:error, error} = Ash.destroy(brand, action: :remove, actor: admin)
+      assert stale?(error)
+      assert :ok = Ash.destroy(row(brand), action: :remove, actor: admin)
+    end
+
+    test "a destroy of a record nobody loaded goes through", %{brand: brand, admin: admin} do
+      {:ok, _} = rename(brand, %{name: unique("Moved on ")}, admin)
+
+      assert :ok = Ash.destroy(%AtomicBrand{id: brand.id}, action: :remove, actor: admin)
+      assert {:error, _} = Ash.get(AtomicBrand, brand.id)
+    end
+
+    test "a built record given a stale version of its own is refused", %{
+      brand: brand,
+      admin: admin
+    } do
+      {:ok, moved} = rename(brand, %{name: unique("Moved on ")}, admin)
+      {:ok, _} = rename(moved, %{name: unique("Again ")}, admin)
+
+      # An API that takes the version the client last saw.
+      held = %AtomicBrand{id: brand.id, version: 2}
+
+      assert {:error, error} = rename(held, %{name: unique("From version 2 ")}, admin)
+      assert stale?(error)
+
+      assert {:error, error} = Ash.destroy(held, action: :remove, actor: admin)
+      assert stale?(error)
+      assert %{version: 3} = row(brand)
     end
   end
 end

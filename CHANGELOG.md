@@ -4,6 +4,25 @@
 
 ### Features
 
+- **Versioned resources run their updates atomically.** The optimistic lock
+  now works on Ash's atomic path as well as in memory, so versioning no
+  longer turns `require_atomic?` off: an update that can run atomically does,
+  with the lock inside the `UPDATE`, and `Ash.update_many/4` over loaded
+  records locks each one, a stale row failing alone with
+  `Ash.Error.Changes.StaleRecord`. On that path "changed" is decided against
+  the row being written, the way Ash decides whether `updated_at` moves: a
+  write of what the row already holds neither filters nor bumps, and
+  bookkeeping fields still do not count. A record nobody loaded, such as a
+  hand-built `%Post{id: id}` or an identifier given to `update_many`, still
+  holding the counter's default, has no copy to be stale, and is bumped
+  without the check on either path, where it used to be checked against that
+  default. A hand-built record given a version of its own, such as
+  `%Post{id: id, version: params["version"]}`, is checked as before. A bulk write by query or
+  by `:atomic_batches` that changes anything still runs `:stream`, since Ash
+  gives the lock no versions there. `field_restrictions` gains the same
+  path: `StripRestrictedFields` drops a restricted value from
+  `changeset.atomics` too.
+
 - **Timestamps show in the reader's timezone, and a form says which zone a
   time is typed in.** The list, the details page, the live sessions page,
   exports, print file names and the filter read the zone of the reader's
@@ -471,8 +490,7 @@
   `updated_at` are kept, redacted when `sensitive?`, and a change's
   `atomic_update` is not input. A bulk update by query never
   reads its rows, so its `from` is `from_unknown: true`; a bulk destroy by
-  query reads `from` off the rows it deleted. Versioned resources are
-  unchanged: the optimistic lock still forces `require_atomic? false`.
+  query reads `from` off the rows it deleted.
 
 - **A filter chip reads an atom's value by its declared label.** A chip on
   an `:atom` field with `one_of` read the humanized value ("Status =
@@ -838,6 +856,24 @@
   default interpolation gets the same treatment.
 
 ### Breaking changes
+
+- **PostgreSQL 17 or later is required.** On AshPostgres, declare it in the
+  repo, `def min_pg_version, do: %Version{major: 17, minor: 0, patch: 0}`:
+  AshPostgres writes SQL for the declared version, and `Ash.update_many/4`
+  locks versioned rows in one `MERGE` only from 17. The example app declares
+  17.
+
+- **Versioning no longer forces `require_atomic? false`.** Each update and
+  destroy on a versioned resource keeps its own setting, so a named one
+  (Ash's default is `require_atomic? true`; `defaults [:update]` is not) with
+  a change that has no `atomic/3`, such as `change fn ...`, now draws Ash's
+  compile-time warning and fails with `Ash.Error.Framework.MustBeAtomic`.
+  Say `require_atomic? false` on it, as on any resource. Such an update that
+  can run atomically now does, and there a value the actor re-submitted
+  unchanged, but that someone else has since changed, is written and so
+  locked: it fails with `StaleRecord` where the in-memory path drops it as
+  unchanged. `Ash.bulk_update` by query with `strategy: :atomic` still finds
+  no strategy for a write that changes anything; add `:stream`.
 
 - **`:humanize_overrides` is removed, and so is the `_ar` label rule.** A
   humanized name is now only `Phoenix.Naming.humanize/1` title-cased, with

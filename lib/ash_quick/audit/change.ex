@@ -91,8 +91,8 @@ defmodule AshQuick.Audit.Change do
   On an unversioned resource `from` is still what the actor loaded, so two
   `count + 1` writes at once can leave an entry reading `from: 0, to: 2`.
 
-  A versioned resource's updates and destroys never run atomically: its
-  optimistic lock forces `require_atomic? false` on them.
+  On a versioned resource the optimistic lock refuses a write against a stale
+  copy on this path too, so `from` there is what the row held.
 
   Only attributes appear. A `has_many` or `many_to_many` change is not one — it
   is a write to the other resource, recorded in that resource's own entries, and

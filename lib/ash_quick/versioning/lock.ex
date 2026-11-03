@@ -2,24 +2,67 @@ defmodule AshQuick.Versioning.Lock do
   @moduledoc false
   # Single-mechanism optimistic lock for declared versioning.
   #
-  # Unlike `Ash.Resource.Change.OptimisticLock`, which decides whether to lock at
-  # the *change phase* (before `before_action` hooks run), this change makes the
-  # decision in a `before_action` registered last — so it sees the FINAL
-  # changeset. That closes two holes the change-phase decision cannot:
+  # The lock is taken only for a *meaningful* write: one that changes an
+  # attribute or relationship other than the counter itself and the ones
+  # `AshQuick.Config.versioning_ignored_attributes/1` and
+  # `versioning_ignored_relationships/1` name. A destroy is always meaningful.
+  # Taking it means refusing the write unless the row still holds the version
+  # the actor loaded, and bumping that version.
   #
-  #   * Under-lock: a `before_action` that injects the only real change used to
-  #     write the row with no lock at all (the change-phase guard saw an empty
-  #     changeset and skipped the lock). Now that change is visible, so the write
-  #     is locked.
-  #   * Over-lock churn / self-referential collisions: a changeset that is a
-  #     genuine no-op once all `before_action`s have run gets no filter and no
-  #     bump, so an orchestration update that doesn't touch its own record can't
-  #     collide with a nested update that bumps the same record mid-action.
+  # The decision has to see the *final* write, or two things go wrong:
   #
-  # This requires the action to run non-atomically (the decision needs the
-  # in-memory final changeset). `AshQuick.Versioning.Transformer` forces
-  # `require_atomic? false` on every `:update`/`:destroy` action of a versioned
-  # resource; `atomic/3` here returns `:not_atomic` as a backstop.
+  #   * Under-lock: a write whose only real change arrives after the decision
+  #     goes through with no lock at all.
+  #   * Over-lock churn / self-referential collisions: a write that ends up a
+  #     genuine no-op still filters and bumps, so an orchestration update that
+  #     doesn't touch its own record can collide with a nested update that bumps
+  #     the same record mid-action.
+  #
+  # Ash runs an update or destroy down one of two paths, and the lock decides on
+  # each where the final write is visible.
+  #
+  # Non-atomic (`change/3`): `before_action` hooks may still change the
+  # changeset after every change has run, so the decision is a `before_action`
+  # of its own, appended last, made against the in-memory changeset. A value
+  # equal to what the record holds is not a change there — Ash drops it before
+  # the write.
+  #
+  # Atomic (`atomic/3`): Ash refuses any `before_action` hook on this path, and
+  # the lock is a global change appended after the resource's own, so by the
+  # time it runs every change that can write has written into
+  # `changeset.attributes` or `changeset.atomics`. What it cannot know is
+  # whether those values differ from the row: Ash writes every accepted input
+  # here, unchanged ones included, as atomics. So "meaningful" becomes an
+  # expression the data layer evaluates against the row being written — the
+  # same comparison Ash makes to decide whether an `update_default` such as
+  # `updated_at` moves. When it holds, the write is filtered on the loaded
+  # version and bumps it; when it does not, the row is written as it stands and
+  # the version is left alone.
+  #
+  # Two limits of that path. The lock sees only what ran before it: a global
+  # change another extension's transformer appends after AshQuick's can write
+  # an atomic the lock never compared, where the in-memory path, deciding in
+  # the last `before_action`, would have seen its result. And the condition
+  # repeats every written expression, once in the counter's value and once in
+  # the filter, so a fragment with a side effect such as `nextval(...)` is
+  # evaluated more than once, and the statement grows with each field written.
+  #
+  # The atomic path declines (`:not_atomic`) a meaningful write whose changeset
+  # carries `Ash.Changeset.OriginalDataNotAvailable`. That is a bulk write by
+  # query, where nobody holds a copy, but it is also an `:atomic_batches` bulk
+  # write over records somebody *did* load: Ash builds one changeset for every
+  # batch and gives it none of their versions, and nothing on it says which of
+  # the two it is. Declining keeps the per-record lock of the stream strategy
+  # for both, which is what Ash's own `OptimisticLock` does.
+  #
+  # A record nobody loaded — a hand-built `%Post{id: id}`, or an identifier
+  # given to `Ash.update_many/4`, which Ash turns into one — carries the
+  # counter's default rather than a version anybody saw. There is no copy to be
+  # stale, so its write is bumped without the check, on both paths. Ecto's
+  # metadata is what tells it apart (`:built` until a data layer returns it),
+  # together with the counter still holding its default: a built record given
+  # a version of its own, `%Post{id: id, version: params["version"]}`, is a
+  # copy held somewhere else, and is checked like a loaded one.
   #
   # The locked attribute arrives in `opts` — the transformer resolved it from the
   # resource's declaration, so nothing here has to look it up per changeset.
@@ -37,9 +80,24 @@ defmodule AshQuick.Versioning.Lock do
   end
 
   @impl true
-  def atomic(_changeset, _opts, _context) do
-    {:not_atomic,
-     "AshQuick versioning decides the optimistic lock on the final changeset in a before_action"}
+  def atomic(changeset, opts, _context) do
+    attribute = Keyword.fetch!(opts, :attribute)
+
+    case changed_condition(changeset, attribute) do
+      nil ->
+        {:ok, changeset}
+
+      condition ->
+        case changeset.data do
+          %Ash.Changeset.OriginalDataNotAvailable{} ->
+            {:not_atomic,
+             "AshQuick versioning cannot tell a bulk write by query from atomic batches " <>
+               "over loaded records, whose versions it would have to check"}
+
+          data ->
+            {:ok, atomic_lock(changeset, attribute, loaded_version(data, attribute), condition)}
+        end
+    end
   end
 
   # A destroy is always meaningful. Its changeset carries no attribute changes,
@@ -60,17 +118,41 @@ defmodule AshQuick.Versioning.Lock do
   end
 
   defp apply_lock(changeset, attribute) do
-    current = Map.get(changeset.data, attribute)
+    case loaded_version(changeset.data, attribute) do
+      nil ->
+        Ash.Changeset.atomic_update(
+          changeset,
+          attribute,
+          {:atomic, Ash.Expr.expr(^Ash.Expr.ref(attribute) + 1)}
+        )
 
-    changeset
-    |> Ash.Changeset.filter(Ash.Expr.expr(^Ash.Expr.ref(attribute) == ^current))
-    |> Ash.Changeset.force_change_attribute(attribute, current + 1)
+      current ->
+        changeset
+        |> Ash.Changeset.filter(Ash.Expr.expr(^Ash.Expr.ref(attribute) == ^current))
+        |> Ash.Changeset.force_change_attribute(attribute, current + 1)
+    end
   end
 
-  defp meaningful?(%{resource: resource} = changeset, attribute) do
-    ignored_attributes = [attribute | AshQuick.Config.versioning_ignored_attributes(resource)]
+  defp loaded_version(%{__meta__: %{state: :built}} = data, attribute) do
+    version = Map.get(data, attribute)
 
-    attributes = Map.drop(changeset.attributes, ignored_attributes)
+    if version == Ash.Resource.Info.attribute(data.__struct__, attribute).default,
+      do: nil,
+      else: version
+  end
+
+  defp loaded_version(data, attribute), do: Map.get(data, attribute)
+
+  defp meaningful?(changeset, attribute) do
+    {attributes, relationships} = meaningful_changes(changeset, attribute)
+    not (attributes == %{} and relationships == %{})
+  end
+
+  defp meaningful_changes(%{resource: resource} = changeset, attribute) do
+    attributes =
+      Map.drop(changeset.attributes, [
+        attribute | AshQuick.Config.versioning_ignored_attributes(resource)
+      ])
 
     relationships =
       Map.drop(
@@ -78,6 +160,108 @@ defmodule AshQuick.Versioning.Lock do
         AshQuick.Config.versioning_ignored_relationships(resource)
       )
 
-    not (attributes == %{} and relationships == %{})
+    {attributes, relationships}
+  end
+
+  # The counter moves only when something meaningful does: the row's own value
+  # is kept otherwise. The check is a filter rather than an `error(...)` in the
+  # value, so a stale row is one the write does not match — which a single
+  # update reports as `Ash.Error.Changes.StaleRecord`, and `Ash.update_many/4`
+  # as a `StaleRecord` for that row alone, where an error raised inside its
+  # `MERGE` would fail every row in the statement.
+  defp atomic_lock(changeset, attribute, current, true) do
+    changeset
+    |> Ash.Changeset.atomic_update(
+      attribute,
+      {:atomic, Ash.Expr.expr(^Ash.Expr.ref(attribute) + 1)}
+    )
+    |> check_version(attribute, current, nil)
+  end
+
+  defp atomic_lock(changeset, attribute, current, condition) do
+    changeset
+    |> Ash.Changeset.atomic_update(
+      attribute,
+      {:atomic,
+       Ash.Expr.expr(
+         if ^condition do
+           ^Ash.Expr.ref(attribute) + 1
+         else
+           ^Ash.Expr.ref(attribute)
+         end
+       )}
+    )
+    |> check_version(attribute, current, condition)
+  end
+
+  defp check_version(changeset, _attribute, nil, _condition), do: changeset
+
+  defp check_version(changeset, attribute, current, nil) do
+    Ash.Changeset.filter(changeset, Ash.Expr.expr(^Ash.Expr.ref(attribute) == ^current))
+  end
+
+  defp check_version(changeset, attribute, current, condition) do
+    Ash.Changeset.filter(
+      changeset,
+      Ash.Expr.expr(not (^condition) or ^Ash.Expr.ref(attribute) == ^current)
+    )
+  end
+
+  # `nil` when the write cannot be meaningful whatever the row holds, `true`
+  # when it is meaningful whatever the row holds, and otherwise an expression
+  # that is true when a value being written differs from the row's.
+  defp changed_condition(%{action_type: :destroy}, _attribute), do: true
+
+  defp changed_condition(changeset, attribute) do
+    {attributes, relationships} = meaningful_changes(changeset, attribute)
+
+    atomics =
+      Keyword.drop(changeset.atomics, [
+        attribute | AshQuick.Config.versioning_ignored_attributes(changeset.resource)
+      ])
+
+    if relationships == %{} do
+      atomics
+      |> Enum.concat(attributes)
+      |> Enum.map(fn {key, value} -> differs(changeset.resource, key, value) end)
+      |> Enum.reduce(nil, fn
+        differs, nil -> differs
+        differs, condition -> Ash.Expr.expr(^condition or ^differs)
+      end)
+    else
+      true
+    end
+  end
+
+  # How Ash compares a written value with the row when it decides whether an
+  # `update_default` applies — `atomic_default_condition` in `Ash.Changeset` —
+  # but with a write from or to `nil` counted as a change wherever the data
+  # layer cannot say `is_distinct_from`: missing one is an under-lock, where
+  # Ash only misses a timestamp.
+  defp differs(resource, key, value) do
+    ref = Ash.Expr.ref(key)
+    distinct = Ash.Expr.expr(is_distinct_from(^value, ^ref))
+
+    cond do
+      not Ash.Expr.can_return_nil?(value) and
+          not Ash.Resource.Info.attribute(resource, key).allow_nil? ->
+        Ash.Expr.expr(^value != ^ref)
+
+      Ash.DataLayer.data_layer_can?(resource, {:filter_expr, distinct}) ->
+        distinct
+
+      true ->
+        nil_safe_differs(value, ref)
+    end
+  end
+
+  defp nil_safe_differs(value, ref) do
+    Ash.Expr.expr(
+      cond do
+        is_nil(^value) and is_nil(^ref) -> false
+        is_nil(^value) or is_nil(^ref) -> true
+        true -> ^value != ^ref
+      end
+    )
   end
 end

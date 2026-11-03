@@ -20,6 +20,13 @@ defmodule AshQuick.FieldRestrictions.StripRestrictedFields do
     end)
   end
 
+  # The same on the atomic path. An accepted input arrives there in
+  # `changeset.atomics` rather than `changeset.attributes`, and
+  # `Ash.Changeset.clear_change/2` clears both, so a restricted value is dropped
+  # whichever path the write takes.
+  @impl true
+  def atomic(changeset, opts, context), do: {:ok, change(changeset, opts, context)}
+
   defp check_passes?({check_module, check_opts}, check_context) do
     check_module.match?(check_context, check_opts)
   rescue

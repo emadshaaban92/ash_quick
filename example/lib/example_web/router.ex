@@ -97,6 +97,7 @@ defmodule ExampleWeb.Router do
           AshQuick.LiveView.Mount,
           {ExampleWeb.UserAuth, :assign_scope}
         ] do
+        quick_view "/atomic_brands", Example.Test.AtomicBrandLive.Quick
         quick_view "/bulk_guarded", Example.Test.BulkGuardedLive.Quick
         quick_view "/bulk_named", Example.Test.BulkNamedLive.Quick
         quick_view "/dated_entries", Example.Test.DatedEntriesLive.Quick

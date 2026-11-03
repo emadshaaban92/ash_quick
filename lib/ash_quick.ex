@@ -266,8 +266,8 @@ defmodule AshQuick do
   has since changed matches no row and comes back as
   `Ash.Error.Changes.StaleRecord` rather than overwriting them.
 
-  The decision is made in a `before_action` appended last, against the **final**
-  changeset — not at the change phase, where Ash's own
+  The lock is taken only when the write changes something, decided against the
+  **final** write — not at the change phase, where Ash's own
   `Ash.Resource.Change.OptimisticLock` decides. Two things follow. A change a
   `before_action` injects is locked, where a change-phase guard would have seen
   an empty changeset and skipped the lock entirely. And an update that ends up a
@@ -277,8 +277,25 @@ defmodule AshQuick do
   this purpose — see `AshQuick.Config.versioning_ignored_attributes/1`, which
   reads them off the resource's `bookkeeping` declaration below.
 
-  Reaching that changeset needs the non-atomic path, so every `:update` and
-  `:destroy` on a versioned resource is forced to `require_atomic? false`.
+  Each action keeps its own `require_atomic?`, because the lock works on both
+  of Ash's paths. In memory it decides in a `before_action` appended last, once
+  every other hook has run. On the atomic path, where Ash allows no
+  `before_action`, it decides inside the write: "changes something" is an
+  expression comparing each value written with the row's, the way Ash decides
+  whether `updated_at` moves, and it guards both the filter on the loaded
+  version and the bump. That path writes every accepted input, so there a value
+  the actor left alone but someone else has since changed counts as a change,
+  and is locked. `Ash.update_many/4` over loaded records locks each one, and a
+  record nobody loaded (a hand-built `%Post{id: id}`, or an identifier) still
+  holds the counter's default and has no copy to be stale, so its write is
+  bumped without the check. A hand-built record given a version of its own,
+  `%Post{id: id, version: params["version"]}`, is checked against it.
+
+  A bulk write by query, or by `:atomic_batches`, that changes anything does
+  not run atomically. Ash builds one changeset for it without the rows' data,
+  so the lock cannot tell a query nobody loaded from records somebody did, and
+  declines the atomic strategy for both; with `:stream` among the strategies
+  each row is locked in memory instead.
 
   It is **on unless declared otherwise**, the opposite of activation: losing a
   concurrent write is silent and unrecoverable, so a resource that does not want
