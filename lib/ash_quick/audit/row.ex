@@ -16,6 +16,7 @@ defmodule AshQuick.Audit.Row do
   # than nil.
 
   alias AshQuick.Audit.Declaration
+  alias AshQuick.Audit.Expression
 
   # Ash's own marker for a value it will not print (`Ash.Helpers.redact/1`), so
   # a redacted before/after reads the same as a redacted changeset.
@@ -74,7 +75,7 @@ defmodule AshQuick.Audit.Row do
   #     one, and `updated_at` is always one. The in-memory path records those as
   #     values, so their value is read off the record the write returned;
   #   * an expression a change asked for — `count + 1` — which is not input on
-  #     either path. What it came to is in `changes`.
+  #     either path. What it came to is in `changes`, with the expression.
   #
   # A value the write did not return (`%Ash.NotLoaded{}`) is left out rather
   # than recorded as that struct.
@@ -88,10 +89,23 @@ defmodule AshQuick.Audit.Row do
   end
 
   defp given_value(changeset, record, name, value) do
+    case kind(changeset, name, value) do
+      :value -> {:ok, value}
+      :given -> returned(record, name)
+      :asked -> :error
+    end
+  end
+
+  # Which of the three kinds above an atomic is. A versioned resource's counter
+  # counts as an update default: the lock sets it by an expression on this path
+  # and as a value in memory, and that expression repeats every other one the
+  # write set, a sensitive one included.
+  defp kind(changeset, name, value) do
     cond do
-      not Ash.Expr.expr?(value) -> {:ok, value}
-      input?(changeset, name) or update_default?(changeset, name) -> returned(record, name)
-      true -> :error
+      not Ash.Expr.expr?(value) -> :value
+      input?(changeset, name) or update_default?(changeset, name) -> :given
+      name == AshQuick.Info.versioning_attribute(changeset.resource) -> :given
+      true -> :asked
     end
   end
 
@@ -131,22 +145,30 @@ defmodule AshQuick.Audit.Row do
   #
   # Called by `AshQuick.Audit.Change` *before* it redacts the changeset, because
   # a sensitive attribute that did not change must be left out and that question
-  # can only be asked of the real values. `redacted` is the names whose values
-  # are replaced once it has been asked; nothing else about them is read.
+  # can only be asked of the real values. `redacted` and `arguments` are the
+  # attribute and argument names whose values are replaced once it has been
+  # asked; nothing else about them is read.
   #
   # `from` comes off `changeset.data` — or, for a destroy run as one query, off
   # the row it returned (`stood/2`) — and `to` off what the write set
   # (`written/2`). Nothing here goes back to the data layer: the entry is
   # written inside the transaction of the write it describes, and a read there
   # is a read on every audited write forever.
-  def changes(%Ash.Changeset{} = changeset, record, redacted) do
+  def changes(%Ash.Changeset{} = changeset, record, redacted, arguments) do
     attributes = Ash.Resource.Info.attributes(changeset.resource)
     written = written(changeset, record)
 
     case changeset.action.type do
-      :create -> created(written, attributes, redacted)
-      :update -> updated(changeset, written, attributes, redacted, read?(changeset.data))
-      :destroy -> destroyed(stood(changeset, record), attributes, redacted)
+      :create ->
+        created(written, attributes, redacted)
+
+      :update ->
+        changeset
+        |> updated(written, attributes, redacted, read?(changeset.data))
+        |> put_expressions(changeset, attributes, redacted, arguments)
+
+      :destroy ->
+        destroyed(stood(changeset, record), attributes, redacted)
     end
   end
 
@@ -203,6 +225,42 @@ defmodule AshQuick.Audit.Row do
 
       true ->
         %{from: value(attribute, old, redacted), to: value(attribute, new, redacted)}
+    end
+  end
+
+  # An attribute a change set by an expression keeps it as `expr`, beside the
+  # `from` and `to` it came to, which stays true even where `from` is stale.
+  # Only the third kind in `given/2`: an input, an update default or the lock's
+  # counter is a value on the in-memory path, and `now()` on every entry would
+  # say nothing.
+  #
+  # Secrets are worked out only when there is an expression to keep them from.
+  defp put_expressions(entries, changeset, attributes, redacted, arguments) do
+    asked =
+      for {name, value} <- changeset.atomics,
+          Map.has_key?(entries, name),
+          kind(changeset, name, value) == :asked,
+          do: name
+
+    if asked == [] do
+      entries
+    else
+      secrets = Expression.secrets(changeset, redacted, arguments)
+
+      Enum.reduce(asked, entries, fn name, entries ->
+        text = expression(changeset, find(attributes, name), attributes, redacted, secrets)
+        Map.update!(entries, name, &Map.put(&1, :expr, text))
+      end)
+    end
+  end
+
+  defp expression(changeset, %{name: name} = attribute, attributes, redacted, secrets) do
+    if name in redacted do
+      @redacted
+    else
+      changeset
+      |> Expression.expression(name)
+      |> Expression.render(attribute, attributes, secrets)
     end
   end
 
