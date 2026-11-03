@@ -273,6 +273,8 @@ URL determines view type:
 - `id: nil` + create action -> **Create modal** over the list
 - `id: <uuid>` + update or destroy action -> **Action modal** over the record's
   page: a form when the action takes input, a confirmation when it takes none
+- An action declared `full_page` renders the same form or confirmation as a
+  page of its own instead (see below)
 
 Action resolved from (priority order):
 1. `action` URL parameter
@@ -319,6 +321,16 @@ is no `data-confirm` and no browser dialog anywhere.
 - In LiveView tests, target the modal: `form("#ash-quick-action-modal form")`,
   and submit it to confirm. The page underneath is in the DOM too, so a bare
   `"form"` selector matches its forms as well.
+- An action too big for a modal opens as a page of its own when the resource
+  declares it: `ash_quick do forms do full_page [:register] end end` (public
+  creates, updates and destroys only, or it does not compile). Every control
+  still opens its URL; the page there draws the form with nothing underneath
+  and no `#ash-quick-action-modal`. Cancel and a run return where the modal
+  would (the page it was opened from, or the record's details when reached by
+  a link, the list for a create); a create goes to the record it made, a
+  destroy of the page's own record to the list. An update's page names the
+  record under its title. Bulk runs always use the modal. Read it back with
+  `AshQuick.Info.full_page?/2`.
 
 ## Custom actions: seeding a form
 

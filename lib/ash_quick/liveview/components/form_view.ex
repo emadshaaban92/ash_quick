@@ -26,6 +26,8 @@ defmodule AshQuick.LiveView.Components.FormView do
       |> assign(:forbidden?, forbidden?)
       |> assign(:confirm?, not forbidden? and Enum.empty?(fields(assigns.form, assigns.scope)))
 
+    assigns = assign(assigns, :subtitle, subtitle(assigns))
+
     ~H"""
     <section class="p-3 sm:p-5">
       <.confirm_form :if={@confirm?} {confirm_assigns(assigns)} />
@@ -36,6 +38,7 @@ defmodule AshQuick.LiveView.Components.FormView do
         phx-change="validate"
         phx-submit="save"
         form_title={@page_title}
+        form_subtitle={@subtitle}
       >
         <.form_fields
           form={@form}
@@ -54,6 +57,16 @@ defmodule AshQuick.LiveView.Components.FormView do
   end
 
   defp fields(form, scope), do: Utils.action_fields(form.resource, form.action, scope)
+
+  # A modal's record is on the page underneath it. An update drawn with nothing
+  # underneath (a `full_page` action) names the record under its title, as a
+  # confirmation does.
+  defp subtitle(%{ash_action: %{type: :update}, record: %{} = record} = assigns) do
+    unless match?(%{assigns: %{}}, assigns.ash_quick_background),
+      do: AshQuick.Info.display_value(record)
+  end
+
+  defp subtitle(_assigns), do: nil
 
   defp confirm_assigns(assigns) do
     Map.take(assigns, [:form, :id, :ash_action, :resource, :record, :ash_quick_background])

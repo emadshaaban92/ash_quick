@@ -690,6 +690,10 @@ defmodule AshQuick.Components do
 
   attr :form_title, :string, default: nil
 
+  attr :form_subtitle, :string,
+    default: nil,
+    doc: "drawn under the title, such as the name of the record the form edits"
+
   slot :inner_block, required: true
   slot :actions, doc: "the slot for form actions, such as a submit button"
   attr :submit_label, :string, default: nil, doc: "Submit button label"
@@ -701,6 +705,9 @@ defmodule AshQuick.Components do
         <h2 :if={@form_title} class="mb-4 text-xl font-bold text-base-content">
           {@form_title}
         </h2>
+        <p :if={@form_subtitle} class="-mt-2 mb-4 font-medium text-base-content/70">
+          {@form_subtitle}
+        </p>
         <.form
           :let={f}
           for={@for}

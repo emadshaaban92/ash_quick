@@ -160,6 +160,35 @@ defmodule AshQuick do
   and the msgid it is translated under: `mix ash_quick.gen.gettext` lists it
   in place of the humanized name.
 
+  ## Forms
+
+  A create, an update or a destroy opens in a modal over the page it was
+  opened from. An action whose form is too big for one — many fields, a
+  nested list, several attachments — opens as a page of its own instead:
+
+      ash_quick do
+        forms do
+          full_page [:register, :import]
+        end
+      end
+
+  Every page that opens the action agrees, since they all ask the resource:
+  the list's New button, a row's actions and a details page's buttons each
+  lead to the action's URL, and the page served there draws the form (or the
+  confirmation, for an action that takes no input) on its own. Cancel and a
+  successful run return where the modal would: to the page it was opened
+  from, at its search, filters and page, or, reached with nothing before it,
+  to the record's details page (the list for a create). A create goes on to
+  the record it made, and a destroy opened from the record it destroyed goes
+  to the list.
+
+  A bulk run of the action still opens in the modal over the list, which
+  keeps the selection it runs over.
+
+  Each name has to be a public create, update or destroy of the resource;
+  anything else does not compile, since AshQuick opens no other.
+  `AshQuick.Info.full_page?/2` reads the declaration back.
+
   ## Lookup
 
   Names the read action AshQuick runs a search through, and the argument the
@@ -834,6 +863,19 @@ defmodule AshQuick do
     ]
   }
 
+  @forms %Spark.Dsl.Section{
+    name: :forms,
+    describe: "Declare how this resource's create, update and destroy actions open.",
+    schema: [
+      full_page: [
+        type: {:list, :atom},
+        default: [],
+        doc:
+          "The public create, update and destroy actions that open as a page of their own, at their URL, rather than in the action modal over the page they were opened from. Naming any other action does not compile."
+      ]
+    ]
+  }
+
   @ash_quick %Spark.Dsl.Section{
     name: :ash_quick,
     describe: "AshQuick configuration for this resource.",
@@ -841,6 +883,7 @@ defmodule AshQuick do
       @liveness,
       @display,
       @labels,
+      @forms,
       @lookup,
       @activation,
       @versioning,
@@ -875,7 +918,8 @@ defmodule AshQuick do
       AshQuick.Impersonation.Verifier,
       AshQuick.Lookup.Verifier,
       AshQuick.Print.Verifier,
-      AshQuick.Labels.Verifier
+      AshQuick.Labels.Verifier,
+      AshQuick.Forms.Verifier
     ]
 
   @surface_sources [:ash_quick_details, :ash_quick_list, :ash_quick_list_bulk]

@@ -1529,12 +1529,14 @@ defmodule AshQuick.LiveView.FormUtils do
 
   defp attachment_keys(record), do: Storage.attachment_keys(record)
 
-  # A destroy returns to the page its modal opened over, unless that page was
+  # A destroy returns to the page it was opened from, unless that page was
   # the record it destroyed: then to the list.
   # Matched on the record the page showed, not the id in its URL: that is the
   # id as typed, and an upper-cased UUID loads the same record without being
   # equal to it. Only on a details page, since a list the socket patched to
-  # from one still holds that record.
+  # from one still holds that record. A full page reached with nothing before
+  # it names the record's page without having read it, at the id this page's
+  # own URL typed.
   defp handle_success(
          %{id: id},
          _form_params,
@@ -1547,9 +1549,14 @@ defmodule AshQuick.LiveView.FormUtils do
         URLParams.to_list_params(socket.assigns.params)
       )
 
+    url_id = socket.assigns.params.id
+
     path =
       case socket.assigns.ash_quick_background do
-        %{assigns: %{params: %URLParams{id: url_id}, record: %{id: ^id}}} when url_id != nil ->
+        %{params: %URLParams{id: shown}, record: %{id: ^id}} when shown != nil ->
+          list_path
+
+        %{params: %URLParams{id: ^url_id}, record: nil} ->
           list_path
 
         %{path: path} ->
@@ -1563,7 +1570,7 @@ defmodule AshQuick.LiveView.FormUtils do
      socket |> put_flash(:info, gettext("Record deleted successfully")) |> push_patch(to: path)}
   end
 
-  # An update returns to the page its modal opened over, which reloads to show
+  # An update returns to the page it was opened from, which reloads to show
   # it. A create goes on to the record it made: the next thing anyone does
   # with it is there.
   defp handle_success(

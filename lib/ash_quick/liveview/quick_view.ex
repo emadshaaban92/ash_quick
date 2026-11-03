@@ -188,6 +188,10 @@ defmodule AshQuick.LiveView.QuickView do
       record's page: a form when the action takes input, a confirmation when
       it takes none (see "Actions open in a modal" below)
 
+  An action the resource declares `full_page` renders the same form or
+  confirmation as a page of its own instead of a modal (see "Full-page
+  actions" below).
+
   The action is resolved from (in priority order):
   1. The `action` URL parameter
   2. The `live_action` from the router (e.g. `:create`)
@@ -247,6 +251,30 @@ defmodule AshQuick.LiveView.QuickView do
   actor cannot see (a field restriction hides it) is dropped at the first
   `phx-change`, so its value belongs at `AshQuick.form_submit_stage/0`, or in
   a change that runs at every stage.
+
+  ### Full-page actions
+
+  A form too big for a modal — many fields, a nested list, several
+  attachments — opens as a page of its own when the resource says so:
+
+      ash_quick do
+        forms do
+          full_page [:register]
+        end
+      end
+
+  The action is reached as any other: the list's New button, a row's actions
+  and a details page's buttons all lead to its URL, and the page served there
+  draws the form with nothing underneath, inside the usual layout. It
+  returns where the modal would have: Cancel and a successful update or
+  destroy lead back to the page it was opened from, at its search, filters
+  and page, or, reached with nothing before it, to the record's details (the
+  list for a create). A create goes on to the record it made, and a destroy
+  opened from the record it destroyed goes to the list. An update's form names
+  the record under its title, since no page underneath shows it. Everything
+  else above holds for it: the form source, the form stages, the locked submit
+  and custom templates. A bulk run of the action still opens in the modal
+  below, over the list and its selection.
 
   A bulk action opens the same modal over the list, keeping the selection: a
   confirmation naming how many rows it applies to, or a form whose values
@@ -605,7 +633,7 @@ defmodule AshQuick.LiveView.QuickView do
         # re-renders it. The form's own render is assigned here rather than
         # called in the template, because a template handed `assigns` whole
         # loses change tracking.
-        def render(%{ash_quick_background: %{}} = var!(assigns)) do
+        def render(%{ash_quick_background: %{assigns: %{}}} = var!(assigns)) do
           var!(assigns) =
             assign(var!(assigns), :ash_quick_action, __ash_quick_render__(var!(assigns)))
 
@@ -803,20 +831,26 @@ defmodule AshQuick.LiveView.QuickView do
   # reached with nothing before it — a link, a refresh — opens over the page
   # the action belongs to: the record's details for an update, the list for a
   # create.
+  #
+  # Either way the background says where that page is (`:path`), and what it
+  # showed (`:params`, `:record`), which is how a destroy tells whether it
+  # destroyed the record its page was about. A modal's also holds the page's
+  # `:assigns`, which it is drawn over; an action the resource declared
+  # `full_page` is drawn on its own and holds none, so it returns to the same
+  # page without rendering it.
   def put_background(socket, previous, %URI{} = uri, %Options{} = options, after_handle_params) do
+    action = socket.assigns.ash_action
+
     background =
-      case {socket.assigns.ash_action, previous} do
-        {%Actions.Read{}, _previous} ->
+      cond do
+        match?(%Actions.Read{}, action) ->
           nil
 
-        {_action, %{ash_quick_background: %{} = background}} ->
-          background
+        AshQuick.Info.full_page?(options.resource, action.name) ->
+          return_to(socket, previous, options)
 
-        {_action, %{ash_action: %Actions.Read{}, ash_quick_request_path: path}} ->
-          %{assigns: snapshot(previous), path: path}
-
-        {action, _previous} ->
-          parent_background(socket, action, options, after_handle_params)
+        true ->
+          modal_background(socket, previous, action, options, after_handle_params)
       end
 
     socket
@@ -827,6 +861,50 @@ defmodule AshQuick.LiveView.QuickView do
   # Where this page is, query and all, for an action opened over it to return to.
   defp request_path(%URI{path: path, query: nil}), do: path
   defp request_path(%URI{path: path, query: query}), do: "#{path}?#{query}"
+
+  defp modal_background(socket, previous, action, options, after_handle_params) do
+    case previous do
+      %{ash_quick_background: %{assigns: %{}} = background} ->
+        background
+
+      %{ash_action: %Actions.Read{}, ash_quick_request_path: path} ->
+        page(path, snapshot(previous))
+
+      _previous ->
+        parent_background(socket, action, options, after_handle_params)
+    end
+  end
+
+  # A full page draws nothing underneath, so the page it returns to is only
+  # named. With nothing before it, that is the page the action belongs to, at
+  # the URL's own search and filters: the list it lands on reads it then.
+  defp return_to(socket, previous, %Options{} = options) do
+    case previous do
+      %{ash_quick_background: %{} = background} ->
+        Map.delete(background, :assigns)
+
+      %{ash_action: %Actions.Read{}, ash_quick_request_path: path} ->
+        path |> page(previous) |> Map.delete(:assigns)
+
+      _previous ->
+        parent_return(socket, options)
+    end
+  end
+
+  defp page(path, assigns),
+    do: %{path: path, params: assigns.params, record: assigns[:record], assigns: assigns}
+
+  defp parent_return(socket, %Options{} = options) do
+    params = parent_params(socket.assigns.params, socket.assigns.ash_action)
+
+    if params |> action_from_params(options, nil) |> then(&resolve_parent(options, &1, params)) do
+      %{
+        path: URLParams.full_path(socket.assigns.base_path, params),
+        params: params,
+        record: nil
+      }
+    end
+  end
 
   defp parent_background(socket, action, %Options{} = options, after_handle_params) do
     params = parent_params(socket.assigns.params, action)
@@ -846,10 +924,10 @@ defmodule AshQuick.LiveView.QuickView do
       # Only rendered, never live: what loading it subscribed to is let go.
       Liveness.unsubscribe_all(parent, options)
 
-      %{
-        assigns: snapshot(parent.assigns),
-        path: URLParams.full_path(socket.assigns.base_path, parent.assigns.params)
-      }
+      page(
+        URLParams.full_path(socket.assigns.base_path, parent.assigns.params),
+        snapshot(parent.assigns)
+      )
     end
   end
 

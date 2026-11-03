@@ -109,6 +109,7 @@ defmodule ExampleWeb.Router do
         quick_view "/form_stages", Example.Test.FormStagesLive.Quick
         quick_view "/hidden_address", Example.Test.HiddenAddressLive.Quick
         quick_view "/labelled_loans", Example.Test.LabelledLoansLive.Quick
+        quick_view "/long_forms", Example.Test.LongFormsLive.Quick
         quick_view "/lookup_items", Example.Test.LookupItemsLive.Quick
         quick_view "/nested_items", Example.Test.NestedItemsLive.Quick
         quick_view "/picked_labels", Example.Test.PickedLabelsLive.Quick

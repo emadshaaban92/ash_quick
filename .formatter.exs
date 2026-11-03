@@ -9,6 +9,7 @@ spark_locals_without_parens = [
   entry: 1,
   entry: 2,
   exclude_actions: 1,
+  full_page: 1,
   group: 2,
   group: 3,
   hint: 1,

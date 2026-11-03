@@ -4,6 +4,20 @@
 
 ### Features
 
+- **An action too big for a modal opens as a page of its own.** A resource names
+  such actions under `ash_quick do forms do full_page [:register] end end`. The
+  list's New button, a row's actions and a details page's buttons still lead to
+  the action's URL, and the page there draws its form, or its confirmation, with
+  nothing underneath. Cancel and a successful run return where the modal would:
+  to the page it was opened from, at its search, filters and page, or, reached
+  by a link, to the record's details page (the list for a create); a create goes
+  on to the record it made, and a destroy of the record the page was about goes
+  to the list. An update's page names the record under its title. Actions not
+  named, and every bulk run, keep opening in the modal. `simple_form/1` takes a
+  `form_subtitle`. `AshQuick.Forms.Verifier` refuses a name that is no public
+  create, update or destroy of the resource, and `AshQuick.Info.full_page?/2`
+  reads the declaration back.
+
 - **An audit entry keeps the expression an `atomic_update` asked for.** An
   attribute a change set by an expression has `expr` in `changes` beside
   `from` and `to`, as text: `count: %{from: 0, to: 6, expr: "count + 5"}`.
