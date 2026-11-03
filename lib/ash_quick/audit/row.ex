@@ -59,6 +59,61 @@ defmodule AshQuick.Audit.Row do
     |> put_changes(changeset, changes)
   end
 
+  # What the action was given, as `changeset.attributes` holds it on the
+  # in-memory path, so the row's `attributes` reads the same whichever path the
+  # write took. Called by `AshQuick.Audit.Change` before it redacts, because
+  # what an atomic is can only be asked of the real value.
+  #
+  # An atomic update holds what it sets in `changeset.atomics`, and three kinds
+  # of entry live there:
+  #
+  #   * a plain value — an accepted input, or a change's `set_attribute` — which
+  #     the in-memory path would have put in `changeset.attributes`;
+  #   * an expression standing for an input or an update default: a type that
+  #     casts an input atomically (`Ash.Type.cast_atomic/3`) can turn it into
+  #     one, and `updated_at` is always one. The in-memory path records those as
+  #     values, so their value is read off the record the write returned;
+  #   * an expression a change asked for — `count + 1` — which is not input on
+  #     either path. What it came to is in `changes`.
+  #
+  # A value the write did not return (`%Ash.NotLoaded{}`) is left out rather
+  # than recorded as that struct.
+  def given(%Ash.Changeset{} = changeset, record) do
+    Enum.reduce(changeset.atomics, changeset.attributes, fn {name, value}, given ->
+      case given_value(changeset, record, name, value) do
+        {:ok, value} -> Map.put(given, name, value)
+        :error -> given
+      end
+    end)
+  end
+
+  defp given_value(changeset, record, name, value) do
+    cond do
+      not Ash.Expr.expr?(value) -> {:ok, value}
+      input?(changeset, name) or update_default?(changeset, name) -> returned(record, name)
+      true -> :error
+    end
+  end
+
+  defp input?(%{action: action, params: params}, name) do
+    name in List.wrap(action.accept) and
+      (Map.has_key?(params, name) or Map.has_key?(params, to_string(name)))
+  end
+
+  defp update_default?(%{resource: resource}, name) do
+    case Ash.Resource.Info.attribute(resource, name) do
+      %{update_default: default} -> not is_nil(default)
+      nil -> false
+    end
+  end
+
+  defp returned(record, name) do
+    case Map.get(record, name) do
+      %Ash.NotLoaded{} -> :error
+      value -> {:ok, value}
+    end
+  end
+
   # Only for a store that has somewhere to put it: an input the `:create` action
   # does not know is a refused batch, and a refused batch is a failed write.
   defp put_changes(row, changeset, changes) do
@@ -79,40 +134,53 @@ defmodule AshQuick.Audit.Row do
   # can only be asked of the real values. `redacted` is the names whose values
   # are replaced once it has been asked; nothing else about them is read.
   #
-  # Values come off `changeset.data` and `changeset.attributes` only. Nothing
-  # here reads the result record or goes back to the data layer: the entry is
+  # `from` comes off `changeset.data` — or, for a destroy run as one query, off
+  # the row it returned (`stood/2`) — and `to` off what the write set
+  # (`written/2`). Nothing here goes back to the data layer: the entry is
   # written inside the transaction of the write it describes, and a read there
   # is a read on every audited write forever.
-  def changes(%Ash.Changeset{} = changeset, redacted) do
+  def changes(%Ash.Changeset{} = changeset, record, redacted) do
     attributes = Ash.Resource.Info.attributes(changeset.resource)
-    read? = read?(changeset.data)
+    written = written(changeset, record)
 
     case changeset.action.type do
-      :create -> created(changeset, attributes, redacted)
-      :update -> updated(changeset, attributes, redacted, read?)
-      :destroy -> destroyed(changeset, attributes, redacted, read?)
+      :create -> created(written, attributes, redacted)
+      :update -> updated(changeset, written, attributes, redacted, read?(changeset.data))
+      :destroy -> destroyed(stood(changeset, record), attributes, redacted)
     end
+  end
+
+  # What the write set, keyed by attribute name. A value set in memory is in
+  # `changeset.attributes`. One set atomically is in `changeset.atomics`, and is
+  # either a value or an expression only the data layer evaluated, so what it
+  # came to is read off the record the write returned — the one place it is
+  # known without a read. Every update goes this way when it runs atomically,
+  # and an `atomic_update` change sends its attribute this way on any path.
+  defp written(changeset, record) do
+    for {name, _value} <- changeset.atomics,
+        into: changeset.attributes,
+        do: {name, Map.get(record, name)}
   end
 
   # A create has nothing to compare against, so every attribute the action set
   # is a `to` and there is no `from` to be unknown.
   #
   # The assignment is a comprehension filter rather than a binding — anything
-  # `changeset.attributes` holds that the resource does not call an attribute is
-  # dropped here rather than written as an entry about nothing.
-  defp created(changeset, attributes, redacted) do
-    for {name, new} <- changeset.attributes,
+  # the write set that the resource does not call an attribute is dropped here
+  # rather than written as an entry about nothing.
+  defp created(written, attributes, redacted) do
+    for {name, new} <- written,
         attribute = find(attributes, name),
         into: %{},
-        do: {name, %{to: value(attribute, new, redacted)}}
+        do: {name, to_entry(attribute, new, redacted)}
   end
 
   # The keys are the ones the action set: an attribute the write did not touch
   # has no before and after, whatever it happens to hold. `entry` filters as
   # above, which is how an attribute set to the value it already held leaves no
   # entry at all.
-  defp updated(changeset, attributes, redacted, read?) do
-    for {name, new} <- changeset.attributes,
+  defp updated(changeset, written, attributes, redacted, read?) do
+    for {name, new} <- written,
         attribute = find(attributes, name),
         entry = update_entry(attribute, Map.get(changeset.data, name), new, redacted, read?),
         into: %{},
@@ -122,7 +190,10 @@ defmodule AshQuick.Audit.Row do
   defp update_entry(attribute, old, new, redacted, read?) do
     cond do
       not known?(read?, old) ->
-        %{from_unknown: true, to: value(attribute, new, redacted)}
+        Map.put(to_entry(attribute, new, redacted), :from_unknown, true)
+
+      not known?(true, new) ->
+        %{from: value(attribute, old, redacted), to_unknown: true}
 
       # Asked of the real values rather than of what is recorded, so a sensitive
       # attribute set to what it already held is left out rather than reported
@@ -135,11 +206,31 @@ defmodule AshQuick.Audit.Row do
     end
   end
 
+  # The new value mirrors the old: one the write set atomically is read off the
+  # record it returned, and a `select` can leave it out of that record, which
+  # says nothing about what it now holds.
+  defp to_entry(attribute, new, redacted) do
+    if known?(true, new),
+      do: %{to: value(attribute, new, redacted)},
+      else: %{to_unknown: true}
+  end
+
+  # The record a destroy removed. Usually that is the one the actor loaded. A
+  # bulk destroy run as one query loads none — Ash marks its data
+  # `OriginalDataNotAvailable` — but the rows its `DELETE ... RETURNING` handed
+  # back are exactly the rows as they stood, so those are read instead. Only
+  # then: elsewhere the returned record may be the data handed in, and a
+  # hand-built `%Brand{id: id}` coming back would read as a record of nils.
+  defp stood(%{data: %Ash.Changeset.OriginalDataNotAvailable{}}, record), do: record
+  defp stood(changeset, _record), do: changeset.data
+
   # A destroy sets nothing, so the entry is the record as it stood — every
   # attribute rather than the ones some action named.
-  defp destroyed(changeset, attributes, redacted, read?) do
+  defp destroyed(stood, attributes, redacted) do
+    read? = read?(stood)
+
     for attribute <- attributes, into: %{} do
-      old = Map.get(changeset.data, attribute.name)
+      old = Map.get(stood, attribute.name)
 
       if known?(read?, old) do
         {attribute.name, %{from: value(attribute, old, redacted)}}

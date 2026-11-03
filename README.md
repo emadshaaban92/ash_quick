@@ -572,7 +572,7 @@ attribute :changes, :map, allow_nil?: false, default: %{}, public?: true
 $ mix ash.codegen add_audit_log_changes
 ```
 
-Four things to know about what it holds:
+Five things to know about what it holds:
 
 * **`from` is the record the actor loaded**, never a fresh read — the entry is
   written inside the transaction of the write it describes. On an unversioned
@@ -582,8 +582,19 @@ Four things to know about what it holds:
   record by definition.
 * **An unknown previous value is `from_unknown: true`, never `from: nil`.**
   `nil` is a value a column can hold, so "was blank" and "was never read" must
-  not read alike. Both an attribute a `select` left out and a record that was
-  never read — a hand-built `%Brand{id: id}` — reach it.
+  not read alike. An attribute a `select` left out, a record that was never
+  read — a hand-built `%Brand{id: id}` — and a bulk update run as one query,
+  which never reads its rows, all reach it. A bulk destroy run as one query
+  reads `from` off the rows it deleted, which are the rows as they stood.
+* **An atomic write is recorded like any other.** An update that keeps Ash's
+  default `require_atomic? true` needs no `require_atomic? false` for the
+  audit. A value it sets atomically, an accepted input or an `atomic_update`
+  such as `count + 1`, is recorded with `to` read off the record the write
+  returned, since only the data layer knows what an expression came to; one
+  the record does not hold is `to_unknown: true`. `attributes` reads the same
+  as on the in-memory path. On an unversioned resource `from` is still the
+  record the actor loaded, so two `count + 1` writes at once can leave an
+  entry reading `from: 0, to: 2`.
 * **`has_many` and `many_to_many` changes are not in `changes`.** They are
   writes to the other resource: they show up in `arguments` as the input this
   action was given, and in that resource's own audit rows. An embedded resource

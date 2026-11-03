@@ -456,6 +456,24 @@
 
 ### Bug fixes
 
+- **An audited resource's updates and destroys run atomically.**
+  `AshQuick.Audit.Change` had no `atomic/3`, so on a resource with
+  versioning off an update or destroy that keeps Ash's default
+  `require_atomic? true`, such as `update :rename, accept: [:name]`, failed
+  with `Ash.Error.Framework.MustBeAtomic`, and `Ash.bulk_update` with
+  `strategy: :atomic` found no strategy. The change now runs on the atomic
+  path and still writes its entry from `after_batch/3`. A value set
+  atomically, whether an accepted input or an `atomic_update` expression
+  such as `count + 1`, is recorded in `changes` as what the returned record
+  holds (`to_unknown: true` when it does not hold it), so an `atomic_update`
+  on a non-atomic action is recorded too. The entry's `attributes` read as
+  they do on the in-memory path: accepted inputs and update defaults such as
+  `updated_at` are kept, redacted when `sensitive?`, and a change's
+  `atomic_update` is not input. A bulk update by query never
+  reads its rows, so its `from` is `from_unknown: true`; a bulk destroy by
+  query reads `from` off the rows it deleted. Versioned resources are
+  unchanged: the optimistic lock still forces `require_atomic? false`.
+
 - **A filter chip reads an atom's value by its declared label.** A chip on
   an `:atom` field with `one_of` read the humanized value ("Status =
   Failed") where the filter's select offered the label the resource declares

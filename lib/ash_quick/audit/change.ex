@@ -64,8 +64,35 @@ defmodule AshQuick.Audit.Change do
   A previous value that is not known is written as `from_unknown: true` and
   never as `from: nil` — `nil` is a value a column can hold, and saying a field
   had been blank is a different claim from not knowing what it held. There are
-  two ways to reach it: an attribute the read did not `select`, and a record
-  that was never read at all, such as a hand-built `%Brand{id: id}`.
+  three ways to reach it: an attribute the read did not `select`, a record that
+  was never read at all, such as a hand-built `%Brand{id: id}`, and a bulk
+  update run as one query, which never reads its rows. A bulk destroy run as
+  one query reads none either, but the rows it deleted come back from the data
+  layer as they stood, and `from` is read off those.
+
+  ## Atomic writes
+
+  An update or destroy that keeps Ash's default `require_atomic? true` runs
+  atomically, and the entry is written for it all the same. Such an update
+  holds what it sets in `changeset.atomics` rather than in
+  `changeset.attributes`, as a value or as an expression only the data layer
+  evaluates. `to` is read off the record the write returned — the one place
+  the new value is known without a read. That holds on any path, so an
+  `atomic_update` on a non-atomic action is recorded too. A new value the
+  record does not hold, because a `select` left it out, is written as
+  `to_unknown: true`, the way an unknown previous value is.
+
+  The entry's `attributes` read the same whichever path the write took: an
+  accepted input and an update default such as `updated_at` are kept (and
+  redacted) as values, even where Ash turned them into an expression, and an
+  `atomic_update` a change asked for, such as `count + 1`, is not input on
+  either path.
+
+  On an unversioned resource `from` is still what the actor loaded, so two
+  `count + 1` writes at once can leave an entry reading `from: 0, to: 2`.
+
+  A versioned resource's updates and destroys never run atomically: its
+  optimistic lock forces `require_atomic? false` on them.
 
   Only attributes appear. A `has_many` or `many_to_many` change is not one — it
   is a write to the other resource, recorded in that resource's own entries, and
@@ -132,6 +159,12 @@ defmodule AshQuick.Audit.Change do
     changesets
   end
 
+  # Nothing to add to the write itself: the entry is built in `after_batch/3`,
+  # which Ash runs on the atomic path too, handing it the record the write
+  # returned. So an audited action needs no `require_atomic? false` of its own.
+  @impl true
+  def atomic(changeset, _opts, _context), do: {:ok, changeset}
+
   @impl true
   def after_batch([{changeset, _record} | _] = changesets_and_results, _opts, context) do
     if excluded?(changeset) do
@@ -165,18 +198,34 @@ defmodule AshQuick.Audit.Change do
   # values, and one line further down they are gone. `AshQuick.Audit.Row` is
   # handed the names to redact so it answers that question before it records
   # anything about them.
+  #
+  # What the action was given is settled here too, for the same reason: which
+  # atomics count as input is a question about what they are, and once a
+  # sensitive one is `"**redacted**"` every one of them looks like a value. So
+  # the changeset handed on holds all of it in `attributes`, whichever path the
+  # write took — see `AshQuick.Audit.Row.given/2`.
   defp entry({changeset, record}, attributes, arguments) do
-    {redact(changeset, attributes, arguments), record, Row.changes(changeset, attributes)}
+    given = Row.given(changeset, record)
+
+    {redact(%{changeset | attributes: given}, attributes, arguments), record,
+     Row.changes(changeset, record, attributes)}
   end
 
+  # `atomics` is where an atomic update holds what it was given, so a secret
+  # accepted there is as much in the changeset as one in `attributes`, and an
+  # expression may carry one pinned inside it.
   defp redact(%Ash.Changeset{} = changeset, attributes, arguments) do
     %{
       changeset
       | attributes: redact(changeset.attributes, attributes),
+        atomics: redact_atomics(changeset.atomics, attributes),
         arguments: redact(changeset.arguments, arguments),
         params: redact(changeset.params, param_keys(attributes ++ arguments))
     }
   end
+
+  defp redact_atomics(atomics, names),
+    do: Enum.reduce(names, atomics, &Keyword.replace(&2, &1, @redacted))
 
   # Params are the raw input, so a name arrives under whichever key kind the
   # caller used — a form submits strings, a code interface submits atoms — and
