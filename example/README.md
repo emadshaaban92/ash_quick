@@ -8,7 +8,8 @@ It exists to be a **host**. The library has no Repo, no endpoint and no router,
 so its own suite runs on ETS and cannot reach the paths that only exist inside a
 real application:
 
-* the optimistic lock's `before_action` filter being honoured by **AshPostgres**,
+* the optimistic lock being honoured by **AshPostgres**, both as a
+  `before_action` filter and inside an atomic `UPDATE` or `update_many` `MERGE`,
 * the audit row being written **inside the transaction** of the write it records,
   so a store that refuses takes the record back with it,
 * a presign **taking custody** of an arriving object through the storage seam,
@@ -20,7 +21,7 @@ kept small enough that a failing test names one thing.
 
 ## Running it
 
-Needs PostgreSQL 16+ reachable as `db` with an `admin`/`admin` superuser (see
+Needs PostgreSQL 17+ reachable as `db` with an `admin`/`admin` superuser (see
 `config/dev.exs`).
 
 ```console

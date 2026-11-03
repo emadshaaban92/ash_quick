@@ -763,15 +763,20 @@ and what to write.
   that does not want the optimistic lock has to say so with
   `ash_quick do versioning do enabled? false end end`. Left alone, the resource gains
   a `:version` integer counter (default `1`), every `:update`/`:destroy` is filtered
-  on the version the actor loaded and bumps it, and all of them are forced to
-  `require_atomic? false`. A stale write raises `Ash.Error.Changes.StaleRecord` —
-  in a UI that means "someone else changed this, reload"; it is not a bug to
-  suppress. Do not turn versioning off to escape the forced `require_atomic?
-  false` either; that is the mechanism, not a side effect.
+  on the version the actor loaded and bumps it. A stale write raises
+  `Ash.Error.Changes.StaleRecord` — in a UI that means "someone else changed
+  this, reload"; it is not a bug to suppress.
 
-  **`Ash.bulk_update` therefore never takes the atomic path** on a versioned
-  resource. It runs `:stream` — a real changeset, notification and audit row
-  per record. Correct, and not free: size batches accordingly.
+  The lock works on both of Ash's paths, so each action keeps its own
+  `require_atomic?`: one that can run atomically does, with the lock inside the
+  `UPDATE`, and one with a change that cannot says `require_atomic? false`, as
+  on any resource. `Ash.update_many/4` over loaded records locks each one in a
+  single `MERGE`, which needs the PostgreSQL 17 AshQuick requires, declared in
+  the repo's `min_pg_version`. **A bulk write by query or by `:atomic_batches`
+  that changes anything needs `:stream` among its strategies**: Ash gives the
+  lock no versions there, so it declines the atomic one, and `:stream` locks
+  each row in memory — a real changeset, notification and audit row per
+  record. Correct, and not free: size batches accordingly.
 
   Bookkeeping-only changes (timestamps, audit relationships) do not count as changes
   and do not bump — see `AshQuick.Config.versioning_ignored_attributes/1`.
@@ -1050,8 +1055,8 @@ config :ash_quick,
 
 - Routing a QuickView with `live/3` instead of `quick_view/3`.
 - Reading `:only` / `:except` as resource action names. They are route shapes.
-- Turning versioning off to escape the forced `require_atomic? false`, or
-  rescuing `StaleRecord` instead of surfacing it.
+- Turning versioning off to run a bulk write atomically, or rescuing
+  `StaleRecord` instead of surfacing it.
 - Narrowing a `quick_view` past `:show` or `:action` while the page still
   renders controls leading there. Rows link to `<base>/<id>`, and every update
   or destroy, with inputs or without, opens at `<base>/<id>/<action>`.

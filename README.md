@@ -39,6 +39,19 @@ def deps do
 end
 ```
 
+On AshPostgres, AshQuick supports PostgreSQL 17 or later, and the repo should
+say so, because AshPostgres writes SQL for the version the repo declares rather
+than the one it connects to:
+
+```elixir
+# lib/my_app/repo.ex
+def min_pg_version, do: %Version{major: 17, minor: 0, patch: 0}
+```
+
+Declaring less turns off what versioning relies on for `Ash.update_many/4`: the
+single `MERGE` that locks each loaded record. Below it, each record falls back
+to a bulk write that needs `strategy: [..., :stream]`.
+
 ### Configuration
 
 Configuration lives under the `:ash_quick` key in `config/config.exs` — **not
@@ -516,18 +529,28 @@ Read this before adopting, because it changes how every write behaves.
 Unless the resource says otherwise, every `:update` and `:destroy` is filtered
 on the `version` the actor loaded and bumps it. Three consequences:
 
-1. **`require_atomic? false` is forced on every `:update` and `:destroy`.** The
-   lock is decided in a `before_action` against the final changeset, and
-   reaching that changeset needs the non-atomic path.
-2. **`Ash.bulk_update` therefore never takes the atomic path** on a versioned
-   resource. It runs `:stream` — a real changeset, notification and audit row
-   per record. Correct, and not free: size the batches accordingly.
-3. **`Ash.Error.Changes.StaleRecord` is a live failure mode every caller
+1. **`Ash.Error.Changes.StaleRecord` is a live failure mode every caller
    handles.** A write against a record someone else has since changed matches
    no row and comes back as that error rather than overwriting them.
+2. **Each action keeps its own `require_atomic?`.** The lock works on both of
+   Ash's paths, so an update that can run atomically does, and one with a
+   change that cannot says `require_atomic? false` as it would on any
+   resource. On the atomic path the lock is part of the `UPDATE`, and that
+   includes `Ash.update_many/4` over loaded records, which locks each one in
+   a single `MERGE` (PostgreSQL 17, see Installation).
+3. **A bulk write by query, or by `:atomic_batches`, takes `:stream` instead
+   when it changes anything the lock counts.** Ash hands both the same
+   changeset without the rows' versions, so the lock cannot tell a query
+   nobody loaded from records somebody did, and declines the atomic strategy
+   for both. Pass `strategy: [:atomic, :stream]` and each row is locked in
+   memory: a real changeset, notification and audit row per record. Correct,
+   and not free: size the batches accordingly.
 
 An update that ends up a genuine no-op neither bumps nor filters, and changes
-to the bookkeeping fields do not count as changes for this purpose.
+to the bookkeeping fields do not count as changes for this purpose. On the
+atomic path "no-op" is judged against the row being written, since that path
+writes every accepted input: a value the actor did not change, but someone
+else has since, is a change, and is locked.
 
 It is on rather than off because losing a concurrent write is silent and
 unrecoverable. Turn it off where there is nothing to lose — an append-only log,

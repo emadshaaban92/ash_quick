@@ -40,11 +40,15 @@ NULL, if activation is declared. All add-if-absent: a resource that already
 defines one keeps what it wrote.
 
 **Versioning is on by default.** Every `:update` and `:destroy` is filtered on
-the `version` the actor loaded and bumps it, which forces `require_atomic?
-false` on all of them — so `Ash.bulk_update` never takes the atomic path, and
+the `version` the actor loaded and bumps it, and
 `Ash.Error.Changes.StaleRecord` is a live failure mode every caller handles.
-Turn it off only where there is nothing to lose: an append-only log, a row a
-single writer touches.
+The lock works on Ash's atomic path too, so each action keeps its own
+`require_atomic?`, and `Ash.update_many/4` locks each loaded record in one
+`MERGE` (PostgreSQL 17+, which AshQuick requires; declare it in the repo's
+`min_pg_version`). A bulk write by query or by `:atomic_batches` that changes
+anything needs `:stream` among its strategies: there the lock cannot see the
+rows' versions, so it declines the atomic one. Turn versioning off only where
+there is nothing to lose: an append-only log, a row a single writer touches.
 
 **Three things refuse to compile.** An `:id` that addresses exactly one row
 (the views build DOM ids from it and route on it); a display label, inferred
