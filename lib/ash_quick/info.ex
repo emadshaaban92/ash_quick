@@ -245,6 +245,18 @@ defmodule AshQuick.Info do
   end
 
   @doc """
+  Whether `resource` declared `action_name` to open as a page of its own,
+  under `ash_quick do forms do full_page [...] end end`, rather than in the
+  action modal.
+
+  `false` for a resource without the extension, which declares nothing.
+  """
+  def full_page?(resource, action_name) do
+    Ash.Resource.Info.resource?(resource) and
+      action_name in Spark.Dsl.Extension.get_opt(resource, [:ash_quick, :forms], :full_page, [])
+  end
+
+  @doc """
   The read action a search over `resource` runs through.
 
   One action stands behind the list page, the export and every relationship

@@ -519,7 +519,7 @@ running it.
 
 It also attaches the audit change to every create, update and destroy, and
 wires the resource's PubSub publications. See the `AshQuick` moduledoc for each
-section: `liveness`, `display`, `labels`, `lookup`, `activation`,
+section: `liveness`, `display`, `labels`, `forms`, `lookup`, `activation`,
 `versioning`, `bookkeeping`, `audit`, `field_restrictions`.
 
 ### Versioning is on by default
@@ -783,6 +783,30 @@ flow.
 A `quick_view` inside `scope "/admin"` answers `/admin/products` and builds its
 links from `/admin/products` too.
 
+## Actions too big for a modal
+
+A create, an update or a destroy opens in a modal over the page it was opened
+from. One whose form is too big for a modal (many fields, a nested list,
+several attachments) opens as a page of its own when its resource says so:
+
+```elixir
+ash_quick do
+  forms do
+    full_page [:register, :import]
+  end
+end
+```
+
+The list's New button, a row's actions and a details page's buttons lead to
+the action's URL as before; the page there draws the form, or the
+confirmation, with nothing underneath. Cancel and a successful run return where
+the modal would: to the page it was opened from, at its search, filters and
+page, or, reached by a link, to the record's details page (the list for a
+create). A create goes on to the record it made, and a destroy of the record
+the page was about goes to the list. Each name must be a public create, update
+or destroy, or the resource does not compile. A bulk run of the action still
+opens in the modal over the list, which keeps the selection it runs over.
+
 ## Generators
 
 Two, and both write more than the file they are named after — because the thing
@@ -848,16 +872,17 @@ policy action(:approve) do
 end
 ```
 
-A control only opens the action: every create, update and destroy, bulk ones
-included, runs in a modal over the page it was opened from, and the run is
-stamped `AshQuick.form_source/0` (`:ash_quick_form`) however the modal was
-reached, by the control, a hand-pushed event or a typed URL. That source is
-deliberately **not** a surface: a policy scoped to the three above never fires
-at the run, so a stale or forged run routes to the action's own validation (a
-409 or 422) instead of a `Forbidden`. A state gate therefore needs both a
-surface policy, which hides the button, and a validation, which refuses the
-write. Where QuickView must never run an action at all, forbid the form source
-too, as the `AshQuick` moduledoc does for `:impersonate`:
+A control only opens the action: every create, update and destroy runs in a
+modal over the page it was opened from, or on a page of its own for an action
+the resource declares `full_page`; bulk runs always use the modal. The run is
+stamped `AshQuick.form_source/0` (`:ash_quick_form`) however it was reached, by
+the control, a hand-pushed event or a typed URL. That source is deliberately
+**not** a surface: a policy scoped to the three above never fires at the run, so
+a stale or forged run routes to the action's own validation (a 409 or 422)
+instead of a `Forbidden`. A state gate therefore needs both a surface policy,
+which hides the button, and a validation, which refuses the write. Where
+QuickView must never run an action at all, forbid the form source too, as the
+`AshQuick` moduledoc does for `:impersonate`:
 
 ```elixir
 policy action(:impersonate) do
