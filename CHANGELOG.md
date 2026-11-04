@@ -1055,7 +1055,7 @@
   CVE-2026-82727. Ash 3.37.1 fixed EEF-CVE-2026-114214, and phoenix_html 4.4.0
   fixed EEF-CVE-2026-117645. The other floors rose to the releases the suite
   runs against: spark 2.7, and for the optional features nimble_csv 1.3, exceed
-  0.7, ex_aws 2.7, ex_money 6.3, localize 1.5 and sourceror 1.13.
+  0.7, ex_aws 2.7, ex_money 6.3, localize 1.6 and sourceror 1.13.
 
   **Who is affected:** a host on an older release of any of these. Update
   them with `mix deps.update` alongside AshQuick.

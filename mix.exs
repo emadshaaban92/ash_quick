@@ -81,7 +81,7 @@ defmodule AshQuick.MixProject do
       {:ex_aws, "~> 2.7", optional: true},
       {:ex_aws_s3, "~> 2.5", optional: true},
       {:ex_money, "~> 6.3", optional: true},
-      {:localize, "~> 1.5", optional: true},
+      {:localize, "~> 1.6", optional: true},
       {:merge_pdf, "~> 0.5", optional: true},
 
       # The installer and generators are mix tasks in this package, and a host
