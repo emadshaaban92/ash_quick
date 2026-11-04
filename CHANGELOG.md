@@ -190,7 +190,17 @@
   `AshQuick.Nav.Info.details_linker/3` per render, over the resources it
   can link, so each one's page is resolved once and the access control
   asked at most once; a custom page can do the same. The "Name (hint)"
-  wording is translatable. List pages are unchanged.
+  wording is translatable.
+
+- **A list page links the records its columns name, as a details page
+  does.** A column that stops at a relationship or reaches the related
+  record's display label is a link to that record's details page, with its
+  `display hint` as the tooltip and in the accessible name, for a reader the
+  nav's access control grants that page, and plain text, without the hint,
+  for anyone else. The list query loads each such record's hint, and the
+  page builds its `AshQuick.Nav.Info.details_linker/3` once per navigation.
+  A row does not navigate on a click, so the link is the cell's only target,
+  beside the row's "View details" button.
 
 - **The Live Users register tells two people sharing a name apart.** Each
   person's `display hint` is shown beside their label, both for whoever is

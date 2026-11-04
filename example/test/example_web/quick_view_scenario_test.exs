@@ -79,12 +79,13 @@ defmodule ExampleWeb.QuickViewScenarioTest do
     assert created.inserted_by_id == editor.id
 
     # The list shows it, with both relationships rendered by name rather than
-    # by uuid.
-    {:ok, _view, html} = conn |> log_in(editor) |> live(~p"/products")
+    # by uuid. The brand's id is in its link's href, so it is the cells' text
+    # that must not carry it.
+    {:ok, view, html} = conn |> log_in(editor) |> live(~p"/products")
     assert html =~ "Four-season tent"
     assert html =~ brand.name
     assert html =~ category.name
-    refute html =~ created.brand_id
+    refute has_element?(view, "td", created.brand_id)
 
     # --- The admin reprices it from the details page. -----------------------
     {:ok, view, html} = conn |> log_in(admin) |> live(~p"/products/#{created.id}")
