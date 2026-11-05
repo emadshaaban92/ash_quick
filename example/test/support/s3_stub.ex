@@ -24,10 +24,41 @@ defmodule Example.Test.S3Stub do
   @behaviour ExAws.Request.HttpClient
 
   @table __MODULE__
+  @refusals Module.concat(__MODULE__, Refusals)
 
-  @doc "Starts the table. Called once from `test_helper.exs`."
+  @doc "Starts the tables. Called once from `test_helper.exs`."
   def start do
     :ets.new(@table, [:named_table, :public, :set, write_concurrency: true])
+    :ets.new(@refusals, [:named_table, :public, :set])
+    :ok
+  end
+
+  @doc """
+  Refuses every upload whose key holds `prefix`, until `accept/1`.
+
+  By prefix rather than for everything, so a test that makes an export fail
+  fails only its own: the suite is async, and exports are keyed by the actor.
+  The refusal is a `403`, which ExAws returns at once instead of retrying.
+
+  With `hold: true` the refusing request first sends the calling process
+  `{Example.Test.S3Stub, :held, pid}` and waits for `release/1` on that `pid`,
+  so a test can act while the export is still running.
+  """
+  def refuse(prefix, opts \\ []) do
+    holder = if Keyword.get(opts, :hold, false), do: self()
+    :ets.insert(@refusals, {prefix, holder})
+    :ok
+  end
+
+  @doc "Lets a request `refuse/2` is holding go on to its refusal."
+  def release(pid) do
+    send(pid, {__MODULE__, :release})
+    :ok
+  end
+
+  @doc "Takes back `refuse/2`."
+  def accept(prefix) do
+    :ets.delete(@refusals, prefix)
     :ok
   end
 
@@ -68,7 +99,34 @@ defmodule Example.Test.S3Stub do
     query = URI.decode_query(uri.query || "")
     key = uri.path |> String.trim_leading("/") |> URI.decode()
 
-    respond(method, key, query, body)
+    case refusal(key) do
+      nil -> respond(method, key, query, body)
+      {:refuse, holder} -> refuse_request(key, holder)
+    end
+  end
+
+  # The key goes in the body, so a test can tell its own failure apart.
+  defp refuse_request(key, holder) do
+    if is_pid(holder) do
+      send(holder, {__MODULE__, :held, self()})
+
+      receive do
+        {__MODULE__, :release} -> :ok
+      after
+        to_timeout(second: 5) -> :ok
+      end
+    end
+
+    body = "<Error><Code>AccessDenied</Code><Key>#{key}</Key></Error>"
+    {:ok, %{status_code: 403, headers: [], body: body}}
+  end
+
+  # By `String.contains?/2`, as the tests find an export: the path leads with
+  # the bucket.
+  defp refusal(path) do
+    Enum.find_value(:ets.tab2list(@refusals), fn {prefix, holder} ->
+      if String.contains?(path, prefix), do: {:refuse, holder}
+    end)
   end
 
   # Initiate. The upload id is the key, since nothing here multiplexes.

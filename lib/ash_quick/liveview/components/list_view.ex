@@ -216,7 +216,11 @@ defmodule AshQuick.LiveView.Components.ListView do
           />
         </div>
       </div>
-      <.export_modal :if={AshQuick.Config.exports_enabled?()} export_data={@export_data} />
+      <.export_modal
+        :if={AshQuick.Config.exports_enabled?()}
+        export_data={@export_data}
+        export_format={@export_format}
+      />
     </section>
     """
   end
@@ -541,7 +545,9 @@ defmodule AshQuick.LiveView.Components.ListView do
             <.icon name="hero-exclamation-circle" class="w-6 h-6" />
             <p>{gettext("Failed to export")}</p>
           </div>
-          <button phx-click="start-gen-report" class="btn btn-primary">
+          <%!-- Runs the failed export again. The rows come from the page's
+          selection, which the modal sits over, so only the format is carried. --%>
+          <button phx-click="export" phx-value-format={@export_format} class="btn btn-primary">
             <.icon name="hero-arrow-path" class="w-4 h-4" /> {gettext("Retry")}
           </button>
         </div>
