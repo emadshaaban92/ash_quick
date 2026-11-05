@@ -14,6 +14,7 @@ defmodule AshQuick.LiveView.FormUtils do
   alias AshQuick.LiveView.QuickView.Options
   alias Ash.Resource.Actions.Argument
   alias Ash.Type
+  alias AshQuick.LiveView.Components.FormView
   alias AshQuick.LiveView.Utils
   alias AshQuick.Storage
 
@@ -37,6 +38,7 @@ defmodule AshQuick.LiveView.FormUtils do
     |> set_record!(action_type, action_name, params, options)
     |> set_form(action_type, options)
     |> then(&allow_image_upload(&1, &1.assigns.form))
+    |> then(&assign(&1, ash_quick_refusal: FormView.refusal(&1.assigns)))
   end
 
   defp set_title(socket, action_name, %{resource: resource}) do
@@ -142,9 +144,15 @@ defmodule AshQuick.LiveView.FormUtils do
     socket |> assign(form: form) |> assign_issued_attachment_keys()
   end
 
+  # A field a field policy hides on the record gets no sub-form: Ash read it
+  # as `%Ash.ForbiddenField{}`, which there is nothing to build one over. See
+  # `Utils.form_fields/1`, which keeps every other path off it.
   defp set_form(socket, :update, _options) do
+    %{record: record, resource: resource, ash_action: %{name: action}} = socket.assigns
+
     form =
-      AshPhoenix.Form.for_update(socket.assigns.record, socket.assigns.ash_action.name,
+      AshPhoenix.Form.for_update(record, action,
+        forms: Utils.nested_forms(resource, action, Utils.hidden_field_names(record)),
         transform_params: &transform_nested_params/3,
         transform_errors: &ActionErrors.renderable_vars/2,
         scope: socket.assigns.scope,
@@ -502,7 +510,7 @@ defmodule AshQuick.LiveView.FormUtils do
   end
 
   defp allow_image_upload(socket, form, root?) do
-    Utils.action_fields(form.resource, form.action)
+    Utils.form_fields(form)
     |> Enum.reduce(socket, &maybe_allow_upload(form, &1, &2, root?))
     |> then(
       &Enum.reduce(form.forms |> Map.values(), &1, fn nested_form, socket_acc ->
@@ -664,10 +672,12 @@ defmodule AshQuick.LiveView.FormUtils do
     end)
   end
 
-  # No form was built because the record is not readable by this actor, so the
-  # page is showing the forbidden panel. Nothing stops someone pushing a form
-  # event at it anyway — refuse rather than build on a nil form.
-  defp handle_form_events(event, _params, %{assigns: %{form: nil}} = socket, _options)
+  # The page shows the forbidden panel in place of the form: the actor may not
+  # run the action, may change none of what it takes, or may not read the
+  # record, in which case no form was built. Nothing stops someone pushing a
+  # form event at it anyway. Refuse it as the panel words it, rather than build
+  # on a nil form or run what the panel says is refused.
+  defp handle_form_events(event, params, socket, options)
        when event in [
               "cancel-upload",
               "add-form",
@@ -676,19 +686,27 @@ defmodule AshQuick.LiveView.FormUtils do
               "validate",
               "save"
             ] do
-    {:halt, socket |> put_flash(:error, AshQuick.LiveView.ActionErrors.forbidden_message())}
+    case FormView.held_refusal(socket.assigns) do
+      :ok ->
+        handle_open_form_events(event, params, socket, options)
+
+      {:forbidden, message} ->
+        {:halt, put_flash(socket, :error, message || ActionErrors.forbidden_message())}
+    end
   end
 
-  defp handle_form_events("cancel-upload", params, socket, _options) do
+  defp handle_form_events(_, _, socket, _options), do: {:cont, socket}
+
+  defp handle_open_form_events("cancel-upload", params, socket, _options) do
     {:halt, socket |> cancel_upload(params["entry"], params["ref"]) |> clear_flash()}
   end
 
-  defp handle_form_events("add-form", %{"path" => path}, socket, _options) do
+  defp handle_open_form_events("add-form", %{"path" => path}, socket, _options) do
     form = AshPhoenix.Form.add_form(socket.assigns.form, path)
     {:halt, socket |> assign(form: form) |> allow_image_upload(form) |> clear_flash()}
   end
 
-  defp handle_form_events("remove-form", %{"path" => path}, socket, _options) do
+  defp handle_open_form_events("remove-form", %{"path" => path}, socket, _options) do
     form = AshPhoenix.Form.remove_form(socket.assigns.form, path)
     {:halt, socket |> assign(form: form) |> clear_flash()}
   end
@@ -697,7 +715,7 @@ defmodule AshQuick.LiveView.FormUtils do
   # the list itself is held here, so there is no value of the client's to take.
   # Anything that does not name a position in an array attribute of attachments
   # is ignored rather than passed on to the host's own `handle_event/3`.
-  defp handle_form_events("remove-attachment", params, socket, _options) do
+  defp handle_open_form_events("remove-attachment", params, socket, _options) do
     form = socket.assigns.form
 
     with %{"field" => name, "index" => index} when is_binary(name) <- params,
@@ -714,12 +732,12 @@ defmodule AshQuick.LiveView.FormUtils do
   # `add_*` argument) posts no `form` params at all: a file input's value never
   # travels with the form. Nor does a confirmation, which has no inputs. Both
   # are an empty form, not someone else's event.
-  defp handle_form_events(event, params, socket, options)
+  defp handle_open_form_events(event, params, socket, options)
        when event in ["validate", "save"] and not is_map_key(params, "form") do
-    handle_form_events(event, Map.put(params, "form", %{}), socket, options)
+    handle_open_form_events(event, Map.put(params, "form", %{}), socket, options)
   end
 
-  defp handle_form_events("validate", %{"form" => params} = event, socket, _options) do
+  defp handle_open_form_events("validate", %{"form" => params} = event, socket, _options) do
     params =
       params
       |> FieldErrors.mark_used(event["_target"])
@@ -733,7 +751,7 @@ defmodule AshQuick.LiveView.FormUtils do
     end
   end
 
-  defp handle_form_events("save", %{"form" => params}, socket, _options) do
+  defp handle_open_form_events("save", %{"form" => params}, socket, _options) do
     params = params |> put_emptied_selections() |> carry_uploaded_attachments(socket.assigns.form)
 
     case validate_issued(socket.assigns.form, params, socket) do
@@ -742,7 +760,7 @@ defmodule AshQuick.LiveView.FormUtils do
     end
   end
 
-  defp handle_form_events(_, _, socket, _options), do: {:cont, socket}
+  defp handle_open_form_events(_, _, socket, _options), do: {:cont, socket}
 
   defp submit_form(form, params, socket) do
     result =
@@ -997,8 +1015,8 @@ defmodule AshQuick.LiveView.FormUtils do
   # A belongs_to is offered as its relationship, and its errors are filed under
   # the attribute behind it (`owner_id`), which the same input shows.
   defp input_names(form, scope) do
-    form.resource
-    |> Utils.action_fields(form.action, scope)
+    form
+    |> Utils.form_fields(scope)
     |> Enum.flat_map(fn
       %Ash.Resource.Relationships.BelongsTo{} = field -> [field.name, field.source_attribute]
       field -> [field.name]
@@ -1032,9 +1050,13 @@ defmodule AshQuick.LiveView.FormUtils do
 
   def put_emptied_selections(value), do: value
 
+  # A list argument left out of the post means "emptied", so it is put back
+  # as `[]`: only for an argument the form handles, never one it leaves out
+  # as hidden, which would then save over a value its reader never saw.
   @doc false
   def maybe_put_has_many(params, form) do
-    AshPhoenix.Form.arguments(form)
+    form
+    |> Utils.form_fields()
     |> Enum.filter(fn
       %Argument{type: {:array, item_type}} = argument ->
         item_type in [Type.UUID, Type.UUIDv7] or EnumOptions.kind(argument) == :array
@@ -1137,7 +1159,7 @@ defmodule AshQuick.LiveView.FormUtils do
   defp carry_uploaded_attachments(params, form) do
     raw_params = form.raw_params || %{}
 
-    Utils.action_fields(form.resource, form.action)
+    Utils.form_fields(form)
     |> Enum.filter(&(&1.type == {:array, AshQuick.AshTypes.Attachment}))
     |> Enum.reduce(params, fn field, updated_params ->
       key = field.name |> to_string()
@@ -1161,7 +1183,7 @@ defmodule AshQuick.LiveView.FormUtils do
   defp held_attachments?(_field), do: false
 
   defp held_attachments_field(form, name) do
-    Utils.action_fields(form.resource, form.action)
+    Utils.form_fields(form)
     |> Enum.find(&(held_attachments?(&1) and to_string(&1.name) == name))
   end
 
@@ -1408,7 +1430,7 @@ defmodule AshQuick.LiveView.FormUtils do
   end
 
   defp upload_images(params, socket, form) when is_map(params) do
-    Utils.action_fields(form.resource, form.action)
+    Utils.form_fields(form)
     |> Enum.reduce(params, fn field, updated_params ->
       maybe_upload_image(field, updated_params, socket, form)
     end)

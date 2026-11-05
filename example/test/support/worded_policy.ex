@@ -18,6 +18,10 @@ defmodule Example.Test.WordedPolicy do
   policy's words. `:stamp` refuses the same way with no message of its own, the
   control that still gets the fixed sentence.
 
+  `:approve` and `:archive` are refused on a sealed record, which the page can
+  tell before anything runs: `:approve` says why in its policy's words, and
+  `:archive` has none of its own.
+
   In ETS rather than Postgres: nothing here is about what lands in a table.
   """
   use Ash.Resource,
@@ -53,6 +57,14 @@ defmodule Example.Test.WordedPolicy do
       accept []
       change set_attribute(:sealed, true)
     end
+
+    update :approve do
+      accept []
+    end
+
+    update :archive do
+      accept []
+    end
   end
 
   policies do
@@ -66,6 +78,17 @@ defmodule Example.Test.WordedPolicy do
       forbid_if context_equals(:action_source, :ash_quick_form)
       authorize_if always()
       error_message "Sealing is closed for the season."
+    end
+
+    policy action(:approve) do
+      forbid_if expr(sealed == true)
+      authorize_if always()
+      error_message "A sealed record cannot be approved."
+    end
+
+    policy action(:archive) do
+      forbid_if expr(sealed == true)
+      authorize_if always()
     end
 
     policy action(:stamp) do

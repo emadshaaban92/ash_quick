@@ -947,7 +947,14 @@ policy's `error_message` is what a run it refuses flashes, translated like any
 msgid (add it to the `errors` catalogue); without one, or when the
 `error_message` function returns its own exception, the flash is "You don't
 have permission to do that." Give a policy an `error_message` when the person
-refused can act on the reason.
+refused can act on the reason. A form refused before it opens (reached by its
+URL) shows the "Access Forbidden" panel with that message too; menus and
+buttons simply leave the action out. An update form never draws, prefills or
+sends a field a field policy hides from its reader on that record (or an
+argument named like it); one whose every input is hidden is refused. A bulk
+form leaves out a field hidden on any record. Field policies govern reading
+only: to refuse writes to a field, give the action a policy with
+`changing_attributes/1`.
 
 `:gettext` names the host's Gettext backend; AshQuick translates everything
 else it draws there, in the `ash_quick` domain and that backend's locale: its

@@ -104,7 +104,30 @@ policy's message is a msgid like Ash's own, so it goes through
 `:error_translator` too: add it to your `errors` catalogue. Only the message is
 shown, never the policy breakdown.
 An `error_message` function that returns an exception of its own replaces the
-policy error, so the flash shows the fixed sentence instead.
+policy error, so the flash shows the fixed sentence instead. A form the actor
+may not run at all, reached by its URL, opens on an "Access Forbidden" panel,
+which says the refusing policy's `error_message` too when it has one. Menus
+and buttons leave out an action the actor may not run.
+
+Field policies decide what a page shows: a column hidden on every record is
+left out, and a value hidden on one record reads as a muted dash. An update
+form never draws, prefills or sends a field its reader may not see on the
+record it updates, nor an argument named like one, so a save from the form
+leaves that field as it is. An update whose every input is hidden that way
+opens on the forbidden panel. A bulk form leaves out a field hidden from the
+actor on any record, since its value would go to all of them.
+
+Field policies govern reading. They don't stop a write sent another way: the
+same action can run through an API, a script or a hand-sent event. To refuse
+writes to a field, add an action policy with `changing_attributes/1`:
+
+```elixir
+policy [action_type(:update), changing_attributes([:salary])] do
+  authorize_if actor_attribute_equals(:role, :admin)
+end
+```
+
+A save the policy refuses flashes its `error_message`, as above.
 
 `:gettext` names your Gettext backend, and AshQuick translates everything else
 it draws there, in the `ash_quick` domain and in that backend's locale: its own

@@ -10,6 +10,7 @@ defmodule AshQuick.LiveView.Components.FormView do
   alias AshQuick.Labels
   alias Phoenix.LiveView.JS
 
+  alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.FieldErrors
   alias AshQuick.LiveView.FormUtils
@@ -17,13 +18,15 @@ defmodule AshQuick.LiveView.Components.FormView do
   alias AshQuick.LiveView.URLParams
 
   def form_view(assigns) do
-    forbidden? = forbidden?(assigns)
+    refusal = held_refusal(assigns)
+    forbidden? = refusal != :ok
 
     assigns =
       assigns
       |> assign_new(:uploads, fn -> nil end)
       |> assign_new(:ash_quick_background, fn -> nil end)
       |> assign(:forbidden?, forbidden?)
+      |> assign(:refusal, if(forbidden?, do: elem(refusal, 1)))
       |> assign(:confirm?, not forbidden? and Enum.empty?(fields(assigns.form, assigns.scope)))
 
     assigns = assign(assigns, :subtitle, subtitle(assigns))
@@ -51,12 +54,17 @@ defmodule AshQuick.LiveView.Components.FormView do
           <.cancel_link background={@ash_quick_background} class="mt-4 sm:mt-6 ml-2" />
         </:actions>
       </.simple_form>
-      <.forbidden_action :if={@forbidden?} base_path={@base_path} params={@params} />
+      <.forbidden_action
+        :if={@forbidden?}
+        message={@refusal}
+        base_path={@base_path}
+        params={@params}
+      />
     </section>
     """
   end
 
-  defp fields(form, scope), do: Utils.action_fields(form.resource, form.action, scope)
+  defp fields(form, scope), do: Utils.form_fields(form, scope)
 
   # A modal's record is on the page underneath it. An update drawn with nothing
   # underneath (a `full_page` action) names the record under its title, as a
@@ -158,33 +166,93 @@ defmodule AshQuick.LiveView.Components.FormView do
   so it is skipped when the answer is `true` and the forbidden panel renders
   in its place.
   """
-  def forbidden?(assigns) do
-    forbidden?(assigns.ash_action, assigns[:record], assigns.resource, assigns.scope)
+  def forbidden?(assigns), do: held_refusal(assigns) != :ok
+
+  @doc """
+  Whether the actor may run this form's action, keyed by the action and record
+  it was asked about: `{key, :ok}`, or `{key, {:forbidden, message}}` where
+  `message` is the refusing policy's `error_message`, or `nil` when it has
+  none and the panel says its own sentence.
+
+  `FormUtils` asks once, when it builds the form, and holds the answer as
+  `:ash_quick_refusal`, so a render (one per keystroke while the form is
+  open) reads it rather than asking Ash again. An answer about another action
+  or record is asked again.
+  """
+  def refusal(assigns), do: {refusal_key(assigns), ask_refusal(assigns)}
+
+  @doc """
+  The answer `refusal/1` holds for this form's action and record, `:ok` or
+  `{:forbidden, message}`, asked again when what it holds is about another.
+  The form's events consult it too, so an event pushed at the forbidden panel
+  is refused as the panel words it.
+  """
+  def held_refusal(assigns) do
+    key = refusal_key(assigns)
+
+    case assigns[:ash_quick_refusal] do
+      {^key, refusal} -> refusal
+      _other -> ask_refusal(assigns)
+    end
   end
+
+  defp refusal_key(assigns) do
+    {assigns.ash_action.name, assigns[:record] && Map.get(assigns.record, :id)}
+  end
+
+  defp ask_refusal(assigns) do
+    case refusal(assigns.ash_action, assigns[:record], assigns.resource, assigns.scope) do
+      :ok -> if every_input_hidden?(assigns), do: {:forbidden, nil}, else: :ok
+      refused -> refused
+    end
+  end
+
+  # An update whose every input a field policy hides on this record has
+  # nothing its reader may change. Drawn as a confirmation, it would run the
+  # action anyway, its changes and bookkeeping included, over values they
+  # never saw; it is refused instead.
+  defp every_input_hidden?(%{form: %{} = form, ash_action: %{type: :update} = action} = assigns) do
+    Utils.form_fields(form, assigns.scope) == [] and
+      Utils.action_fields(assigns.resource, action.name, assigns.scope) != []
+  end
+
+  defp every_input_hidden?(_assigns), do: false
 
   # An update form with no record: the actor cannot read it, or it does not
   # exist. Both look the same from here, and neither offers an action to run.
-  defp forbidden?(%{type: type}, nil, _resource, _scope) when type in [:update, :destroy],
-    do: true
+  defp refusal(%{type: type}, nil, _resource, _scope) when type in [:update, :destroy],
+    do: {:forbidden, nil}
 
   # A create form has no record by nature — fall back to a record-less check.
-  defp forbidden?(action, nil, resource, scope), do: not can_run?({resource, action}, scope)
+  defp refusal(action, nil, resource, scope), do: run_refusal({resource, action}, scope)
 
-  defp forbidden?(action, record, _resource, scope), do: not can_run?({record, action}, scope)
+  defp refusal(action, record, _resource, scope), do: run_refusal({record, action}, scope)
 
   # Asked as the run will be stamped, so a policy refusing the form source
   # shows the forbidden panel here rather than a form whose submit it refuses.
-  defp can_run?(target, scope) do
-    Ash.can?(target, scope,
-      log_policy_breakdown?: false,
-      context: %{action_source: AshQuick.form_source()}
-    )
+  # A check Ash cannot settle before the run lets the form open, as
+  # `Ash.can?/3` does, and the run decides.
+  defp run_refusal(target, scope) do
+    case Ash.can(target, scope,
+           log_policy_breakdown?: false,
+           maybe_is: true,
+           return_forbidden_error?: true,
+           context: %{action_source: AshQuick.form_source()}
+         ) do
+      {:ok, true} -> :ok
+      # `maybe_is` settles only the authorizer's own maybe; Ash also answers
+      # `:maybe` outright for a record with no primary key value yet.
+      {:ok, :maybe} -> :ok
+      {:ok, false, error} -> {:forbidden, ActionErrors.policy_message(error)}
+      {:ok, false} -> {:forbidden, nil}
+      {:error, error} -> raise error
+    end
   end
 
   def form_fields(%{form: form, scope: scope} = assigns) do
     assigns =
       assigns
-      |> assign(:fields, Utils.action_fields(form.resource, form.action, scope))
+      |> assign(:fields, Utils.form_fields(form, scope))
       |> assign(:phx_form, form |> to_form())
       |> assign_new(:widgets, fn -> %{} end)
 
@@ -570,7 +638,8 @@ defmodule AshQuick.LiveView.Components.FormView do
           <h3 class="card-title text-base-content">
             {gettext("Access Forbidden")}
           </h3>
-          <p class="text-base-content/70">
+          <p :if={@message} class="text-base-content/70">{@message}</p>
+          <p :if={!@message} class="text-base-content/70">
             {gettext(
               "You do not have permission to perform this action. Please contact an administrator if you believe this is an error."
             )}

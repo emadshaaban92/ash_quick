@@ -138,8 +138,11 @@ defmodule AshQuick.LiveView.BulkActions do
   defp upload_field(resource, %{name: name}) do
     resource
     |> Utils.action_fields(name)
-    |> Enum.find_value(fn field ->
-      uploads?(Map.get(field, :type), MapSet.new()) && field.name
+    |> Enum.find_value(fn
+      # An accepted `belongs_to` attribute comes back as its relationship,
+      # whose `:type` is the kind of relationship, not a type to look into.
+      %Ash.Resource.Relationships.BelongsTo{} -> nil
+      field -> uploads?(Map.get(field, :type), MapSet.new()) && field.name
     end)
   end
 

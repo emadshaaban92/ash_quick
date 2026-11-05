@@ -108,6 +108,7 @@ defmodule ExampleWeb.Router do
         quick_view "/filter_fields", Example.Test.FilterFieldsLive.Quick
         quick_view "/form_stages", Example.Test.FormStagesLive.Quick
         quick_view "/hidden_address", Example.Test.HiddenAddressLive.Quick
+        quick_view "/hidden_fields", Example.Test.HiddenFieldsLive.Quick
         quick_view "/labelled_loans", Example.Test.LabelledLoansLive.Quick
         quick_view "/long_forms", Example.Test.LongFormsLive.Quick
         quick_view "/lookup_items", Example.Test.LookupItemsLive.Quick

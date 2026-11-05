@@ -518,6 +518,32 @@
 
 ### Bug fixes
 
+- **An update form no longer crashes on a field its reader may not see.** A
+  field policy hiding an accepted attribute made Ash read it back as
+  `%Ash.ForbiddenField{}`, which an input cannot draw and a sub-form cannot be
+  built over, so the form took the page down; an input drawn empty would have
+  saved that emptiness over a value its reader never saw. An update form now
+  never draws, prefills or sends a field a field policy hides from its reader
+  on the record it updates (attachments, embeds and `belongs_to` dropdowns
+  included), nor an argument named like one, so a save from the form leaves it
+  as it is. A field hidden on some records only is left out of those records'
+  forms. An update whose every input is hidden opens on the forbidden panel
+  rather than a confirmation that would run it anyway, and a form event pushed
+  at that panel is refused. A bulk form leaves out a field hidden from the
+  actor on any record, and is refused when that leaves it nothing to set.
+  Field policies govern reading: they do not stop a write sent another way,
+  which an action policy with `changing_attributes/1` does.
+
+- **A bulk action accepting a `belongs_to` attribute compiles.** The check
+  that refuses uploads in `list: [bulk_actions: ...]` read the relationship
+  the attribute stands for as a type, and raised.
+
+- **The "Access Forbidden" panel says why, when the policy does.** A form the
+  actor may not run, reached by its URL, showed the panel's fixed sentence
+  even when the refusing policy had an `error_message`. It now shows that
+  message, translated as a refused run's flash is, and the fixed sentence
+  only when the policy has none.
+
 - **An audited resource's updates and destroys run atomically.**
   `AshQuick.Audit.Change` had no `atomic/3`, so on a resource with
   versioning off an update or destroy that keeps Ash's default
@@ -1047,13 +1073,14 @@
   carrying `{AshQuick.Print, template: MyTemplate}`. Prints get the action's
   policies and an audit row, and are no longer uploaded to storage.
 
-- **Ash 3.37.1, ash_phoenix 2.3.25 and phoenix_html 4.4 or later are required.**
+- **Ash 3.37.3, ash_phoenix 2.3.25 and phoenix_html 4.4 or later are required.**
   Column filtering uses `Ash.can_see_fields/4`, which arrived in 3.32.1 and from
   3.35.0 no longer skips a policy authorizer that has not loaded yet. Live pages
   re-target their subscriptions through `keep_live`'s dynamic subscriptions,
   which arrived in ash_phoenix 2.3.20, and 2.3.25 fixed CVE-2026-82724 through
-  CVE-2026-82727. Ash 3.37.1 fixed EEF-CVE-2026-114214, and phoenix_html 4.4.0
-  fixed EEF-CVE-2026-117645. The other floors rose to the releases the suite
+  CVE-2026-82727. Ash 3.37.1 fixed EEF-CVE-2026-114214, and 3.37.3 stopped an
+  update that manages a relationship from failing on a record whose embed a
+  field policy hides. phoenix_html 4.4.0 fixed EEF-CVE-2026-117645. The other floors rose to the releases the suite
   runs against: spark 2.7, and for the optional features nimble_csv 1.3, exceed
   0.7, ex_aws 2.7, ex_money 6.3, localize 1.6 and sourceror 1.13.
 
