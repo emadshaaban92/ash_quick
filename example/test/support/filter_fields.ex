@@ -147,3 +147,26 @@ defmodule Example.Test.FilterFieldsLive.Quick do
     list: [fields: [:code, {:stamped_at, label: "Stamped"}, :active]],
     details: [fields: [:code, :stamped_at]]
 end
+
+defmodule Example.Test.FilterFieldsNamedLive.Quick do
+  @moduledoc """
+  The page over `Example.Test.FilterFields` whose filter offers three fields,
+  out of the resource's order: a stage, a code, and a salary only an admin may
+  see. Routed only in the test build.
+  """
+  use AshQuick.LiveView.QuickView,
+    resource: Example.Test.FilterFields,
+    list: [fields: [:code, :active], filterable: [:stage, :code, :salary]],
+    details: [fields: [:code]]
+end
+
+defmodule Example.Test.FilterFieldsNoneLive.Quick do
+  @moduledoc """
+  The page over `Example.Test.FilterFields` whose list offers no filter.
+  Routed only in the test build.
+  """
+  use AshQuick.LiveView.QuickView,
+    resource: Example.Test.FilterFields,
+    list: [fields: [:code, :active], filterable: []],
+    details: [fields: [:code]]
+end

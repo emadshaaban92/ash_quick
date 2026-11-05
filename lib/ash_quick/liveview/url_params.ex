@@ -195,6 +195,15 @@ defmodule AshQuick.LiveView.URLParams do
   def allow_sort(%__MODULE__{} = params, _sortable), do: params
 
   @doc """
+  Closes the filter modal on a list that offers no field to filter by, as
+  `filterable: []` says: it has nothing to show.
+  """
+  def allow_filter_form(%__MODULE__{} = params, []),
+    do: %__MODULE__{params | show_custom_filter: false}
+
+  def allow_filter_form(%__MODULE__{} = params, _filterable), do: params
+
+  @doc """
   The params a click on `column`'s header leads to: ascending, then descending,
   then back to the list's default order. Any sort starts from the first page,
   since the rows a page held are not the ones it holds sorted otherwise.

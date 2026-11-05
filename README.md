@@ -954,6 +954,37 @@ any other column is dropped, and the list reads in its default order. The sort
 goes through `Ash.Query.sort_input/3`, so field policies apply to it as they
 do to a filter.
 
+## Filtering a list
+
+A list's filter button opens a form that builds a filter row by row: a field,
+an operator and a value, in groups joined by AND or OR. The applied filter is
+carried in the URL, shown above the list as chips, and followed by the export.
+The form offers every public, `filterable?` attribute, aggregate and
+calculation of a type it has a row for: strings, numbers, dates, timestamps,
+booleans, UUIDs, atoms and fields with a fixed set of values. It leaves out a
+belongs_to relationship's source attribute, and any field a field policy hides
+from the visitor on every record.
+
+Filtering by an unindexed column reads the whole table, which is nothing on a
+small one; for a large one, name the fields it has indexes for, in the order
+the form lists them:
+
+```elixir
+use AshQuick.LiveView.QuickView,
+  resource: MyApp.Sales.Order,
+  list: [
+    fields: [:number, :placed_at, :total, [customer: :name]],
+    filterable: [:number, :placed_at, :status]
+  ]
+```
+
+A field need not be a list column to be filterable, and field policies still
+narrow the list for each visitor. `filterable: []` leaves the filter button
+out. Each entry has to be a field the form offers; the QuickView refuses any
+other, and a relationship path, when it compiles. A link whose filter has a
+row on any other field loses that row before the list reads, and the visitor
+is told the filter couldn't be applied.
+
 ## Testing a details page
 
 Each row on a QuickView details page carries a `data-field` attribute naming

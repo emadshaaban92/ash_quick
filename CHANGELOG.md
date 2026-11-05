@@ -4,6 +4,14 @@
 
 ### Features
 
+- **A list names the fields its filter offers.** `list: [filterable: ...]`
+  lists them, in the order the filter form shows them, so a large table offers
+  only its indexed fields; `filterable: []` leaves the filter button out. Each
+  entry is a field the form offers when the option is not given, checked when
+  the QuickView compiles; relationship paths are refused. A link's filter row
+  on any other field is dropped before the read, with the flash saying the
+  filter couldn't be applied. Not given, the form offers what it did.
+
 - **An action too big for a modal opens as a page of its own.** A resource names
   such actions under `ash_quick do forms do full_page [:register] end end`. The
   list's New button, a row's actions and a details page's buttons still lead to

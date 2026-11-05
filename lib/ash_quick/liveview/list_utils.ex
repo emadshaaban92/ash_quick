@@ -163,6 +163,10 @@ defmodule AshQuick.LiveView.ListUtils do
   # one that is no date, or any date when the zone will not load. The filter
   # it builds leaves such a row out, and the visitor is told here why.
   #
+  # And so is a row on a field the QuickView's `filterable:` leaves out, which
+  # the form does not offer either: the host named the fields this list may be
+  # filtered by, most likely the ones its table has indexes for.
+  #
   # A root that is itself such a row, as a hand-written link can be, leaves no
   # filter at all.
   defp drop_refused_rows(socket, %URLParams{custom_filter: nil} = params, _action, _options),
@@ -172,8 +176,11 @@ defmodule AshQuick.LiveView.ListUtils do
     scope = socket.assigns[:scope]
     by_name = CustomFilter.fields_by_name(options.resource)
 
+    names = CustomFilter.field_names(filter)
+
     hidden =
-      hidden_fields(CustomFilter.field_names(filter), by_name, options.resource, action, scope)
+      hidden_fields(names, by_name, options.resource, action, scope) ++
+        unoffered_fields(names, options.list_filterable)
 
     partly_hidden =
       case filter |> emptiness_rows() |> Enum.map(& &1.field_name) |> Enum.uniq() do
@@ -202,6 +209,13 @@ defmodule AshQuick.LiveView.ListUtils do
         {put_flash(socket, :error, refused_filter_message()),
          %URLParams{params | custom_filter: filter}}
     end
+  end
+
+  defp unoffered_fields(_names, nil), do: []
+
+  defp unoffered_fields(names, filterable) do
+    offered = Enum.map(filterable, &to_string/1)
+    Enum.reject(names, &(&1 in offered))
   end
 
   # A row left without a value filters by nothing, and is not refused.

@@ -4,12 +4,29 @@ defmodule AshQuick.LiveView.CustomFilter do
   @enforce_keys [:uuid, :operator]
   defstruct [:uuid, :operator, :field_name, :value, :children]
 
+  alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.LocalDatetime
 
   # The operators that compare a field with no value.
   @valueless ~w(is_nil is_not_nil)
 
   @string_types [Ash.Type.String, Ash.Type.CiString]
+
+  @offered_types [
+    Ash.Type.UUID,
+    Ash.Type.UUIDv7,
+    Ash.Type.Atom,
+    Ash.Type.Boolean,
+    Ash.Type.String,
+    Ash.Type.CiString,
+    Ash.Type.Date,
+    Ash.Type.Integer,
+    Ash.Type.Decimal,
+    Ash.Type.DateTime,
+    Ash.Type.UtcDatetimeUsec,
+    Ash.Type.UtcDatetime,
+    Ash.Type.Float
+  ]
 
   @doc """
   Adds a row, or a group holding one row, under the group `uuid` names.
@@ -179,6 +196,46 @@ defmodule AshQuick.LiveView.CustomFilter do
   @doc "The rows of `filter`'s tree that filter by something, in order."
   def applied_leaves(%__MODULE__{} = filter),
     do: filter |> leaves() |> Enum.filter(&applied?/1)
+
+  @doc """
+  The fields of `resource` the filter form offers, before field policies narrow
+  them: public, `filterable?` attributes, aggregates and calculations of a type
+  it has a row for, but no belongs_to relationship's source attribute.
+
+  With `names`, a list's `filterable:`, those it names, in its order; any
+  other name is left out, so a caller that refuses one checks it with
+  `filterable_field?/2`.
+  """
+  def filterable_fields(resource, names \\ nil)
+
+  def filterable_fields(resource, nil) do
+    belongs_to_source_attributes =
+      resource
+      |> Ash.Resource.Info.relationships()
+      |> Enum.filter(&(&1.type == :belongs_to))
+      |> Enum.map(& &1.source_attribute)
+
+    resource
+    |> Ash.Resource.Info.fields([:attributes, :aggregates, :calculations])
+    |> Enum.reject(&(&1.name in belongs_to_source_attributes))
+    |> Enum.filter(&(&1.filterable? and &1.public? and offered_type?(&1)))
+  end
+
+  def filterable_fields(resource, names) do
+    by_name = resource |> filterable_fields() |> Map.new(&{&1.name, &1})
+
+    for name <- names, Map.has_key?(by_name, name), do: by_name[name]
+  end
+
+  @doc "Whether the filter form offers `name`, a field of `resource`."
+  def filterable_field?(resource, name),
+    do: is_atom(name) and Enum.any?(filterable_fields(resource), &(&1.name == name))
+
+  # A field with a fixed set of values is offered whatever its type: an
+  # `Ash.Type.Enum` is a module of its own, so no list of types could name it.
+  # An atom without `one_of` is offered too, and typed in.
+  defp offered_type?(field),
+    do: EnumOptions.kind(field) == :single or field.type in @offered_types
 
   @doc """
   The fields a row can name on `resource`, by the name a row holds them under.

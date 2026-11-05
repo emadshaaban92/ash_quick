@@ -13,24 +13,13 @@ defmodule AshQuick.LiveView.Components.FilterForm do
 
   @datetime_types [Ash.Type.DateTime, Ash.Type.UtcDatetimeUsec, Ash.Type.UtcDatetime]
 
-  @supported_types [
-    Ash.Type.UUID,
-    Ash.Type.UUIDv7,
-    Ash.Type.Atom,
-    Ash.Type.Boolean,
-    Ash.Type.String,
-    Ash.Type.CiString,
-    Ash.Type.Date,
-    Ash.Type.Integer,
-    Ash.Type.Decimal,
-    Ash.Type.DateTime,
-    Ash.Type.UtcDatetimeUsec,
-    Ash.Type.UtcDatetime,
-    Ash.Type.Float
-  ]
-
   attr :resource, :atom, required: true
   attr :action, :map, default: nil, doc: "the read the list runs"
+
+  attr :filterable, :list,
+    default: nil,
+    doc: "the names of the fields offered, in order; `nil` for every field a filter can take"
+
   attr :scope, :map, required: true
   attr :close, :any, default: nil, doc: "a path or a `JS` command Cancel runs to close the modal"
 
@@ -599,10 +588,12 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # event or re-render of the modal: a field policy is a check against the
   # actor, and the answer does not change while the form is open.
   defp assign_fields(socket) do
-    if Enum.any?([:resource, :action, :scope], &changed?(socket, &1)) do
-      %{resource: resource, action: action, scope: scope} = socket.assigns
+    if Enum.any?([:resource, :filterable, :action, :scope], &changed?(socket, &1)) do
+      %{resource: resource, filterable: filterable, action: action, scope: scope} =
+        socket.assigns
+
       action = action || Ash.Resource.Info.primary_action(resource, :read)
-      fields = fields(resource, action, scope)
+      fields = fields(resource, filterable, action, scope)
 
       socket
       |> assign(:fields, fields)
@@ -681,32 +672,15 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # Without the list's read, the field policies are asked against the
   # resource's primary read, so a caller that names none still hides them;
   # `assign_fields/1` picks it, for this and for `emptiable/4` alike.
-  defp fields(resource, nil, _scope), do: fields(resource)
+  defp fields(resource, filterable, nil, _scope),
+    do: CustomFilter.filterable_fields(resource, filterable)
 
-  defp fields(resource, action, scope) do
-    offered = fields(resource)
+  defp fields(resource, filterable, action, scope) do
+    offered = CustomFilter.filterable_fields(resource, filterable)
     visible = offered |> Enum.map(& &1.name) |> Utils.visible_fields(resource, action, scope)
 
     Enum.filter(offered, &(&1.name in visible))
   end
-
-  defp fields(resource) do
-    belongs_to_source_attributes =
-      resource
-      |> Ash.Resource.Info.relationships()
-      |> Enum.filter(&(&1.type == :belongs_to))
-      |> Enum.map(& &1.source_attribute)
-
-    resource
-    |> Ash.Resource.Info.fields([:attributes, :aggregates, :calculations])
-    |> Enum.reject(&(&1.name in belongs_to_source_attributes))
-    |> Enum.filter(&(&1.filterable? and &1.public? and supported?(&1)))
-  end
-
-  # A field with a fixed set of values is offered whatever its type: an
-  # `Ash.Type.Enum` is a module of its own, so no list of types could name it.
-  # An atom without `one_of` is offered too, and typed in.
-  defp supported?(field), do: EnumOptions.kind(field) == :single or field.type in @supported_types
 
   @doc """
   What `operator` reads as, here and on the list's chips. One a link names that
