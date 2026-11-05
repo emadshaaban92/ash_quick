@@ -212,6 +212,7 @@ defmodule AshQuick.LiveView.ExposureTest do
         action_running: false,
         row_actions: nil,
         export_data: nil,
+        export_format: nil,
         data: %{results: [record], count: 1, limit: 20, offset: 0}
       }
 

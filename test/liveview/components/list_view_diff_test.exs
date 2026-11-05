@@ -38,6 +38,7 @@ defmodule AshQuick.LiveView.Components.ListViewDiffTest do
       action_running: false,
       row_actions: nil,
       export_data: nil,
+      export_format: nil,
       data: %{
         results: [
           %OtherName{id: "row-one", name: "Alpha Row Name"},

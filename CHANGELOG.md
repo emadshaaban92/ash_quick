@@ -518,6 +518,12 @@
 
 ### Bug fixes
 
+- **A failed export's Retry runs the export again.** The button sent
+  `"start-gen-report"`, which nothing handled, so the QuickView raised
+  `UndefinedFunctionError`, or `FunctionClauseError` with a `handle_event/3` of
+  its own. It now sends `"export"` with the format the failed run used, and the
+  modal goes back to "Generating Data ..." over the same selection.
+
 - **A reconnect with the action modal open over a list no longer crashes the
   view.** The list is drawn under the modal, inert, but on a reconnect (a
   network drop, a deploy) LiveView's form recovery replays its search,

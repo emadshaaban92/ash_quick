@@ -18,6 +18,8 @@ defmodule ExampleWeb.ListScenarioTest do
   """
   use ExampleWeb.FeatureCase, async: true
 
+  import ExUnit.CaptureLog
+
   alias Example.Test.S3Stub
 
   # `render_async/1` defaults to 100 ms, which is not a budget an export can be
@@ -380,6 +382,96 @@ defmodule ExampleWeb.ListScenarioTest do
       refute csv =~ lamp.name
     end
 
+    # Issue #141: Retry pushed an event nothing handled, and the page crashed.
+    test "a failed export's Retry runs it again", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      tent = product(name: "Four-season tent", actor: admin)
+
+      key = refuse_exports(admin)
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/products")
+
+      # The task generating the file dies of the refusal. Its crash is logged,
+      # and Tower's log handler reports it with the reason.
+      capture_log(fn ->
+        view |> element("a", "CSV") |> render_click()
+        render_async(view, @export_timeout)
+      end)
+
+      assert has_element?(view, "#ash-quick-export-modal", "Failed to export")
+      refute has_element?(view, "#ash-quick-export-modal a", "Download")
+      assert eventually(fn -> reported?(key) end), "the failed export was not reported"
+
+      retry_export(view, key)
+
+      assert has_element?(view, "#ash-quick-export-modal a", "Download")
+      refute has_element?(view, "#ash-quick-export-modal", "Failed to export")
+      assert exported_csv(admin) =~ tent.name
+    end
+
+    test "Retry exports the rows that were selected", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      tent = product(name: "Four-season tent", actor: admin)
+      lamp = product(name: "Headlamp", actor: admin)
+
+      key = refuse_exports(admin)
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/products")
+      render_change(view, "table-form-change", %{tent.id => "on"})
+
+      fail_export(view, "CSV")
+      retry_export(view, key)
+
+      csv = exported_csv(admin)
+      assert csv =~ tent.name
+      refute csv =~ lamp.name
+    end
+
+    test "Retry exports in the format that failed", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      product(name: "Four-season tent", actor: admin)
+
+      key = refuse_exports(admin)
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/products")
+
+      fail_export(view, "Excel")
+      retry_export(view, key)
+
+      assert has_element?(view, "#ash-quick-export-modal a", "Download")
+      assert [_workbook] = Enum.filter(S3Stub.keys(), &(&1 =~ key and &1 =~ ".xlsx"))
+    end
+
+    # A patch resets the list's assigns while the export's task runs on, and
+    # LiveView draws the modal again when the task ends.
+    test "Retry still works after a patch landed during the export", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      tent = product(name: "Four-season tent", actor: admin)
+
+      key = "exports/#{admin.id}/products-"
+      S3Stub.refuse(key, hold: true)
+      on_exit(fn -> S3Stub.accept(key) end)
+
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/products")
+
+      capture_log(fn ->
+        view |> element("a", "CSV") |> render_click()
+        assert_receive {S3Stub, :held, upload}, @export_timeout
+
+        render_patch(view, ~p"/products?search=tent")
+        S3Stub.release(upload)
+        render_async(view, @export_timeout)
+      end)
+
+      assert has_element?(view, "#ash-quick-export-modal", "Failed to export")
+
+      retry_export(view, key)
+
+      assert has_element?(view, "#ash-quick-export-modal a", "Download")
+      assert exported_csv(admin) =~ tent.name
+    end
+
     test "offers the formats the host's dependencies actually support", ctx do
       %{conn: conn, admin: admin} = ctx
 
@@ -421,6 +513,45 @@ defmodule ExampleWeb.ListScenarioTest do
            "nothing was uploaded under #{key}"
 
     body
+  end
+
+  # Makes this actor's exports fail until the test ends, and gives back the
+  # prefix their keys start with.
+  defp refuse_exports(actor) do
+    key = "exports/#{actor.id}/products-"
+    S3Stub.refuse(key)
+    on_exit(fn -> S3Stub.accept(key) end)
+    key
+  end
+
+  defp fail_export(view, format) do
+    capture_log(fn ->
+      view |> element("a", format) |> render_click()
+      render_async(view, @export_timeout)
+    end)
+
+    assert has_element?(view, "#ash-quick-export-modal", "Failed to export")
+  end
+
+  defp retry_export(view, key) do
+    S3Stub.accept(key)
+    view |> element("#ash-quick-export-modal button", "Retry") |> render_click()
+    render_async(view, @export_timeout)
+  end
+
+  # The report arrives through the logger, after the task has died.
+  defp eventually(check) do
+    Enum.any?(1..40, fn _attempt -> check.() or wait_a_moment() end)
+  end
+
+  defp wait_a_moment do
+    Process.sleep(25)
+    false
+  end
+
+  # Tower's default reporter keeps what was reported in memory.
+  defp reported?(key) do
+    Enum.any?(Tower.EphemeralReporter.events(), &(inspect(&1.reason) =~ key))
   end
 
   defp find_export(prefix) do

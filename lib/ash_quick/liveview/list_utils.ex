@@ -3,7 +3,7 @@ defmodule AshQuick.LiveView.ListUtils do
   require Ash.Query
   require Logger
   import Phoenix.LiveView
-  import Phoenix.Component, only: [assign: 2, assign: 3]
+  import Phoenix.Component, only: [assign: 2, assign: 3, assign_new: 3]
   use Gettext, backend: AshQuick.Gettext
 
   alias Ash.Resource.Actions
@@ -45,6 +45,9 @@ defmodule AshQuick.LiveView.ListUtils do
     |> assign(:params, params)
     |> assign(:selected_rows, %{})
     |> assign(:export_data, nil)
+    # Kept across patches: an export a patch interrupted still finishes, and
+    # its modal comes back, so a failed one still needs its format to retry.
+    |> assign_new(:export_format, fn -> nil end)
     |> assign(:row_actions, nil)
     |> detach_hook(:quick_view_events_hook, :handle_event)
     |> attach_hook(:quick_view_events_hook, :handle_event, fn
@@ -477,7 +480,9 @@ defmodule AshQuick.LiveView.ListUtils do
     socket =
       case Ash.Scope.ToOpts.get_actor(socket.assigns.scope) do
         {:ok, actor} when not is_nil(actor) ->
+          # The format stays with the modal, so its Retry runs this same export.
           socket
+          |> assign(:export_format, format)
           |> assign_async(:export_data, fn ->
             Gettext.put_locale(locale)
 
@@ -504,7 +509,7 @@ defmodule AshQuick.LiveView.ListUtils do
     socket =
       socket
       |> cancel_async(socket.assigns.export_data)
-      |> assign(export_data: nil)
+      |> assign(export_data: nil, export_format: nil)
 
     {:halt, socket}
   end
