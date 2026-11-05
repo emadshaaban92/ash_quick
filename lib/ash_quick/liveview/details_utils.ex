@@ -146,6 +146,15 @@ defmodule AshQuick.LiveView.DetailsUtils do
 
   defp handle_details_info(_, socket, _options), do: {:cont, socket}
 
+  # Every event the details page handles; see `ListUtils.events/0`.
+  @events ~w(row_action_click)
+
+  @doc false
+  def events, do: @events
+
+  defp handle_details_events(event, _params, socket, _options) when event not in @events,
+    do: {:cont, socket}
+
   defp handle_details_events(
          "row_action_click",
          %{"id" => id, "action_name" => action_name},

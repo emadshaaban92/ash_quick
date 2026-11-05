@@ -172,10 +172,18 @@ defmodule AshQuick.LiveView.QuickView do
       `attach_hook` whose unmatched clause returns `{:cont, socket}`, so an event
       name QuickView does not handle reaches the QuickView module's own
       `handle_event/3`. Names QuickView *does* handle — `"validate"`, `"save"`,
-      `"add-form"`, `"remove-form"`, `"cancel-upload"` — are halted at the hook
-      and never reach the module, so a widget that needs to post-process one of
-      those must use a name of its own and call the `AshPhoenix.Form` function
-      itself.
+      `"add-form"`, `"remove-form"`, `"cancel-upload"`, `"remove-attachment"` —
+      are halted at the hook and never reach the module, so a widget that needs
+      to post-process one of those must use a name of its own and call the
+      `AshPhoenix.Form` function itself.
+
+      The names the list and details pages handle are reserved in a form too:
+      the page the modal opened over is still drawn under it, and its events
+      are dropped while the modal is open. They are `"search"`, `"page_size"`,
+      `"new_click"`, `"export"`, `"close-export-modal"`, `"bulk_action"`,
+      `"bulk_validate"`, `"bulk_save"`, `"bulk_close"`, `"row_actions_open"`,
+      `"row_action_click"`, `"toggle-filter"` and `"table-form-change"`. A widget
+      pushing one of them does nothing, so give its events names of their own.
 
   ## Action routing convention
 

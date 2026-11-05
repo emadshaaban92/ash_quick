@@ -15,6 +15,8 @@ defmodule AshQuick.LiveView.FormUtils do
   alias Ash.Resource.Actions.Argument
   alias Ash.Type
   alias AshQuick.LiveView.Components.FormView
+  alias AshQuick.LiveView.DetailsUtils
+  alias AshQuick.LiveView.ListUtils
   alias AshQuick.LiveView.Utils
   alias AshQuick.Storage
 
@@ -695,7 +697,19 @@ defmodule AshQuick.LiveView.FormUtils do
     end
   end
 
-  defp handle_form_events(_, _, socket, _options), do: {:cont, socket}
+  # The page the modal opened over is still drawn under it, inert, from a
+  # snapshot. A click cannot reach it, but its events still arrive: on a
+  # reconnect LiveView's form recovery replays every `phx-change` form with an
+  # id, inert or not (the list's search, selection and page-size forms), and
+  # anything can be sent by hand. The form's hook has replaced that page's, so
+  # passed on, such an event would reach the QuickView module, which has no
+  # clause for it, and crash the view. It is dropped. Any other name is the
+  # host's and goes on.
+  defp handle_form_events(event, _params, socket, _options) do
+    if event in ListUtils.events() or event in DetailsUtils.events(),
+      do: {:halt, socket},
+      else: {:cont, socket}
+  end
 
   defp handle_open_form_events("cancel-upload", params, socket, _options) do
     {:halt, socket |> cancel_upload(params["entry"], params["ref"]) |> clear_flash()}

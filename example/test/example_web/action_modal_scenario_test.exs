@@ -253,6 +253,93 @@ defmodule ExampleWeb.ActionModalScenarioTest do
     end
   end
 
+  describe "an event sent to the page under the modal" do
+    # The page under the modal is drawn inert, so a click cannot reach it, but
+    # its events still arrive: on a reconnect LiveView's form recovery replays
+    # the list's `phx-change` forms, and anything can be sent by hand. Each is
+    # dropped rather than handed to the QuickView module, which has no clause
+    # for it and would crash the view (issue #127).
+    test "a reconnect replaying the list's search keeps the modal open", ctx do
+      %{conn: conn, admin: admin, product: product} = ctx
+      search = product.name
+
+      {:ok, view, _html} = conn |> log_in(admin) |> live(~p"/products?search=#{search}")
+
+      view |> element("##{product.id}-row-actions-dropdown [role=button]") |> render_click()
+      view |> element("##{product.id}-action-reprice") |> render_click()
+      assert_patch(view, ~p"/products/#{product.id}/reprice?search=#{search}")
+
+      # What form recovery sends for `#search-form` on rejoin.
+      render_change(view, "search", %{
+        "_target" => ["search"],
+        "_unused_search" => "",
+        "search" => search
+      })
+
+      assert has_element?(view, "#{@modal} form[phx-submit=save]")
+      assert has_element?(view, "[inert] tr", product.name)
+    end
+
+    test "from the list is dropped, and the modal stays open", ctx do
+      %{conn: conn, admin: admin, product: product} = ctx
+      search = product.name
+
+      {:ok, view, _html} = conn |> log_in(admin) |> live(~p"/products?search=#{search}")
+
+      view |> element("##{product.id}-row-actions-dropdown [role=button]") |> render_click()
+      view |> element("##{product.id}-action-deactivate") |> render_click()
+      assert_patch(view, ~p"/products/#{product.id}/deactivate?search=#{search}")
+
+      # Every name the list handles: the event is dropped before its params
+      # are read, so none are needed.
+      for event <- AshQuick.LiveView.ListUtils.events() do
+        render_click(view, event, %{})
+
+        assert has_element?(view, "#{@modal} h3", "Deactivate"), "#{event} closed the modal"
+        assert has_element?(view, "[inert] tr", product.name)
+      end
+
+      # Nothing ran: the record is as it was, and running the action still works.
+      assert Ash.reload!(product, authorize?: false).active
+      view |> form("#{@modal} form") |> render_submit()
+
+      assert_patch(view, ~p"/products?search=#{search}")
+      refute Ash.reload!(product, authorize?: false).active
+    end
+
+    test "from the details page is dropped", ctx do
+      %{conn: conn, admin: admin, product: product} = ctx
+
+      {:ok, view, _html} = conn |> log_in(admin) |> live(~p"/products/#{product.id}")
+
+      view |> element("a", "Deactivate") |> render_click()
+      assert_patch(view, ~p"/products/#{product.id}/deactivate")
+
+      for event <- AshQuick.LiveView.DetailsUtils.events() do
+        render_click(view, event, %{})
+        assert has_element?(view, "#{@modal} h3", "Deactivate"), "#{event} closed the modal"
+      end
+
+      assert Ash.reload!(product, authorize?: false).active
+    end
+
+    test "of the host's own still reaches the QuickView module", ctx do
+      %{conn: conn, admin: admin, product: product} = ctx
+
+      {:ok, view, _html} = conn |> log_in(admin) |> live(~p"/products?search=#{product.name}")
+
+      view |> element("##{product.id}-row-actions-dropdown [role=button]") |> render_click()
+      view |> element("##{product.id}-action-deactivate") |> render_click()
+
+      # `ProductLive.Quick` handles its "discount" bulk item itself; with no row
+      # selected it reprices none, and says so.
+      render_click(view, "discount", %{})
+
+      assert has_element?(view, "#flash-info", "Repriced 0 products.")
+      assert has_element?(view, "#{@modal} h3", "Deactivate")
+    end
+  end
+
   describe "a delete" do
     test "from the record it deletes goes to the list", ctx do
       %{conn: conn, admin: admin, product: product} = ctx

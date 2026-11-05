@@ -408,6 +408,20 @@ defmodule AshQuick.LiveView.ListUtils do
   def get_offset(nil, _), do: 0
   def get_offset(page, limit), do: (page - 1) * limit
 
+  # Every event the list handles. A name outside it is the host's, and goes on
+  # to the QuickView module; the clause below makes this the only way in, so a
+  # handler added without its name here is never reached. `FormUtils` reads it
+  # to keep these events off a list drawn under the action modal.
+  @events ~w(search page_size new_click export close-export-modal bulk_action bulk_validate
+             bulk_save bulk_close row_actions_open row_action_click toggle-filter
+             table-form-change)
+
+  @doc false
+  def events, do: @events
+
+  defp handle_list_events(event, _params, socket, _options) when event not in @events,
+    do: {:cont, socket}
+
   defp handle_list_events("search", %{"search" => search}, socket, _options) do
     params =
       socket.assigns.params

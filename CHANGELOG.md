@@ -518,6 +518,18 @@
 
 ### Bug fixes
 
+- **A reconnect with the action modal open over a list no longer crashes the
+  view.** The list is drawn under the modal, inert, but on a reconnect (a
+  network drop, a deploy) LiveView's form recovery replays its search,
+  selection and page-size forms, and the `"search"` it sent went past the
+  form's hook, which had replaced the list's, to the QuickView module. That
+  raised `UndefinedFunctionError`, or `FunctionClauseError` in a QuickView
+  with a `handle_event/3` of its own. Any of the list's or details page's
+  events sent by hand did the same. While the modal is open, those events are
+  now dropped; any other event still reaches the QuickView's own
+  `handle_event/3`. Their names are therefore reserved for a form widget too,
+  as the form's own events already were.
+
 - **An update form no longer crashes on a field its reader may not see.** A
   field policy hiding an accepted attribute made Ash read it back as
   `%Ash.ForbiddenField{}`, which an input cannot draw and a sub-form cannot be
