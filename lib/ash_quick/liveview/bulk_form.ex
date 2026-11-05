@@ -16,18 +16,55 @@ defmodule AshQuick.LiveView.BulkForm do
   # required one present. What depends on a record is the run's to refuse.
 
   alias Ash.Error.Changes.Required
+  alias AshQuick.LiveView.Utils
 
-  @doc "A blank form for `action` over `resource`."
+  @doc """
+  A blank form for `action` over `resource`.
+
+  A field a field policy hides from the actor on any record is left out: its
+  value would go to every selected row, over values the actor may not see on
+  some of them. The blank record holds it as `%Ash.ForbiddenField{}`, as a
+  read would, so `Utils.form_fields/2` leaves it out the way it does on a
+  single record's form.
+  """
   def new(resource, action, scope) do
+    hidden = hidden_fields(resource, action, scope)
+
     resource
-    |> struct()
+    |> struct(Map.new(hidden, &{&1, %Ash.ForbiddenField{field: &1, type: :attribute}}))
     |> build(action.type, action.name,
       as: "form",
+      forms: Utils.nested_forms(resource, action.name, hidden),
       scope: scope,
       actor: actor(scope),
       prepare_source: &hold/1
     )
     |> check_inputs(action)
+  end
+
+  # The attributes `action` accepts, and the attributes its arguments are named
+  # like (the form prefills such an argument from the record's field), that the
+  # actor may not see on every record the resource's primary read returns, or
+  # its first read without a primary one. There are no records here to ask
+  # about, so a field hidden on some records only is left out too. With no read
+  # to ask through, nothing can be checked, and all of them are left out.
+  defp hidden_fields(resource, action, scope) do
+    named =
+      for %{name: name} <- action.arguments,
+          Ash.Resource.Info.attribute(resource, name),
+          do: name
+
+    fields = Enum.uniq(Map.get(action, :accept, []) ++ named)
+
+    case read_action(resource) do
+      nil -> fields
+      read -> fields -- Utils.visible_fields(fields, resource, read, scope, filter_is: false)
+    end
+  end
+
+  defp read_action(resource) do
+    Ash.Resource.Info.primary_action(resource, :read) ||
+      Enum.find(Ash.Resource.Info.actions(resource), &(&1.type == :read))
   end
 
   @doc "`form` with `params` posted to it."

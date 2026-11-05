@@ -497,7 +497,7 @@ defmodule AshQuick.LiveView.ListUtils do
 
   defp handle_list_events("bulk_action", %{"action_name" => action_name}, socket, options) do
     case BulkActions.offered(socket.assigns[:bulk_actions], options.resource, action_name) do
-      nil -> {:halt, refuse_action(socket)}
+      nil -> {:halt, refuse_bulk_action(socket)}
       action -> {:halt, open_bulk_action(action, socket, options)}
     end
   end
@@ -598,9 +598,12 @@ defmodule AshQuick.LiveView.ListUtils do
   # the selection it is about to act on. Who may run it is left to the run,
   # which asks of each selected row: asked here of no row, a policy that only
   # a row can answer would refuse a selection it allows.
+  #
+  # A refused open closes whatever bulk action was open before it, so no later
+  # event runs one the page no longer shows.
   defp open_bulk_action(action, socket, options) do
     if selected_records(socket) == [] do
-      refuse_action(socket)
+      refuse_bulk_action(socket)
     else
       scope = socket.assigns.scope
 
@@ -608,9 +611,19 @@ defmodule AshQuick.LiveView.ListUtils do
         if Utils.action_fields(options.resource, action.name, scope) != [],
           do: BulkForm.new(options.resource, action, scope)
 
-      assign(socket, :ash_quick_bulk, %{action: action, form: form})
+      # Inputs it takes, every one hidden from the actor: nothing left that
+      # they may set, and a confirmation would run it over values they never
+      # saw.
+      if form && Utils.form_fields(form, scope) == [] do
+        refuse_bulk_action(socket)
+      else
+        assign(socket, :ash_quick_bulk, %{action: action, form: form})
+      end
     end
   end
+
+  defp refuse_bulk_action(socket),
+    do: socket |> assign(:ash_quick_bulk, nil) |> refuse_action()
 
   defp update_bulk_form(socket, params, target) do
     case socket.assigns.ash_quick_bulk do

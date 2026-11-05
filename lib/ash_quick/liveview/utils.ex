@@ -63,6 +63,68 @@ defmodule AshQuick.LiveView.Utils do
     end)
   end
 
+  @doc """
+  The fields an `AshPhoenix.Form` handles: `action_fields/2` for its action,
+  without those a field policy hides on the record it updates.
+
+  Ash reads such a field back as `%Ash.ForbiddenField{}`. An input cannot
+  draw one, a sub-form cannot be built over one, and a field drawn empty
+  would save that emptiness over a value its reader never saw. So the form
+  leaves the field out everywhere, drawing, uploads and embeds alike, and the
+  save leaves it as it is. A field a policy hides on some records only is left
+  out of the forms for those records. An argument named like a hidden field is
+  left out too: the form prefills it from that field.
+
+  Every path of a form that walks its fields walks this list, so none of them
+  meets a hidden value. `form_fields/2` is the same list as the actor's field
+  restrictions narrow it, which is what the form draws.
+  """
+  def form_fields(%{resource: resource, action: action} = form) do
+    resource
+    |> action_fields(action)
+    |> reject_hidden(Map.get(form, :data))
+  end
+
+  def form_fields(%{resource: resource, action: action} = form, scope) do
+    resource
+    |> action_fields(action, scope)
+    |> reject_hidden(Map.get(form, :data))
+  end
+
+  @doc """
+  The names of the fields `record` holds as `%Ash.ForbiddenField{}`: those a
+  field policy hides from whoever read it.
+  """
+  def hidden_field_names(%_{} = record) do
+    for {name, %Ash.ForbiddenField{}} <- Map.from_struct(record), do: name
+  end
+
+  def hidden_field_names(_data), do: []
+
+  @doc """
+  The nested forms `AshPhoenix.Form` would build for `action` on its own,
+  without those under `hidden`: passed as `forms:`, they keep a sub-form from
+  being built over a value the reader may not see.
+  """
+  def nested_forms(resource, action, hidden) do
+    resource
+    |> AshPhoenix.Form.Auto.auto(action)
+    |> Keyword.drop(hidden)
+    |> Keyword.put(:auto?, false)
+  end
+
+  defp reject_hidden(fields, data) do
+    case hidden_field_names(data) do
+      [] -> fields
+      hidden -> Enum.reject(fields, &hidden?(&1, hidden))
+    end
+  end
+
+  defp hidden?(%Relationships.BelongsTo{} = field, hidden),
+    do: field.name in hidden or field.source_attribute in hidden
+
+  defp hidden?(field, hidden), do: field.name in hidden
+
   defp scope_to_check_context(scope) do
     %AshQuick.FieldRestrictions.Check.Context{
       actor: scope_to_actor(scope),

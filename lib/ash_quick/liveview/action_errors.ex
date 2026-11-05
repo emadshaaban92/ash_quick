@@ -38,10 +38,19 @@ defmodule AshQuick.LiveView.ActionErrors do
   replaces the policy error, so it has no message here and the fixed sentence is
   shown.
   """
-  def forbidden_message(error) do
+  def forbidden_message(error), do: policy_message(error) || forbidden_message()
+
+  @doc """
+  The `error_message` of the policy that raised the authorization failure
+  `error`, translated, or `nil` when that policy has none.
+
+  It is how a refusal is worded wherever one is shown: a flash after a run,
+  and the forbidden panel in place of a form.
+  """
+  def policy_message(error) do
     case policy_messages(error) do
       [message | _] -> translate(message, [])
-      [] -> forbidden_message()
+      [] -> nil
     end
   end
 

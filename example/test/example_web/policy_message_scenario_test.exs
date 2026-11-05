@@ -3,14 +3,16 @@ defmodule ExampleWeb.PolicyMessageScenarioTest do
   A run a policy refuses says the policy's `error_message` when it has one, and
   the fixed sentence when it has none.
 
-  `Example.Test.WordedPolicy` refuses each case at the run, not before the
-  modal opens: a refusal the page can see coming never reaches a run, so it has
-  no policy error to word.
+  `Example.Test.WordedPolicy` refuses most cases at the run, after the modal
+  opens. A refusal the page can see coming never reaches a run: the modal opens
+  on the forbidden panel instead, which says the policy's message in place of
+  its own sentence.
   """
   use ExampleWeb.FeatureCase, async: true
 
   @bulk "a[phx-click*='bulk_action']"
   @modal "#ash-quick-action-modal"
+  @panel_sentence "You do not have permission to perform this action."
 
   test "a form the run refuses says the policy's message", %{conn: conn, admin: admin} do
     record = worded(unique("open-"))
@@ -55,9 +57,44 @@ defmodule ExampleWeb.PolicyMessageScenarioTest do
     refute Ash.get!(Example.Test.WordedPolicy, record.id, authorize?: false).sealed
   end
 
-  defp worded(code) do
+  describe "an action the page can tell is refused before it runs" do
+    test "is refused on its panel in the policy's words", %{conn: conn, admin: admin} do
+      record = worded(unique("sealed-"), sealed: true)
+
+      conn
+      |> log_in(admin)
+      |> visit("/test/worded_policy/#{record.id}/approve")
+      |> assert_has(@modal, text: "Access Forbidden")
+      |> assert_has(@modal, text: "A sealed record cannot be approved.")
+      |> refute_has(@modal, text: @panel_sentence)
+    end
+
+    test "is refused with the panel's own sentence when its policy has no message", ctx do
+      %{conn: conn, admin: admin} = ctx
+      record = worded(unique("sealed-"), sealed: true)
+
+      conn
+      |> log_in(admin)
+      |> visit("/test/worded_policy/#{record.id}/archive")
+      |> assert_has(@modal, text: "Access Forbidden")
+      |> assert_has(@modal, text: @panel_sentence)
+    end
+
+    test "opens as usual on a record its policy allows", %{conn: conn, admin: admin} do
+      record = worded(unique("open-"))
+
+      conn
+      |> log_in(admin)
+      |> visit("/test/worded_policy/#{record.id}/approve")
+      |> refute_has(@modal, text: "Access Forbidden")
+      |> assert_has("#{@modal} button", text: "Confirm")
+    end
+  end
+
+  defp worded(code, attrs \\ []) do
     Example.Test.WordedPolicy
     |> Ash.Changeset.for_create(:create, %{code: code})
+    |> Ash.Changeset.force_change_attributes(Map.new(attrs))
     |> Ash.create!(authorize?: false)
   end
 end
