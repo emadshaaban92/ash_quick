@@ -394,24 +394,15 @@ defmodule AshQuick.LiveView.QuickView.Options do
   end
 
   # The fields the filter form offers, as `filterable:` names them, in its
-  # order. Unsaid, it stays `nil`: the form offers every field it can take,
-  # and a link's rows are left to the read.
+  # order: a field's name, or `{relationship, field}` for one reached through a
+  # belongs_to, which `[brand: :name]` writes as a keyword and a list as
+  # `sortable:` takes one. Unsaid, it stays `nil`: the form offers every field
+  # of the resource's own it can take, and a link's rows are left to the read.
   defp put_list_filterable(%__MODULE__{} = options, nil), do: options
 
   defp put_list_filterable(%__MODULE__{resource: resource} = options, filterable) do
-    refused =
-      Enum.flat_map(filterable, fn name ->
-        cond do
-          not is_atom(name) ->
-            [{name, "is not a field name; the filter takes no relationship paths"}]
-
-          not CustomFilter.filterable_field?(resource, name) ->
-            [{name, "is not a field the filter offers"}]
-
-          true ->
-            []
-        end
-      end)
+    checked = Enum.map(filterable, &{&1, check_filterable(resource, &1)})
+    refused = for {name, {:error, reason}} <- checked, do: {name, reason}
 
     if refused != [] do
       raise ArgumentError, """
@@ -423,12 +414,48 @@ defmodule AshQuick.LiveView.QuickView.Options do
       `list: [filterable: ...]` names fields of #{inspect(resource)} the filter \
       offers: public, `filterable?` attributes, aggregates and calculations of \
       a type it has a row for, such as a string, number, date, boolean or a \
-      fixed set of values, and no belongs_to relationship's source attribute.
+      fixed set of values, and no belongs_to relationship's source attribute. \
+      A field of a related resource is named through a public belongs_to \
+      relationship, one hop away, as `[brand: :name]`, one with a read of its \
+      destination to ask.
       """
     end
 
-    %{options | list_filterable: Enum.uniq(filterable)}
+    %{options | list_filterable: for({_name, {:ok, spec}} <- checked, uniq: true, do: spec)}
   end
+
+  defp check_filterable(resource, name) do
+    with {:ok, spec} <- filterable_name(name) do
+      if CustomFilter.filterable_field?(resource, spec),
+        do: {:ok, spec},
+        else: {:error, unfilterable(spec)}
+    end
+  end
+
+  defp filterable_name(name) when is_atom(name), do: {:ok, name}
+
+  defp filterable_name({relationship, name}) when is_atom(relationship) and is_atom(name),
+    do: {:ok, {relationship, name}}
+
+  defp filterable_name([{relationship, name}]) when is_atom(relationship) and is_atom(name),
+    do: {:ok, {relationship, name}}
+
+  defp filterable_name({relationship, _nested}) when is_atom(relationship),
+    do: {:error, "goes more than one relationship deep; the filter takes one hop"}
+
+  defp filterable_name([{relationship, _nested}]) when is_atom(relationship),
+    do: {:error, "goes more than one relationship deep; the filter takes one hop"}
+
+  defp filterable_name(_name), do: {:error, "is not a field name or a relationship path"}
+
+  defp unfilterable(name) when is_atom(name), do: "is not a field the filter offers"
+
+  defp unfilterable({relationship, name}),
+    do:
+      "is not a field the filter offers through #{inspect(relationship)}, which must be a " <>
+        "public belongs_to relationship with a read of its destination to ask, its " <>
+        "read_action or the destination's primary read, and #{inspect(name)} a field " <>
+        "the filter offers on that destination"
 
   defp single_path?(path) when is_atom(path), do: true
   defp single_path?([{relationship, nested}]) when is_atom(relationship), do: single_path?(nested)

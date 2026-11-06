@@ -5,6 +5,7 @@ defmodule AshQuick.LiveView.CustomFilter do
   defstruct [:uuid, :operator, :field_name, :value, :children]
 
   alias AshQuick.LiveView.EnumOptions
+  alias AshQuick.LiveView.FilterField
   alias AshQuick.LiveView.LocalDatetime
   alias AshQuick.LiveView.Utils
 
@@ -201,16 +202,60 @@ defmodule AshQuick.LiveView.CustomFilter do
 
   @doc """
   The fields of `resource` the filter form offers, before field policies narrow
-  them: public, `filterable?` attributes, aggregates and calculations of a type
-  it has a row for, but no belongs_to relationship's source attribute.
+  them, as `FilterField`s: public, `filterable?` attributes, aggregates and
+  calculations of a type it has a row for, but no belongs_to relationship's
+  source attribute.
 
-  With `names`, a list's `filterable:`, those it names, in its order; any
-  other name is left out, so a caller that refuses one checks it with
-  `filterable_field?/2`.
+  With `names`, a list's `filterable:`, those it names, in its order: each a
+  field of `resource`, or `{relationship, field}`, a field reached through a
+  public belongs_to relationship that has a read to read its destination
+  with, one the filter offers on that destination. Any other name is left
+  out, so a caller that refuses one checks it with `filterable_field?/2`.
+  Unsaid, only `resource`'s own fields are offered.
   """
   def filterable_fields(resource, names \\ nil)
 
-  def filterable_fields(resource, nil) do
+  def filterable_fields(resource, nil),
+    do: resource |> own_fields() |> Enum.map(&FilterField.own(resource, &1))
+
+  def filterable_fields(resource, names) do
+    by_name = resource |> own_fields() |> Map.new(&{&1.name, &1})
+
+    for name <- names, field = filterable_field(resource, name, by_name), do: field
+  end
+
+  defp filterable_field(resource, name, by_name) when is_atom(name) do
+    if field = by_name[name], do: FilterField.own(resource, field)
+  end
+
+  defp filterable_field(resource, {relationship, name}, _by_name)
+       when is_atom(relationship) and is_atom(name) do
+    with %{} = relationship <- filterable_relationship(resource, relationship),
+         %{} = field <-
+           relationship.destination |> own_fields() |> Enum.find(&(&1.name == name)) do
+      FilterField.through(relationship, field)
+    end
+  end
+
+  defp filterable_field(_resource, _name, _by_name), do: nil
+
+  # One hop through a belongs_to, and only one: a row compares a product with
+  # the one brand it has. A to-many relationship would ask whether any of its
+  # records match, which is another question, and a longer path joins a table
+  # for each hop. Ash reads the brand with the relationship's read, so one
+  # with none to read it with could never answer a row.
+  defp filterable_relationship(resource, name) do
+    case Ash.Resource.Info.public_relationship(resource, name) do
+      %Ash.Resource.Relationships.BelongsTo{} = relationship ->
+        if Map.get(relationship, :filterable?, true) and destination_read(relationship),
+          do: relationship
+
+      _ ->
+        nil
+    end
+  end
+
+  defp own_fields(resource) do
     belongs_to_source_attributes =
       resource
       |> Ash.Resource.Info.relationships()
@@ -223,33 +268,63 @@ defmodule AshQuick.LiveView.CustomFilter do
     |> Enum.filter(&(&1.filterable? and &1.public? and offered_type?(&1)))
   end
 
-  def filterable_fields(resource, names) do
-    by_name = resource |> filterable_fields() |> Map.new(&{&1.name, &1})
-
-    for name <- names, Map.has_key?(by_name, name), do: by_name[name]
-  end
-
   @doc """
   The fields of `resource` the filter form offers the visitor `scope` names,
   in its order: `filterable_fields/2`, less any field a field policy hides
   from them on every record of `action`'s read. Ash would read such a field
   as `nil` in the filter, so the list would come back empty and look like an
-  answer. A field hidden on some records only stays.
+  answer. A field hidden on some records only stays. A field reached through
+  a relationship is asked of its destination's read.
 
   Without `action`, the fields are not narrowed.
   """
   def offered_fields(resource, names, nil, _scope), do: filterable_fields(resource, names)
 
-  def offered_fields(resource, names, action, scope) do
-    offered = filterable_fields(resource, names)
-    visible = offered |> Enum.map(& &1.name) |> Utils.visible_fields(resource, action, scope)
+  def offered_fields(resource, names, action, scope),
+    do: resource |> filterable_fields(names) |> visible(action, scope)
 
-    Enum.filter(offered, &(&1.name in visible))
+  @doc """
+  Those of `fields`, `FilterField`s, the visitor `scope` names may see: on
+  every record, or with `filter_is: false` in `opts`, on every record they
+  read. A field of the list's resource is asked of `action`, the list's read;
+  one reached through a relationship of the read the relationship reads its
+  destination with: its `read_action`, or the destination's primary read,
+  which `filterable_fields/2` offers none without. With `action` given as
+  `nil`, the list's own fields are not narrowed.
+  """
+  def visible(fields, action, scope, opts \\ []) do
+    visible =
+      for {relationship, group} <- Enum.group_by(fields, & &1.relationship),
+          {resource, read} = read_by(relationship, group, action),
+          by_name = Map.new(group, &{&1.field.name, &1}),
+          name <- visible_names(Map.keys(by_name), resource, read, scope, opts),
+          into: MapSet.new(),
+          do: by_name[name].name
+
+    Enum.filter(fields, &MapSet.member?(visible, &1.name))
   end
 
-  @doc "Whether the filter form offers `name`, a field of `resource`."
-  def filterable_field?(resource, name),
-    do: is_atom(name) and Enum.any?(filterable_fields(resource), &(&1.name == name))
+  defp visible_names(names, _resource, nil, _scope, _opts), do: names
+
+  defp visible_names(names, resource, read, scope, opts),
+    do: Utils.visible_fields(names, resource, read, scope, opts)
+
+  defp read_by(nil, [field | _], action), do: {field.resource, action}
+
+  defp read_by(relationship, _fields, _action),
+    do: {relationship.destination, destination_read(relationship)}
+
+  defp destination_read(%{read_action: nil, destination: destination}),
+    do: Ash.Resource.Info.primary_action(destination, :read)
+
+  defp destination_read(%{read_action: name, destination: destination}),
+    do: Ash.Resource.Info.action(destination, name, :read)
+
+  @doc """
+  Whether the filter form offers `name`, as `filterable:` names it, on
+  `resource`.
+  """
+  def filterable_field?(resource, name), do: filterable_fields(resource, [name]) != []
 
   # A field with a fixed set of values is offered whatever its type: an
   # `Ash.Type.Enum` is a module of its own, so no list of types could name it.
@@ -259,12 +334,24 @@ defmodule AshQuick.LiveView.CustomFilter do
     do: EnumOptions.kind(field) in [:single, :array] or field.type in @offered_types
 
   @doc """
-  The fields a row can name on `resource`, by the name a row holds them under.
+  The fields a row can name on `resource`, as `FilterField`s, by the name a
+  row holds them under: every attribute, aggregate and calculation of its
+  own, and those of `names`, a list's offered fields as `filterable:` names
+  them, reached through a relationship.
   """
-  def fields_by_name(resource) do
-    resource
-    |> Ash.Resource.Info.fields([:attributes, :aggregates, :calculations])
-    |> Map.new(&{to_string(&1.name), &1})
+  def fields_by_name(resource, names \\ nil) do
+    own =
+      resource
+      |> Ash.Resource.Info.fields([:attributes, :aggregates, :calculations])
+      |> Enum.map(&FilterField.own(resource, &1))
+
+    paths =
+      names
+      |> List.wrap()
+      |> Enum.filter(&is_tuple/1)
+      |> then(&filterable_fields(resource, &1))
+
+    Map.new(own ++ paths, &{&1.name, &1})
   end
 
   @doc """
@@ -342,10 +429,10 @@ defmodule AshQuick.LiveView.CustomFilter do
       that day's first moment up to the next day's: the zone the list shows
       timestamps in, `AshQuick.Scope.timezone/1`, which the list passes;
       `AshQuick.Config.timezone/0` when none is given.
-    * `:fields` — the resource's fields by name, as `fields_by_name/1` gives
-      them. Is Empty on a string also keeps one holding `""`, and on a list
-      one holding `[]`, which read as empty in the list, and only a field's
-      type says which it is.
+    * `:fields` — the fields a row can name, by name, as `fields_by_name/2`
+      gives them. Is Empty on a string also keeps one holding `""`, and on a
+      list one holding `[]`, which read as empty in the list, and only a
+      field's type says which it is.
   """
   def build_ash_filter(filter, opts \\ []) do
     timezone = Keyword.get_lazy(opts, :timezone, &AshQuick.Config.timezone/0)
@@ -360,19 +447,17 @@ defmodule AshQuick.LiveView.CustomFilter do
     end
   end
 
+  # Is Empty on a field through a relationship asks that no related record
+  # holds a value: a row with no owner has an empty owner's name, as one
+  # whose owner the reader may not read does, which its column shows blank.
   defp build(%__MODULE__{field_name: field_name, operator: operator}, _timezone, fields)
        when is_binary(field_name) and operator in @valueless do
-    is_nil = %{field_name => %{"is_nil" => operator == "is_nil"}}
+    empty = fields[field_name] && empty_value(fields[field_name].field.type)
 
-    case {fields[field_name] && empty_value(fields[field_name].type), operator} do
-      {nil, _} ->
-        is_nil
-
-      {empty, "is_nil"} ->
-        %{"or" => [is_nil, %{field_name => %{"eq" => empty}}]}
-
-      {empty, "is_not_nil"} ->
-        %{"and" => [is_nil, %{field_name => %{"not_eq" => empty}}]}
+    case {FilterField.path?(field_name), operator} do
+      {true, "is_nil"} -> %{"not" => on(field_name, &filled(&1, empty))}
+      {false, "is_nil"} -> on(field_name, &blank(&1, empty))
+      {_path?, "is_not_nil"} -> on(field_name, &filled(&1, empty))
     end
   end
 
@@ -385,7 +470,7 @@ defmodule AshQuick.LiveView.CustomFilter do
        when is_binary(field_name) do
     case value |> List.wrap() |> Enum.filter(&has_value?/1) do
       [] -> nil
-      values -> %{field_name => %{"in" => values}}
+      values -> at(field_name, %{"in" => values})
     end
   end
 
@@ -399,7 +484,7 @@ defmodule AshQuick.LiveView.CustomFilter do
   defp build(%__MODULE__{field_name: field_name, operator: "on", value: value}, timezone, _fields)
        when is_binary(field_name) do
     case LocalDatetime.day_range(value, timezone) do
-      {:ok, from, to} -> %{field_name => %{"gte" => from, "lt" => to}}
+      {:ok, from, to} -> at(field_name, %{"gte" => from, "lt" => to})
       :error -> nil
     end
   end
@@ -415,7 +500,7 @@ defmodule AshQuick.LiveView.CustomFilter do
        when is_binary(field_name) do
     case value |> List.wrap() |> Enum.filter(&has_value?/1) do
       [] -> nil
-      values -> %{field_name => %{"intersects" => values}}
+      values -> at(field_name, %{"intersects" => values})
     end
   end
 
@@ -425,7 +510,7 @@ defmodule AshQuick.LiveView.CustomFilter do
          _fields
        )
        when is_binary(field_name) and is_binary(value) and value != "" do
-    %{"not" => %{field_name => %{"contains" => value}}}
+    on(field_name, &%{"not" => %{&1 => %{"contains" => value}}})
   end
 
   defp build(
@@ -437,7 +522,7 @@ defmodule AshQuick.LiveView.CustomFilter do
               is_binary(value) and value != "" do
     # Ash's own predicates rather than `like`, which only AshPostgres defines
     # and which would read a `%` or `_` in the value as a wildcard.
-    %{field_name => %{"string_#{operator}" => value}}
+    at(field_name, %{"string_#{operator}" => value})
   end
 
   defp build(
@@ -446,12 +531,51 @@ defmodule AshQuick.LiveView.CustomFilter do
          _fields
        )
        when is_binary(field_name) and is_binary(operator) and not is_nil(value) and value != "" do
-    %{field_name => %{operator => value}}
+    at(field_name, %{operator => value})
   end
 
   defp build(%__MODULE__{}, _timezone, _fields) do
     nil
   end
+
+  defp at(field_name, predicate), do: on(field_name, &%{&1 => predicate})
+
+  # The statement `statement` makes of a row's field, as Ash's filter input
+  # reads it. A field through a relationship, `"brand.name"`, is asked inside
+  # `exists(brand, ...)`, rather than as the nested `%{"brand" => %{"name" =>
+  # ...}}`: Ash applies the brand's read policies inside an `exists`, so a row
+  # is never kept for a brand its reader may not read, while a nested
+  # reference makes the whole branch of the filter holding it demand a
+  # readable brand, which drops a row with none even from an `or` beside it.
+  # A relationship name the VM does not know is no relationship of the
+  # resource, and is left to the read, which refuses it.
+  defp on(field_name, statement) do
+    case String.split(field_name, ".", parts: 2) do
+      [name] ->
+        statement.(name)
+
+      [relationship, name] ->
+        case FilterField.known_atom(relationship) do
+          relationship when is_atom(relationship) ->
+            Ash.Query.Exists.new([relationship], statement.(name))
+
+          relationship ->
+            %{relationship => statement.(name)}
+        end
+    end
+  end
+
+  # Whether a field has no value: `nil`, or the empty value its type also
+  # reads as empty with, when it has one.
+  defp blank(name, nil), do: %{name => %{"is_nil" => true}}
+
+  defp blank(name, empty),
+    do: %{"or" => [%{name => %{"is_nil" => true}}, %{name => %{"eq" => empty}}]}
+
+  defp filled(name, nil), do: %{name => %{"is_nil" => false}}
+
+  defp filled(name, empty),
+    do: %{"and" => [%{name => %{"is_nil" => false}}, %{name => %{"not_eq" => empty}}]}
 
   # The value besides `nil` a field reads as empty with: `""` for a string,
   # or a type built on one, as `AshQuick.AshTypes.Text` is, and `[]` for a

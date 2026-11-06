@@ -1024,9 +1024,33 @@ use AshQuick.LiveView.QuickView,
 A field need not be a list column to be filterable, and field policies still
 narrow the list for each visitor. `filterable: []` leaves the filter button
 out. Each entry has to be a field the form offers; the QuickView refuses any
-other, and a relationship path, when it compiles. A link whose filter has a
-row on any other field loses that row before the list reads, and the visitor
-is told the filter couldn't be applied.
+other when it compiles. A link whose filter has a row on any other field loses
+that row before the list reads, and the visitor is told the filter couldn't be
+applied.
+
+`filterable:` also reaches one hop through a public belongs_to, to a field the
+form would offer on the related resource:
+
+```elixir
+list: [
+  fields: [:sku, :name, [brand: :name]],
+  filterable: [:sku, :name, brand: :name, brand: :code]
+]
+```
+
+The form lists such a field as "Brand › Name", draws its value as the brand's
+field is drawn (a fixed set of values is picked, by the brand's own labels),
+and the URL names its rows `brand.name`. A row asks whether the product's
+brand matches, as `exists(brand, ...)`, inside which Ash applies the brand's
+read policies, so a product is never kept for a brand its reader may not
+read; the brand's field policies narrow the fields offered, as the list's own
+do. Is Empty on such a field keeps a product with no brand, when the
+relationship allows none, and one whose brand its reader may not read: the
+column shows both blank. A list without `filterable:` offers no related
+field, and a link's row on one it does not offer is dropped. Index the
+relationship's source attribute and the related field on a large table.
+To-many relationships and longer paths are refused when the QuickView
+compiles.
 
 ## Testing a details page
 

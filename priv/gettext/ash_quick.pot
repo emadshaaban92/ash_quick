@@ -751,3 +751,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "has any of"
 msgstr ""
+
+#: lib/ash_quick/liveview/filter_field.ex
+#, elixir-autogen, elixir-format
+msgid "%{relationship} › %{field}"
+msgstr ""

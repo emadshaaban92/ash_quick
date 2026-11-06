@@ -118,7 +118,7 @@ defmodule ExampleWeb.FilterableScenarioTest do
       message =
         Exception.message(
           assert_raise(ArgumentError, fn ->
-            options(filterable: [:code, :tags, :parent_id, :missing, [parent: :code], :stage])
+            options(filterable: [:code, :tags, :parent_id, :missing, [children: :code], :stage])
           end)
         )
 
@@ -126,7 +126,7 @@ defmodule ExampleWeb.FilterableScenarioTest do
       assert message =~ "* :tags is not a field the filter offers"
       assert message =~ "* :parent_id is not a field the filter offers"
       assert message =~ "* :missing is not a field the filter offers"
-      assert message =~ "* [parent: :code] is not a field name"
+      assert message =~ "* [children: :code] is not a field the filter offers through :children"
       refute message =~ "* :code"
       refute message =~ "* :stage"
     end
