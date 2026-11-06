@@ -13,6 +13,7 @@ defmodule ExampleWeb.EnumScenarioTest do
   use ExampleWeb.FeatureCase, async: true
 
   alias Example.Test.EnumPicks
+  alias ExampleWeb.FilterPicker
 
   setup %{conn: conn, admin: admin} do
     {:ok, conn: log_in(conn, admin)}
@@ -144,10 +145,9 @@ defmodule ExampleWeb.EnumScenarioTest do
       assert texts(view, "select[name='operator-#{uuid}'] option") ==
                ["Has Any Of", "Is Empty", "Is Not Empty"]
 
-      assert texts(view, "select[name='value-#{uuid}[]'][multiple] option") ==
-               ["E-mail", "Text message"]
+      assert FilterPicker.focus_values(view, uuid) == ["E-mail", "Text message"]
 
-      filter_change(view, "value-#{uuid}", ["email"])
+      FilterPicker.pick_values(view, uuid, ["E-mail"])
       view |> element("#custom-filter-form") |> render_submit()
 
       cells = texts(view, "td")
@@ -157,6 +157,45 @@ defmodule ExampleWeb.EnumScenarioTest do
 
       assert texts(view, "[data-filter-chip] > span[id$='-text']")
              |> Enum.map(&String.replace(&1, ~r/\s+/, " ")) == ["Channels has any of E-mail"]
+
+      view |> element("a[title='Advanced filters']") |> render_click()
+      assert FilterPicker.picked(view, filter_uuid(view)) == ["E-mail"]
+    end
+
+    # Any Of picks the values as tags, each named by its label, whatever kind
+    # of fixed set the field holds: an enum, a string-valued one, or a new
+    # type over a constrained atom.
+    test "picks Any Of values by their labels, and shows them back", %{conn: conn} do
+      for {field, offered, pick, kept, dropped, chip} <- [
+            {"stage", ["Being written", "On air", "Archived"], ["On air", "Archived"],
+             [stage: :live], [stage: :draft], "Stage is any of On air, Archived"},
+            {"phase", ["Open", "Closed now"], ["Closed now"], [phase: "closed_now"],
+             [phase: "open"], "Phase is any of Closed now"},
+            {"size", ["Small", "Extra Large"], ["Extra Large"], [size: :extra_large],
+             [size: :small], "Size is any of Extra Large"}
+          ] do
+        kept = picks(:draft, [], kept)
+        dropped = picks(:draft, [], dropped)
+
+        {:ok, view, _html} = live(conn, "/test/enum_picks?show_custom_filter=true")
+        uuid = filter_uuid(view)
+        filter_change(view, "field_name-#{uuid}", field)
+        filter_change(view, "operator-#{uuid}", "in")
+
+        assert FilterPicker.focus_values(view, uuid) == offered
+        FilterPicker.pick_values(view, uuid, pick)
+        view |> element("#custom-filter-form") |> render_submit()
+
+        cells = texts(view, "td")
+        assert kept.code in cells, "#{field} dropped #{kept.code}"
+        refute dropped.code in cells, "#{field} kept #{dropped.code}"
+
+        assert texts(view, "[data-filter-chip] > span[id$='-text']")
+               |> Enum.map(&String.replace(&1, ~r/\s+/, " ")) == [chip]
+
+        view |> element("a[title='Advanced filters']") |> render_click()
+        assert FilterPicker.picked(view, filter_uuid(view)) == pick
+      end
     end
 
     test "types in an atom without one_of, and leaves out a list of them", %{conn: conn} do

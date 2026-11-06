@@ -11,6 +11,8 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
   """
   use ExampleWeb.FeatureCase, async: true
 
+  import ExampleWeb.FilterPicker
+
   alias AshQuick.LiveView.CustomFilter
   alias Example.Test.FilterFields
 
@@ -895,17 +897,236 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       filter_change(view, "field_name-#{uuid}", "stage")
       filter_change(view, "operator-#{uuid}", "in")
 
-      assert texts(view, "select[name='value-#{uuid}[]'][multiple] option") ==
-               ["Draft", "Live", "Archived"]
+      assert focus_values(view, uuid) == ["Draft", "Live", "Archived"]
 
-      filter_change(view, "value-#{uuid}", ["draft", "archived"])
+      pick_values(view, uuid, ["Draft", "Archived"])
+      assert picked(view, uuid) == ["Draft", "Archived"]
       view |> element("#custom-filter-form") |> render_submit()
+
+      # The URL holds the strings the select held.
+      assert applied(view) == [{"stage", "in", ["draft", "archived"]}]
 
       cells = texts(view, "td")
       assert draft.code in cells
       assert archived.code in cells
       refute live_row.code in cells
       assert chips(view) == ["Stage is any of Draft, Archived"]
+
+      view |> element("a[title='Advanced filters']") |> render_click()
+      assert picked(view, filter_uuid(view)) == ["Draft", "Archived"]
+    end
+
+    # Each tag is removed by its ✕, and the row then holds what is left.
+    test "drops a value by its tag's ✕", %{conn: conn} do
+      code = unique("AR")
+      draft = filter_field(code: "#{code}-draft", stage: :draft)
+      live_row = filter_field(code: "#{code}-live", stage: :live)
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      uuid = filter_uuid(view)
+      filter_change(view, "field_name-#{uuid}", "stage")
+      filter_change(view, "operator-#{uuid}", "in")
+      pick_values(view, uuid, ["Draft", "Live"])
+
+      remove_value(view, uuid, "Live")
+      assert picked(view, uuid) == ["Draft"]
+      view |> element("#custom-filter-form") |> render_submit()
+
+      cells = texts(view, "td")
+      assert draft.code in cells
+      refute live_row.code in cells
+      assert chips(view) == ["Stage is any of Draft"]
+    end
+
+    # A search matches what the tags read, and focusing the input again
+    # offers every value once more.
+    test "searches the values by label", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      uuid = filter_uuid(view)
+      filter_change(view, "field_name-#{uuid}", "stage")
+      filter_change(view, "operator-#{uuid}", "in")
+
+      assert search_values(view, uuid, "AR") == ["Archived"]
+      pick_values(view, uuid, ["Archived"])
+      assert focus_values(view, uuid) == ["Draft", "Live", "Archived"]
+      assert picked(view, uuid) == ["Archived"]
+    end
+
+    # A link can name a value the set does not hold. It shows as a tag, so it
+    # can be seen and removed, and is applied as before: an atom's `one_of`
+    # is not checked by the cast, so it matches no row.
+    test "shows a link's value outside the set as a tag", %{conn: conn} do
+      code = unique("AX")
+      draft = filter_field(code: "#{code}-draft", stage: :draft)
+
+      filter =
+        encode_filter([
+          %{"field_name" => "code", "operator" => "starts_with", "value" => code},
+          %{"field_name" => "stage", "operator" => "in", "value" => ["draft", "retired_now"]}
+        ])
+
+      {:ok, view, _html} =
+        live(conn, "/test/filter_fields?custom_filter=#{filter}&show_custom_filter=true")
+
+      [_code, uuid] = filter_uuids(view)
+      assert picked(view, uuid) == ["Draft", "Retired Now"]
+      assert draft.code in texts(view, "td")
+
+      remove_value(view, uuid, "Retired Now")
+      assert picked(view, uuid) == ["Draft"]
+      view |> element("#custom-filter-form") |> render_submit()
+
+      assert applied(view) == [
+               {"code", "starts_with", code},
+               {"stage", "in", ["draft"]}
+             ]
+    end
+
+    # A link's Any Of can hold one value bare rather than in a list.
+    test "shows a link's single value as one tag", %{conn: conn} do
+      filter =
+        encode_filter([%{"field_name" => "stage", "operator" => "in", "value" => "live"}])
+
+      {:ok, view, _html} =
+        live(conn, "/test/filter_fields?custom_filter=#{filter}&show_custom_filter=true")
+
+      assert picked(view, filter_uuid(view)) == ["Live"]
+    end
+
+    # A hand-written link can hold blanks and empty lists beside a value; they
+    # hold nothing, so they draw no tag.
+    test "draws no tag for a link's blank values", %{conn: conn} do
+      filter =
+        encode_filter([
+          %{"field_name" => "stage", "operator" => "in", "value" => ["", [], "live", nil]}
+        ])
+
+      {:ok, view, _html} =
+        live(conn, "/test/filter_fields?custom_filter=#{filter}&show_custom_filter=true")
+
+      assert picked(view, filter_uuid(view)) == ["Live"]
+    end
+
+    # A value its Ash.Type.Enum does not hold is refused under the row, though
+    # only a forged event can post one, and LiveSelect's input carries the
+    # error as the other rows' inputs do.
+    test "marks the picker holding a value its enum refuses", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/test/enum_picks?show_custom_filter=true")
+      uuid = filter_uuid(view)
+      filter_change(view, "field_name-#{uuid}", "stage")
+      filter_change(view, "operator-#{uuid}", "in")
+
+      view
+      |> element("#custom-filter-form")
+      |> render_change(%{
+        "_target" => ["value-#{uuid}", "values"],
+        "value-#{uuid}" => %{"values" => ["gone"]}
+      })
+
+      assert picked(view, uuid) == ["Gone"]
+      view |> element("#custom-filter-form") |> render_submit()
+
+      assert texts(view, "#value-error-#{uuid}") == ["is invalid"]
+      id = picker_id(view, uuid)
+      assert attribute(view, "##{id}-wrap", "data-error-id") == ["value-error-#{uuid}"]
+      # Primary, as an input holding picks is drawn, would hide the error.
+      [class] = attribute(view, "##{id} input[type=text]", "class")
+      assert class =~ "input-error"
+      refute class =~ "input-primary"
+      refute_patched(view)
+
+      remove_value(view, uuid, "Gone")
+      refute has_element?(view, "#value-error-#{uuid}")
+      assert attribute(view, "##{id}-wrap", "data-error-id") == []
+      refute attribute(view, "##{id} input[type=text]", "class") |> hd() =~ "input-error"
+    end
+
+    # LiveSelect tells its options apart by label, so a value outside the set
+    # that reads as one inside it names its value too, rather than the two
+    # unpicking each other.
+    test "names a value whose label another value has", %{conn: conn} do
+      filter =
+        encode_filter([
+          %{"field_name" => "stage", "operator" => "in", "value" => ["draft", "DRAFT"]}
+        ])
+
+      {:ok, view, _html} =
+        live(conn, "/test/filter_fields?custom_filter=#{filter}&show_custom_filter=true")
+
+      uuid = filter_uuid(view)
+      assert picked(view, uuid) == ["Draft", "Draft (DRAFT)"]
+
+      remove_value(view, uuid, "Draft (DRAFT)")
+      assert picked(view, uuid) == ["Draft"]
+      view |> element("#custom-filter-form") |> render_submit()
+      assert applied(view) == [{"stage", "in", ["draft"]}]
+    end
+
+    # The value the resource declares a label for reads by it, as a tag and
+    # in the dropdown.
+    test "picks a value by the label the resource declares", %{conn: conn} do
+      code = unique("AL")
+      failed = filter_field(code: "#{code}-failed", ocr_status: :failed)
+      done = filter_field(code: "#{code}-done", ocr_status: :done)
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      uuid = filter_uuid(view)
+      filter_change(view, "field_name-#{uuid}", "ocr_status")
+      filter_change(view, "operator-#{uuid}", "in")
+
+      assert focus_values(view, uuid) == ["Pending", "Done", "Couldn't read"]
+      pick_values(view, uuid, ["Couldn't read"])
+      view |> element("#custom-filter-form") |> render_submit()
+
+      assert applied(view) == [{"ocr_status", "in", ["failed"]}]
+      cells = texts(view, "td")
+      assert failed.code in cells
+      refute done.code in cells
+      assert chips(view) == ["Status is any of Couldn't read"]
+
+      view |> element("a[title='Advanced filters']") |> render_click()
+      assert picked(view, filter_uuid(view)) == ["Couldn't read"]
+    end
+
+    # After a reconnect LiveSelect hands back the tags it held, label and
+    # value only, and offers just those: they still read by label, and
+    # focusing the input offers every value again.
+    test "keeps its tags' labels across a reconnect", %{conn: conn} do
+      filter =
+        encode_filter([
+          %{"field_name" => "ocr_status", "operator" => "in", "value" => ["failed"]}
+        ])
+
+      {:ok, view, _html} =
+        live(conn, "/test/filter_fields?custom_filter=#{filter}&show_custom_filter=true")
+
+      uuid = filter_uuid(view)
+      assert picked(view, uuid) == ["Couldn't read"]
+
+      view
+      |> element("##{picker_id(view, uuid)}")
+      |> render_hook("selection_recovery", [%{"label" => "Couldn't read", "value" => "failed"}])
+
+      assert picked(view, uuid) == ["Couldn't read"]
+      assert focus_values(view, uuid) == ["Pending", "Done", "Couldn't read"]
+    end
+
+    # A row moved to another field starts a fresh selection, from that
+    # field's values.
+    test "starts afresh on another field", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      uuid = filter_uuid(view)
+      filter_change(view, "field_name-#{uuid}", "stage")
+      filter_change(view, "operator-#{uuid}", "in")
+      pick_values(view, uuid, ["Live"])
+      stage_picker = picker_id(view, uuid)
+
+      filter_change(view, "field_name-#{uuid}", "ocr_status")
+      filter_change(view, "operator-#{uuid}", "in")
+
+      refute picker_id(view, uuid) == stage_picker
+      assert picked(view, uuid) == []
+      assert focus_values(view, uuid) == ["Pending", "Done", "Couldn't read"]
     end
 
     # A link can name Any Of on a field without a fixed set. The form shows
@@ -947,24 +1168,43 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       filter_change(view, "value-#{uuid}", "live")
       filter_change(view, "operator-#{uuid}", "in")
 
-      assert texts(view, "select[name='value-#{uuid}[]'] option[selected]") == ["Live"]
+      assert picked(view, uuid) == ["Live"]
 
-      filter_change(view, "value-#{uuid}", ["archived", "draft"])
+      remove_value(view, uuid, "Live")
+      pick_values(view, uuid, ["Archived", "Draft"])
       filter_change(view, "operator-#{uuid}", "equals")
 
       assert texts(view, "select[name='value-#{uuid}'] option[selected]") == ["Archived"]
     end
 
-    # A select with nothing picked sends nothing, so the row filters by nothing.
-    test "applies nothing once every value is unpicked", %{conn: conn} do
+    # Is Empty takes no value, so coming back to Any Of starts with none, as
+    # the select did.
+    test "comes back from Is Empty holding nothing", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      uuid = filter_uuid(view)
+      filter_change(view, "field_name-#{uuid}", "ocr_status")
+      filter_change(view, "operator-#{uuid}", "in")
+      pick_values(view, uuid, ["Done"])
+
+      filter_change(view, "operator-#{uuid}", "is_nil")
+      assert picker_id(view, uuid) == nil
+      filter_change(view, "operator-#{uuid}", "in")
+
+      assert picked(view, uuid) == []
+      assert focus_values(view, uuid) == ["Pending", "Done", "Couldn't read"]
+    end
+
+    # With its last tag removed, LiveSelect posts only its empty-selection
+    # marker, so the row then holds nothing and filters by nothing.
+    test "applies nothing once every value is removed", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
       uuid = filter_uuid(view)
       filter_change(view, "field_name-#{uuid}", "stage")
       filter_change(view, "operator-#{uuid}", "in")
-      filter_change(view, "value-#{uuid}", ["live"])
+      pick_values(view, uuid, ["Live"])
 
-      # A browser sends nothing for a select none of whose options is picked.
-      filter_change(view, "value-#{uuid}", [])
+      remove_value(view, uuid, "Live")
+      assert picked(view, uuid) == []
 
       view |> element("#custom-filter-form") |> render_submit()
 
@@ -992,11 +1232,11 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       assert texts(view, "select[name='operator-#{uuid}'] option") ==
                ["Has Any Of", "Is Empty", "Is Not Empty"]
 
-      assert texts(view, "select[name='value-#{uuid}[]'][multiple] option") ==
-               ["Billing", "Shipping", "Returns"]
+      assert focus_values(view, uuid) == ["Billing", "Shipping", "Returns"]
 
-      filter_change(view, "value-#{uuid}", ["billing", "returns"])
+      pick_values(view, uuid, ["Billing", "Returns"])
       view |> element("#custom-filter-form") |> render_submit()
+      assert applied(view) == [{"topics", "has_any", ["billing", "returns"]}]
 
       cells = texts(view, "td")
       assert billing.code in cells
@@ -1007,7 +1247,7 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
 
       view |> element("a[title='Advanced filters']") |> render_click()
 
-      assert texts(view, "select[name^='value-'] option[selected]") == ["Billing", "Returns"]
+      assert picked(view, filter_uuid(view)) == ["Billing", "Returns"]
     end
 
     # Topics is never `nil`, so only a list holding nothing is empty, and the
@@ -1134,7 +1374,7 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
 
       [_name, tags] = filter_uuids(view)
       filter_change(view, "field_name-#{tags}", "tags")
-      filter_change(view, "value-#{tags}", ["sale", "staff_pick"])
+      pick_values(view, tags, ["Sale", "Staff Pick"])
       view |> element("#custom-filter-form") |> render_submit()
 
       cells = texts(view, "td")
@@ -1263,6 +1503,15 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
     view
     |> attribute("select[name^='field_name-']", "name")
     |> Enum.map(&String.replace_prefix(&1, "field_name-", ""))
+  end
+
+  # The rows the URL the form just applied carries, as written there.
+  defp applied(view) do
+    %URI{query: query} = view |> assert_patch() |> URI.parse()
+    %{"custom_filter" => encoded} = URI.decode_query(query)
+
+    for leaf <- encoded |> CustomFilter.from_string() |> CustomFilter.applied_leaves(),
+        do: {leaf.field_name, leaf.operator, leaf.value}
   end
 
   defp filter_change(view, name, value) do

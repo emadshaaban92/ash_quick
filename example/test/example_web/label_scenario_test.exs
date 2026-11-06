@@ -17,6 +17,7 @@ defmodule ExampleWeb.LabelScenarioTest do
   use ExampleWeb.FeatureCase, async: true
 
   alias Example.Test.S3Stub
+  alias ExampleWeb.FilterPicker
 
   @export_timeout to_timeout(second: 5)
 
@@ -93,6 +94,43 @@ defmodule ExampleWeb.LabelScenarioTest do
 
     {:ok, english, _html} = live(log_in(conn, admin), "/products?custom_filter=#{filter}")
     assert has_element?(english, "[data-filter-chip]", "Name")
+  end
+
+  # Has Any Of's tags and options read in the reader's language too, and so
+  # does the chip the picked value makes.
+  test "the custom filter picks a list's values by their translated labels", ctx do
+    %{conn: conn, admin: admin, arabic: arabic} = ctx
+    prefix = unique("Tag ")
+    sale = product(name: "#{prefix}sale", tags: [:sale], actor: admin)
+    plain = product(name: "#{prefix}plain", tags: [:new], actor: admin)
+
+    {:ok, view, _html} = live(log_in(conn, arabic), "/products?show_custom_filter=true")
+    [name] = filter_uuids(view)
+    filter_change(view, "field_name-#{name}", "name")
+    filter_change(view, "operator-#{name}", "starts_with")
+    filter_change(view, "value-#{name}", prefix)
+    view |> element("#custom-filter-form button[phx-value-nested='false']") |> render_click()
+    [_name, tags] = filter_uuids(view)
+    filter_change(view, "field_name-#{tags}", "tags")
+
+    assert "تخفيض" in FilterPicker.focus_values(view, tags)
+    refute "Sale" in FilterPicker.offered(view, tags)
+    FilterPicker.pick_values(view, tags, ["تخفيض"])
+    view |> element("#custom-filter-form") |> render_submit()
+
+    assert has_element?(view, "td", sale.name)
+    refute has_element?(view, "td", plain.name)
+    assert has_element?(view, "[data-filter-chip]", "تخفيض")
+
+    # The link the chips sit beside, titled in Arabic here.
+    view |> element("a[href*='show_custom_filter=true']") |> render_click()
+    [_name, tags] = filter_uuids(view)
+    assert FilterPicker.picked(view, tags) == ["تخفيض"]
+
+    {:ok, english, _html} = live(log_in(conn, admin), "/products?show_custom_filter=true")
+    [row] = filter_uuids(english)
+    filter_change(english, "field_name-#{row}", "tags")
+    assert "Sale" in FilterPicker.focus_values(english, row)
   end
 
   test "the apps grid labels its tiles", %{conn: conn, admin: admin, arabic: arabic} do
@@ -203,5 +241,20 @@ defmodule ExampleWeb.LabelScenarioTest do
            "nothing was uploaded under #{prefix}"
 
     body
+  end
+
+  defp filter_uuids(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("select[name^='field_name-']")
+    |> LazyHTML.attribute("name")
+    |> Enum.map(&String.replace_prefix(&1, "field_name-", ""))
+  end
+
+  defp filter_change(view, name, value) do
+    view
+    |> element("#custom-filter-form")
+    |> render_change(%{"_target" => [name], name => value})
   end
 end

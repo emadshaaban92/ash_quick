@@ -4,6 +4,17 @@
 
 ### Features
 
+- **Any Of and Has Any Of pick their values as tags.** In the filter form, a
+  row picking several values from a fixed set is a LiveSelect in tags mode,
+  as a form's multi-select is, rather than a native multiple select: typing
+  narrows the values by label, a value is picked with a click or Enter, and
+  each one picked is a tag with a ✕. A link's value outside the set shows as
+  a tag too, under its humanized name, so it can be seen and removed. A long
+  set scrolls within the dropdown, and a dropdown opened near the bottom of
+  the modal scrolls into view. On a phone a row's operator select is as wide
+  as its operator, rather than taking the row from its value. What a row
+  holds, the URL and the filter it builds are unchanged.
+
 - **A list of values from a fixed set is filtered by Has Any Of.** The filter
   form now offers a field such as `{:array, :atom}` with `one_of` on its
   items, or a list of an `Ash.Type.Enum`: its values are picked as Any Of's
