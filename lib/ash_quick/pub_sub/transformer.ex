@@ -63,10 +63,11 @@ defmodule AshQuick.PubSub.Transformer do
     end)
   end
 
-  # `notifiers:` is an extension list, which a transformer cannot add to — but
-  # `Ash.Resource.Info.notifiers/1` reads `:simple_notifiers` alongside it, and
-  # that is persisted state. So `extensions: [AshQuick]` is the whole opt-in: no
-  # resource has to remember a second line for its liveness to work.
+  # `add_extensions` on `AshQuick` brings `Ash.Notifier.PubSub`'s DSL in, but
+  # not its notifier: an added extension lands in the extension list, while
+  # `Ash.Resource.Info.notifiers/1` reads only the `notifiers:` option and
+  # `:simple_notifiers`. A transformer cannot touch the former, so the notifier
+  # goes into the latter, unless the resource already listed it in `notifiers:`.
   defp put_notifier(dsl_state) do
     notifiers = Transformer.get_persisted(dsl_state, :simple_notifiers, [])
 
