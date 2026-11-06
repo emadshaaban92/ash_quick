@@ -162,26 +162,25 @@
   `:gettext` config names it (`MyAppWeb.Gettext`; the installer writes it
   when the backend exists). Everything AshQuick draws is looked up there, in
   the `ash_quick` domain and that backend's locale: its own buttons, flashes
-  and empty states, and every label, whether a field or action name (as
-  humanized, after `:humanize_overrides`), a `label:` option,
-  `new_action_label`, a saved filter's label, a custom bulk item's title, a
-  nav entry or group, a page title, or the value of an enum or a `one_of`
-  atom, on the list, the details page, the forms, the filters, the sidebar
-  and the apps grid. A label is translated where it is drawn, so a reader in
-  Arabic gets Arabic labels on the same compiled QuickView an English reader
-  gets English ones on, and a label that is not a string (markup in a
-  `label:` option) is drawn as it is. The locale is the host's, set
-  process-wide or on its own backend. An export's header is in the locale of
-  the reader who asked for it, the scope's (`AshQuick.Scope.locale/1`); the
-  task writing the file used to have none. `AshQuick.Nav.Info.sections/1`
-  hands out its labels translated, so a host drawing its own nav from it gets
-  them too. A flashed error names its field translated ("Field: message"),
-  and the "is invalid" a field-only error reads goes through
-  `:error_translator` like Ash's other messages. A form's title is one
-  translatable message, `[%{resource}] %{action}`, without the trailing space
-  it had, and a details page's is `%{resource} - %{record}`. With no
-  backend, everything is drawn in English. `AshQuick.Labels` (`translate/1`,
-  `name/1`, `field/1`) is what a custom template calls to match.
+  and empty states, and every label, whether a field or action name
+  humanized, a `label:` option, `new_action_label`, a saved filter's label, a
+  custom bulk item's title, a nav entry or group, a page title, or the value
+  of an enum or a `one_of` atom, on the list, the details page, the forms,
+  the filters, the sidebar and the apps grid. A label is translated where it
+  is drawn, so a reader in Arabic gets Arabic labels on the same compiled
+  QuickView an English reader gets English ones on, and a label that is not a
+  string (markup in a `label:` option) is drawn as it is. The locale is the
+  host's, set process-wide or on its own backend. An export's header is in
+  the locale of the reader who asked for it, the scope's
+  (`AshQuick.Scope.locale/1`); the task writing the file used to have none.
+  `AshQuick.Nav.Info.sections/1` hands out its labels translated, so a host
+  drawing its own nav from it gets them too. A flashed error names its field
+  translated ("Field: message"), and the "is invalid" a field-only error reads
+  goes through `:error_translator` like Ash's other messages. A form's title is
+  one translatable message, `[%{resource}] %{action}`, without the trailing
+  space it had, and a details page's is `%{resource} - %{record}`. With no
+  backend, everything is drawn in English. `AshQuick.Labels` (`translate/2`,
+  `name/2`, `field/2`, `value/3`) is what a custom template calls to match.
 
 - **`mix ash_quick.gen.gettext` writes the template a host translates
   AshQuick in.** Labels are not `gettext` call sites, so it reads them off
@@ -1011,7 +1010,7 @@
 - **`:humanize_overrides` is removed, and so is the `_ar` label rule.** A
   humanized name is now only `Phoenix.Naming.humanize/1` title-cased, with
   `destroy` read as "Delete": `config :ash_quick, humanize_overrides:` is
-  ignored, `AshQuick.Config.humanize_overrides/0` is gone, and a field ending
+  ignored, its `humanize_overrides/0` getter is gone, and a field ending
   in `_ar` reads "Name Ar" where it read "Name (Arabic)". The overrides were
   read at compile time inside the dependency, so changing them did nothing
   until it was recompiled; they matched a bare name on every resource; and

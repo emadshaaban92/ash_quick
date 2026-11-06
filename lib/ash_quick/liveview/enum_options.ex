@@ -4,13 +4,14 @@ defmodule AshQuick.LiveView.EnumOptions do
 
   Two kinds of type hold a fixed set of values: an `Ash.Type.Enum` module,
   whose values and labels are its own (`values/0`, `label/1`), and an atom
-  constrained by `one_of`, whose labels are `AshQuick.LiveView.Utils.humanize/1`
-  of each value. Given the resource the field belongs to, a label the resource
-  declares for a value (`label :status, :paid_off, "Paid Off in Full"`, see
-  `AshQuick`) is drawn in place of either. Each is translated
-  (`AshQuick.Labels.translate/2`), under the resource's and field's context
-  when given the resource, so a value reads in the reader's language. A `Ash.Type.NewType` over either counts as what it wraps. An
-  atom without `one_of` holds no fixed set: it is typed in, like a string.
+  constrained by `one_of`, whose labels are its values humanized, as
+  `AshQuick.Labels.name/2` draws a name. Given the resource the field belongs
+  to, a label the resource declares for a value (`label :status, :paid_off,
+  "Paid Off in Full"`, see `AshQuick`) is drawn in place of either. Each is
+  translated (`AshQuick.Labels.translate/2`), under the resource's and field's
+  context when given the resource, so a value reads in the reader's language.
+  An `Ash.Type.NewType` over either counts as what it wraps. An atom without
+  `one_of` holds no fixed set: it is typed in, like a string.
 
   Forms, the custom filter and the list and details pages all read their
   options and labels here, so a value reads the same everywhere it shows.
@@ -92,8 +93,8 @@ defmodule AshQuick.LiveView.EnumOptions do
   @doc """
   The label `value` shows as in `field` of `resource`: the label the resource
   declares for that value, else its enum's label when the field is typed by an
-  `Ash.Type.Enum`, and `AshQuick.LiveView.Utils.humanize/1` otherwise, `field`
-  given or not, translated (`AshQuick.Labels.translate/2`).
+  `Ash.Type.Enum`, and the value humanized otherwise, `field` given or not,
+  translated (`AshQuick.Labels.translate/2`).
 
   A string naming one of the atoms `field` offers reads as that atom: a filter
   casts its value as Ash compares it (`Ash.Type.coerce/3`), which leaves an
