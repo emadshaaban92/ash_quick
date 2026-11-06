@@ -652,7 +652,7 @@ defmodule AshQuick.LiveView.Components.FormView do
               patch={URLParams.full_path(@base_path, @params |> URLParams.to_list_params())}
               class="btn btn-error btn-sm"
             >
-              <.icon name="hero-arrow-left" class="w-4 h-4" /> {gettext("Go Back")}
+              <.icon name="hero-arrow-left" class="w-4 h-4 rtl:rotate-180" /> {gettext("Go Back")}
             </.link>
           </div>
         </div>

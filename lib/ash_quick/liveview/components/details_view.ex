@@ -28,7 +28,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
           {gettext("The resource you're looking for could not be found.")}
         </p>
         <.link navigate="/" class="btn btn-primary">
-          <.icon name="hero-arrow-left" class="w-5 h-5" /> {gettext("Go back home")}
+          <.icon name="hero-arrow-left" class="w-5 h-5 rtl:rotate-180" /> {gettext("Go back home")}
         </.link>
       </div>
     </div>
@@ -62,7 +62,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
           patch={URLParams.full_path(@base_path, @params |> URLParams.to_list_params())}
           class="btn btn-ghost btn-sm btn-square"
         >
-          <.icon name="hero-arrow-left" class="w-5 h-5" />
+          <.icon name="hero-arrow-left" class="w-5 h-5 rtl:rotate-180" />
         </.link>
         {AshQuick.Info.display_value(@record) || Map.get(@record, :id)}
         <:subtitle>

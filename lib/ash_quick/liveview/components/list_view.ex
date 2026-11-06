@@ -699,7 +699,7 @@ defmodule AshQuick.LiveView.Components.ListView do
           aria-label={gettext("Previous page")}
           class="join-item btn btn-sm"
         >
-          <.icon name="hero-chevron-left" class="w-4 h-4" />
+          <.icon name="hero-chevron-left" class="w-4 h-4 rtl:rotate-180" />
         </.link>
         <.link
           patch={@path_for_page.(1)}
@@ -766,7 +766,7 @@ defmodule AshQuick.LiveView.Components.ListView do
           aria-label={gettext("Next page")}
           class="join-item btn btn-sm"
         >
-          <.icon name="hero-chevron-right" class="w-4 h-4" />
+          <.icon name="hero-chevron-right" class="w-4 h-4 rtl:rotate-180" />
         </.link>
       </div>
     </nav>
