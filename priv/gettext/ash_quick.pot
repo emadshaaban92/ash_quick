@@ -741,3 +741,13 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Time zone"
 msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Has Any Of"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "has any of"
+msgstr ""

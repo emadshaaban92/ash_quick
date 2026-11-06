@@ -4,6 +4,20 @@
 
 ### Features
 
+- **A list of values from a fixed set is filtered by Has Any Of.** The filter
+  form now offers a field such as `{:array, :atom}` with `one_of` on its
+  items, or a list of an `Ash.Type.Enum`: its values are picked as Any Of's
+  are, and the rows kept are those whose list holds any of them, read by Ash's
+  `intersects/2` (`&&` on Postgres). Its chip reads "Topics has any of
+  Billing, Returns", each value by its label. Is Empty on such a list also
+  keeps a row whose list holds nothing, and Is Not Empty drops it; both are
+  offered on any list, `allow_nil?: false` included. A QuickView that names
+  no `filterable:` now offers such fields in its filter form beside the
+  others; name the fields with `filterable:` to leave them out. A link's Has
+  Any Of on a list without a fixed set, as `{:array, :string}`, shows its
+  values typed in; on a field holding no list it is dropped before the read,
+  with the flash saying the filter couldn't be applied.
+
 - **A list names the fields its filter offers.** `list: [filterable: ...]`
   lists them, in the order the filter form shows them, so a large table offers
   only its indexed fields; `filterable: []` leaves the filter button out. Each

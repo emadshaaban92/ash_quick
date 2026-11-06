@@ -213,8 +213,11 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     """
   end
 
-  # Any Of picks several values from a fixed set.
-  defp filter_value(%{filter: %{operator: "in"}, choice: :single} = assigns) do
+  # Any Of picks several values from a fixed set, and so does Has Any Of from
+  # the set a list's items are picked from.
+  defp filter_value(%{filter: %{operator: operator}, choice: choice} = assigns)
+       when (operator == "in" and choice == :single) or
+              (operator == "has_any" and choice == :array) do
     assigns =
       assign(assigns,
         options: EnumOptions.options(assigns.field, assigns.resource),
@@ -234,9 +237,11 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     """
   end
 
-  # Any Of on a field without a fixed set, which only a link carries: its
-  # values typed in, one after another, split again at each comma.
-  defp filter_value(%{filter: %{operator: "in"}} = assigns) do
+  # Any Of or Has Any Of on a field without a fixed set, which only a link
+  # carries: its values typed in, one after another, split again at each
+  # comma.
+  defp filter_value(%{filter: %{operator: operator}} = assigns)
+       when operator in ~w(in has_any) do
     ~H"""
     <input
       type="text"
@@ -567,8 +572,9 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     end
   end
 
-  # Any Of's select sends a list, and nothing at all once every value is
-  # unpicked; its text input, on a field without a fixed set, one string.
+  # Any Of's select sends a list, as Has Any Of's does, and nothing at all
+  # once every value is unpicked; its text input, on a field without a fixed
+  # set, one string.
   defp hold(:list, field, value, timezone) when is_binary(value) do
     value
     |> String.split(",")
@@ -683,6 +689,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   def operator_label("starts_with"), do: gettext("Starts With")
   def operator_label("ends_with"), do: gettext("Ends With")
   def operator_label("in"), do: gettext("Any Of")
+  def operator_label("has_any"), do: gettext("Has Any Of")
   def operator_label("on"), do: gettext("On Day")
   def operator_label("is_nil"), do: gettext("Is Empty")
   def operator_label("is_not_nil"), do: gettext("Is Not Empty")
@@ -697,6 +704,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   def operator_phrase("starts_with"), do: gettext("starts with")
   def operator_phrase("ends_with"), do: gettext("ends with")
   def operator_phrase("in"), do: gettext("is any of")
+  def operator_phrase("has_any"), do: gettext("has any of")
   def operator_phrase("on"), do: pgettext("filter chip", "on")
   def operator_phrase("is_nil"), do: gettext("is empty")
   def operator_phrase("is_not_nil"), do: gettext("is not empty")
@@ -733,18 +741,23 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   end
 
   # A field with a fixed set of values compares by value, whatever its type,
-  # or against several; anything else by what its type allows.
+  # or against several, and a list of such values by whether it holds any of
+  # several; anything else by what its type allows.
   defp base_operators(field) do
-    if EnumOptions.kind(field) == :single,
-      do: @equality ++ ["in"],
-      else: type_operators(field)
+    case EnumOptions.kind(field) do
+      :single -> @equality ++ ["in"]
+      :array -> ["has_any"]
+      nil -> type_operators(field)
+    end
   end
 
   # A count, or whether any row exists, is never `nil`, nor is an aggregate
   # with a `default`. Another aggregate is when it finds nothing, and names no
-  # `allow_nil?` to say otherwise.
+  # `allow_nil?` to say otherwise. A list can hold nothing, which reads as
+  # empty, even where it is never `nil`.
   defp nullable?(%Ash.Resource.Aggregate{kind: kind}) when kind in [:count, :exists], do: false
   defp nullable?(%Ash.Resource.Aggregate{default: default}) when not is_nil(default), do: false
+  defp nullable?(%{type: {:array, _type}}), do: true
   defp nullable?(field), do: Map.get(field, :allow_nil?, true)
 
   defp type_operators(%{type: t})

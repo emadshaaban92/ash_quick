@@ -623,6 +623,14 @@ msgstr "%{resource} - %{record}"
 msgid "Time zone"
 msgstr "المنطقة الزمنية"
 
+#, elixir-format
+msgid "Has Any Of"
+msgstr "يحتوي على أيٍّ من"
+
+#, elixir-format
+msgid "has any of"
+msgstr "يحتوي على أيٍّ من"
+
 msgid "Accepts"
 msgstr ""
 

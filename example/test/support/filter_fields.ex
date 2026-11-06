@@ -14,8 +14,9 @@ defmodule Example.Test.FilterFields do
   one else, a flag picked as Yes or No, a state typed in as an atom, a stage
   picked from a fixed set, an OCR status picked from a fixed set one of whose
   values the resource labels, a note that may be left empty or blank, a memo
-  hidden on some rows, a sum that is never empty, and tags, which it offers
-  to no one.
+  hidden on some rows, a sum that is never empty, topics, a list each item of
+  which is picked from a fixed set, and tags, a list of strings, which it
+  offers to no one.
 
   In ETS rather than Postgres, so Starts With is read by Ash itself rather
   than by a SQL `LIKE`.
@@ -55,6 +56,7 @@ defmodule Example.Test.FilterFields do
         :ocr_status,
         :note,
         :memo,
+        :topics,
         :parent_id
       ]
     ]
@@ -121,7 +123,16 @@ defmodule Example.Test.FilterFields do
     # Kept as typed, so a row can hold `""`, which Is Empty counts as empty.
     attribute :note, :string, public?: true, constraints: [allow_empty?: true]
     attribute :memo, :string, public?: true
-    # A list, which the filter does not offer.
+    # A list of values from a fixed set, which Has Any Of asks about.
+    # Never `nil`, as a list usually is declared: Is Empty still finds the
+    # rows holding nothing.
+    attribute :topics, {:array, :atom},
+      allow_nil?: false,
+      public?: true,
+      default: [],
+      constraints: [items: [one_of: [:billing, :shipping, :returns]]]
+
+    # A list with no fixed set, which the filter does not offer.
     attribute :tags, {:array, :string}, public?: true, default: []
   end
 

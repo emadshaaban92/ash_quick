@@ -130,6 +130,35 @@ defmodule ExampleWeb.EnumScenarioTest do
       end
     end
 
+    # Channels is a list of an enum, so the rows kept are those holding any
+    # channel picked, each named by the enum's label.
+    test "offers a list of enum values by its labels, with Has Any Of", %{conn: conn} do
+      email = picks(:draft, [:email, :sms])
+      sms = picks(:draft, [:sms])
+      none = picks(:draft, [])
+
+      {:ok, view, _html} = live(conn, "/test/enum_picks?show_custom_filter=true")
+      uuid = filter_uuid(view)
+      filter_change(view, "field_name-#{uuid}", "channels")
+
+      assert texts(view, "select[name='operator-#{uuid}'] option") ==
+               ["Has Any Of", "Is Empty", "Is Not Empty"]
+
+      assert texts(view, "select[name='value-#{uuid}[]'][multiple] option") ==
+               ["E-mail", "Text message"]
+
+      filter_change(view, "value-#{uuid}", ["email"])
+      view |> element("#custom-filter-form") |> render_submit()
+
+      cells = texts(view, "td")
+      assert email.code in cells
+      refute sms.code in cells
+      refute none.code in cells
+
+      assert texts(view, "[data-filter-chip] > span[id$='-text']")
+             |> Enum.map(&String.replace(&1, ~r/\s+/, " ")) == ["Channels has any of E-mail"]
+    end
+
     test "types in an atom without one_of, and leaves out a list of them", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/test/enum_picks?show_custom_filter=true")
       uuid = filter_uuid(view)
