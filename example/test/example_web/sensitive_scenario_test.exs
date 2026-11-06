@@ -18,8 +18,10 @@ defmodule ExampleWeb.SensitiveScenarioTest do
     {:ok, conn: log_in(conn, admin)}
   end
 
+  # Not digits alone: a page and a CSV hold random UUIDs, which can hold any
+  # four of them.
   defp secret do
-    Ash.create!(Secrets, %{code: unique("S"), pin: "4321", issued_on: ~D[2026-10-19]})
+    Ash.create!(Secrets, %{code: unique("S"), pin: "pin-4321-zq", issued_on: ~D[2026-10-19]})
   end
 
   test "the list, the details page and its title show neither value", %{conn: conn} do
@@ -30,7 +32,7 @@ defmodule ExampleWeb.SensitiveScenarioTest do
 
     assert html =~ secret.code
     assert html =~ "********"
-    refute html =~ "4321"
+    refute html =~ "pin-4321-zq"
     refute html =~ "Oct 19, 2026"
 
     {:ok, details, _html} = live(conn, ~p"/test/secrets/#{secret.id}")
@@ -38,14 +40,14 @@ defmodule ExampleWeb.SensitiveScenarioTest do
 
     # The PIN is the label, so it is the heading and the title too.
     assert html =~ "********"
-    refute html =~ "4321"
+    refute html =~ "pin-4321-zq"
     refute html =~ "Oct 19, 2026"
     # The title is sent as an update, so it is read after moving to the
     # record from the list, the way a click on its row does.
     render_patch(list, ~p"/test/secrets/#{secret.id}")
 
     assert page_title(list) =~ "Secrets - ********"
-    refute page_title(list) =~ "4321"
+    refute page_title(list) =~ "pin-4321-zq"
   end
 
   test "the update form holds no stored value, and a blank one keeps it", %{conn: conn} do
@@ -53,7 +55,7 @@ defmodule ExampleWeb.SensitiveScenarioTest do
 
     {:ok, view, html} = live(conn, ~p"/test/secrets/#{secret.id}/update")
 
-    refute html =~ "4321"
+    refute html =~ "pin-4321-zq"
     assert has_element?(view, ~s(#{@modal} input[type=password][name="form[pin]"]))
     assert has_element?(view, ~s(#{@modal} input[placeholder="Leave blank to keep it"]))
 
@@ -63,7 +65,7 @@ defmodule ExampleWeb.SensitiveScenarioTest do
     |> form("#{@modal} form[phx-submit=save]", %{"form" => %{"code" => renamed, "pin" => ""}})
     |> render_submit()
 
-    assert %{code: ^renamed, pin: "4321"} = Ash.get!(Secrets, secret.id)
+    assert %{code: ^renamed, pin: "pin-4321-zq"} = Ash.get!(Secrets, secret.id)
 
     # A value typed in replaces it.
     {:ok, view, _html} = live(conn, ~p"/test/secrets/#{secret.id}/update")
@@ -88,7 +90,7 @@ defmodule ExampleWeb.SensitiveScenarioTest do
 
     assert csv =~ secret.code
     assert csv =~ "********"
-    refute csv =~ "4321"
+    refute csv =~ "pin-4321-zq"
     refute csv =~ "Oct 19, 2026"
   end
 
