@@ -592,8 +592,10 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       %{resource: resource, filterable: filterable, action: action, scope: scope} =
         socket.assigns
 
+      # Without the list's read, the field policies are asked against the
+      # resource's primary read, so a caller that names none still hides them.
       action = action || Ash.Resource.Info.primary_action(resource, :read)
-      fields = fields(resource, filterable, action, scope)
+      fields = CustomFilter.offered_fields(resource, filterable, action, scope)
 
       socket
       |> assign(:fields, fields)
@@ -665,22 +667,6 @@ defmodule AshQuick.LiveView.Components.FilterForm do
 
   # Is Empty is never first: a row starts comparing its field with a value.
   defp first_operator(field), do: field |> base_operators() |> List.first()
-
-  # A field a field policy hides from the actor on every row is not offered:
-  # Ash would read it as `nil` in the filter, so the list would come back empty
-  # and look like an answer. One hidden on some rows only stays.
-  # Without the list's read, the field policies are asked against the
-  # resource's primary read, so a caller that names none still hides them;
-  # `assign_fields/1` picks it, for this and for `emptiable/4` alike.
-  defp fields(resource, filterable, nil, _scope),
-    do: CustomFilter.filterable_fields(resource, filterable)
-
-  defp fields(resource, filterable, action, scope) do
-    offered = CustomFilter.filterable_fields(resource, filterable)
-    visible = offered |> Enum.map(& &1.name) |> Utils.visible_fields(resource, action, scope)
-
-    Enum.filter(offered, &(&1.name in visible))
-  end
 
   @doc """
   What `operator` reads as, here and on the list's chips. One a link names that

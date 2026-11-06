@@ -170,3 +170,15 @@ defmodule Example.Test.FilterFieldsNoneLive.Quick do
     list: [fields: [:code, :active], filterable: []],
     details: [fields: [:code]]
 end
+
+defmodule Example.Test.FilterFieldsSalaryLive.Quick do
+  @moduledoc """
+  The page over `Example.Test.FilterFields` whose filter offers only the
+  salary, which only an admin may see: anyone else is offered no field.
+  Routed only in the test build.
+  """
+  use AshQuick.LiveView.QuickView,
+    resource: Example.Test.FilterFields,
+    list: [fields: [:code, :active], filterable: [:salary]],
+    details: [fields: [:code]]
+end

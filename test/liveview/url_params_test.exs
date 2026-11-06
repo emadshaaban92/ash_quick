@@ -603,7 +603,20 @@ defmodule AshQuick.LiveView.URLParamsCeilingTest do
 
       refute URLParams.allow_filter_form(params, []).show_custom_filter
       assert URLParams.allow_filter_form(params, [:code]).show_custom_filter
-      assert URLParams.allow_filter_form(params, nil).show_custom_filter
+    end
+
+    test "holds the fields offered, which no path carries" do
+      params =
+        %{"show_custom_filter" => "true"}
+        |> URLParams.from_url_params()
+        |> URLParams.apply_pagination(struct(Pagination, max_page_size: 250, default_limit: 20))
+
+      assert params.filterable == nil
+
+      held = URLParams.allow_filter_form(params, [:stage, :code])
+
+      assert held.filterable == [:stage, :code]
+      assert URLParams.full_path("/rows", held) == URLParams.full_path("/rows", params)
     end
   end
 end

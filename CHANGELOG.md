@@ -10,7 +10,13 @@
   entry is a field the form offers when the option is not given, checked when
   the QuickView compiles; relationship paths are refused. A link's filter row
   on any other field is dropped before the read, with the flash saying the
-  filter couldn't be applied. Not given, the form offers what it did.
+  filter couldn't be applied, and the export follows the filter that is left.
+  Not given, the form offers what it did.
+
+- **A visitor with no field to filter by sees no filter button.** Field
+  policies can hide every field a list's filter offers, its own
+  `filterable:` or all of a resource's, from a visitor; the button is then
+  left out, and a link opening the filter form opens nothing.
 
 - **An action too big for a modal opens as a page of its own.** A resource names
   such actions under `ash_quick do forms do full_page [:register] end end`. The
