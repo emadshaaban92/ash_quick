@@ -39,6 +39,7 @@ defmodule AshQuick.LiveView.ListUtils do
         %Options{} = options
       ) do
     {socket, params} = drop_refused_rows(socket, params, action, options)
+    params = URLParams.allow_filter_form(params, offered_fields(socket, action, options))
     {socket, params, page} = initial_read(socket, params, options)
 
     socket
@@ -209,6 +210,16 @@ defmodule AshQuick.LiveView.ListUtils do
         {put_flash(socket, :error, refused_filter_message()),
          %URLParams{params | custom_filter: filter}}
     end
+  end
+
+  # The fields the filter offers this visitor, by name: the ones the
+  # QuickView's `filterable:` names, or every one the form can take, less those
+  # field policies hide from the visitor. Asked on every navigation, as the
+  # list's columns are; the answer only changes with the scope.
+  defp offered_fields(socket, action, %Options{} = options) do
+    options.resource
+    |> CustomFilter.offered_fields(options.list_filterable, action, socket.assigns[:scope])
+    |> Enum.map(& &1.name)
   end
 
   defp unoffered_fields(_names, nil), do: []

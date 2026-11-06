@@ -6,6 +6,7 @@ defmodule AshQuick.LiveView.CustomFilter do
 
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.LocalDatetime
+  alias AshQuick.LiveView.Utils
 
   # The operators that compare a field with no value.
   @valueless ~w(is_nil is_not_nil)
@@ -225,6 +226,24 @@ defmodule AshQuick.LiveView.CustomFilter do
     by_name = resource |> filterable_fields() |> Map.new(&{&1.name, &1})
 
     for name <- names, Map.has_key?(by_name, name), do: by_name[name]
+  end
+
+  @doc """
+  The fields of `resource` the filter form offers the visitor `scope` names,
+  in its order: `filterable_fields/2`, less any field a field policy hides
+  from them on every record of `action`'s read. Ash would read such a field
+  as `nil` in the filter, so the list would come back empty and look like an
+  answer. A field hidden on some records only stays.
+
+  Without `action`, the fields are not narrowed.
+  """
+  def offered_fields(resource, names, nil, _scope), do: filterable_fields(resource, names)
+
+  def offered_fields(resource, names, action, scope) do
+    offered = filterable_fields(resource, names)
+    visible = offered |> Enum.map(& &1.name) |> Utils.visible_fields(resource, action, scope)
+
+    Enum.filter(offered, &(&1.name in visible))
   end
 
   @doc "Whether the filter form offers `name`, a field of `resource`."

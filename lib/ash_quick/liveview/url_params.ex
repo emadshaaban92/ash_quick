@@ -20,7 +20,11 @@ defmodule AshQuick.LiveView.URLParams do
             # Unknown until `apply_pagination/2` reads the list's action, which
             # every page does before it writes a path.
             default_limit: nil,
-            max_page_size: nil
+            max_page_size: nil,
+            # The names of the fields the list's filter offers the visitor, in
+            # order. Unknown until `allow_filter_form/2` is given them, which a
+            # list page does before it renders.
+            filterable: nil
 
   @doc """
   Reads a QuickView's state out of the query string.
@@ -195,13 +199,17 @@ defmodule AshQuick.LiveView.URLParams do
   def allow_sort(%__MODULE__{} = params, _sortable), do: params
 
   @doc """
-  Closes the filter modal on a list that offers no field to filter by, as
-  `filterable: []` says: it has nothing to show.
+  Holds the names of the fields the list's filter offers the visitor, in
+  order, so whatever draws the list draws its filter from them. A list that
+  offers none, by its `filterable: []` or because field policies hide every
+  field from the visitor, shows no filter button, and its filter modal is
+  closed: it has nothing to show.
   """
   def allow_filter_form(%__MODULE__{} = params, []),
-    do: %__MODULE__{params | show_custom_filter: false}
+    do: %__MODULE__{params | filterable: [], show_custom_filter: false}
 
-  def allow_filter_form(%__MODULE__{} = params, _filterable), do: params
+  def allow_filter_form(%__MODULE__{} = params, filterable) when is_list(filterable),
+    do: %__MODULE__{params | filterable: filterable}
 
   @doc """
   The params a click on `column`'s header leads to: ascending, then descending,

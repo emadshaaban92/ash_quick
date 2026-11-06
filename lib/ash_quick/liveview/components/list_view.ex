@@ -52,13 +52,6 @@ defmodule AshQuick.LiveView.Components.ListView do
     doc: "the `QuickField.data_field/1` names of the columns the list may be sorted by"
   )
 
-  attr(:filterable, :list,
-    default: nil,
-    doc:
-      "the names of the fields the filter offers, in order; `nil` for every field it can " <>
-        "take, `[]` for none, which leaves the filter button out"
-  )
-
   attr(:actions, :any, default: nil)
   attr(:filters, :map, default: nil)
   attr(:selected_rows, :map, default: nil)
@@ -91,14 +84,14 @@ defmodule AshQuick.LiveView.Components.ListView do
                 params={@params}
                 path={@path}
                 columns={@fields}
-                filterable={@filterable}
+                filterable={@params.filterable}
               />
 
               <div class="flex items-center w-full space-x-2">
                 <div class="flex-1">
                   <.search_form params={@params} />
                 </div>
-                <.filter_button :if={@filterable != []} params={@params} path={@path} />
+                <.filter_button :if={@params.filterable != []} params={@params} path={@path} />
               </div>
             </div>
             <div class="w-full lg:w-auto flex flex-col sm:flex-row space-y-2 sm:space-y-0 items-stretch sm:items-center justify-end sm:space-x-3 shrink-0">

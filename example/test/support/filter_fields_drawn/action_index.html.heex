@@ -1,0 +1,23 @@
+<%!--
+  A host's own list page: AshQuick's list under a heading of its own, given
+  the attributes it names one by one, and not `filterable`. The assigns no
+  attribute declares go in as they are.
+--%>
+<h2 id="drawn-list">Drawn by the host</h2>
+<AshQuick.LiveView.Components.ListView.list_view
+  id={@id}
+  resource={@resource}
+  fields={@fields}
+  data={@data}
+  scope={@scope}
+  ash_action={@ash_action}
+  params={@params}
+  sortable={@sortable}
+  path_for_page={@path_for_page}
+  new_click={@new_click}
+  actions={@actions}
+  filters={@filters}
+  selected_rows={@selected_rows}
+  row_actions={@row_actions}
+  {Map.take(assigns, [:path, :base_path, :routed_shapes, :linker, :export_data, :export_format])}
+/>

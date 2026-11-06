@@ -963,7 +963,8 @@ The form offers every public, `filterable?` attribute, aggregate and
 calculation of a type it has a row for: strings, numbers, dates, timestamps,
 booleans, UUIDs, atoms and fields with a fixed set of values. It leaves out a
 belongs_to relationship's source attribute, and any field a field policy hides
-from the visitor on every record.
+from the visitor on every record. A visitor left with no field to filter by
+sees no filter button.
 
 Filtering by an unindexed column reads the whole table, which is nothing on a
 small one; for a large one, name the fields it has indexes for, in the order

@@ -136,13 +136,13 @@ defmodule AshQuick.LiveView.QuickView do
       aggregate or calculation of a type it has a row for, and no belongs_to
       relationship's source attribute — though not necessarily a list
       column; the QuickView refuses any other, and a relationship path, when
-      it compiles. Field policies still narrow it for each visitor.
-      Filtering by an unindexed column reads the whole table, so a large one
-      names the fields it has indexes for, or `[]` for none, which leaves the
-      filter button out. A link's filter row on any other field is dropped
-      before the read, with a flash saying the filter couldn't be applied. A
-      custom list template gets the option as `@filterable`, `nil` when it is
-      not given.
+      it compiles. Field policies still narrow it for each visitor, and a
+      visitor they leave none of it sees no filter button. Filtering by an
+      unindexed column reads the whole table, so a large one names the fields
+      it has indexes for, or `[]` for none, which leaves the filter button
+      out. A link's filter row on any other field is dropped before the read,
+      with a flash saying the filter couldn't be applied. A custom list
+      template gets the option as `@filterable`, `nil` when it is not given.
 
   ### Details options (under `:details`)
 
@@ -1151,7 +1151,6 @@ defmodule AshQuick.LiveView.QuickView do
       params
       |> paginate(action, options)
       |> URLParams.allow_sort(options.list_sortable)
-      |> URLParams.allow_filter_form(options.list_filterable)
 
     {params, action}
   end
