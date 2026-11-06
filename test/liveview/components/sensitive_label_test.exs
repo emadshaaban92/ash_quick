@@ -20,8 +20,12 @@ defmodule AshQuick.LiveView.Components.SensitiveLabelTest do
   alias AshQuick.Test.Linked.{Locker, Maker, Part, Vault}
   alias AshQuick.Test.Scopes.DerivedScope
 
-  defp vault, do: %Vault{id: Ash.UUID.generate(), pin: "4321", code: "V-1"}
-  defp locker, do: %Locker{id: Ash.UUID.generate(), name: "Locker 9", combination: "0815"}
+  # Not digits alone: a link's href holds a random UUID, which can hold any
+  # four of them.
+  defp vault, do: %Vault{id: Ash.UUID.generate(), pin: "pin-4321-zq", code: "V-1"}
+
+  defp locker,
+    do: %Locker{id: Ash.UUID.generate(), name: "Locker 9", combination: "comb-0815-zq"}
 
   describe "the text a page shows" do
     test "masks a sensitive label, and leaves a plain one" do
@@ -61,14 +65,14 @@ defmodule AshQuick.LiveView.Components.SensitiveLabelTest do
       html = banner(vault())
 
       assert html =~ "You&#39;re impersonating ******** (V-1)"
-      refute html =~ "4321"
+      refute html =~ "pin-4321-zq"
     end
 
     test "masks a sensitive hint" do
       html = banner(locker())
 
       assert html =~ "You&#39;re impersonating Locker 9 (********)"
-      refute html =~ "0815"
+      refute html =~ "comb-0815-zq"
     end
   end
 
@@ -84,6 +88,6 @@ defmodule AshQuick.LiveView.Components.SensitiveLabelTest do
 
     assert html =~ ~s(title="********")
     assert html =~ ~s[aria-label="Locker 9 (********)"]
-    refute html =~ "0815"
+    refute html =~ "comb-0815-zq"
   end
 end

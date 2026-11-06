@@ -490,17 +490,19 @@ defmodule AshQuick.AuditTest do
     test "a sensitive argument in an expression never appears in the entry",
          %{actor: actor, record: record} do
       record
-      |> Ash.Changeset.for_update(:bump_secretly, %{bonus: 4242}, actor: actor)
+      |> Ash.Changeset.for_update(:bump_secretly, %{bonus: 987_654_321}, actor: actor)
       |> Ash.update!()
 
       assert [_created, entry] = entries(record)
 
-      # `count + (1 + 4242)` is folded into `count + 4243`: a literal derived
-      # from the secret, which no comparison with it would find. `to` is the
-      # count, not a secret.
-      assert entry.changes == %{count: %{from: 0, to: 4243, expr: "count + **redacted**"}}
+      # `count + (1 + 987654321)` is folded into `count + 987654322`: a literal
+      # derived from the secret, which no comparison with it would find. `to`
+      # is the count, not a secret.
+      assert entry.changes == %{count: %{from: 0, to: 987_654_322, expr: "count + **redacted**"}}
       assert entry.arguments == %{bonus: "**redacted**"}
-      refute inspect(entry) =~ "4242"
+      # Nine digits, not four: the entry holds random UUIDs, which can hold any
+      # four of them.
+      refute inspect(entry) =~ "987654321"
     end
 
     test "a secret another attribute's expression reads is redacted there too",
@@ -762,7 +764,7 @@ defmodule AshQuick.AuditTest do
 
     test "a bulk update by query keeps its expression beside an unknown `from`",
          %{actor: actor, record: record} do
-      for {action, input} <- [bump_by: %{by: 5}, bump_secretly: %{bonus: 4242}] do
+      for {action, input} <- [bump_by: %{by: 5}, bump_secretly: %{bonus: 987_654_321}] do
         assert %Ash.BulkResult{status: :success} =
                  Tally
                  |> Ash.Query.filter(id == ^record.id)
@@ -780,10 +782,11 @@ defmodule AshQuick.AuditTest do
       assert by.changes == %{count: %{from_unknown: true, to: 5, expr: "count + 5"}}
 
       assert secretly.changes == %{
-               count: %{from_unknown: true, to: 4248, expr: "count + **redacted**"}
+               count: %{from_unknown: true, to: 987_654_327, expr: "count + **redacted**"}
              }
 
-      refute inspect(secretly) =~ "4242"
+      # Nine digits, as above.
+      refute inspect(secretly) =~ "987654321"
     end
 
     test "a bulk destroy by query records the rows it deleted as they stood",
