@@ -103,6 +103,35 @@ defmodule AshQuick.LiveView.CustomFilterTest do
       assert CustomFilter.build_ash_filter(filter) == nil
     end
 
+    test "Has Any Of asks whether a list holds a value picked" do
+      filter = %CustomFilter{row("tags") | operator: "has_any", value: ["sale", "", "new"]}
+
+      assert CustomFilter.build_ash_filter(filter) ==
+               %{"tags" => %{"intersects" => ["sale", "new"]}}
+
+      filter = %CustomFilter{row("tags") | operator: "has_any", value: "sale"}
+      assert CustomFilter.build_ash_filter(filter) == %{"tags" => %{"intersects" => ["sale"]}}
+
+      filter = %CustomFilter{row("tags") | operator: "has_any", value: []}
+      refute CustomFilter.applied?(filter)
+      assert CustomFilter.build_ash_filter(filter) == nil
+    end
+
+    # A list with nothing in it reads as empty in the list, as `nil` does.
+    test "Is Empty on a list also keeps one holding nothing" do
+      fields = %{"tags" => %{type: {:array, Ash.Type.Atom}}}
+      empty = %CustomFilter{row("tags") | operator: "is_nil"}
+      not_empty = %CustomFilter{row("tags") | operator: "is_not_nil"}
+
+      assert CustomFilter.build_ash_filter(empty, fields: fields) == %{
+               "or" => [%{"tags" => %{"is_nil" => true}}, %{"tags" => %{"eq" => []}}]
+             }
+
+      assert CustomFilter.build_ash_filter(not_empty, fields: fields) == %{
+               "and" => [%{"tags" => %{"is_nil" => false}}, %{"tags" => %{"not_eq" => []}}]
+             }
+    end
+
     test "On Day is the day's instants in the zone given" do
       filter = %CustomFilter{row("stamped_at") | operator: "on", value: "2026-10-22"}
 
@@ -127,6 +156,19 @@ defmodule AshQuick.LiveView.CustomFilterTest do
     test "refuses a datetime as On Day's value" do
       assert {:error, _} =
                CustomFilter.cast_row_value(@stamp, "on", "2026-10-22T10:00:00", "Etc/UTC")
+    end
+
+    # Each value is one item of the list, cast as Ash casts a filter's: an
+    # atom's is left the string it was picked as.
+    test "reads Has Any Of's values as items of the list" do
+      tags = %{type: {:array, Ash.Type.Atom}, constraints: [items: [one_of: [:new, :sale]]]}
+
+      assert CustomFilter.cast_row_value(tags, "has_any", ["sale", "", "new"]) ==
+               {:ok, ["sale", "new"]}
+
+      counts = %{type: {:array, Ash.Type.Integer}, constraints: []}
+      assert CustomFilter.cast_row_value(counts, "has_any", ["1", "2"]) == {:ok, [1, 2]}
+      assert {:error, _} = CustomFilter.cast_row_value(counts, "has_any", ["1", "x"])
     end
 
     # Read in a zone the time zone database cannot load, the date names no

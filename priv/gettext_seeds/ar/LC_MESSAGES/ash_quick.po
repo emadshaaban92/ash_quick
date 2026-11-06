@@ -769,3 +769,13 @@ msgstr "%{resource} - %{record}"
 #, elixir-autogen, elixir-format
 msgid "Time zone"
 msgstr "المنطقة الزمنية"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Has Any Of"
+msgstr "يحتوي على أيٍّ من"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "has any of"
+msgstr "يحتوي على أيٍّ من"

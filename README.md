@@ -961,10 +961,16 @@ an operator and a value, in groups joined by AND or OR. The applied filter is
 carried in the URL, shown above the list as chips, and followed by the export.
 The form offers every public, `filterable?` attribute, aggregate and
 calculation of a type it has a row for: strings, numbers, dates, timestamps,
-booleans, UUIDs, atoms and fields with a fixed set of values. It leaves out a
-belongs_to relationship's source attribute, and any field a field policy hides
-from the visitor on every record. A visitor left with no field to filter by
-sees no filter button.
+booleans, UUIDs, atoms, fields with a fixed set of values, and lists of such
+values (`{:array, :atom}` with `one_of` on its items, or a list of an
+`Ash.Type.Enum`). The form leaves out a belongs_to relationship's source
+attribute, and any field a field policy hides from the visitor on every
+record. A visitor left with no field to filter by sees no filter button.
+
+A list is filtered with Has Any Of, which keeps the rows whose list holds any
+of the values picked. Is Empty is offered on every list, `allow_nil?: false`
+or not, and counts one holding nothing as empty, as it counts a blank string
+on a string field.
 
 Filtering by an unindexed column reads the whole table, which is nothing on a
 small one; for a large one, name the fields it has indexes for, in the order

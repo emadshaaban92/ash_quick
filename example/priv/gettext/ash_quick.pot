@@ -595,6 +595,14 @@ msgstr ""
 msgid "Time zone"
 msgstr ""
 
+#, elixir-format
+msgid "Has Any Of"
+msgstr ""
+
+#, elixir-format
+msgid "has any of"
+msgstr ""
+
 msgid "Accepts"
 msgstr ""
 

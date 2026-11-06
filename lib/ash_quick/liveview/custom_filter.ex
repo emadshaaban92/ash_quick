@@ -161,11 +161,12 @@ defmodule AshQuick.LiveView.CustomFilter do
 
   @doc """
   What a row's value is, by its operator: `:none` for Is Empty and Is Not
-  Empty, which compare with nothing; `:list` for Any Of; `:day` for On Day,
-  a date naming a whole day of a timestamp; and `:scalar` for the rest.
+  Empty, which compare with nothing; `:list` for Any Of and Has Any Of;
+  `:day` for On Day, a date naming a whole day of a timestamp; and `:scalar`
+  for the rest.
   """
   def value_shape(operator) when operator in @valueless, do: :none
-  def value_shape("in"), do: :list
+  def value_shape(operator) when operator in ~w(in has_any), do: :list
   def value_shape("on"), do: :day
   def value_shape(_operator), do: :scalar
 
@@ -252,9 +253,10 @@ defmodule AshQuick.LiveView.CustomFilter do
 
   # A field with a fixed set of values is offered whatever its type: an
   # `Ash.Type.Enum` is a module of its own, so no list of types could name it.
-  # An atom without `one_of` is offered too, and typed in.
+  # So is a list of such values, which Has Any Of asks about. An atom without
+  # `one_of` is offered too, and typed in.
   defp offered_type?(field),
-    do: EnumOptions.kind(field) == :single or field.type in @offered_types
+    do: EnumOptions.kind(field) in [:single, :array] or field.type in @offered_types
 
   @doc """
   The fields a row can name on `resource`, by the name a row holds them under.
@@ -284,9 +286,9 @@ defmodule AshQuick.LiveView.CustomFilter do
 
   @doc """
   A row's value cast as its operator reads it: nothing for Is Empty, each
-  value of Any Of by `field`'s type, a date for On Day, and the value by
-  `field`'s type otherwise. The first value of a list that will not cast is
-  the error.
+  value of Any Of by `field`'s type, each of Has Any Of by the type of an
+  item of `field`'s list, a date for On Day, and the value by `field`'s type
+  otherwise. The first value of a list that will not cast is the error.
 
   On Day's date is read as `build_ash_filter/2` reads it, by
   `LocalDatetime.day_range/3`: an ISO 8601 date, and a day in `timezone`,
@@ -305,12 +307,22 @@ defmodule AshQuick.LiveView.CustomFilter do
         end
 
       :list ->
-        value |> List.wrap() |> Enum.filter(&has_value?/1) |> cast_values(field, [])
+        item = if operator == "has_any", do: item_field(field), else: field
+        value |> List.wrap() |> Enum.filter(&has_value?/1) |> cast_values(item, [])
 
       :scalar ->
         cast_value(field, value)
     end
   end
+
+  # One item of a list field, by its type and the constraints its items have.
+  # Any other field is its own item: Has Any Of on one, which only a link
+  # carries, is dropped before the read (`ListUtils`), with the
+  # refused-filter flash.
+  defp item_field(%{type: {:array, type}} = field),
+    do: %{type: type, constraints: (Map.get(field, :constraints) || [])[:items] || []}
+
+  defp item_field(field), do: field
 
   defp cast_values([], _field, cast), do: {:ok, Enum.reverse(cast)}
 
@@ -331,8 +343,9 @@ defmodule AshQuick.LiveView.CustomFilter do
       timestamps in, `AshQuick.Scope.timezone/1`, which the list passes;
       `AshQuick.Config.timezone/0` when none is given.
     * `:fields` — the resource's fields by name, as `fields_by_name/1` gives
-      them. Is Empty on a string also keeps one holding `""`, which reads as
-      empty in the list, and only a field's type says it is a string.
+      them. Is Empty on a string also keeps one holding `""`, and on a list
+      one holding `[]`, which read as empty in the list, and only a field's
+      type says which it is.
   """
   def build_ash_filter(filter, opts \\ []) do
     timezone = Keyword.get_lazy(opts, :timezone, &AshQuick.Config.timezone/0)
@@ -351,19 +364,15 @@ defmodule AshQuick.LiveView.CustomFilter do
        when is_binary(field_name) and operator in @valueless do
     is_nil = %{field_name => %{"is_nil" => operator == "is_nil"}}
 
-    case {fields[field_name], operator} do
-      {%{type: type}, "is_nil"} ->
-        if string?(type),
-          do: %{"or" => [is_nil, %{field_name => %{"eq" => ""}}]},
-          else: is_nil
-
-      {%{type: type}, "is_not_nil"} ->
-        if string?(type),
-          do: %{"and" => [is_nil, %{field_name => %{"not_eq" => ""}}]},
-          else: is_nil
-
-      _ ->
+    case {fields[field_name] && empty_value(fields[field_name].type), operator} do
+      {nil, _} ->
         is_nil
+
+      {empty, "is_nil"} ->
+        %{"or" => [is_nil, %{field_name => %{"eq" => empty}}]}
+
+      {empty, "is_not_nil"} ->
+        %{"and" => [is_nil, %{field_name => %{"not_eq" => empty}}]}
     end
   end
 
@@ -392,6 +401,21 @@ defmodule AshQuick.LiveView.CustomFilter do
     case LocalDatetime.day_range(value, timezone) do
       {:ok, from, to} -> %{field_name => %{"gte" => from, "lt" => to}}
       :error -> nil
+    end
+  end
+
+  # Has Any Of keeps a row whose list holds any value picked. Ash's
+  # `intersects/2`, which AshPostgres reads as `&&`, rather than its
+  # `overlaps` operator, which a filter's input cannot name.
+  defp build(
+         %__MODULE__{field_name: field_name, operator: "has_any", value: value},
+         _timezone,
+         _fields
+       )
+       when is_binary(field_name) do
+    case value |> List.wrap() |> Enum.filter(&has_value?/1) do
+      [] -> nil
+      values -> %{field_name => %{"intersects" => values}}
     end
   end
 
@@ -429,14 +453,18 @@ defmodule AshQuick.LiveView.CustomFilter do
     nil
   end
 
-  # A string, or a type built on one, as `AshQuick.AshTypes.Text` is.
-  defp string?(type) do
+  # The value besides `nil` a field reads as empty with: `""` for a string,
+  # or a type built on one, as `AshQuick.AshTypes.Text` is, and `[]` for a
+  # list. `nil` for any other.
+  defp empty_value({:array, _type}), do: []
+
+  defp empty_value(type) do
     type = Ash.Type.get_type(type)
 
     cond do
-      type in @string_types -> true
-      Ash.Type.NewType.new_type?(type) -> string?(Ash.Type.NewType.subtype_of(type))
-      true -> false
+      type in @string_types -> ""
+      Ash.Type.NewType.new_type?(type) -> empty_value(Ash.Type.NewType.subtype_of(type))
+      true -> nil
     end
   end
 

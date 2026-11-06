@@ -225,7 +225,8 @@ defmodule AshQuick.LiveView.Components.FilterChips do
     ~H""
   end
 
-  # Any Of reads its values one after another, each as its field renders one.
+  # Any Of and Has Any Of read their values one after another, each as its
+  # field renders one.
   defp chip_value(
          %{field: %{type: type} = field, leaf: %{operator: operator, value: value}} = assigns
        )

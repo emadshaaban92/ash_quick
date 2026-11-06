@@ -973,6 +973,178 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
     end
   end
 
+  describe "Has Any Of" do
+    setup %{conn: conn, admin: admin} do
+      {:ok, conn: log_in(conn, admin)}
+    end
+
+    test "keeps the rows whose list holds any value picked from its fixed set", %{conn: conn} do
+      code = unique("HA")
+      billing = filter_field(code: "#{code}-billing", topics: [:billing, :shipping])
+      returns = filter_field(code: "#{code}-returns", topics: [:returns])
+      shipping = filter_field(code: "#{code}-shipping", topics: [:shipping])
+      none = filter_field(code: "#{code}-none", topics: [])
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      uuid = filter_uuid(view)
+      filter_change(view, "field_name-#{uuid}", "topics")
+
+      assert texts(view, "select[name='operator-#{uuid}'] option") ==
+               ["Has Any Of", "Is Empty", "Is Not Empty"]
+
+      assert texts(view, "select[name='value-#{uuid}[]'][multiple] option") ==
+               ["Billing", "Shipping", "Returns"]
+
+      filter_change(view, "value-#{uuid}", ["billing", "returns"])
+      view |> element("#custom-filter-form") |> render_submit()
+
+      cells = texts(view, "td")
+      assert billing.code in cells
+      assert returns.code in cells
+      refute shipping.code in cells
+      refute none.code in cells
+      assert chips(view) == ["Topics has any of Billing, Returns"]
+
+      view |> element("a[title='Advanced filters']") |> render_click()
+
+      assert texts(view, "select[name^='value-'] option[selected]") == ["Billing", "Returns"]
+    end
+
+    # Topics is never `nil`, so only a list holding nothing is empty, and the
+    # form still offers to ask for one.
+    test "counts a list holding nothing as empty, though it is never nil", %{conn: conn} do
+      code = unique("HE")
+      none = filter_field(code: "#{code}-none", topics: [])
+      held = filter_field(code: "#{code}-held", topics: [:billing])
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      uuid = filter_uuid(view)
+      filter_change(view, "field_name-#{uuid}", "topics")
+      options = texts(view, "select[name='operator-#{uuid}'] option")
+      assert "Is Empty" in options and "Is Not Empty" in options
+
+      view = apply_filter(conn, "/test/filter_fields", "topics", "is_nil", "")
+      cells = texts(view, "td")
+      assert none.code in cells
+      refute held.code in cells
+      assert chips(view) == ["Topics is empty"]
+
+      view = apply_filter(conn, "/test/filter_fields", "topics", "is_not_nil", "")
+      cells = texts(view, "td")
+      assert held.code in cells
+      refute none.code in cells
+    end
+
+    # A list with nothing in it shows as blank as one that is `nil`, and
+    # Postgres compares it by SQL of its own.
+    test "counts an empty list and a nil one as empty on Postgres", %{conn: conn, admin: admin} do
+      prefix = unique("Empty ")
+      none = product(name: "#{prefix}none", tags: [], actor: admin)
+      unset = product(name: "#{prefix}unset", tags: nil, actor: admin)
+      held = product(name: "#{prefix}held", tags: [:sale], actor: admin)
+
+      for {operator, kept, dropped} <- [
+            {"is_nil", [none, unset], [held]},
+            {"is_not_nil", [held], [none, unset]}
+          ] do
+        {:ok, view, _html} = live(conn, "/products?show_custom_filter=true")
+        uuid = filter_uuid(view)
+        filter_change(view, "field_name-#{uuid}", "name")
+        filter_change(view, "operator-#{uuid}", "starts_with")
+        filter_change(view, "value-#{uuid}", prefix)
+        view |> element("#custom-filter-form button[phx-value-nested='false']") |> render_click()
+
+        [_name, tags] = filter_uuids(view)
+        filter_change(view, "field_name-#{tags}", "tags")
+        filter_change(view, "operator-#{tags}", operator)
+        view |> element("#custom-filter-form") |> render_submit()
+
+        cells = texts(view, "td")
+        for row <- kept, do: assert(row.name in cells, "#{operator} dropped #{row.name}")
+        for row <- dropped, do: refute(row.name in cells, "#{operator} kept #{row.name}")
+        refute render(view) =~ "couldn&#39;t be applied"
+      end
+    end
+
+    # Only a hand-written link names it on a field holding no list. Dropped
+    # before the read, which Postgres would refuse, logging an error.
+    test "drops a link's row on a field holding no list, with the flash", %{conn: conn} do
+      code = unique("HS")
+      row = filter_field(code: code)
+
+      filter =
+        encode_filter([
+          %{"field_name" => "code", "operator" => "equals", "value" => code},
+          %{"field_name" => "stage", "operator" => "has_any", "value" => ["live"]}
+        ])
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+          assert render(view) =~ "couldn&#39;t be applied"
+          assert chips(view) == ["Code = #{code}"]
+          assert row.code in texts(view, "td")
+        end)
+
+      refute log =~ "re-reading #{inspect(Example.Test.FilterFields)}"
+    end
+
+    # A list of strings has no fixed set to pick from, so the form offers it
+    # nothing, and a link's values are typed in.
+    test "from a link on a list without a fixed set is typed in", %{conn: conn} do
+      code = unique("HT")
+      # Seeded: no form could save the list, so no action takes it.
+      kept = Ash.Seed.seed!(FilterFields, %{code: "#{code}-kept", tags: ["red", "blue"]})
+      dropped = Ash.Seed.seed!(FilterFields, %{code: "#{code}-dropped", tags: ["green"]})
+
+      filter =
+        encode_filter([
+          %{"field_name" => "code", "operator" => "starts_with", "value" => code},
+          %{"field_name" => "tags", "operator" => "has_any", "value" => ["blue", "pink"]}
+        ])
+
+      {:ok, view, _html} =
+        live(conn, "/test/filter_fields?custom_filter=#{filter}&show_custom_filter=true")
+
+      [_code, uuid] = filter_uuids(view)
+      assert attribute(view, "input[name='value-#{uuid}']", "value") == ["blue, pink"]
+      assert texts(view, "select[name='operator-#{uuid}'] option[selected]") == ["Has Any Of"]
+
+      cells = texts(view, "td")
+      assert kept.code in cells
+      refute dropped.code in cells
+      assert chips(view) == ["Code starts with #{code}", "Tags has any of blue, pink"]
+    end
+
+    # On Postgres, too, where Ash reads it as the `&&` of two arrays.
+    test "keeps the rows holding any value picked on Postgres", %{conn: conn, admin: admin} do
+      prefix = unique("Has ")
+      sale = product(name: "#{prefix}sale", tags: [:sale, :new], actor: admin)
+      staff = product(name: "#{prefix}staff", tags: [:staff_pick], actor: admin)
+      plain = product(name: "#{prefix}plain", tags: [], actor: admin)
+
+      {:ok, view, _html} = live(conn, "/products?show_custom_filter=true")
+      uuid = filter_uuid(view)
+      filter_change(view, "field_name-#{uuid}", "name")
+      filter_change(view, "operator-#{uuid}", "starts_with")
+      filter_change(view, "value-#{uuid}", prefix)
+
+      view |> element("#custom-filter-form button[phx-value-nested='false']") |> render_click()
+
+      [_name, tags] = filter_uuids(view)
+      filter_change(view, "field_name-#{tags}", "tags")
+      filter_change(view, "value-#{tags}", ["sale", "staff_pick"])
+      view |> element("#custom-filter-form") |> render_submit()
+
+      cells = texts(view, "td")
+      assert sale.name in cells
+      assert staff.name in cells
+      refute plain.name in cells
+      refute render(view) =~ "couldn&#39;t be applied"
+    end
+  end
+
   describe "On Day" do
     setup %{conn: conn, admin: admin} do
       {:ok, conn: log_in(conn, admin)}

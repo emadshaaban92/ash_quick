@@ -164,6 +164,10 @@ defmodule AshQuick.LiveView.ListUtils do
   # one that is no date, or any date when the zone will not load. The filter
   # it builds leaves such a row out, and the visitor is told here why.
   #
+  # And so is Has Any Of on a field that holds no list, which asks the data
+  # layer for something it does not have: Postgres would refuse the read with
+  # an error, logged before the list is read again without the filter.
+  #
   # And so is a row on a field the QuickView's `filterable:` leaves out, which
   # the form does not offer either: the host named the fields this list may be
   # filtered by, most likely the ones its table has indexes for.
@@ -189,13 +193,7 @@ defmodule AshQuick.LiveView.ListUtils do
         names -> hidden_fields(names, by_name, options.resource, action, scope, filter_is: false)
       end
 
-    refused? = fn row ->
-      case CustomFilter.value_shape(row.operator) do
-        :none -> row.field_name in partly_hidden
-        :day -> unreadable_day?(row, scope)
-        _ -> false
-      end
-    end
+    refused? = &refused_row?(&1, partly_hidden, by_name, scope)
 
     case {hidden, filter |> CustomFilter.leaves() |> Enum.filter(refused?)} do
       {[], []} ->
@@ -227,6 +225,28 @@ defmodule AshQuick.LiveView.ListUtils do
   defp unoffered_fields(names, filterable) do
     offered = Enum.map(filterable, &to_string/1)
     Enum.reject(names, &(&1 in offered))
+  end
+
+  # Whether `row` is refused by its operator: Is Empty on a field hidden on
+  # some rows, On Day on no day, and Has Any Of on a field holding no list.
+  defp refused_row?(row, partly_hidden, by_name, scope) do
+    case CustomFilter.value_shape(row.operator) do
+      :none -> row.field_name in partly_hidden
+      :day -> unreadable_day?(row, scope)
+      :list -> row.operator == "has_any" and not list_row?(row, by_name)
+      _ -> false
+    end
+  end
+
+  # Whether a row names a field holding a list. A row left without a value
+  # filters by nothing, and a name that is no field is left to the read, which
+  # refuses it, so neither is refused here.
+  defp list_row?(%CustomFilter{field_name: name} = row, by_name) do
+    case by_name[name] do
+      %{type: {:array, _type}} -> true
+      nil -> true
+      _field -> not CustomFilter.applied?(row)
+    end
   end
 
   # A row left without a value filters by nothing, and is not refused.
