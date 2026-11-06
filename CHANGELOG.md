@@ -546,6 +546,13 @@
 
 ### Bug fixes
 
+- **Back arrows and the pager's arrows point the reading way in a
+  right-to-left language.** Under `dir="rtl"` the details page's back arrow,
+  its "Go back home" link, a form's "Go Back" and the list pager's previous
+  and next chevrons kept their left-to-right direction, so back pointed
+  forward and the pager read reversed. Each now carries `rtl:rotate-180`, as
+  the attachment carousel's chevrons do.
+
 - **A failed export's Retry runs the export again.** The button sent
   `"start-gen-report"`, which nothing handled, so the QuickView raised
   `UndefinedFunctionError`, or `FunctionClauseError` with a `handle_event/3` of
