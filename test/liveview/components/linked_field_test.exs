@@ -88,12 +88,14 @@ defmodule AshQuick.LiveView.Components.LinkedFieldTest do
     # The label's own field still decides how it reads — here, masked — and
     # the accessible name, which a screen reader reads aloud, is masked too.
     test "keeps the label's own formatting inside the link, and out of its name" do
-      vault = %Vault{id: Ash.UUID.generate(), pin: "4321", code: "V-1"}
+      # Not digits alone: the link's href holds a random UUID, which can
+      # hold any four of them.
+      vault = %Vault{id: Ash.UUID.generate(), pin: "pin-4321-zq", code: "V-1"}
       html = render_field(part(vault: vault), vault: :pin)
 
       assert html |> link(vault) |> LazyHTML.text() == "********"
       assert {"aria-label", "******** (V-1)"} in link_attributes(html, vault)
-      refute html =~ "4321"
+      refute html =~ "pin-4321-zq"
     end
 
     test "renders the label alone, as before, with no linker" do
@@ -114,12 +116,14 @@ defmodule AshQuick.LiveView.Components.LinkedFieldTest do
 
     # Its label is the visible text as well as the accessible name here.
     test "masks a sensitive label, in the text and in the name" do
-      vault = %Vault{id: Ash.UUID.generate(), pin: "4321", code: "V-1"}
+      # Not digits alone: the link's href holds a random UUID, which can
+      # hold any four of them.
+      vault = %Vault{id: Ash.UUID.generate(), pin: "pin-4321-zq", code: "V-1"}
       html = render_field(part(vault: vault), :vault)
 
       assert html |> link(vault) |> LazyHTML.text() == "********"
       assert {"aria-label", "******** (V-1)"} in link_attributes(html, vault)
-      refute html =~ "4321"
+      refute html =~ "pin-4321-zq"
     end
 
     test "is not a link when its label cannot be read" do

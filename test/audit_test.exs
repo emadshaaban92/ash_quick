@@ -392,7 +392,7 @@ defmodule AshQuick.AuditTest do
     setup %{actor: actor} do
       record =
         Tally
-        |> Ash.Changeset.for_create(:create, %{name: "Gate", pin: "1111"}, actor: actor)
+        |> Ash.Changeset.for_create(:create, %{name: "Gate", pin: "pin-1111-zq"}, actor: actor)
         |> Ash.create!()
 
       %{record: record}
@@ -419,7 +419,7 @@ defmodule AshQuick.AuditTest do
     test "an update records what it was given and what changed, with secrets redacted",
          %{actor: actor, record: record} do
       record
-      |> Ash.Changeset.for_update(:rename, %{name: "Gate 2", pin: "2222"}, actor: actor)
+      |> Ash.Changeset.for_update(:rename, %{name: "Gate 2", pin: "pin-2222-zq"}, actor: actor)
       |> Ash.update!()
 
       assert [_created, entry] = entries(record)
@@ -433,8 +433,10 @@ defmodule AshQuick.AuditTest do
                pin: %{from: "**redacted**", to: "**redacted**"}
              }
 
-      refute inspect(entry) =~ "1111"
-      refute inspect(entry) =~ "2222"
+      # Not digits alone: the entry holds random UUIDs, which can hold any
+      # four of them.
+      refute inspect(entry) =~ "pin-1111-zq"
+      refute inspect(entry) =~ "pin-2222-zq"
     end
 
     test "an expression is recorded as what it came to, and not as input",
