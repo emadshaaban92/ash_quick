@@ -1,5 +1,6 @@
 defmodule AshQuick.LiveView.QuickView.Options do
   @moduledoc false
+  alias AshQuick.LiveView.CustomFilter
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.QuickField
   alias AshQuick.LiveView.Utils
@@ -23,6 +24,7 @@ defmodule AshQuick.LiveView.QuickView.Options do
     sidebar: true,
     list_fields: [],
     list_sortable: [],
+    list_filterable: nil,
     list_load: [],
     list_default_action: :index,
     details_fields: [],
@@ -60,7 +62,8 @@ defmodule AshQuick.LiveView.QuickView.Options do
     default_action: [type: :atom],
     new_action_label: [type: :string],
     bulk_actions: [type: {:or, [{:list, :any}, {:fun, 1}]}],
-    sortable: [type: {:list, {:or, [:atom, {:list, {:tuple, [:atom, :any]}}]}}]
+    sortable: [type: {:list, {:or, [:atom, {:list, {:tuple, [:atom, :any]}}]}}],
+    filterable: [type: {:list, :any}]
   ]
 
   @form_schema [
@@ -113,6 +116,7 @@ defmodule AshQuick.LiveView.QuickView.Options do
     |> put_form_options(opts[:form] || [])
     |> validate_lookups!()
     |> put_list_sortable(list_opts[:sortable])
+    |> put_list_filterable(list_opts[:filterable])
     |> validate_list_inputs!()
     |> validate_bulk_actions!()
   end
@@ -387,6 +391,43 @@ defmodule AshQuick.LiveView.QuickView.Options do
     end
 
     %{options | list_sortable: sortable |> Enum.map(&QuickField.data_field/1) |> Enum.uniq()}
+  end
+
+  # The fields the filter form offers, as `filterable:` names them, in its
+  # order. Unsaid, it stays `nil`: the form offers every field it can take,
+  # and a link's rows are left to the read.
+  defp put_list_filterable(%__MODULE__{} = options, nil), do: options
+
+  defp put_list_filterable(%__MODULE__{resource: resource} = options, filterable) do
+    refused =
+      Enum.flat_map(filterable, fn name ->
+        cond do
+          not is_atom(name) ->
+            [{name, "is not a field name; the filter takes no relationship paths"}]
+
+          not CustomFilter.filterable_field?(resource, name) ->
+            [{name, "is not a field the filter offers"}]
+
+          true ->
+            []
+        end
+      end)
+
+    if refused != [] do
+      raise ArgumentError, """
+      #{inspect(options.module)} lets its list be filtered by fields it cannot be \
+      filtered by:
+
+      #{Enum.map_join(refused, "\n", fn {name, reason} -> "  * #{inspect(name)} #{reason}" end)}
+
+      `list: [filterable: ...]` names fields of #{inspect(resource)} the filter \
+      offers: public, `filterable?` attributes, aggregates and calculations of \
+      a type it has a row for, such as a string, number, date, boolean or a \
+      fixed set of values, and no belongs_to relationship's source attribute.
+      """
+    end
+
+    %{options | list_filterable: Enum.uniq(filterable)}
   end
 
   defp single_path?(path) when is_atom(path), do: true

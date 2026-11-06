@@ -596,4 +596,14 @@ defmodule AshQuick.LiveView.URLParamsCeilingTest do
       assert URLParams.full_path("/products", params) == "/products?search=tent&sort=-name"
     end
   end
+
+  describe "filter form" do
+    test "stays shut on a list that offers no field to filter by" do
+      params = URLParams.from_url_params(%{"show_custom_filter" => "true"})
+
+      refute URLParams.allow_filter_form(params, []).show_custom_filter
+      assert URLParams.allow_filter_form(params, [:code]).show_custom_filter
+      assert URLParams.allow_filter_form(params, nil).show_custom_filter
+    end
+  end
 end

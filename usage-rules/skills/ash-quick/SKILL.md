@@ -171,6 +171,13 @@ The URL is not an option here — it is declared in the router with
   indexed ones on a large table. Each entry must be a
   list field Ash can sort, checked at compile time. The sort is one column, in
   the URL as `?sort=name` / `?sort=-name`; an unoffered one is dropped
+- `:filterable` — the fields the filter form offers, in that order, e.g.
+  `[:number, :placed_at, :status]`; `[]` leaves the filter button out. Not
+  given, every public, `filterable?` attribute, aggregate and calculation of a
+  type the form has a row for, no belongs_to source attribute. Field names
+  only (no relationship paths), each one the form offers, checked at compile
+  time; need not be list columns. Name the indexed ones on a large table. A
+  link's filter row on any other field is dropped, with a flash
 
 ### Details options (`:details`)
 - `:fields` — Fields in the detail view
