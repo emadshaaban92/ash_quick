@@ -642,9 +642,14 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     %{custom_filter: custom_filter, fields: fields} = socket.assigns
     errors = value_errors(custom_filter, fields, socket.assigns.timezone)
 
-    if errors == %{}, do: notify_parent(custom_filter)
+    if errors == %{} do
+      custom_filter = CustomFilter.with_currencies(custom_filter, fields)
+      notify_parent(custom_filter)
 
-    {:noreply, assign(socket, :value_errors, errors)}
+      {:noreply, assign(socket, custom_filter: custom_filter, value_errors: errors)}
+    else
+      {:noreply, assign(socket, :value_errors, errors)}
+    end
   end
 
   def handle_event("reset", _, socket) do
@@ -708,18 +713,27 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   end
 
   # Worded the way a form words a field's error, and translated through the
-  # same `:error_translator`.
+  # same `:error_translator`. One a type passes on from another library's
+  # exception, as AshMoney does ex_money's, is in that library's words, which
+  # no catalogue translates and which can quote the value back, as `The
+  # currency "cheap" is unknown`: it reads as the value being invalid.
   defp error_message(error) do
     {message, vars} =
       case error do
         message when is_binary(message) -> {message, []}
-        [_ | _] = keyword -> {Keyword.get(keyword, :message, "is invalid"), keyword}
+        [_ | _] = keyword -> keyword_message(keyword)
         %{message: message, vars: vars} when is_binary(message) -> {message, vars || []}
         error when is_exception(error) -> {Exception.message(error), []}
         _ -> {"is invalid", []}
       end
 
     ActionErrors.translate(message, Enum.reject(vars, &match?({:message, _}, &1)))
+  end
+
+  defp keyword_message(keyword) do
+    if Keyword.has_key?(keyword, :exception),
+      do: {"is invalid", []},
+      else: {Keyword.get(keyword, :message, "is invalid"), keyword}
   end
 
   # The offered field a row names, or `nil` for one the form does not offer.
@@ -942,7 +956,10 @@ defmodule AshQuick.LiveView.Components.FilterForm do
 
   defp type_operators(%{type: Ash.Type.Float}), do: @comparisons
 
-  defp type_operators(_field), do: []
+  # A `Money` by its amount, against one in the same currency.
+  defp type_operators(field) do
+    if CustomFilter.money?(field), do: @equality ++ @comparisons, else: []
+  end
 
   defp notify_parent(msg), do: send(self(), {__MODULE__, msg})
 end

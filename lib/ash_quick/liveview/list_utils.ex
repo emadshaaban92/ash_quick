@@ -127,7 +127,7 @@ defmodule AshQuick.LiveView.ListUtils do
   # timestamps in.
   defp maybe_apply_custom_filter(query, custom_filter, scope, options) do
     case CustomFilter.build_ash_filter(custom_filter,
-           fields: emptiness_fields(query, custom_filter, options),
+           fields: row_fields(query, options),
            timezone: AshQuick.Scope.timezone(scope)
          ) do
       nil -> query
@@ -135,13 +135,10 @@ defmodule AshQuick.LiveView.ListUtils do
     end
   end
 
-  # Only Is Empty and Is Not Empty ask a field's type, so the resource's
-  # fields are looked up only for a filter holding one.
-  defp emptiness_fields(query, custom_filter, options) do
-    if emptiness_rows(custom_filter) == [],
-      do: %{},
-      else: CustomFilter.fields_by_name(query.resource, options.list_filterable)
-  end
+  # The fields a row can name, whose types say how some rows are asked: Is
+  # Empty on a string or a list, and a row comparing a `Money`.
+  defp row_fields(query, options),
+    do: CustomFilter.fields_by_name(query.resource, options.list_filterable)
 
   defp emptiness_rows(filter),
     do:

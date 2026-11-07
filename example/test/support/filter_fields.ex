@@ -15,8 +15,10 @@ defmodule Example.Test.FilterFields do
   picked from a fixed set, an OCR status picked from a fixed set one of whose
   values the resource labels, a note that may be left empty or blank, a memo
   hidden on some rows, a sum that is never empty, topics, a list each item of
-  which is picked from a fixed set, and tags, a list of strings, which it
-  offers to no one.
+  which is picked from a fixed set, a fee in a currency, a deposit in one with no
+  default, and tags, a list of
+  strings, and a reference Ash filters by simple equality only, neither of
+  which it offers anyone.
 
   In ETS rather than Postgres, so Starts With is read by Ash itself rather
   than by a SQL `LIKE`.
@@ -57,6 +59,9 @@ defmodule Example.Test.FilterFields do
         :note,
         :memo,
         :topics,
+        :fee,
+        :deposit,
+        :reference,
         :parent_id
       ]
     ]
@@ -134,6 +139,18 @@ defmodule Example.Test.FilterFields do
 
     # A list with no fixed set, which the filter does not offer.
     attribute :tags, {:array, :string}, public?: true, default: []
+
+    # An amount in a currency, compared by its amount within that currency.
+    attribute :fee, :money,
+      public?: true,
+      constraints: [ex_money_opts: [default_currency: :USD, only: [:USD, :EUR]]]
+
+    # With no default currency: a bare amount is in the reader's locale's.
+    attribute :deposit, :money, public?: true
+
+    # Ash takes it only in a filter's one top-level `==`, which a row of the
+    # form need not be, so the filter does not offer it.
+    attribute :reference, :string, public?: true, filterable?: :simple_equality
   end
 
   relationships do

@@ -9,8 +9,18 @@ defmodule AshQuick.LiveView.CustomFilter do
   alias AshQuick.LiveView.LocalDatetime
   alias AshQuick.LiveView.Utils
 
+  require Ash.Expr
+  import Ash.Expr, only: [expr: 1, ref: 1]
+
   # The operators that compare a field with no value.
   @valueless ~w(is_nil is_not_nil)
+
+  # The operators a `Money` row compares by, its amount in its currency.
+  @money_operators ~w(equals not_equals gt gte lt lte)
+
+  # AshMoney's type, named rather than referenced: AshQuick does not depend on
+  # `ash_money`, so a host without it has no such module, and no field of it.
+  @money_type AshMoney.Types.Money
 
   @string_types [Ash.Type.String, Ash.Type.CiString]
 
@@ -204,7 +214,8 @@ defmodule AshQuick.LiveView.CustomFilter do
   The fields of `resource` the filter form offers, before field policies narrow
   them, as `FilterField`s: public, `filterable?` attributes, aggregates and
   calculations of a type it has a row for, but no belongs_to relationship's
-  source attribute.
+  source attribute, no field filterable by simple equality only, and no
+  calculation without an expression.
 
   With `names`, a list's `filterable:`, those it names, in its order: each a
   field of `resource`, or `{relationship, field}`, a field reached through a
@@ -265,8 +276,27 @@ defmodule AshQuick.LiveView.CustomFilter do
     resource
     |> Ash.Resource.Info.fields([:attributes, :aggregates, :calculations])
     |> Enum.reject(&(&1.name in belongs_to_source_attributes))
-    |> Enum.filter(&(&1.filterable? and &1.public? and offered_type?(&1)))
+    |> Enum.filter(&(&1.public? and filterable?(&1) and offered_type?(&1)))
   end
+
+  # `filterable? :simple_equality` lets Ash compare a field only once in a
+  # filter, by `==`, outside any `or` or `not`, and a row of the form can sit
+  # in an Any group, beside another on the same field, or under Is Not
+  # Empty's `not`: Ash would refuse the read. Such a field is left out.
+  #
+  # A calculation is asked in the filter by its expression, so one computed
+  # in Elixir only, with `calculate/3` and no `expression/2`, cannot be: the
+  # read raises on a data layer that filters in SQL, as AshPostgres does.
+  # Sorting asks the same of a calculation, `Ash.Resource.Info.sortable?/3`.
+  defp filterable?(%{filterable?: filterable?}) when filterable? != true, do: false
+
+  defp filterable?(%Ash.Resource.Calculation{calculation: {module, _opts}}),
+    do:
+      match?({:module, _}, Code.ensure_compiled(module)) and
+        function_exported?(module, :expression, 2)
+
+  defp filterable?(%Ash.Resource.Calculation{}), do: false
+  defp filterable?(_field), do: true
 
   @doc """
   The fields of `resource` the filter form offers the visitor `scope` names,
@@ -331,7 +361,34 @@ defmodule AshQuick.LiveView.CustomFilter do
   # So is a list of such values, which Has Any Of asks about. An atom without
   # `one_of` is offered too, and typed in.
   defp offered_type?(field),
-    do: EnumOptions.kind(field) in [:single, :array] or field.type in @offered_types
+    do:
+      EnumOptions.kind(field) in [:single, :array] or field.type in @offered_types or
+        money?(field)
+
+  @doc """
+  Whether `field` holds a `Money`, as AshMoney's type stores it by default: as
+  a currency and an amount the data layer can read apart, the composite
+  `money_with_currency` on AshPostgres. Each row compares the two, as
+  `build_ash_filter/2` writes it. One stored as a map, `storage_type: :map`,
+  is not offered: its amount is no number the data layer can compare.
+  """
+  def money?(%{type: type} = field) do
+    constraints = Map.get(field, :constraints) || []
+
+    base_type(type) == @money_type and Ash.Type.composite?(type, constraints)
+  end
+
+  def money?(_field), do: false
+
+  defp base_type({:array, _type}), do: nil
+
+  defp base_type(type) do
+    type = Ash.Type.get_type(type)
+
+    if Ash.Type.NewType.new_type?(type),
+      do: base_type(Ash.Type.NewType.subtype_of(type)),
+      else: type
+  end
 
   @doc """
   The fields a row can name on `resource`, as `FilterField`s, by the name a
@@ -418,6 +475,41 @@ defmodule AshQuick.LiveView.CustomFilter do
       {:ok, value} -> cast_values(rest, field, [value | cast])
       error -> error
     end
+  end
+
+  @doc """
+  `filter` with each row comparing a `Money`, among `fields`, holding its
+  value with its currency, `USD 10` for `10`: a bare amount is in the field's
+  default currency, or with none, the one ex_money reads from Localize's
+  locale, which a host may set per reader, USD for one and EGP for another.
+  Held with its currency, the row reads the same for everyone its link
+  reaches, and its chip says which. A value that will not cast is left as
+  typed.
+  """
+  def with_currencies(filter, fields) do
+    money =
+      for %FilterField{name: name, field: field} <- fields,
+          money?(field),
+          into: %{},
+          do: {name, field}
+
+    filter
+    |> applied_leaves()
+    |> Enum.reduce(filter, fn %__MODULE__{
+                                uuid: uuid,
+                                field_name: name,
+                                operator: operator,
+                                value: value
+                              },
+                              filter ->
+      with %{} = field <- money[name],
+           true <- operator in @money_operators,
+           {:ok, %{currency: currency, amount: amount}} <- cast_value(field, value) do
+        update_filter(filter, uuid, :value, "#{currency} #{Decimal.to_string(amount, :normal)}")
+      else
+        _ -> filter
+      end
+    end)
   end
 
   @doc """
@@ -525,6 +617,31 @@ defmodule AshQuick.LiveView.CustomFilter do
     at(field_name, %{"string_#{operator}" => value})
   end
 
+  # A `Money` compares by its amount, and only with one in the same currency:
+  # AshMoney's own comparison of two in different currencies raises, on
+  # Postgres for any row the list holds in another, so it is never asked.
+  # `EUR 10` is a `Money` in euros. The form holds each row with its
+  # currency, `with_currencies/2`; a bare `10`, which only a link typed by
+  # hand carries, is cast as its form input casts it: in the field's default
+  # currency, or with none, that of Localize's locale. A value that will not
+  # cast is compared as written, and the read refuses it, with the
+  # refused-filter flash, as it does any value its field's type cannot cast.
+  defp build(
+         %__MODULE__{field_name: field_name, operator: operator, value: value},
+         _timezone,
+         fields
+       )
+       when is_binary(field_name) and operator in @money_operators and not is_nil(value) and
+              value != "" and not is_list(value) do
+    with %FilterField{field: field} <- fields[field_name],
+         true <- money?(field),
+         {:ok, %{currency: currency, amount: amount}} <- cast_value(field, value) do
+      on(field_name, fn _name -> money(field.name, operator, to_string(currency), amount) end)
+    else
+      _ -> at(field_name, %{operator => value})
+    end
+  end
+
   defp build(
          %__MODULE__{field_name: field_name, operator: operator, value: value},
          _timezone,
@@ -564,6 +681,26 @@ defmodule AshQuick.LiveView.CustomFilter do
         end
     end
   end
+
+  # A `Money` field's amount compared with `amount`, on a row holding one in
+  # `currency`. The currency is read as a string: the data layer holds a code,
+  # and Ash, reading a `Money` itself, the atom it names. Not Equal keeps a
+  # row in another currency, whose amount is not the one named.
+  defp money(name, "not_equals", currency, amount),
+    do: expr(not (^money(name, "equals", currency, amount)))
+
+  defp money(name, operator, currency, amount) do
+    expr(
+      type(get_path(^ref(name), [:currency]), :string) == ^currency and
+        ^amount(expr(get_path(^ref(name), [:amount])), operator, amount)
+    )
+  end
+
+  defp amount(held, "equals", amount), do: expr(^held == ^amount)
+  defp amount(held, "gt", amount), do: expr(^held > ^amount)
+  defp amount(held, "gte", amount), do: expr(^held >= ^amount)
+  defp amount(held, "lt", amount), do: expr(^held < ^amount)
+  defp amount(held, "lte", amount), do: expr(^held <= ^amount)
 
   # Whether a field has no value: `nil`, or the empty value its type also
   # reads as empty with, when it has one.

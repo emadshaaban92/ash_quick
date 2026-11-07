@@ -40,6 +40,35 @@ defmodule AshQuick.LiveView.CustomFilterTest do
     end
   end
 
+  describe "filterable_fields/2" do
+    alias AshQuick.Test.Filter.Ledger
+
+    defp offered(resource, names \\ nil),
+      do: resource |> CustomFilter.filterable_fields(names) |> Enum.map(& &1.spec)
+
+    # Ash refuses it under an `or` or a `not`, or named twice, and a row of
+    # the form can be any of those.
+    test "leave out a field Ash filters by simple equality only" do
+      refute :reference in offered(Ledger)
+      refute :reference in offered(Ledger, [:name, :reference])
+      refute CustomFilter.filterable_field?(Ledger, :reference)
+    end
+
+    test "leave out a field that is not filterable" do
+      refute :note in offered(Ledger)
+    end
+
+    # On a data layer that filters in SQL, the read would raise.
+    test "leave out a calculation computed in Elixir only" do
+      refute :shouted in offered(Ledger)
+      refute CustomFilter.filterable_field?(Ledger, :shouted)
+    end
+
+    test "keep an expression calculation and the plain fields" do
+      assert offered(Ledger) == [:id, :name, :whispered]
+    end
+  end
+
   describe "reject_fields/2" do
     test "drops the rows naming a field, in nested groups too" do
       filter = group([row("salary"), row("code"), group([row("salary"), row("name")])])
