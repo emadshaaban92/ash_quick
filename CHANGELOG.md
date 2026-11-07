@@ -4,6 +4,25 @@
 
 ### Features
 
+- **Files can live on the server's own disk.** `AshQuick.Storage.Local`
+  is a storage module that writes attachments and exports under a configured
+  `:root` and serves them through `AshQuick.Storage.Local.Plug`, which the
+  host forwards to at `:at` (`/ash_quick/files` by default). Browser uploads
+  come over the LiveView socket, so it needs no bucket, CORS or CSP change.
+  A `public/*` file is served by its path; any other file needs the
+  `Phoenix.Token` on its link, which names that one key and expires as a
+  presigned URL does. An export's link also carries its filename. Every
+  response is `nosniff` and sandboxed, and HTML, SVG and other types a
+  browser would run are sent as downloads. Range requests and `etag`s come
+  from `Plug.Static`. A key that could reach outside `:root`, or that holds
+  a `:`, is refused on write and read. It suits one node, or several sharing a volume the host
+  backs up. A host module written with `use AshQuick.Storage.Local` gets the
+  three seam callbacks delegated, overridable, and adds the lifecycle ones.
+  `mix ash_quick.check` reports `:unserved_local_storage` when the router
+  does not route `:at` to the plug, and `:piped_local_storage` when it does so
+  inside a pipeline. Nothing deletes files, so a host clears `exports/`
+  itself.
+
 - **A list is filtered by a Money column.** The filter form offers an
   AshMoney `:money` field stored as its default `money_with_currency`, with
   =, !=, >, >=, < and <=, and compares its amount with one in the same

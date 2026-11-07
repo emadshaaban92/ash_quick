@@ -29,6 +29,13 @@ config :phoenix_test, :endpoint, ExampleWeb.Endpoint
 # would have downloaded are readable from a test.
 config :ex_aws, :http_client, Example.Test.S3Stub
 
+# Only the cases that swap `:storage` to `AshQuick.Storage.Local` write here;
+# the router forwards `/test/files` to its plug.
+config :ash_quick, AshQuick.Storage.Local,
+  root: Path.join(System.tmp_dir!(), "ash_quick_example_local_storage"),
+  endpoint: ExampleWeb.Endpoint,
+  at: "/test/files"
+
 # `ExampleWeb.Router` serves pages over `test/support` resources only when
 # this is set, the way `:dev_routes` gates the dashboard.
 config :example, test_routes: true

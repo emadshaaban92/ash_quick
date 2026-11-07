@@ -1,42 +1,35 @@
 defmodule Example.Test.SocketStore do
   @moduledoc """
-  A storage module with no `upload_target/2`, so browser uploads come over the
-  LiveView socket and are stored with `put_file/3` (`AshQuick.Storage`,
-  "Browser uploads").
+  `use AshQuick.Storage.Local`, which has no `upload_target/2`, so browser uploads
+  come over the LiveView socket and are stored with `put_file/3`
+  (`AshQuick.Storage`, "Browser uploads").
 
-  It keeps objects on local disk under `root/0`. A key holding `refuse` is
-  refused, so a test can show what a person is told when the store says no.
-  Only `ExampleWeb.SocketUploadScenarioTest` points `:storage` here, and it runs
-  synchronously because the setting is global.
+  A key holding `refuse` is refused, so a test can show what a person is told
+  when the store says no. Only `ExampleWeb.SocketUploadScenarioTest` points
+  `:storage` here, and it runs synchronously because the setting is global.
   """
-  @behaviour AshQuick.Storage
+  use AshQuick.Storage.Local
 
-  @doc "Where the objects are written."
-  def root, do: Path.join(System.tmp_dir!(), "ash_quick_socket_store")
+  alias AshQuick.Storage.Local
+
+  @doc "Where the objects are written: `AshQuick.Storage.Local`'s `:root`."
+  def root, do: Application.fetch_env!(:ash_quick, Local)[:root]
 
   @doc "The bytes stored at `key`, or `nil`."
   def read(key) do
-    case File.read(Path.join(root(), key)) do
-      {:ok, bytes} -> bytes
+    with {:ok, path} <- Local.file_path(key),
+         {:ok, bytes} <- File.read(path) do
+      bytes
+    else
       {:error, _reason} -> nil
     end
   end
 
   @impl true
-  def url(key, _opts), do: "/socket-store/" <> key
-
-  @impl true
-  def download_url(key, opts), do: "/socket-store/#{key}?filename=#{opts[:filename]}"
-
-  @impl true
-  def put_file(key, path, _opts) do
-    if key =~ "refuse" do
-      {:error, :refused}
-    else
-      destination = Path.join(root(), key)
-      File.mkdir_p!(Path.dirname(destination))
-      File.cp!(path, destination)
-    end
+  def put_file(key, path, opts) do
+    if key =~ "refuse",
+      do: {:error, :refused},
+      else: Local.put_file(key, path, opts)
   end
 end
 

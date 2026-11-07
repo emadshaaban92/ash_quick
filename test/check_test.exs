@@ -241,3 +241,85 @@ defmodule AshQuick.CheckTest do
     end
   end
 end
+
+defmodule AshQuick.CheckLocalStorageTest do
+  # `AshQuick.Storage.Local` reads its `:at` from configuration, so the case
+  # runs alone while it swaps it.
+  use ExUnit.Case, async: false
+
+  alias AshQuick.Check.Storage
+  alias AshQuick.Storage.Local
+
+  defmodule ForwardingRouter do
+    use Phoenix.Router
+
+    scope "/admin" do
+      forward "/files", AshQuick.Storage.Local.Plug
+    end
+  end
+
+  defmodule BareRouter do
+    use Phoenix.Router
+  end
+
+  defmodule PipedRouter do
+    use Phoenix.Router
+
+    pipeline :browser do
+      plug :accepts, ["html"]
+    end
+
+    scope "/admin" do
+      pipe_through :browser
+      forward "/files", AshQuick.Storage.Local.Plug
+    end
+  end
+
+  defmodule WrappedStore do
+    use AshQuick.Storage.Local
+  end
+
+  setup do
+    previous = Application.get_env(:ash_quick, Local)
+    Application.put_env(:ash_quick, Local, at: "/admin/files")
+
+    on_exit(fn ->
+      if previous,
+        do: Application.put_env(:ash_quick, Local, previous),
+        else: Application.delete_env(:ash_quick, Local)
+    end)
+  end
+
+  test "a router forwarding the storage's path to its plug is not reported" do
+    assert Storage.run(ForwardingRouter, Local) == {[], []}
+  end
+
+  test "a router forwarding nothing there is a defect naming the forward to add" do
+    assert {[finding], []} = Storage.run(BareRouter, Local)
+
+    assert %{check: :unserved_local_storage, subject: "/admin/files", severity: :defect} =
+             finding
+
+    assert finding.message =~ ~s(forward "/admin/files", AshQuick.Storage.Local.Plug)
+  end
+
+  test "a forward at another path is reported" do
+    Application.put_env(:ash_quick, Local, at: "/files")
+    assert {[%{subject: "/files"}], []} = Storage.run(ForwardingRouter, Local)
+  end
+
+  test "a forward inside a pipeline is a defect" do
+    assert {[finding], []} = Storage.run(PipedRouter, Local)
+    assert %{check: :piped_local_storage, subject: "/admin/files"} = finding
+    assert finding.message =~ "[:browser]"
+  end
+
+  test "a storage module that uses Local is held to the forward too" do
+    assert {[%{check: :unserved_local_storage}], []} = Storage.run(BareRouter, WrappedStore)
+    assert Storage.run(ForwardingRouter, WrappedStore) == {[], []}
+  end
+
+  test "another storage module is not asked about" do
+    assert Storage.run(BareRouter, AshQuick.Storage.S3) == {[], []}
+  end
+end
