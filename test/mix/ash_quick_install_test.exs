@@ -611,12 +611,40 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
       igniter = install(%{"assets/js/app.js" => @app_js})
 
       assert_has_patch(igniter, "assets/js/app.js", """
-      + |import { hooks as ashQuickHooks } from "phoenix-colocated/ash_quick"
+      + |import { hooks as ashQuickHooks, uploaders as ashQuickUploaders } from "phoenix-colocated/ash_quick"
       """)
 
       assert_has_patch(igniter, "assets/js/app.js", """
       - |  hooks: {...colocatedHooks},
+      + |  uploaders: {...ashQuickUploaders},
       + |  hooks: {...ashQuickHooks, ...colocatedHooks},
+      """)
+    end
+
+    # The `S3` client uploader an external upload names comes from the same
+    # bundle; a host's own uploaders keep their place beside it.
+    test "adds the library's uploaders to the host's own" do
+      app_js = """
+      import {Socket} from "phoenix"
+      import {LiveSocket} from "phoenix_live_view"
+
+      const liveSocket = new LiveSocket("/live", Socket, {
+        uploaders: {Mine},
+        hooks: {},
+      })
+      """
+
+      igniter = install(%{"assets/js/app.js" => app_js})
+
+      assert_content_equals(igniter, "assets/js/app.js", """
+      import {Socket} from "phoenix"
+      import {LiveSocket} from "phoenix_live_view"
+      import { hooks as ashQuickHooks, uploaders as ashQuickUploaders } from "phoenix-colocated/ash_quick"
+
+      const liveSocket = new LiveSocket("/live", Socket, {
+        uploaders: {...ashQuickUploaders, Mine},
+        hooks: {...ashQuickHooks, },
+      })
       """)
     end
 
@@ -645,9 +673,10 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
         browserSessionParams,
         initBrowserSession,
       } from "../../deps/ash_quick/assets/js/browser_session" // the tab's id
-      import { hooks as ashQuickHooks } from "phoenix-colocated/ash_quick"
+      import { hooks as ashQuickHooks, uploaders as ashQuickUploaders } from "phoenix-colocated/ash_quick"
 
       const liveSocket = new LiveSocket("/live", Socket, {
+        uploaders: {...ashQuickUploaders},
         hooks: {...ashQuickHooks, },
       })
       """)

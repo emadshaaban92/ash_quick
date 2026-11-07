@@ -477,6 +477,35 @@ defmodule AshQuick.LiveView.Components.FormView do
         id={@phx_field.id}
         class="file-input w-full"
       />
+      <%!-- The client uploader `AshQuick.Storage.S3.upload_target/2` names: a
+      `PUT` of the file to the presigned URL. Bundled into the host's app.js
+      from `phoenix-colocated/ash_quick` as `uploaders.S3`, so a strict CSP
+      lets it run. It renders nothing here. --%>
+      <script :type={Phoenix.LiveView.ColocatedJS} name="S3" key="uploaders">
+        export default function (entries, onViewError) {
+          entries.forEach(entry => {
+            const xhr = new XMLHttpRequest()
+            onViewError(() => xhr.abort())
+
+            xhr.onload = () =>
+              xhr.status >= 200 && xhr.status < 300 ? entry.progress(100) : entry.error()
+            xhr.onerror = () => entry.error()
+
+            // 100 is reported once S3 has answered, not when the last byte left.
+            xhr.upload.addEventListener("progress", event => {
+              if (!event.lengthComputable) return
+              const percent = Math.round((event.loaded / event.total) * 100)
+              if (percent < 100) entry.progress(percent)
+            })
+
+            // The browser sets Content-Length from the body, which is what the
+            // signed header is checked against.
+            xhr.open("PUT", entry.meta.url, true)
+            if (entry.file.type) xhr.setRequestHeader("Content-Type", entry.file.type)
+            xhr.send(entry.file)
+          })
+        }
+      </script>
       <%!-- Carries an existing attachment across a validate round trip, as the JSON
       the type casts back. A bare input: the field's errors render once, below. --%>
       <input

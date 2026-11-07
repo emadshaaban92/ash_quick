@@ -7,10 +7,12 @@ defmodule AshQuick.Storage do
   contract" below). Callers don't pass constraints; the key already
   says everything we need.
 
-    * `public/...`  → deterministic HTTPS URL pointing at the bucket.
-                      Anonymous reads succeed via the bucket policy.
-    * `private/...` → ExAws-signed `GET` URL with a short TTL.
-    * any other prefix → presigned `GET` URL (treated as private).
+    * `public/...`  → the storage module is asked for a `:public` URL. For
+                      `AshQuick.Storage.S3` that is a deterministic HTTPS URL
+                      pointing at the bucket, read anonymously through the
+                      bucket policy.
+    * any other prefix → it is asked for a `:private` URL: a short-lived,
+                      signed one (S3: a presigned `GET`).
 
   ## Bucket policy contract
 
@@ -33,7 +35,7 @@ defmodule AshQuick.Storage do
       signed URLs minted here succeed.
 
   Bucket-policy-only access control is intentional: per-object ACLs are
-  not used. `presigned_put_url/2` never sets an ACL, and the upload
+  not used. `AshQuick.Storage.S3` never sets an ACL, and the upload
   pipeline picks the key prefix from the field's `:visibility`
   constraint. The path is the single source of truth — `public/...`
   is public, everything else is private. Per-object ACLs are deprecated
@@ -81,11 +83,18 @@ defmodule AshQuick.Storage do
 
   ## The storage seam
 
-  Everything that needs a bucket, a host or credentials is a callback:
-  `public_url/1`, `presigned_put_url/2`, `presigned_get_url/2` and
-  `upload/3`. What stays here is the part that reads a key rather than a
-  bucket — which prefix is public, and whether the host is still holding
-  the object.
+  Everything that needs a bucket, a host or credentials is a callback, worded
+  as what AshQuick wants done rather than as one store's operations:
+
+    * `c:url/2` — a URL a page can render an object from.
+    * `c:download_url/2` — a URL that downloads an object under a filename.
+    * `c:put_file/3` — store a file the server holds (an export, say).
+    * `c:upload_target/2` — where a browser sends a picked file. Optional:
+      a storage module without it receives uploads through the LiveView
+      socket, and AshQuick writes each one with `c:put_file/3`.
+
+  What stays here is the part that reads a key rather than a bucket — which
+  prefix is public, and whether the host is still holding the object.
 
   The default implementation is `AshQuick.Storage.S3` (plain ExAws, bucket
   from `AshQuick.Config.s3_bucket/0`). A host that already owns an
@@ -93,6 +102,31 @@ defmodule AshQuick.Storage do
   both:
 
       config :ash_quick, storage: MyApp.Uploads.ObjectStore
+
+  ## Browser uploads
+
+  A picked file goes one of two ways, chosen by whether the storage module
+  exports `c:upload_target/2`:
+
+    * **External.** The browser writes the bytes straight to the store.
+      `c:upload_target/2` returns the name of a LiveView client uploader and
+      the metadata it needs; AshQuick ships one, `S3`, as colocated JS that
+      the host registers on its `LiveSocket`:
+
+          import { hooks as ashQuickHooks, uploaders as ashQuickUploaders }
+            from "phoenix-colocated/ash_quick"
+
+          let liveSocket = new LiveSocket("/live", Socket, {
+            hooks: {...ashQuickHooks},
+            uploaders: {...ashQuickUploaders}
+          })
+
+    * **Socket.** Without `c:upload_target/2` the bytes travel over the
+      LiveView socket to the server, and AshQuick hands the finished file to
+      `c:put_file/3` once the entry completes. Nothing needs registering in
+      the browser. `c:put_file/3` runs in the LiveView process, so the page
+      waits on the store while it writes. A file the store refuses is left
+      off the form, and the page flashes that it was not uploaded.
 
   ## Object lifecycle
 
@@ -116,7 +150,8 @@ defmodule AshQuick.Storage do
   end up for `url_for/2` to resolve it — and answers with the key the bytes
   should actually be written to. A host that holds objects somewhere else
   first (a quarantine prefix, a staging bucket) says so here, and AshQuick
-  signs the PUT for whatever it is handed. Nothing in AshQuick has to learn
+  writes the bytes to whatever it is handed: `c:upload_target/2` is asked
+  for that key, and so is `c:put_file/3`. Nothing in AshQuick has to learn
   the layout, and the record it saves keeps pointing at the serving key
   throughout.
 
@@ -157,56 +192,75 @@ defmodule AshQuick.Storage do
   """
   @type resolution :: {:ok, String.t()} | :processing | :rejected
 
-  @doc """
-  The anonymous-read URL for a `public/*` key. No signing — the bucket
-  policy is what makes the read succeed.
+  @typedoc """
+  Where a browser sends a picked file: the name of a LiveView client uploader
+  registered on the host's `LiveSocket`, and the metadata that uploader reads
+  (`entry.meta` in the browser). AshQuick adds `:key` and `:serving_key` to it.
   """
-  @callback public_url(key :: String.t()) :: String.t()
+  @type upload_target :: {:external, uploader :: String.t(), meta :: map()}
 
   @doc """
-  A presigned `PUT` URL for uploading to `key`.
+  A URL a page renders `key` from.
 
   Options:
 
-    * `:content_type` — travels as a signed query parameter, which keeps
-      the value tamper-proof but binds nothing: S3 ignores query
-      parameters it does not recognise, so the stored type is whatever
-      `Content-Type` header the uploader chooses to send.
-    * `:content_length` — signed as a **header**, so it appears in
-      `X-Amz-SignedHeaders` and the value is part of the canonical
-      request. A `PUT` whose body is a different length sends a
-      different `Content-Length` and fails signature validation, which
-      is what makes the size cap a server-side one. Signing it as a
-      query parameter instead would bind nothing, for the reason above.
-    * `:expires_in` — TTL in seconds. Defaults to
+    * `:visibility` — `:public` for a `public/*` key, `:private` for any
+      other. A `:public` URL may be permanent and unauthenticated; a
+      `:private` one has to stop working after `:expires_in`.
+    * `:expires_in` — TTL in seconds for a `:private` URL. Defaults to
       `#{@default_ttl_seconds}` (1 hour).
   """
-  @callback presigned_put_url(key :: String.t(), opts :: keyword()) :: String.t()
+  @callback url(key(), opts :: keyword()) :: String.t()
 
   @doc """
-  A presigned `GET` URL for an arbitrary key.
+  A URL that downloads `key` as a file named `:filename`, rather than showing
+  it in the browser. Exports are handed out through it.
 
   Options:
 
+    * `:filename` — the name the browser saves the file under. Required.
     * `:expires_in` — TTL in seconds. Defaults to `#{@default_ttl_seconds}`.
-    * `:query_params` — extra signed query params, e.g.
-      `[{"response-content-disposition", ~s(attachment; filename="x.csv")}]`
-      to force a download with a chosen filename.
   """
-  @callback presigned_get_url(key :: String.t(), opts :: keyword()) :: String.t()
+  @callback download_url(key(), opts :: keyword()) :: String.t()
 
   @doc """
-  Streams a local file up to `key` (server-side `PUT`), for an object the
-  host generated rather than one a browser uploaded. Opts: `:content_type`.
+  Stores the local file at `path` under `key`. Used for an object the server
+  holds: a generated export, or a browser upload that arrived over the socket
+  (see "Browser uploads" above).
+
+  Options:
+
+    * `:content_type` — the object's media type, when known.
   """
-  @callback upload(key :: String.t(), path :: Path.t(), opts :: keyword()) ::
-              :ok | {:error, term()}
+  @callback put_file(key(), path :: Path.t(), opts :: keyword()) :: :ok | {:error, term()}
+
+  @doc """
+  Where the browser writes a picked file destined for `key`. See "Browser
+  uploads" above.
+
+  Called once per picked file, after `c:object_arriving/2`, with the key that
+  answered. The target has to bind what AshQuick was told about the file, so
+  a browser cannot store something else under the key:
+
+    * `:content_type` — the type the browser declared.
+    * `:content_length` — the size the browser declared, in bytes.
+      `max_file_size` on `allow_upload/3` only bounds what the browser
+      offers, so this is the server-side size cap: the store must refuse a
+      body of any other length. `AshQuick.Storage.S3` signs it as a header,
+      which makes a differently sized `PUT` fail signature validation.
+    * `:expires_in` — how long the target may be used, in seconds.
+
+  Optional; left out, uploads come over the LiveView socket and are stored
+  with `c:put_file/3`.
+  """
+  @callback upload_target(key(), opts :: keyword()) :: upload_target()
 
   @doc """
   An object is arriving at `serving_key`. Returns the key to write the bytes to.
 
-  Called once per object, before the bytes are written — at presign time for a
-  browser upload, immediately before the PUT for a server-side one. This is the
+  Called once per object, before the bytes are written: when the file is picked
+  for an external browser upload, and immediately before `c:put_file/3` for an
+  upload that came over the socket. This is the
   host's chance to record the object, and to say where it wants the bytes. A
   host that would rather not work on an object until something references it can
   wait for `c:object_referenced/4` — a picked file is not a saved one.
@@ -273,7 +327,8 @@ defmodule AshQuick.Storage do
   @callback object_referenced(keys :: [key()], resource :: module(), resource_id :: term()) ::
               :ok | {:error, term()}
 
-  @optional_callbacks object_arriving: 2,
+  @optional_callbacks upload_target: 2,
+                      object_arriving: 2,
                       object_states: 2,
                       object_states: 1,
                       object_referenced: 4,
@@ -295,8 +350,8 @@ defmodule AshQuick.Storage do
       default) exists today; anything else raises. The argument is here
       so a host that later derives renditions has somewhere to ask for
       one without every call site changing shape.
-    * `:expires_in` — TTL in seconds for signed URLs. Defaults to
-      `#{@default_ttl_seconds}` (1 hour). Ignored for `public/*` keys.
+    * `:expires_in` — TTL in seconds for a private URL. Defaults to
+      `#{@default_ttl_seconds}` (1 hour). See `c:url/2`.
   """
   @spec url_for(Value.t(), keyword()) :: resolution()
   def url_for(value, opts \\ [])
@@ -391,36 +446,48 @@ defmodule AshQuick.Storage do
           "unknown attachment variant #{inspect(variant)}; only :original is served today"
   end
 
-  defp serving_url(%Value{key: "public/" <> _ = key}, _opts), do: impl().public_url(key)
+  defp serving_url(%Value{key: key}, opts) do
+    impl().url(key, [visibility: visibility(key)] ++ Keyword.take(opts, [:expires_in]))
+  end
 
-  defp serving_url(%Value{key: key}, opts),
-    do: presigned_get_url(key, Keyword.take(opts, [:expires_in]))
-
-  @doc """
-  Returns a presigned `PUT` URL for uploading to the given key. Used by
-  the upload pipeline; centralized here so the same hostname / signing
-  conventions as `url_for/2` apply. See the `c:presigned_put_url/2`
-  callback for the options.
-  """
-  def presigned_put_url(key, opts \\ []) when is_binary(key),
-    do: impl().presigned_put_url(key, opts)
+  # Anchored, so a `public/` nested under another prefix (a quarantine, say)
+  # is private.
+  defp visibility("public/" <> _rest), do: :public
+  defp visibility(_key), do: :private
 
   @doc """
-  Returns a presigned `GET` URL for an arbitrary key. Use this for
-  server-generated objects (e.g. a report uploaded with `upload/3`) where
-  there is no `Value` struct to hand to `url_for/2`. See the
-  `c:presigned_get_url/2` callback for the options.
+  How the configured storage module takes browser uploads: `:external` when it
+  exports `c:upload_target/2`, `:socket` when it does not.
   """
-  def presigned_get_url(key, opts \\ []) when is_binary(key),
-    do: impl().presigned_get_url(key, opts)
+  @spec upload_mode() :: :external | :socket
+  def upload_mode do
+    impl = impl()
+
+    if Code.ensure_loaded?(impl) and function_exported?(impl, :upload_target, 2),
+      do: :external,
+      else: :socket
+  end
+
+  @doc "See `c:upload_target/2`."
+  @spec upload_target(key(), keyword()) :: upload_target()
+  def upload_target(key, opts \\ []) when is_binary(key), do: impl().upload_target(key, opts)
 
   @doc """
-  Streams a local file up to `key` (server-side `PUT`). The caller already
-  holds the bytes — use this when the object is generated server-side
-  rather than uploaded by the browser via `presigned_put_url/2`.
+  A download URL for an arbitrary key — a server-generated object such as an
+  export, which has no `Value` to hand to `url_for/2`. See `c:download_url/2`.
   """
-  def upload(key, path, opts \\ []) when is_binary(key) and is_binary(path),
-    do: impl().upload(key, path, opts)
+  @spec download_url(key(), keyword()) :: String.t()
+  def download_url(key, opts) when is_binary(key) do
+    case Keyword.get(opts, :filename) do
+      filename when is_binary(filename) and filename != "" -> impl().download_url(key, opts)
+      _missing -> raise ArgumentError, "download_url/2 needs a :filename to download as"
+    end
+  end
+
+  @doc "See `c:put_file/3`."
+  @spec put_file(key(), Path.t(), keyword()) :: :ok | {:error, term()}
+  def put_file(key, path, opts \\ []) when is_binary(key) and is_binary(path),
+    do: impl().put_file(key, path, opts)
 
   @doc "See `c:object_arriving/2`. The passthrough answer is `serving_key` itself."
   def object_arriving(serving_key, opts \\ []),
@@ -474,49 +541,44 @@ defmodule AshQuick.Storage do
     The default `AshQuick.Storage` implementation: plain ExAws against
     `AshQuick.Config.s3_bucket/0` and `AshQuick.Config.s3_host/0`.
 
-    Each callback has a head that takes the bucket explicitly. They are for
-    a host whose own object-store seam owns the bucket: it points
-    `:storage` at itself and calls these with its own bucket, so signing
-    and key encoding are stated once rather than restated per host.
+    Browser uploads are external: `upload_target/2` hands the browser a
+    presigned `PUT` for the `S3` client uploader AshQuick ships (see "Browser
+    uploads" in `AshQuick.Storage`).
+
+    Every callback also takes `:bucket` and `:host` in its opts, over the
+    configured ones. They are for a host whose own object-store seam owns the
+    bucket: it points `:storage` at itself and delegates here with its own
+    bucket, so signing and key encoding are stated once rather than restated
+    per host:
+
+        def url(key, opts), do: AshQuick.Storage.S3.url(key, [bucket: "mine"] ++ opts)
     """
     @behaviour AshQuick.Storage
 
     @default_ttl_seconds 3600
 
     @impl true
-    def public_url(key), do: public_url(bucket(), AshQuick.Config.s3_host(), key)
-
-    @doc "`c:AshQuick.Storage.public_url/1` against an explicit bucket and host."
-    def public_url(bucket, host, key), do: "https://#{bucket}.#{host}/#{encode_key(key)}"
+    def url(key, opts) do
+      case Keyword.get(opts, :visibility, :private) do
+        :public -> public_url(key, opts)
+        :private -> presigned_get_url(key, opts)
+      end
+    end
 
     @impl true
-    def presigned_put_url(key, opts), do: presigned_put_url(bucket(), key, opts)
+    def download_url(key, opts) do
+      filename = Keyword.fetch!(opts, :filename)
 
-    @doc "`c:AshQuick.Storage.presigned_put_url/2` against an explicit bucket."
-    def presigned_put_url(bucket, key, opts) do
-      presigned_url(bucket, :put, key,
-        expires_in: ttl(opts),
-        query_params: maybe_param([], "Content-Type", Keyword.get(opts, :content_type)),
-        headers: maybe_param([], "content-length", Keyword.get(opts, :content_length))
+      presigned_get_url(
+        key,
+        Keyword.put(opts, :query_params, [
+          {"response-content-disposition", content_disposition(filename)}
+        ])
       )
     end
 
     @impl true
-    def presigned_get_url(key, opts), do: presigned_get_url(bucket(), key, opts)
-
-    @doc "`c:AshQuick.Storage.presigned_get_url/2` against an explicit bucket."
-    def presigned_get_url(bucket, key, opts) do
-      presigned_url(bucket, :get, key,
-        expires_in: ttl(opts),
-        query_params: Keyword.get(opts, :query_params, [])
-      )
-    end
-
-    @impl true
-    def upload(key, path, opts), do: upload(bucket(), key, path, opts)
-
-    @doc "`c:AshQuick.Storage.upload/3` against an explicit bucket."
-    def upload(bucket, key, path, opts) do
+    def put_file(key, path, opts) do
       s3_opts =
         case Keyword.get(opts, :content_type) do
           nil -> []
@@ -525,7 +587,7 @@ defmodule AshQuick.Storage do
 
       path
       |> ExAws.S3.Upload.stream_file()
-      |> ExAws.S3.upload(bucket, key, s3_opts)
+      |> ExAws.S3.upload(bucket(opts), key, s3_opts)
       |> ExAws.request()
       |> case do
         {:ok, _} -> :ok
@@ -533,12 +595,70 @@ defmodule AshQuick.Storage do
       end
     end
 
-    defp bucket, do: AshQuick.Config.s3_bucket()
+    @doc """
+    A presigned `PUT` for the `S3` client uploader.
+
+    `:content_type` travels as a signed query parameter, which keeps the value
+    tamper-proof but binds nothing: S3 ignores query parameters it does not
+    recognise, so the stored type is the `Content-Type` header the uploader
+    sends. `:content_length` is signed as a **header**, so it appears in
+    `X-Amz-SignedHeaders` and the value is part of the canonical request. A
+    `PUT` whose body is a different length sends a different `Content-Length`
+    and fails signature validation, which is what makes the size cap a
+    server-side one. Signing it as a query parameter instead would bind
+    nothing, for the reason above.
+    """
+    @impl true
+    def upload_target(key, opts) do
+      url =
+        presigned_url(bucket(opts), :put, key,
+          expires_in: ttl(opts),
+          query_params: maybe_param([], "Content-Type", Keyword.get(opts, :content_type)),
+          headers: maybe_param([], "content-length", Keyword.get(opts, :content_length))
+        )
+
+      {:external, "S3", %{url: url}}
+    end
+
+    @doc """
+    The anonymous-read URL for `key`. No signing: the bucket policy is what
+    makes the read succeed. Opts: `:bucket`, `:host`.
+    """
+    def public_url(key, opts \\ []) do
+      host = Keyword.get_lazy(opts, :host, &AshQuick.Config.s3_host/0)
+      "https://#{bucket(opts)}.#{host}/#{encode_key(key)}"
+    end
+
+    @doc """
+    A presigned `GET` for `key`. Opts: `:bucket`, `:expires_in`, and
+    `:query_params`, extra signed query params such as
+    `response-content-disposition`.
+    """
+    def presigned_get_url(key, opts \\ []) do
+      presigned_url(bucket(opts), :get, key,
+        expires_in: ttl(opts),
+        query_params: Keyword.get(opts, :query_params, [])
+      )
+    end
+
+    defp bucket(opts), do: Keyword.get_lazy(opts, :bucket, &AshQuick.Config.s3_bucket/0)
 
     defp ttl(opts), do: Keyword.get(opts, :expires_in, @default_ttl_seconds)
 
     defp maybe_param(params, _name, nil), do: params
     defp maybe_param(params, name, value), do: [{name, to_string(value)} | params]
+
+    # RFC 6266: a plain-ASCII `filename` for old clients, with quotes and
+    # backslashes dropped so it cannot end the quoted string early, and the
+    # exact name in `filename*` for every client that reads it.
+    defp content_disposition(filename) do
+      fallback =
+        filename
+        |> String.replace(~r/[^\x20-\x7E]|["\\]/u, "_")
+
+      encoded = URI.encode(filename, &URI.char_unreserved?/1)
+      ~s(attachment; filename="#{fallback}"; filename*=UTF-8''#{encoded})
+    end
 
     defp encode_key(key) do
       key

@@ -1049,6 +1049,13 @@ covers wiring them up.
   `actor_id`, `real_actor_id`, `ip`, `tenant`, and optionally a `:map`
   `changes` (what each attribute was and became).
 - `AshQuick.Storage` — object storage; defaults to `AshQuick.Storage.S3`.
+  Callbacks: `url/2` (`visibility:` `:public` for a `public/*` key, else
+  `:private`, and `expires_in:`), `download_url/2` (`filename:`,
+  `expires_in:`; exports use it), `put_file/3`, and optional
+  `upload_target/2` returning `{:external, uploader, meta}`. A module without
+  `upload_target/2` takes browser uploads over the LiveView socket and stores
+  each with `put_file/3`. `AshQuick.Storage.S3` takes `bucket:` / `host:` in
+  every callback's opts, for a host module that delegates with its own bucket.
 - `AshQuick.AccessControl` — which routes a scope may navigate to. Named on the
   nav. Deliberately **not** `Ash.can?`: a filter policy allows the action and
   returns no rows, so `can?` says yes for a page that would be empty.
@@ -1072,9 +1079,11 @@ covers wiring them up.
 - `AshQuick.BrowserSessionPresence` in the supervision tree, and
   `AshQuick.LiveView.Mount` **first** in the live session's `on_mount`.
 - In `app.js`: `browserSessionParams` / `initBrowserSession` and `initLocale`
-  from `deps/ash_quick/assets/js/`, and the library's colocated hooks
-  (`import { hooks as ashQuickHooks } from "phoenix-colocated/ash_quick"`,
-  spread into the LiveSocket's `hooks`). The hooks are written under
+  from `deps/ash_quick/assets/js/`, and the library's colocated hooks and
+  uploaders (`import { hooks as ashQuickHooks, uploaders as ashQuickUploaders }
+  from "phoenix-colocated/ash_quick"`, spread into the LiveSocket's `hooks`
+  and `uploaders`; `uploaders.S3` sends a picked file to
+  `AshQuick.Storage.S3`'s presigned `PUT`). The hooks are written under
   `Mix.Project.build_path()` when AshQuick compiles, so esbuild's `NODE_PATH`
   must include it (a Phoenix 1.8 app's does) and `mix compile` must run before
   the asset build. In `app.css`: the `@source` line for the library's classes

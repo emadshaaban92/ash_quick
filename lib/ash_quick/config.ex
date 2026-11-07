@@ -35,7 +35,8 @@ defmodule AshQuick.Config do
     drawn in the locale of the `:gettext` backend, which the host sets.
 
   * `:storage` — A module implementing `AshQuick.Storage` — everything
-    that needs a bucket, a host or credentials, plus the optional lifecycle
+    that needs a bucket, a host or credentials (URLs to render and download
+    an object, storing a file, where a browser upload goes), plus the optional lifecycle
     callbacks that route an arriving upload somewhere of the host's choosing
     and withhold objects that are not servable yet. Defaults to
     `AshQuick.Storage.S3`, which implements no lifecycle: bytes go straight to

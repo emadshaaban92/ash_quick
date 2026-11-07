@@ -40,7 +40,7 @@ if Code.ensure_loaded?(Igniter) do
         build at the library's own classes.
       * Adds the `phx-submit-loading` Tailwind variant when `app.css` lacks it,
         which the action modal's spinner and lock hang on, and registers the
-        library's colocated hooks in `app.js`.
+        library's colocated hooks and its `S3` client uploader in `app.js`.
 
     The rest of `app.js` (the tab's session params, the locale, and printing)
     is stated in a notice rather than patched in, and so is writing the
@@ -101,7 +101,7 @@ if Code.ensure_loaded?(Igniter) do
     @css_source ~s|@source "../../deps/ash_quick/lib/**/*.*ex";|
     @css_submit_loading ~s|@custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);|
     @js_path "assets/js/app.js"
-    @js_hooks_import ~s|import { hooks as ashQuickHooks } from "phoenix-colocated/ash_quick"|
+    @js_hooks_import ~s|import { hooks as ashQuickHooks, uploaders as ashQuickUploaders } from "phoenix-colocated/ash_quick"|
 
     @impl Igniter.Mix.Task
     def info(_argv, _parent) do
@@ -538,7 +538,9 @@ if Code.ensure_loaded?(Igniter) do
 
     # A dependency's colocated hooks are not in the host's own colocated bundle,
     # so the host imports them by name. Without them the action modal's
-    # controls still answer the keyboard while an action runs.
+    # controls still answer the keyboard while an action runs. The `S3` client
+    # uploader comes from the same bundle: without it a picked file never
+    # leaves the browser.
     defp import_library_hooks(igniter) do
       if Igniter.exists?(igniter, @js_path) do
         Igniter.update_file(igniter, @js_path, &add_library_hooks/1)
@@ -568,8 +570,37 @@ if Code.ensure_loaded?(Igniter) do
           content =
             (head <> "\n" <> @js_hooks_import <> rest)
             |> String.replace(~r/hooks:\s*\{/, "hooks: {...ashQuickHooks, ", global: false)
+            |> add_library_uploaders()
 
           Rewrite.Source.update(source, :content, content)
+      end
+    end
+
+    # Into the host's own `uploaders: {...}` when it has one; otherwise a key of
+    # its own beside `hooks`, at the same indent.
+    defp add_library_uploaders(content) do
+      if Regex.match?(~r/uploaders:\s*\{/, content) do
+        String.replace(content, ~r/uploaders:\s*\{/, "uploaders: {...ashQuickUploaders, ",
+          global: false
+        )
+      else
+        own_line = ~r/^([ \t]*)hooks: \{\.\.\.ashQuickHooks, /m
+
+        if Regex.match?(own_line, content) do
+          String.replace(
+            content,
+            own_line,
+            "\\1uploaders: {...ashQuickUploaders},\n\\1hooks: {...ashQuickHooks, ",
+            global: false
+          )
+        else
+          String.replace(
+            content,
+            "hooks: {...ashQuickHooks, ",
+            "uploaders: {...ashQuickUploaders}, hooks: {...ashQuickHooks, ",
+            global: false
+          )
+        end
       end
     end
 
@@ -586,13 +617,15 @@ if Code.ensure_loaded?(Igniter) do
 
     defp hooks_instructions(reason) do
       """
-      #{reason}, so AshQuick's hooks are not registered. Without them the action \
-      modal's controls still answer the keyboard while an action runs. Add:
+      #{reason}, so AshQuick's hooks and uploaders are not registered. Without \
+      them the action modal's controls still answer the keyboard while an action \
+      runs, and a file picked for an attachment is never uploaded. Add:
 
           #{@js_hooks_import}
 
           let liveSocket = new LiveSocket("/live", Socket, {
-            hooks: {...ashQuickHooks}
+            hooks: {...ashQuickHooks},
+            uploaders: {...ashQuickUploaders}
           })
       """
     end
