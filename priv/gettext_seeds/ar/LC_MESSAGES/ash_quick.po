@@ -779,3 +779,8 @@ msgstr "يحتوي على أيٍّ من"
 #, elixir-autogen, elixir-format
 msgid "has any of"
 msgstr "يحتوي على أيٍّ من"
+
+#: lib/ash_quick/liveview/filter_field.ex
+#, elixir-autogen, elixir-format
+msgid "%{relationship} › %{field}"
+msgstr "%{relationship} › %{field}"

@@ -8,8 +8,8 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.CustomFilter
   alias AshQuick.LiveView.EnumOptions
+  alias AshQuick.LiveView.FilterField
   alias AshQuick.LiveView.LocalDatetime
-  alias AshQuick.LiveView.Utils
 
   @datetime_types [Ash.Type.DateTime, Ash.Type.UtcDatetimeUsec, Ash.Type.UtcDatetime]
 
@@ -18,7 +18,9 @@ defmodule AshQuick.LiveView.Components.FilterForm do
 
   attr :filterable, :list,
     default: nil,
-    doc: "the names of the fields offered, in order; `nil` for every field a filter can take"
+    doc:
+      "the fields offered, in order, as `filterable:` names them; `nil` for every field of " <>
+        "the resource's own a filter can take"
 
   attr :scope, :map, required: true
   attr :close, :any, default: nil, doc: "a path or a `JS` command Cancel runs to close the modal"
@@ -150,7 +152,9 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   end
 
   # One row: its field, operator and value, and the error under it when its
-  # value was refused. `field` is the offered field it names, or `nil`.
+  # value was refused. `field` is the offered `FilterField` it names, or `nil`.
+  # Its value is drawn by the field it reaches, and labelled by the resource
+  # holding it, which a field through a relationship is not the list's.
   defp filter_row(assigns) do
     ~H"""
     <div class="flex flex-col sm:flex-row sm:items-center gap-1">
@@ -175,8 +179,8 @@ defmodule AshQuick.LiveView.Components.FilterForm do
         </select>
         <.filter_value
           filter={@filter}
-          field={@field}
-          resource={@resource}
+          field={@field && @field.field}
+          resource={(@field && @field.resource) || @resource}
           error={@error}
           timezone={@timezone}
           myself={@myself}
@@ -419,8 +423,11 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   defp invalid_attrs(filter, _error),
     do: ["aria-invalid": "true", "aria-describedby": "value-error-#{filter.uuid}"]
 
-  # The LiveSelect a row picks its values with, by the row and its field.
-  defp picker_id(%CustomFilter{uuid: uuid, field_name: name}), do: "filter-values-#{uuid}-#{name}"
+  # The LiveSelect a row picks its values with, by the row and its field. A
+  # field through a relationship names its path with a dot, which a CSS
+  # selector would read as a class, so the id joins it with dashes instead.
+  defp picker_id(%CustomFilter{uuid: uuid, field_name: name}),
+    do: "filter-values-#{uuid}-#{String.replace(to_string(name), ".", "--")}"
 
   # The values a row holds, as its tags: a link can hold one bare value, a
   # blank or an empty list, or the same value twice.
@@ -588,7 +595,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       nil ->
         {:noreply, socket}
 
-      field ->
+      %FilterField{field: field} ->
         custom_filter =
           socket.assigns.custom_filter
           |> CustomFilter.update_filter(uuid, :field_name, field_name)
@@ -655,11 +662,11 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # The options of the row whose LiveSelect has `id`, narrowed to the labels
   # holding `search`. An id no row has now is a stale page, and is ignored.
   defp offer_values(socket, id, search) do
-    %{custom_filter: custom_filter, fields: fields, resource: resource} = socket.assigns
+    %{custom_filter: custom_filter, fields: fields} = socket.assigns
 
     with %CustomFilter{field_name: name, value: value} <-
            custom_filter |> CustomFilter.leaves() |> Enum.find(&(picker_id(&1) == id)),
-         %{} = field <- field_for(fields, name) do
+         %FilterField{field: field, resource: resource} <- field_for(fields, name) do
       {options, _labels} = value_choices(field, resource, held_values(value))
       send_update(LiveSelect.Component, id: id, options: EnumOptions.search(options, search))
     end
@@ -686,8 +693,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   defp value_errors(filter, fields, timezone) do
     for %CustomFilter{uuid: uuid, field_name: name, operator: operator, value: value} <-
           CustomFilter.applied_leaves(filter),
-        field = field_for(fields, name),
-        not is_nil(field),
+        %FilterField{field: field} <- [field_for(fields, name)],
         message = cast_error(field, operator, value, timezone),
         not is_nil(message),
         into: %{},
@@ -717,7 +723,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   end
 
   # The offered field a row names, or `nil` for one the form does not offer.
-  defp field_for(fields, name), do: Enum.find(fields, &(to_string(&1.name) == name))
+  defp field_for(fields, name), do: Enum.find(fields, &(&1.name == name))
 
   # A timestamp is typed in the zone the list shows it in, and held as the UTC
   # instant that means. See `AshQuick.LiveView.LocalDatetime`. On Day holds
@@ -725,7 +731,9 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   defp held_value(socket, uuid, value) do
     case CustomFilter.find(socket.assigns.custom_filter, uuid) do
       %CustomFilter{field_name: name, operator: operator} ->
-        field = field_for(socket.assigns.fields, name)
+        field =
+          with %FilterField{field: field} <- field_for(socket.assigns.fields, name), do: field
+
         hold(CustomFilter.value_shape(operator), field, value, socket.assigns.timezone)
 
       nil ->
@@ -766,7 +774,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
 
       socket
       |> assign(:fields, fields)
-      |> assign(:emptiable, emptiable(fields, resource, action, scope))
+      |> assign(:emptiable, emptiable(fields, action, scope))
     else
       socket
     end
@@ -776,14 +784,11 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # empty, and that the actor sees on every row. Ash reads a field as `nil`
   # where a field policy hides it, so Is Empty would keep a row whose value
   # the actor may not see as one that has none.
-  defp emptiable(fields, resource, action, scope) do
-    names = fields |> Enum.filter(&nullable?/1) |> Enum.map(& &1.name)
-
-    case action do
-      nil -> names
-      action -> Utils.visible_fields(names, resource, action, scope, filter_is: false)
-    end
-    |> MapSet.new()
+  defp emptiable(fields, action, scope) do
+    fields
+    |> Enum.filter(&emptiable?/1)
+    |> CustomFilter.visible(action, scope, filter_is: false)
+    |> MapSet.new(& &1.name)
   end
 
   # A row can name a field this form does not offer: a link written for an
@@ -791,7 +796,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # option, so it shows the field the row filters on instead of the first one
   # offered, which a browser would show and could not then be picked.
   defp field_options(fields, field_name, labels, resource) do
-    options = Enum.map(fields, &{field_label(&1.name, labels, resource), to_string(&1.name)})
+    options = Enum.map(fields, &{field_label(&1.name, labels, resource), &1.name})
 
     if is_binary(field_name) and not Enum.any?(options, &(elem(&1, 1) == field_name)),
       do: [
@@ -804,31 +809,27 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   @doc """
   What a field of `resource` is called, here and on the list's chips: its
   column's label when the list shows one, and otherwise the label the resource
-  declares for it or its humanized name.
+  declares for it or its humanized name. A field reached through a
+  relationship reads as both, "Brand › Name", whatever its column is called:
+  a column through `brand` is often labelled by the field alone, which would
+  read as one of the list's own.
   """
   def field_label(name, labels, resource \\ nil)
 
   def field_label(name, labels, resource) when is_binary(name) do
-    labels[name] || name |> known_atom() |> Labels.name(resource)
+    cond do
+      FilterField.path?(name) -> FilterField.path_label(name, resource)
+      label = labels[name] -> label
+      true -> name |> FilterField.known_atom() |> Labels.name(resource)
+    end
   end
 
   def field_label(name, labels, resource), do: field_label(to_string(name), labels, resource)
 
-  # A row's field name comes from a URL, so it is never made an atom: one the
-  # resource has is one already, and any other is drawn humanized as written.
-  defp known_atom(name) do
-    String.to_existing_atom(name)
-  rescue
-    ArgumentError -> name
-  end
-
   # A new row starts on the first field offered: no one field is one every
   # resource has, or one every actor may see.
-  defp first_leaf([field | _]),
-    do: %{
-      field_name: to_string(field.name),
-      operator: first_operator(field)
-    }
+  defp first_leaf([%FilterField{name: name, field: field} | _]),
+    do: %{field_name: name, operator: first_operator(field)}
 
   defp first_leaf([]), do: nil
 
@@ -893,10 +894,10 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # sees it on every row.
   defp field_operators(nil, _emptiable), do: []
 
-  defp field_operators(field, emptiable) do
+  defp field_operators(%FilterField{name: name, field: field}, emptiable) do
     operators = base_operators(field)
 
-    if operators != [] and field.name in emptiable,
+    if operators != [] and name in emptiable,
       do: operators ++ @emptiness,
       else: operators
   end
@@ -911,6 +912,11 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       nil -> type_operators(field)
     end
   end
+
+  # A field reached through a belongs_to that may be unset is empty on a row
+  # that has no related record, whether or not the related field can be.
+  defp emptiable?(%FilterField{relationship: %{allow_nil?: true}}), do: true
+  defp emptiable?(%FilterField{field: field}), do: nullable?(field)
 
   # A count, or whether any row exists, is never `nil`, nor is an aggregate
   # with a `default`. Another aggregate is when it finds nothing, and names no

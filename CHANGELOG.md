@@ -4,6 +4,22 @@
 
 ### Features
 
+- **A list is filtered by a related record's fields.** `list: [filterable:
+  ...]` takes a field of a related resource, one hop through a public
+  belongs_to: `filterable: [:sku, brand: :name]`, or `[brand: :name]` as one
+  entry. The form lists it as "Brand › Name" and draws its value as the
+  brand's field is drawn, labels included; its chip reads "Brand › Name
+  starts with Acme", and the URL names the row `brand.name`. The row asks
+  `exists(brand, ...)`, inside which Ash applies the brand's read policies,
+  so a product is never kept for a brand its reader may not read, and the
+  brand's field policies narrow the fields offered. Is Empty keeps a product
+  with no brand, or with one its reader may not read, as its column shows
+  either blank, whoever reads it. A list without `filterable:` offers no
+  related field; a link's row on one the list does not offer, a longer path
+  or a to-many relationship among them, is dropped before the read, with the
+  flash saying the filter couldn't be applied, and the QuickView refuses
+  such entries when it compiles.
+
 - **Any Of and Has Any Of pick their values as tags.** In the filter form, a
   row picking several values from a fixed set is a LiveSelect in tags mode,
   as a form's multi-select is, rather than a native multiple select: typing
@@ -33,10 +49,10 @@
   lists them, in the order the filter form shows them, so a large table offers
   only its indexed fields; `filterable: []` leaves the filter button out. Each
   entry is a field the form offers when the option is not given, checked when
-  the QuickView compiles; relationship paths are refused. A link's filter row
-  on any other field is dropped before the read, with the flash saying the
-  filter couldn't be applied, and the export follows the filter that is left.
-  Not given, the form offers what it did.
+  the QuickView compiles. A link's filter row on any other field is dropped
+  before the read, with the flash saying the filter couldn't be applied, and
+  the export follows the filter that is left. Not given, the form offers what
+  it did.
 
 - **A visitor with no field to filter by sees no filter button.** Field
   policies can hide every field a list's filter offers, its own

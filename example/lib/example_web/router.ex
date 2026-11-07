@@ -98,6 +98,7 @@ defmodule ExampleWeb.Router do
           {ExampleWeb.UserAuth, :assign_scope}
         ] do
         quick_view "/atomic_brands", Example.Test.AtomicBrandLive.Quick
+        quick_view "/brand_filter", Example.Test.BrandFilterLive.Quick
         quick_view "/bulk_guarded", Example.Test.BulkGuardedLive.Quick
         quick_view "/bulk_named", Example.Test.BulkNamedLive.Quick
         quick_view "/dated_entries", Example.Test.DatedEntriesLive.Quick
@@ -121,6 +122,8 @@ defmodule ExampleWeb.Router do
         quick_view "/picked_labels", Example.Test.PickedLabelsLive.Quick
         quick_view "/printable", Example.Test.PrintableLive.Quick
         quick_view "/private_create", Example.Test.PrivateCreateLive.Quick
+        quick_view "/related_filter", Example.Test.RelatedFilterLive.Quick
+        quick_view "/related_filter_default", Example.Test.RelatedFilterDefaultLive.Quick
         quick_view "/required_attachments", Example.Test.RequiredAttachmentsLive.Quick
         quick_view "/required_entries", Example.Test.RequiredEntriesLive.Quick
         quick_view "/required_picks", Example.Test.RequiredPicksLive.Quick

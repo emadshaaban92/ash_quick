@@ -135,14 +135,21 @@ defmodule AshQuick.LiveView.QuickView do
       offers when it is not given — a public, `filterable?` attribute,
       aggregate or calculation of a type it has a row for, and no belongs_to
       relationship's source attribute — though not necessarily a list
-      column; the QuickView refuses any other, and a relationship path, when
-      it compiles. Field policies still narrow it for each visitor, and a
-      visitor they leave none of it sees no filter button. Filtering by an
-      unindexed column reads the whole table, so a large one names the fields
-      it has indexes for, or `[]` for none, which leaves the filter button
-      out. A link's filter row on any other field is dropped before the read,
-      with a flash saying the filter couldn't be applied. A custom list
-      template gets the option as `@filterable`, `nil` when it is not given.
+      column, or such a field of a related resource, reached one hop through
+      a public belongs_to: `[:number, customer: :name]`, or `[customer:
+      :name]` as one entry. The form lists that one as "Customer › Name",
+      a link names it `customer.name`, and Ash applies the customer's read
+      policies to the filter. The QuickView refuses any other entry, a
+      to-many relationship or a longer path among them, when it compiles.
+      Not given, the form offers no related field. Field policies still
+      narrow it for each visitor, a related field's by its own resource's,
+      and a visitor they leave none of it sees no filter button. Filtering
+      by an unindexed column reads the whole table, so a large one names the
+      fields it has indexes for, or `[]` for none, which leaves the filter
+      button out. A link's filter row on any other field is dropped before
+      the read, with a flash saying the filter couldn't be applied. A custom
+      list template gets the option as `@filterable`, `nil` when it is not
+      given, a related field as `{relationship, field}`.
 
   ### Details options (under `:details`)
 

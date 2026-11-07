@@ -34,7 +34,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
       assign(assigns,
         filter: filter,
         chips: CustomFilter.chips(filter),
-        fields: CustomFilter.fields_by_name(assigns.resource),
+        fields: CustomFilter.fields_by_name(assigns.resource, assigns.params.filterable),
         labels: column_labels(assigns.columns)
       )
 
@@ -172,8 +172,8 @@ defmodule AshQuick.LiveView.Components.FilterChips do
           {@label}
           <.chip_value
             leaf={@leaf}
-            field={@field}
-            resource={@resource}
+            field={@field && @field.field}
+            resource={(@field && @field.resource) || @resource}
             scope={@scope}
           />
         <% else %>
@@ -201,18 +201,20 @@ defmodule AshQuick.LiveView.Components.FilterChips do
     """
   end
 
-  # "Price >", "Code starts with": the field as its column names it, or as
-  # the form does when the list shows no column for it, and its operator.
+  # "Price >", "Code starts with", "Brand › Name contains": the field as its
+  # column names it, or as the form does when the list shows no column for it
+  # or reaches it through a relationship, and its operator.
   defp leaf_label(%CustomFilter{field_name: name, operator: operator}, labels, resource),
     do:
       "#{FilterForm.field_label(name, labels, resource)} #{FilterForm.operator_phrase(operator)}"
 
   # The value reads as `FieldValue` renders one of its field, as a column with
-  # no widget of its own shows it: Yes or No, an enum's label, a timestamp in
-  # the list's zone, On Day's date as the list shows a date. A column's widget
-  # is not used: it is handed the row's record, which a chip has none of. One
-  # its field's type will not take, which only a link carries, or one on a
-  # field the resource does not have, reads as written.
+  # no widget of its own shows it, labelled by the resource holding the
+  # field: Yes or No, an enum's label, a timestamp in the list's zone, On
+  # Day's date as the list shows a date. A column's widget is not used: it is
+  # handed the row's record, which a chip has none of. One its field's type
+  # will not take, which only a link carries, or one on a field the resource
+  # does not have, reads as written.
   attr :leaf, CustomFilter, required: true
   attr :field, :any, required: true
   attr :resource, :atom, default: nil

@@ -603,6 +603,10 @@ msgstr ""
 msgid "has any of"
 msgstr ""
 
+#, elixir-format
+msgid "%{relationship} › %{field}"
+msgstr ""
+
 msgid "Accepts"
 msgstr ""
 

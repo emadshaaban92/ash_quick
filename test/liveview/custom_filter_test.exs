@@ -2,11 +2,43 @@ defmodule AshQuick.LiveView.CustomFilterTest do
   use ExUnit.Case, async: true
 
   alias AshQuick.LiveView.CustomFilter
+  alias AshQuick.LiveView.FilterField
 
   defp row(field), do: CustomFilter.new_leaf(%{field_name: field, operator: "equals"})
 
+  # The fields a row names, by name, as `CustomFilter.fields_by_name/2` gives
+  # them: only a field's type is read.
+  defp typed(types) do
+    Map.new(types, fn {name, type} ->
+      {name, %FilterField{name: name, spec: nil, field: %{type: type}, resource: nil}}
+    end)
+  end
+
   defp group(children),
     do: %CustomFilter{uuid: Ash.UUID.generate(), operator: "and", children: children}
+
+  describe "visible/4" do
+    alias AshQuick.Test.Exposure.Payslip
+
+    @actor %{id: "8d3c5f0e-2a7b-4c1d-9e6f-0b1a2c3d4e5f"}
+
+    # `amount` is hidden from everyone, whichever record it is read from.
+    test "leaves out a field hidden on every record the read reads" do
+      action = Ash.Resource.Info.action(Payslip, :index)
+      fields = CustomFilter.filterable_fields(Payslip)
+
+      assert :amount in Enum.map(fields, & &1.spec)
+      refute :amount in (fields |> CustomFilter.visible(action, @actor) |> Enum.map(& &1.spec))
+    end
+
+    # As a form drawn with no action given asks.
+    test "leaves every field in with no read to ask" do
+      fields = CustomFilter.filterable_fields(Payslip)
+
+      assert CustomFilter.visible(fields, nil, @actor) == fields
+      assert CustomFilter.visible(fields, nil, @actor, filter_is: false) == fields
+    end
+  end
 
   describe "reject_fields/2" do
     test "drops the rows naming a field, in nested groups too" do
@@ -64,7 +96,7 @@ defmodule AshQuick.LiveView.CustomFilterTest do
 
     # A string kept as typed can hold `""`, which reads as blank in the list.
     test "Is Empty on a string also keeps a blank one" do
-      fields = %{"note" => %{type: Ash.Type.String}, "salary" => %{type: Ash.Type.Integer}}
+      fields = typed(%{"note" => Ash.Type.String, "salary" => Ash.Type.Integer})
       empty = %CustomFilter{row("note") | operator: "is_nil"}
       not_empty = %CustomFilter{row("note") | operator: "is_not_nil"}
 
@@ -77,7 +109,7 @@ defmodule AshQuick.LiveView.CustomFilterTest do
              }
 
       # A type built on a string holds one too.
-      text = %{"body" => %{type: AshQuick.AshTypes.Text}}
+      text = typed(%{"body" => AshQuick.AshTypes.Text})
       body = %CustomFilter{row("body") | operator: "is_nil"}
 
       assert CustomFilter.build_ash_filter(body, fields: text) == %{
@@ -119,7 +151,7 @@ defmodule AshQuick.LiveView.CustomFilterTest do
 
     # A list with nothing in it reads as empty in the list, as `nil` does.
     test "Is Empty on a list also keeps one holding nothing" do
-      fields = %{"tags" => %{type: {:array, Ash.Type.Atom}}}
+      fields = typed(%{"tags" => {:array, Ash.Type.Atom}})
       empty = %CustomFilter{row("tags") | operator: "is_nil"}
       not_empty = %CustomFilter{row("tags") | operator: "is_not_nil"}
 
@@ -130,6 +162,40 @@ defmodule AshQuick.LiveView.CustomFilterTest do
       assert CustomFilter.build_ash_filter(not_empty, fields: fields) == %{
                "and" => [%{"tags" => %{"is_nil" => false}}, %{"tags" => %{"not_eq" => []}}]
              }
+    end
+
+    # Inside `exists`, where Ash applies the related resource's read policies
+    # to the related record alone.
+    test "asks of a field through a relationship inside exists" do
+      filter = %CustomFilter{row("owner.name") | operator: "starts_with", value: "Ad"}
+
+      assert CustomFilter.build_ash_filter(filter) ==
+               Ash.Query.Exists.new([:owner], %{"name" => %{"string_starts_with" => "Ad"}})
+
+      filter = %CustomFilter{row("owner.name") | operator: "not_contains", value: "x"}
+
+      assert CustomFilter.build_ash_filter(filter) ==
+               Ash.Query.Exists.new([:owner], %{"not" => %{"name" => %{"contains" => "x"}}})
+
+      filter = %CustomFilter{row("owner.tier") | operator: "in", value: ["gold"]}
+
+      assert CustomFilter.build_ash_filter(filter) ==
+               Ash.Query.Exists.new([:owner], %{"tier" => %{"in" => ["gold"]}})
+    end
+
+    # A row with no owner, or one its reader may not read, has an empty
+    # owner's name, as the list shows it.
+    test "Is Empty through a relationship is no related record holding a value" do
+      fields = typed(%{"owner.name" => Ash.Type.String})
+      filled = %{"and" => [%{"name" => %{"is_nil" => false}}, %{"name" => %{"not_eq" => ""}}]}
+      empty = %CustomFilter{row("owner.name") | operator: "is_nil"}
+      not_empty = %CustomFilter{row("owner.name") | operator: "is_not_nil"}
+
+      assert CustomFilter.build_ash_filter(empty, fields: fields) ==
+               %{"not" => Ash.Query.Exists.new([:owner], filled)}
+
+      assert CustomFilter.build_ash_filter(not_empty, fields: fields) ==
+               Ash.Query.Exists.new([:owner], filled)
     end
 
     test "On Day is the day's instants in the zone given" do

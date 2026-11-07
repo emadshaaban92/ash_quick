@@ -631,6 +631,10 @@ msgstr "يحتوي على أيٍّ من"
 msgid "has any of"
 msgstr "يحتوي على أيٍّ من"
 
+#, elixir-format
+msgid "%{relationship} › %{field}"
+msgstr "%{relationship} › %{field}"
+
 msgid "Accepts"
 msgstr ""
 

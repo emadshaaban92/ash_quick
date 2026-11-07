@@ -176,10 +176,13 @@ The URL is not an option here — it is declared in the router with
   a visitor whom field policies leave none of them. Not given, every public,
   `filterable?` attribute, aggregate and calculation of a type the form has a
   row for, a list of fixed-set values among them (filtered by Has Any Of), no
-  belongs_to source attribute. Field names only (no relationship
-  paths), each one the form offers, checked at compile time; need not be list
-  columns. Name the indexed ones on a large table. A link's filter row on any
-  other field is dropped, with a flash
+  belongs_to source attribute. Each one the form offers, checked at compile
+  time; need not be list columns. A field of a related resource is reached one
+  hop through a public belongs_to, `[:sku, brand: :name]` (or `[brand: :name]`
+  as one entry): shown as "Brand › Name", carried in the URL as `brand.name`,
+  read through the brand's read and field policies; no to-many or longer
+  paths, and none offered unless named. Name the indexed ones on a large
+  table. A link's filter row on any other field is dropped, with a flash
 
 ### Details options (`:details`)
 - `:fields` — Fields in the detail view

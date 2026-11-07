@@ -15,6 +15,7 @@ defmodule AshQuick.LiveView.ListUtils do
   alias AshQuick.LiveView.FormUtils
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.CustomFilter
+  alias AshQuick.LiveView.FilterField
   alias AshQuick.LiveView.DetailsUtils
   alias AshQuick.LiveView.LocalDatetime
   alias AshQuick.LiveView.Components.FilterForm
@@ -92,7 +93,7 @@ defmodule AshQuick.LiveView.ListUtils do
     )
     |> maybe_apply_base_filter(options.base_filter)
     |> maybe_apply_filters(options.filters, params.selected_filters)
-    |> maybe_apply_custom_filter(params.custom_filter, socket.assigns.scope)
+    |> maybe_apply_custom_filter(params.custom_filter, socket.assigns.scope, options)
     |> apply_sort(params, options)
     |> Utils.load_fields(options.list_fields, strict?: true)
     |> Ash.Query.load(options.load ++ options.list_load, strict?: true)
@@ -120,13 +121,13 @@ defmodule AshQuick.LiveView.ListUtils do
     |> maybe_apply_filters(filters, rest)
   end
 
-  defp maybe_apply_custom_filter(query, nil, _scope), do: query
+  defp maybe_apply_custom_filter(query, nil, _scope, _options), do: query
 
   # On Day reads its date in the reader's zone, the one the list shows
   # timestamps in.
-  defp maybe_apply_custom_filter(query, custom_filter, scope) do
+  defp maybe_apply_custom_filter(query, custom_filter, scope, options) do
     case CustomFilter.build_ash_filter(custom_filter,
-           fields: emptiness_fields(query, custom_filter),
+           fields: emptiness_fields(query, custom_filter, options),
            timezone: AshQuick.Scope.timezone(scope)
          ) do
       nil -> query
@@ -136,10 +137,10 @@ defmodule AshQuick.LiveView.ListUtils do
 
   # Only Is Empty and Is Not Empty ask a field's type, so the resource's
   # fields are looked up only for a filter holding one.
-  defp emptiness_fields(query, custom_filter) do
+  defp emptiness_fields(query, custom_filter, options) do
     if emptiness_rows(custom_filter) == [],
       do: %{},
-      else: CustomFilter.fields_by_name(query.resource)
+      else: CustomFilter.fields_by_name(query.resource, options.list_filterable)
   end
 
   defp emptiness_rows(filter),
@@ -170,7 +171,9 @@ defmodule AshQuick.LiveView.ListUtils do
   #
   # And so is a row on a field the QuickView's `filterable:` leaves out, which
   # the form does not offer either: the host named the fields this list may be
-  # filtered by, most likely the ones its table has indexes for.
+  # filtered by, most likely the ones its table has indexes for. A row through
+  # a relationship, `"brand.name"`, is dropped unless `filterable:` names it,
+  # so a link can reach no related field, nor go further, by itself.
   #
   # A root that is itself such a row, as a hand-written link can be, leaves no
   # filter at all.
@@ -179,18 +182,18 @@ defmodule AshQuick.LiveView.ListUtils do
 
   defp drop_refused_rows(socket, %URLParams{custom_filter: filter} = params, action, options) do
     scope = socket.assigns[:scope]
-    by_name = CustomFilter.fields_by_name(options.resource)
+    by_name = CustomFilter.fields_by_name(options.resource, options.list_filterable)
 
     names = CustomFilter.field_names(filter)
 
     hidden =
-      hidden_fields(names, by_name, options.resource, action, scope) ++
+      hidden_fields(names, by_name, action, scope) ++
         unoffered_fields(names, options.list_filterable)
 
     partly_hidden =
       case filter |> emptiness_rows() |> Enum.map(& &1.field_name) |> Enum.uniq() do
         [] -> []
-        names -> hidden_fields(names, by_name, options.resource, action, scope, filter_is: false)
+        names -> hidden_fields(names, by_name, action, scope, filter_is: false)
       end
 
     refused? = &refused_row?(&1, partly_hidden, by_name, scope)
@@ -217,13 +220,13 @@ defmodule AshQuick.LiveView.ListUtils do
   defp offered_fields(socket, action, %Options{} = options) do
     options.resource
     |> CustomFilter.offered_fields(options.list_filterable, action, socket.assigns[:scope])
-    |> Enum.map(& &1.name)
+    |> Enum.map(& &1.spec)
   end
 
-  defp unoffered_fields(_names, nil), do: []
+  defp unoffered_fields(names, nil), do: Enum.filter(names, &FilterField.path?/1)
 
   defp unoffered_fields(names, filterable) do
-    offered = Enum.map(filterable, &to_string/1)
+    offered = Enum.map(filterable, &FilterField.name/1)
     Enum.reject(names, &(&1 in offered))
   end
 
@@ -243,7 +246,7 @@ defmodule AshQuick.LiveView.ListUtils do
   # refuses it, so neither is refused here.
   defp list_row?(%CustomFilter{field_name: name} = row, by_name) do
     case by_name[name] do
-      %{type: {:array, _type}} -> true
+      %{field: %{type: {:array, _type}}} -> true
       nil -> true
       _field -> not CustomFilter.applied?(row)
     end
@@ -255,16 +258,19 @@ defmodule AshQuick.LiveView.ListUtils do
       LocalDatetime.day_range(value, AshQuick.Scope.timezone(scope)) == :error
   end
 
-  # Those of `names` that are fields of `resource`, `by_name`, the actor may
+  # Those of `names` that are fields a row can name, `by_name`, the actor may
   # not see: on every record, or with `filter_is: false` on some. A name that
   # is no field is left to the read, which refuses it.
-  defp hidden_fields(names, by_name, resource, action, scope, opts \\ []) do
+  defp hidden_fields(names, by_name, action, scope, opts \\ []) do
     named = Enum.filter(names, &(is_binary(&1) and Map.has_key?(by_name, &1)))
 
     visible =
-      named |> Enum.map(&by_name[&1].name) |> Utils.visible_fields(resource, action, scope, opts)
+      named
+      |> Enum.map(&by_name[&1])
+      |> CustomFilter.visible(action, scope, opts)
+      |> MapSet.new(& &1.name)
 
-    Enum.reject(named, &(by_name[&1].name in visible))
+    Enum.reject(named, &MapSet.member?(visible, &1))
   end
 
   # A custom filter is the one part of this query a visitor authors, and there
@@ -436,7 +442,7 @@ defmodule AshQuick.LiveView.ListUtils do
     )
     |> maybe_apply_base_filter(options.base_filter)
     |> maybe_apply_filters(options.filters, params.selected_filters)
-    |> maybe_apply_custom_filter(params.custom_filter, socket.assigns.scope)
+    |> maybe_apply_custom_filter(params.custom_filter, socket.assigns.scope, options)
     |> apply_sort(params, options)
   end
 
