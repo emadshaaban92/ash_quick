@@ -71,16 +71,18 @@ defmodule AshQuick.Test.Uploads.ObjectStore do
   def host, do: "s3.host.invalid"
 
   @impl true
-  def public_url(key), do: AshQuick.Storage.S3.public_url(bucket(), host(), key)
+  def url(key, opts), do: AshQuick.Storage.S3.url(key, s3(opts))
 
   @impl true
-  def presigned_put_url(key, opts), do: AshQuick.Storage.S3.presigned_put_url(bucket(), key, opts)
+  def download_url(key, opts), do: AshQuick.Storage.S3.download_url(key, s3(opts))
 
   @impl true
-  def presigned_get_url(key, opts), do: AshQuick.Storage.S3.presigned_get_url(bucket(), key, opts)
+  def put_file(key, path, opts), do: AshQuick.Storage.S3.put_file(key, path, s3(opts))
 
   @impl true
-  def upload(key, path, opts), do: AshQuick.Storage.S3.upload(bucket(), key, path, opts)
+  def upload_target(key, opts), do: AshQuick.Storage.S3.upload_target(key, s3(opts))
+
+  defp s3(opts), do: [bucket: bucket(), host: host()] ++ opts
 
   @impl true
   def object_arriving(serving_key, _opts) do

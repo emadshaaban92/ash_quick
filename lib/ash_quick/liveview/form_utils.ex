@@ -533,15 +533,16 @@ defmodule AshQuick.LiveView.FormUtils do
         constraints = attachment_constraints(field)
         accepts = Keyword.fetch!(constraints, :accepts)
 
-        allow_upload(socket, upload_name,
-          accept: attachment_accept_extensions(accepts),
-          max_entries: if(field.type == AshQuick.AshTypes.Attachment, do: 1, else: 10),
-          max_file_size: attachment_max_bytes(constraints),
-          external: fn entry, socket ->
-            presign_attachment_upload(entry, socket, constraints)
-          end,
-          auto_upload: true,
-          progress: upload_progress_handler(upload_name, field, constraints, root?)
+        allow_upload(
+          socket,
+          upload_name,
+          [
+            accept: attachment_accept_extensions(accepts),
+            max_entries: if(field.type == AshQuick.AshTypes.Attachment, do: 1, else: 10),
+            max_file_size: attachment_max_bytes(constraints),
+            auto_upload: true,
+            progress: upload_progress_handler(upload_name, field, constraints, root?)
+          ] ++ upload_transport(constraints)
         )
 
       _ ->
@@ -550,6 +551,19 @@ defmodule AshQuick.LiveView.FormUtils do
   end
 
   defp maybe_allow_upload(_form, _field, socket, _root?), do: socket
+
+  # A storage module that names an upload target has the browser write to it;
+  # one that does not takes the bytes over the socket (`AshQuick.Storage`,
+  # "Browser uploads").
+  defp upload_transport(constraints) do
+    case Storage.upload_mode() do
+      :external ->
+        [external: fn entry, socket -> presign_attachment_upload(entry, socket, constraints) end]
+
+      :socket ->
+        []
+    end
+  end
 
   # A field on a nested sub-form is left to the save path: its params live under
   # a path this handler has no way to address from the root form.
@@ -573,8 +587,14 @@ defmodule AshQuick.LiveView.FormUtils do
     entries = socket.assigns.uploads[upload_name].entries
 
     if entries != [] and Enum.all?(entries, & &1.done?) do
-      values = consume_attachment_entries(socket, upload_name, constraints)
-      put_uploaded_values(socket, field, values)
+      {values, failed} = consume_attachment_entries(socket, upload_name, constraints)
+
+      # A socket upload's key is made here rather than at presign, so this is
+      # where the form learns it issued it.
+      values
+      |> Enum.reduce(socket, &mint_attachment_key(&2, &1["key"]))
+      |> put_uploaded_values(field, values)
+      |> flash_failed_uploads(failed)
     else
       socket
     end
@@ -777,15 +797,22 @@ defmodule AshQuick.LiveView.FormUtils do
   defp handle_open_form_events(_, _, socket, _options), do: {:cont, socket}
 
   defp submit_form(form, params, socket) do
+    # A socket upload the store refuses at save is left out and the save goes
+    # on, as it would had the file never been picked; the flash says so, so an
+    # update keeping its old file is not read as the new one saved.
+    {upload_params, refused} =
+      params
+      |> maybe_put_nested_params(form)
+      |> maybe_put_has_many(form)
+      |> upload_images(socket, form)
+
+    socket = flash_failed_uploads(socket, refused)
+
     result =
       form
       |> put_stage(AshQuick.form_submit_stage())
       |> AshPhoenix.Form.submit(
-        params:
-          params
-          |> maybe_put_nested_params(form)
-          |> maybe_put_has_many(form)
-          |> upload_images(socket, form),
+        params: upload_params,
         before_submit: &reference_attachments(&1, Map.get(socket.assigns, :scope)),
         action_opts: action_opts(form)
       )
@@ -1232,13 +1259,20 @@ defmodule AshQuick.LiveView.FormUtils do
     }
   end
 
+  defp flash_failed_uploads(socket, 0), do: socket
+
+  defp flash_failed_uploads(socket, _failed),
+    do: put_flash(socket, :error, upload_error_message(:not_stored))
+
   @doc """
-  Signs the browser's `PUT` for one upload entry.
+  Names where the browser writes one upload entry: the storage module's
+  `c:AshQuick.Storage.upload_target/2`, asked for the write key. Only called
+  when the storage module takes uploads externally.
 
   The key the record will store is the **serving** key, built from the
   field's `:visibility`. Where the bytes actually go is
   `AshQuick.Storage.object_arriving/2`'s call — a host that holds objects somewhere
-  first hands back a different key, and the URL is signed for that one.
+  first hands back a different key, and the target is asked for that one.
   `upload_images/3` rebuilds the serving key from the same entry when the
   form is submitted, so the record never learns where the bytes waited.
 
@@ -1263,20 +1297,18 @@ defmodule AshQuick.LiveView.FormUtils do
   be recovered later — a key alone does not say which Ash type constraint
   produced it.
 
-  `Content-Length` is pinned to the entry's declared size: `max_file_size`
-  on `allow_upload/3` only bounds what the browser offers at preflight, so
-  without a signed length anyone holding the URL can store an object of any
-  size. It is signed as a *header* rather than a query parameter — that is
-  what puts it in the canonical request and makes a differently-sized body
-  fail signature validation.
+  The target is told the entry's declared type and size
+  (`:content_type`, `:content_length`): `max_file_size` on `allow_upload/3`
+  only bounds what the browser offers at preflight, so a target that does
+  not bind the length lets anyone holding it store an object of any size.
   """
   def presign_attachment_upload(entry, socket, constraints) do
     serving_key = build_attachment_key(entry, socket, Keyword.fetch!(constraints, :visibility))
 
     case Storage.object_arriving(serving_key, arriving_opts(entry, socket, constraints)) do
       {:ok, write_key} ->
-        url =
-          Storage.presigned_put_url(write_key,
+        {:external, uploader, meta} =
+          Storage.upload_target(write_key,
             content_type: entry.client_type,
             content_length: entry.client_size
           )
@@ -1285,8 +1317,8 @@ defmodule AshQuick.LiveView.FormUtils do
         # consumed: a form takes back only keys it issued, and every upload —
         # on the root form or a sub-form, consumed on progress or at save —
         # passes through this one place.
-        {:ok, %{uploader: "S3", key: write_key, serving_key: serving_key, url: url},
-         mint_attachment_key(socket, serving_key)}
+        meta = Map.merge(meta, %{uploader: uploader, key: write_key, serving_key: serving_key})
+        {:ok, meta, mint_attachment_key(socket, serving_key)}
 
       # The host refused to take the object. Nothing has been written yet, so
       # failing the entry is the honest outcome — the browser shows the error
@@ -1319,6 +1351,10 @@ defmodule AshQuick.LiveView.FormUtils do
   # The presigner refused the entry, so no URL was signed and no bytes left the
   # browser. Nothing retries it — say the file was not uploaded.
   def upload_error_message({:external_metadata_failure, _meta}),
+    do: gettext("This file was refused and has not been uploaded")
+
+  # A socket upload arrived but the store refused it: the file is not saved.
+  def upload_error_message(:not_stored),
     do: gettext("This file was refused and has not been uploaded")
 
   def upload_error_message(error) when is_atom(error), do: Utils.humanize(error)
@@ -1418,18 +1454,21 @@ defmodule AshQuick.LiveView.FormUtils do
   # A position the post says nothing about is left alone: there is no sub-form
   # params map to fold an upload into, and inventing one would submit a blank
   # entry the seller never filled in.
+  #
+  # Every clause returns the params with how many uploads the store refused.
   defp upload_images(params, socket, forms) when is_list(forms) and is_map(params) do
     forms
     |> Enum.with_index()
-    |> Enum.reduce(params, fn {form, position}, updated_params ->
+    |> Enum.reduce({params, 0}, fn {form, position}, {updated_params, refused} ->
       key = position |> to_string()
 
       case updated_params do
         %{^key => posted} when is_map(posted) ->
-          updated_params |> Map.put(key, upload_images(posted, socket, form))
+          {nested, nested_refused} = upload_images(posted, socket, form)
+          {Map.put(updated_params, key, nested), refused + nested_refused}
 
         _nothing_to_fold_into ->
-          updated_params
+          {updated_params, refused}
       end
     end)
   end
@@ -1445,8 +1484,9 @@ defmodule AshQuick.LiveView.FormUtils do
 
   defp upload_images(params, socket, form) when is_map(params) do
     Utils.form_fields(form)
-    |> Enum.reduce(params, fn field, updated_params ->
-      maybe_upload_image(field, updated_params, socket, form)
+    |> Enum.reduce({params, 0}, fn field, {updated_params, refused} ->
+      {updated_params, field_refused} = maybe_upload_image(field, updated_params, socket, form)
+      {updated_params, refused + field_refused}
     end)
   end
 
@@ -1459,35 +1499,39 @@ defmodule AshQuick.LiveView.FormUtils do
     upload_name = "#{form.name}[#{field.name}]_upload"
     params = drop_blank_attachment_param(params, field)
 
-    uploaded_values = consume_attachment_entries(socket, upload_name, constraints)
+    {uploaded_values, refused} = consume_attachment_entries(socket, upload_name, constraints)
 
-    case {field.type, uploaded_values, form.data} do
-      {_, [], nil} ->
-        params
+    params =
+      case {field.type, uploaded_values, form.data} do
+        {_, [], nil} ->
+          params
 
-      {_, [], data} ->
-        params |> Map.put_new(field.name |> to_string(), Map.get(data, field.name))
+        {_, [], data} ->
+          params |> Map.put_new(field.name |> to_string(), Map.get(data, field.name))
 
-      {AshQuick.AshTypes.Attachment, [value], _} ->
-        params |> Map.put(field.name |> to_string(), value)
+        {AshQuick.AshTypes.Attachment, [value], _} ->
+          params |> Map.put(field.name |> to_string(), value)
 
-      {{:array, AshQuick.AshTypes.Attachment}, values, _} ->
-        params |> Map.put(field.name |> to_string(), saved_before(field, params, form) ++ values)
-    end
+        {{:array, AshQuick.AshTypes.Attachment}, values, _} ->
+          params
+          |> Map.put(field.name |> to_string(), saved_before(field, params, form) ++ values)
+      end
+
+    {params, refused}
   end
 
   defp maybe_upload_image(%{name: field_name}, params, socket, form)
        when is_map_key(form.forms, field_name) do
     nested_form = form.forms[field_name]
 
-    nested_params =
+    {nested_params, refused} =
       Map.get(params, field_name |> to_string())
       |> upload_images(socket, nested_form)
 
-    params |> Map.put(field_name |> to_string(), nested_params)
+    {Map.put(params, field_name |> to_string(), nested_params), refused}
   end
 
-  defp maybe_upload_image(_field, params, _socket, _form), do: params
+  defp maybe_upload_image(_field, params, _socket, _form), do: {params, 0}
 
   # What a save's unconsumed entries land after. For an array attribute that is
   # the list the params hold — carried from the server by
@@ -1508,23 +1552,57 @@ defmodule AshQuick.LiveView.FormUtils do
   # by prepending, and every entry is done by the time consuming is allowed — so
   # what comes back is the selection order backwards. That order is the order
   # the images are stored in, and the first of them is the featured one.
+  #
+  # Returns the params with how many entries could not be stored. Only a socket
+  # upload can fail here: an external one is in the store already.
   defp consume_attachment_entries(socket, upload_name, constraints) do
     visibility = Keyword.fetch!(constraints, :visibility)
 
     socket
-    |> consume_uploaded_entries(upload_name, fn _meta, entry ->
+    |> consume_uploaded_entries(upload_name, fn meta, entry ->
       key = build_attachment_key(entry, socket, visibility)
-      file_type = infer_attachment_file_type(entry.client_name)
 
-      {:ok,
-       %{
-         "key" => key,
-         "file_type" => file_type && to_string(file_type),
-         "original_filename" => entry.client_name,
-         "byte_size" => entry.client_size
-       }}
+      case store_socket_upload(meta, key, entry, socket, constraints) do
+        :ok -> {:ok, attachment_params(key, entry)}
+        :error -> {:ok, :not_stored}
+      end
     end)
     |> Enum.reverse()
+    |> Enum.split_with(&(&1 != :not_stored))
+    |> then(fn {values, failed} -> {values, length(failed)} end)
+  end
+
+  defp attachment_params(key, entry) do
+    file_type = infer_attachment_file_type(entry.client_name)
+
+    %{
+      "key" => key,
+      "file_type" => file_type && to_string(file_type),
+      "original_filename" => entry.client_name,
+      "byte_size" => entry.client_size
+    }
+  end
+
+  # An external upload's bytes are already stored. Its meta is told apart by
+  # the `:uploader` AshQuick always puts on it (`presign_attachment_upload/3`),
+  # not by what the host's own meta holds: a host may well name a `path` there.
+  defp store_socket_upload(%{uploader: _external}, _serving_key, _entry, _socket, _constraints),
+    do: :ok
+
+  # A socket upload is a temporary file on this server, gone once the entry is
+  # consumed, so it is stored now: the host is told it is arriving (the custody
+  # an external upload takes at presign) and the bytes go to the key it names.
+  # `put_file/3` runs in the LiveView process, so the page waits on the store.
+  defp store_socket_upload(%{path: path}, serving_key, entry, socket, constraints) do
+    with {:ok, write_key} <-
+           Storage.object_arriving(serving_key, arriving_opts(entry, socket, constraints)),
+         :ok <- Storage.put_file(write_key, path, content_type: entry.client_type) do
+      :ok
+    else
+      {:error, reason} ->
+        Logger.error("upload of #{serving_key} was not stored: #{inspect(reason)}")
+        :error
+    end
   end
 
   # The field's hidden input posts an empty string when it is carrying nothing —

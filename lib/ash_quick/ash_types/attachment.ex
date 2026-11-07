@@ -83,7 +83,7 @@ defmodule AshQuick.AshTypes.Attachment do
                    bucket policy; rendered as a deterministic HTTPS URL.
         :private — uploaded under `private/...`. Bucket policy does not
                    grant anonymous access; rendered as a short-lived
-                   presigned GET URL.
+                   signed URL (a presigned GET on S3).
         """
       ],
       accepts: [

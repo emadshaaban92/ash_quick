@@ -399,12 +399,13 @@ going still while the action runs. The installer adds it when it is missing.
 import { browserSessionParams, initBrowserSession } from "../../deps/ash_quick/assets/js/browser_session"
 import { initLocale } from "../../deps/ash_quick/assets/js/locale"
 import { initPrinting } from "../../deps/ash_quick/assets/js/print" // only if an action prints
-import { hooks as ashQuickHooks } from "phoenix-colocated/ash_quick"
+import { hooks as ashQuickHooks, uploaders as ashQuickUploaders } from "phoenix-colocated/ash_quick"
 
 let liveSocket = new LiveSocket("/live", Socket, {
   // A function, so every reconnect re-reads the tab's identity.
   params: () => ({ _csrf_token: csrfToken, ...browserSessionParams() }),
-  hooks: { ...colocatedHooks, ...ashQuickHooks }
+  hooks: { ...colocatedHooks, ...ashQuickHooks },
+  uploaders: { ...ashQuickUploaders }
 })
 
 initBrowserSession(liveSocket)
@@ -423,8 +424,13 @@ them under `Mix.Project.build_path()`, which a Phoenix 1.8 app's esbuild
 `NODE_PATH` already includes; it has to be compiled before the assets are
 built, as a Phoenix 1.8 app's `assets.build` alias already does. One of them
 keeps a checkbox, a radio, a select or a searchable dropdown in the action
-modal from being changed from the keyboard while the action runs. The
-installer adds the import and the spread when they are missing.
+modal from being changed from the keyboard while the action runs.
+`ashQuickUploaders` holds `S3`, the LiveView client uploader that sends a
+picked file to the presigned `PUT` `AshQuick.Storage.S3` hands out; without it
+a file picked for an attachment never leaves the browser. A storage module
+that takes uploads over the socket needs neither (see `AshQuick.Storage`,
+"Browser uploads"). The installer adds the import and the spreads when they
+are missing.
 
 ### Router and formatter
 
@@ -906,7 +912,7 @@ reference.
 |---|---|
 | `AshQuick.Scope` | `use` it on the host's scope struct. Generates `Ash.Scope.ToOpts` and the provenance AshQuick needs on top of it: the real actor behind an impersonation, the request IP, the reader's timezone and the actor's locale. Fails the compile if a named field is not on the struct. The IP is the peer address unless `:client_ip` names another source; behind a proxy, see `AshQuick.LiveView.Mount`. A controller reads the same address with `AshQuick.ClientIp.from_conn/1`. |
 | The audit store | An Ash resource in the host app, named app-wide as `:audit_resource` or per resource under `audit do store ... end`. It must accept `resource_name`, `resource_id`, `action_type`, `action_name`, `attributes`, `arguments`, `context`, `actor_id`, `real_actor_id`, `ip`, `tenant`, and may also accept a `:map` `changes` — the only optional column. `actor_id` and `real_actor_id` must allow `nil`: a write with no actor is recorded with both `nil`. Keep it dumb — no policies, no validations: it is written inside the transaction of every audited write. |
-| `AshQuick.Storage` | Resolves attachment values to fetchable URLs, plus optional lifecycle callbacks for routing an arriving upload and withholding objects that are not servable yet. Defaults to `AshQuick.Storage.S3`, which serves straight from the key and implements no lifecycle. |
+| `AshQuick.Storage` | Where objects live: a URL to render one from (`url/2`), a URL to download one under a filename (`download_url/2`), storing a server-side file (`put_file/3`), and where a browser sends a picked file (`upload_target/2`, optional: without it uploads come over the LiveView socket). Plus optional lifecycle callbacks for routing an arriving upload and withholding objects that are not servable yet. Defaults to `AshQuick.Storage.S3`, which serves straight from the key and implements no lifecycle. |
 | `AshQuick.AccessControl` | Answers which routes a scope may navigate to. Named on the nav, and what every rendering of it filters through. Not `Ash.can?`: a filter policy allows the action and returns no rows, so `can?` says yes for a page that would be empty. |
 | `AshQuick.Nav` | The host's navigation registry — one declaration the sidebar and the apps grid are both rendered from. QuickViews are discovered from the declared router; the declaration adds only what the router cannot say: a better label, an icon, a group, a non-QuickView path. |
 | `AshQuick.BrowserSessionPresence` | The live register of signed-in tabs. Supervised, not implemented — listed here because the tree entry is the host's. `AshQuick.LiveView.BrowserSessionsLive` is the page that reads it. |

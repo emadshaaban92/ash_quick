@@ -1034,6 +1034,36 @@
 
 ### Breaking changes
 
+- **`AshQuick.Storage` callbacks say what AshQuick wants, not which S3 call
+  makes it.** A storage module now implements `url(key, opts)` (opts
+  `:visibility`, `:public` for a `public/*` key and `:private` for any other,
+  and `:expires_in`), `download_url(key, opts)` (`:filename`, `:expires_in`),
+  `put_file(key, path, opts)` (`:content_type`), and optionally
+  `upload_target(key, opts)` (`:content_type`, `:content_length`,
+  `:expires_in`), which returns `{:external, uploader, meta}`. They replace
+  `public_url/1`, `presigned_get_url/2`, `upload/3` and `presigned_put_url/2`,
+  and `AshQuick.Storage.presigned_put_url/2`, `presigned_get_url/2` and
+  `upload/3` are gone; call `url_for/2`, `download_url/2`, `put_file/3` or
+  `upload_target/2`. A module without `upload_target/2` takes browser uploads
+  over the LiveView socket, and AshQuick stores each with `put_file/3` when it
+  arrives, after `object_arriving/2`; a file the store refuses flashes "This
+  file was refused and has not been uploaded" and is left off the form. The
+  lifecycle callbacks are unchanged. `AshQuick.Storage.S3` implements all
+  four, signing the upload's `Content-Length` as before, and takes `:bucket`
+  and `:host` in every callback's opts in place of the bucket-first heads
+  (`public_url/3`, `presigned_put_url/3`, `presigned_get_url/3`, `upload/4`).
+  A host module that delegated to those writes
+  `def url(key, opts), do: AshQuick.Storage.S3.url(key, [bucket: bucket()] ++ opts)`,
+  and so on for the others. An export's download link now carries its
+  filename (`response-content-disposition` on S3).
+
+- **Register AshQuick's `S3` uploader in `app.js`.** External uploads name a
+  LiveView client uploader, and AshQuick now ships the `S3` one as colocated
+  JS: `import { hooks as ashQuickHooks, uploaders as ashQuickUploaders } from
+  "phoenix-colocated/ash_quick"` and pass `uploaders: {...ashQuickUploaders}`
+  to the `LiveSocket`. Without it a file picked for an attachment never left
+  the browser. `mix ash_quick.install` adds both to a new app's `app.js`.
+
 - **PostgreSQL 17 or later is required.** On AshPostgres, declare it in the
   repo, `def min_pg_version, do: %Version{major: 17, minor: 0, patch: 0}`:
   AshPostgres writes SQL for the declared version, and `Ash.update_many/4`

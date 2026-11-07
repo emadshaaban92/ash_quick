@@ -23,7 +23,9 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/example"
-import {hooks as ashQuickHooks} from "phoenix-colocated/ash_quick"
+// AshQuick's hooks, and the `S3` client uploader `AshQuick.Storage.S3` sends a
+// picked file through.
+import {hooks as ashQuickHooks, uploaders as ashQuickUploaders} from "phoenix-colocated/ash_quick"
 import topbar from "../vendor/topbar"
 import live_select from "live_select"
 // A tab mints its own id and replays it on every connect — the unit
@@ -48,6 +50,7 @@ const liveSocket = new LiveSocket("/live", Socket, {
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   }),
   hooks: {...colocatedHooks, ...ashQuickHooks, ...live_select},
+  uploaders: {...ashQuickUploaders},
 })
 
 initBrowserSession(liveSocket)

@@ -27,14 +27,15 @@ defmodule AshQuick.LiveView.ExportUtils do
       AshQuick.Config.now_in_timezone(timezone)
       |> Calendar.strftime("%y-%m-%d-%H-%M-%S")
 
-    key = "exports/#{actor.id}/#{resource_name}-#{date_part}.xlsx"
+    filename = "#{resource_name}-#{date_part}.xlsx"
+    key = "exports/#{actor.id}/#{filename}"
 
     :ok =
-      AshQuick.Storage.upload(key, xlsx_tmp_file_name,
+      AshQuick.Storage.put_file(key, xlsx_tmp_file_name,
         content_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       )
 
-    {:ok, AshQuick.Storage.presigned_get_url(key, expires_in: 3600)}
+    {:ok, AshQuick.Storage.download_url(key, filename: filename, expires_in: 3600)}
   end
 
   # sobelow_skip ["Traversal.FileModule"]
@@ -54,11 +55,12 @@ defmodule AshQuick.LiveView.ExportUtils do
       AshQuick.Config.now_in_timezone(timezone)
       |> Calendar.strftime("%y-%m-%d-%H-%M-%S")
 
-    key = "exports/#{actor.id}/#{resource_name}-#{date_part}.csv"
+    filename = "#{resource_name}-#{date_part}.csv"
+    key = "exports/#{actor.id}/#{filename}"
 
-    :ok = AshQuick.Storage.upload(key, csv_tmp_file_name, content_type: "text/csv")
+    :ok = AshQuick.Storage.put_file(key, csv_tmp_file_name, content_type: "text/csv")
 
-    {:ok, AshQuick.Storage.presigned_get_url(key, expires_in: 3600)}
+    {:ok, AshQuick.Storage.download_url(key, filename: filename, expires_in: 3600)}
   end
 
   defp generate_stream_data(query, options, timezone) do

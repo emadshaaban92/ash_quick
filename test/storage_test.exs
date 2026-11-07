@@ -91,6 +91,51 @@ defmodule AshQuick.StorageTest do
     end
   end
 
+  describe "download_url/2" do
+    test "forces a download under the given filename" do
+      url = Storage.download_url("exports/u/products-26-11-07.csv", filename: "products.csv")
+
+      assert url =~ ObjectStore.bucket()
+      params = url |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
+
+      assert params["response-content-disposition"] ==
+               ~s(attachment; filename="products.csv"; filename*=UTF-8''products.csv)
+
+      assert params["X-Amz-Signature"]
+    end
+
+    # The plain `filename` is a quoted string, so a quote in the name would end
+    # it early; the exact name rides `filename*`, percent-encoded.
+    test "keeps quotes and non-ASCII out of the plain filename" do
+      url = Storage.download_url("exports/u/x.csv", filename: ~s(منتجات "q".csv))
+      params = url |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
+
+      assert params["response-content-disposition"] =~ ~s(filename="______ _q_.csv")
+
+      assert params["response-content-disposition"] =~
+               "filename*=UTF-8''" <> URI.encode(~s(منتجات "q".csv), &URI.char_unreserved?/1)
+    end
+
+    test "requires a filename" do
+      assert_raise ArgumentError, ~r/:filename/, fn ->
+        Storage.download_url("exports/u/x.csv", [])
+      end
+    end
+  end
+
+  describe "upload_target/2" do
+    test "the default store takes uploads externally, through the S3 uploader" do
+      assert Storage.upload_mode() == :external
+
+      assert {:external, "S3", %{url: url}} =
+               Storage.upload_target("public/products/a.jpg", content_length: 12)
+
+      assert url =~ ObjectStore.bucket()
+      params = url |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
+      assert "content-length" in String.split(params["X-Amz-SignedHeaders"], ";")
+    end
+  end
+
   describe "url_for/2 with prefetched states" do
     setup do
       %{value: %Value{key: "public/products/abc.jpg", file_type: :image}}
