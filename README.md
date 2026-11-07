@@ -903,6 +903,48 @@ and every navigation to it is refused.
 A tile in the apps grid is a `group` in the nav — a decision about where the
 page belongs, which is left to you.
 
+## Storing files on local disk
+
+`AshQuick.Storage.Local` stores attachments and exports on the server's own
+disk, for an application on one node, or on several that share a volume. The
+host backs that directory up. Uploads come over the LiveView socket and files
+are read back through a plug at the application's own origin, so there is no
+bucket, no CORS and nothing to add to a Content Security Policy.
+
+```elixir
+# config/config.exs
+config :ash_quick, storage: AshQuick.Storage.Local
+
+# config/runtime.exs
+config :ash_quick, AshQuick.Storage.Local,
+  root: "/var/lib/my_app/uploads",
+  endpoint: MyAppWeb.Endpoint
+```
+
+```elixir
+# lib/my_app_web/router.ex, outside any pipeline
+forward "/ash_quick/files", AshQuick.Storage.Local.Plug
+```
+
+A `public/*` file is served to anyone with its path. Any other file needs the
+token on its link: a `Phoenix.Token` signed with the endpoint's secret, naming
+that one key and expiring after an hour by default (`:expires_in`). Like a
+presigned URL, the link works for whoever holds it until then. Files a
+browser would run, such as HTML or SVG, are sent as downloads, and every
+response is sandboxed and `nosniff`. A key that could reach outside `:root`
+is refused. `:at` moves the plug off `/ash_quick/files`. Set these options in
+configuration, not on the forward: the links are built from it.
+`mix ash_quick.check` reports a router that does not forward `:at` to the
+plug, or forwards it inside a pipeline.
+
+A host that wants the lifecycle callbacks on disk storage writes its own module
+with `use AshQuick.Storage.Local`, which delegates the rest, and points
+`:storage` at it.
+
+Nothing deletes a file. Exports pile up under `exports/<actor id>/` and
+replaced attachments stay where they were, so clear `exports/` on a schedule
+of your own before the disk fills.
+
 ## What the host implements
 
 Each is a behaviour or a resource, and each has a moduledoc that is the real
@@ -912,7 +954,7 @@ reference.
 |---|---|
 | `AshQuick.Scope` | `use` it on the host's scope struct. Generates `Ash.Scope.ToOpts` and the provenance AshQuick needs on top of it: the real actor behind an impersonation, the request IP, the reader's timezone and the actor's locale. Fails the compile if a named field is not on the struct. The IP is the peer address unless `:client_ip` names another source; behind a proxy, see `AshQuick.LiveView.Mount`. A controller reads the same address with `AshQuick.ClientIp.from_conn/1`. |
 | The audit store | An Ash resource in the host app, named app-wide as `:audit_resource` or per resource under `audit do store ... end`. It must accept `resource_name`, `resource_id`, `action_type`, `action_name`, `attributes`, `arguments`, `context`, `actor_id`, `real_actor_id`, `ip`, `tenant`, and may also accept a `:map` `changes` — the only optional column. `actor_id` and `real_actor_id` must allow `nil`: a write with no actor is recorded with both `nil`. Keep it dumb — no policies, no validations: it is written inside the transaction of every audited write. |
-| `AshQuick.Storage` | Where objects live: a URL to render one from (`url/2`), a URL to download one under a filename (`download_url/2`), storing a server-side file (`put_file/3`), and where a browser sends a picked file (`upload_target/2`, optional: without it uploads come over the LiveView socket). Plus optional lifecycle callbacks for routing an arriving upload and withholding objects that are not servable yet. Defaults to `AshQuick.Storage.S3`, which serves straight from the key and implements no lifecycle. |
+| `AshQuick.Storage` | Where objects live: a URL to render one from (`url/2`), a URL to download one under a filename (`download_url/2`), storing a server-side file (`put_file/3`), and where a browser sends a picked file (`upload_target/2`, optional: without it uploads come over the LiveView socket). Plus optional lifecycle callbacks for routing an arriving upload and withholding objects that are not servable yet. Defaults to `AshQuick.Storage.S3`, which serves straight from the key and implements no lifecycle. `AshQuick.Storage.Local` keeps objects on the server's disk instead (see Storing files on local disk). |
 | `AshQuick.AccessControl` | Answers which routes a scope may navigate to. Named on the nav, and what every rendering of it filters through. Not `Ash.can?`: a filter policy allows the action and returns no rows, so `can?` says yes for a page that would be empty. |
 | `AshQuick.Nav` | The host's navigation registry — one declaration the sidebar and the apps grid are both rendered from. QuickViews are discovered from the declared router; the declaration adds only what the router cannot say: a better label, an icon, a group, a non-QuickView path. |
 | `AshQuick.BrowserSessionPresence` | The live register of signed-in tabs. Supervised, not implemented — listed here because the tree entry is the host's. `AshQuick.LiveView.BrowserSessionsLive` is the page that reads it. |
@@ -1165,7 +1207,7 @@ action that carries `AshQuick.Print` needs ChromicPDF, and a resource with the
 unless the host names its own `AshQuick.PdfRenderer` as `:pdf_renderer` (a
 test suite with no Chrome does, to read what a print says).
 A host that points `:storage` at its own
-object store never loads the ExAws ones.
+object store, or at `AshQuick.Storage.Local`, never loads the ExAws ones.
 
 ## The example app
 

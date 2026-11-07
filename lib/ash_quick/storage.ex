@@ -97,7 +97,9 @@ defmodule AshQuick.Storage do
   prefix is public, and whether the host is still holding the object.
 
   The default implementation is `AshQuick.Storage.S3` (plain ExAws, bucket
-  from `AshQuick.Config.s3_bucket/0`). A host that already owns an
+  from `AshQuick.Config.s3_bucket/0`). `AshQuick.Storage.Local` keeps objects
+  on the server's disk and serves them through a plug of its own, for an
+  application on one node or a shared volume. A host that already owns an
   object-store client points the seam at it and keeps one bucket across
   both:
 
@@ -505,6 +507,16 @@ defmodule AshQuick.Storage do
   def object_referenced(keys, resource, resource_id, opts),
     do: lifecycle(:object_referenced, [keys, resource, resource_id], opts, :ok)
 
+  @doc false
+  # RFC 6266: a plain-ASCII `filename` for old clients, with quotes and
+  # backslashes dropped so it cannot end the quoted string early, and the
+  # exact name in `filename*` for every client that reads it.
+  def attachment_disposition(filename) do
+    fallback = String.replace(filename, ~r/[^\x20-\x7E]|["\\]/u, "_")
+    encoded = URI.encode(filename, &URI.char_unreserved?/1)
+    ~s(attachment; filename="#{fallback}"; filename*=UTF-8''#{encoded})
+  end
+
   defp impl, do: AshQuick.Config.storage()
 
   # The lifecycle callbacks are optional, so a storage module that leaves one
@@ -572,7 +584,7 @@ defmodule AshQuick.Storage do
       presigned_get_url(
         key,
         Keyword.put(opts, :query_params, [
-          {"response-content-disposition", content_disposition(filename)}
+          {"response-content-disposition", AshQuick.Storage.attachment_disposition(filename)}
         ])
       )
     end
@@ -647,18 +659,6 @@ defmodule AshQuick.Storage do
 
     defp maybe_param(params, _name, nil), do: params
     defp maybe_param(params, name, value), do: [{name, to_string(value)} | params]
-
-    # RFC 6266: a plain-ASCII `filename` for old clients, with quotes and
-    # backslashes dropped so it cannot end the quoted string early, and the
-    # exact name in `filename*` for every client that reads it.
-    defp content_disposition(filename) do
-      fallback =
-        filename
-        |> String.replace(~r/[^\x20-\x7E]|["\\]/u, "_")
-
-      encoded = URI.encode(filename, &URI.char_unreserved?/1)
-      ~s(attachment; filename="#{fallback}"; filename*=UTF-8''#{encoded})
-    end
 
     defp encode_key(key) do
       key

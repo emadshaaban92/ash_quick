@@ -42,7 +42,9 @@ defmodule AshQuick.Config do
     `AshQuick.Storage.S3`, which implements no lifecycle: bytes go straight to
     their serving key and every object is servable. A host with its own
     object-store client points this at it, and `:s3_bucket` / `:s3_host`
-    below go unread.
+    below go unread. `AshQuick.Storage.Local` keeps objects on the server's
+    disk instead; its own settings live under
+    `config :ash_quick, AshQuick.Storage.Local`.
 
   * `:pdf_renderer` — A module implementing `AshQuick.PdfRenderer`, which
     turns a print template's output into the PDF an action's print delivers.

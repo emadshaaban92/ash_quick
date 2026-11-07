@@ -76,6 +76,17 @@ defmodule AshQuick.Check do
   `AshQuick.AccessControl.all_routes/0`, and are reported in `skipped` rather
   than passing silently when it does not.
 
+  Over the storage and the router together:
+
+    * `:unserved_local_storage` — `:storage` keeps its objects through
+      `AshQuick.Storage.Local` (it is that module, or `use`s it), but the
+      router does not route the storage's `:at` path to
+      `AshQuick.Storage.Local.Plug`, so every attachment and export link
+      fails.
+    * `:piped_local_storage` — the forward is there, inside a pipeline. The
+      link's token is what opens an object, and a pipeline's `accepts` or
+      sign-in check refuses requests the token was meant to let through.
+
   Over the application's configuration:
 
     * `:unconfigured_error_reporter` — Tower's `:reporters` left at its default,
@@ -119,6 +130,7 @@ defmodule AshQuick.Check do
   alias AshQuick.Check.Report
   alias AshQuick.Check.Resources
   alias AshQuick.Check.Routing
+  alias AshQuick.Check.Storage
   alias AshQuick.Nav.Info
 
   @doc """
@@ -156,6 +168,7 @@ defmodule AshQuick.Check do
         Keyword.get_lazy(opts, :actor_resource, &AshQuick.Config.actor_resource/0)
       ),
       Nav.run(nav, router, access_control),
+      Storage.run(router),
       opts
       |> Keyword.get_lazy(:tower_reporters, &ErrorReporting.configured_reporters/0)
       |> ErrorReporting.run()

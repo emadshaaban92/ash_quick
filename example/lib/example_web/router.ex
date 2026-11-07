@@ -87,6 +87,13 @@ defmodule ExampleWeb.Router do
   # access gate would refuse each one, so they skip it — and nobody's nav or
   # grid offers them.
   if Application.compile_env(:example, :test_routes) do
+    # Where `AshQuick.Storage.Local` serves its objects, for the cases that
+    # swap `:storage` to it (`config/test.exs` sets its `:at`). Outside every
+    # pipeline: a link's token is what opens a private object, not the session.
+    scope "/test", alias: false do
+      forward "/files", AshQuick.Storage.Local.Plug
+    end
+
     scope "/test", alias: false do
       pipe_through [:browser, :user_required]
 

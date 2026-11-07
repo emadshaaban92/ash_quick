@@ -1056,6 +1056,18 @@ covers wiring them up.
   `upload_target/2` takes browser uploads over the LiveView socket and stores
   each with `put_file/3`. `AshQuick.Storage.S3` takes `bucket:` / `host:` in
   every callback's opts, for a host module that delegates with its own bucket.
+  `AshQuick.Storage.Local` stores on disk instead: `storage:
+  AshQuick.Storage.Local`, `config :ash_quick, AshQuick.Storage.Local, root:,
+  endpoint:` (or `secret_key_base:`; `at:` defaults to `/ash_quick/files`), and
+  `forward "/ash_quick/files", AshQuick.Storage.Local.Plug` outside any
+  pipeline. Uploads come over the socket; `public/*` is served without a token,
+  anything else needs the link's `Phoenix.Token`; HTML/SVG and other runnable
+  types are sent as downloads. Suits one node or a shared volume the host backs
+  up; nothing deletes files, so the host clears `exports/`. A host module that
+  adds lifecycle callbacks does `use AshQuick.Storage.Local` (delegates the
+  seam). Set options in config, not on the forward. `mix ash_quick.check`
+  reports `:unserved_local_storage` (no route to the plug at `:at`) and
+  `:piped_local_storage` (forward inside a pipeline).
 - `AshQuick.AccessControl` — which routes a scope may navigate to. Named on the
   nav. Deliberately **not** `Ash.can?`: a filter policy allows the action and
   returns no rows, so `can?` says yes for a page that would be empty.
