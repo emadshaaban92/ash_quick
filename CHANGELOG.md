@@ -4,6 +4,19 @@
 
 ### Features
 
+- **A list is filtered by a Money column.** The filter form offers an
+  AshMoney `:money` field stored as its default `money_with_currency`, with
+  =, !=, >, >=, < and <=, and compares its amount with one in the same
+  currency: `EUR 10` is in euros, and `10` in the field's default currency,
+  as its form input reads it, or with none set, in the currency of
+  Localize's locale. On Apply the form holds each such row with its currency,
+  `USD 10`, so its link and chip read the same for every reader. A row in
+  another currency never matches, except under !=. AshMoney's own comparison raises when two currencies meet, so
+  comparing whole `Money` values would refuse the filter on any table holding
+  another currency; each row asks the currency and the amount apart instead.
+  AshQuick still does not depend on `ash_money`: the type is matched by its
+  module name. A value that is no amount reads "is invalid" under its row.
+
 - **A list is filtered by a related record's fields.** `list: [filterable:
   ...]` takes a field of a related resource, one hop through a public
   belongs_to: `filterable: [:sku, brand: :name]`, or `[brand: :name]` as one
@@ -571,6 +584,22 @@
   `@scope` in their assigns.
 
 ### Bug fixes
+
+- **A field Ash filters by simple equality only no longer takes the list
+  down.** An attribute or aggregate with `filterable? :simple_equality` made
+  the filter's field lookup raise `BadBooleanError` on every list page over
+  the resource, and naming any field in `filterable:` made the QuickView fail
+  to compile. Ash takes such a field only in one top-level `==`, never under
+  an `or` or a `not`, which a row of the form can be, so the form now leaves
+  it out, and `filterable:` refuses it.
+
+- **The filter no longer offers a calculation computed in Elixir only.** A
+  public calculation with `calculate/3` and no `expression/2` was offered,
+  and filtering by it raised on AshPostgres, which filters in SQL. The form
+  now offers a calculation only when it has an expression, as sorting
+  already did, on every data layer: on ETS, which evaluates such a
+  calculation in Elixir, it filtered fine and is no longer offered either,
+  and a `filterable:` naming one now fails to compile.
 
 - **Back arrows and the pager's arrows point the reading way in a
   right-to-left language.** Under `dir="rtl"` the details page's back arrow,

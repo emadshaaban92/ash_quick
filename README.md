@@ -997,11 +997,21 @@ an operator and a value, in groups joined by AND or OR. The applied filter is
 carried in the URL, shown above the list as chips, and followed by the export.
 The form offers every public, `filterable?` attribute, aggregate and
 calculation of a type it has a row for: strings, numbers, dates, timestamps,
-booleans, UUIDs, atoms, fields with a fixed set of values, and lists of such
-values (`{:array, :atom}` with `one_of` on its items, or a list of an
-`Ash.Type.Enum`). The form leaves out a belongs_to relationship's source
-attribute, and any field a field policy hides from the visitor on every
-record. A visitor left with no field to filter by sees no filter button.
+booleans, UUIDs, atoms, amounts of money, fields with a fixed set of values,
+and lists of such values (`{:array, :atom}` with `one_of` on its items, or a
+list of an `Ash.Type.Enum`). The form leaves out a belongs_to relationship's
+source attribute, a field Ash filters by simple equality only (`filterable?
+:simple_equality`), a calculation with no `expression/2`, which a filter
+cannot ask in SQL, and any field a field policy hides from the visitor on
+every record. A visitor left with no field to filter by sees no filter
+button.
+
+An AshMoney `:money` field, stored as its default `money_with_currency`, is
+compared by its amount, with one in the same currency: `EUR 10` is in
+euros, and `10` in the field's default currency, as its form input reads it,
+or with none set, in the currency of Localize's locale. The form holds each
+row with its currency, `USD 10`, so a link reads the same for every reader. A
+row in another currency never matches, except under !=.
 
 A list is filtered with Has Any Of, which keeps the rows whose list holds any
 of the values picked. Is Empty is offered on every list, `allow_nil?: false`

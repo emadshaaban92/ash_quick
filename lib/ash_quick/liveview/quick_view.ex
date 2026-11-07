@@ -134,9 +134,10 @@ defmodule AshQuick.LiveView.QuickView do
       order: `[:number, :placed_at, :status]`. Each is a field the form
       offers when it is not given — a public, `filterable?` attribute,
       aggregate or calculation of a type it has a row for, and no belongs_to
-      relationship's source attribute — though not necessarily a list
-      column, or such a field of a related resource, reached one hop through
-      a public belongs_to: `[:number, customer: :name]`, or `[customer:
+      relationship's source attribute, field filterable by simple equality
+      only, or calculation without `expression/2` — though not necessarily
+      a list column, or such a field of a related resource, reached one hop
+      through a public belongs_to: `[:number, customer: :name]`, or `[customer:
       :name]` as one entry. The form lists that one as "Customer › Name",
       a link names it `customer.name`, and Ash applies the customer's read
       policies to the filter. The QuickView refuses any other entry, a

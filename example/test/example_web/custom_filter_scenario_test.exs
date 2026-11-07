@@ -235,7 +235,150 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
     end
   end
 
+  describe "a Money field" do
+    setup %{conn: conn, admin: admin} do
+      {:ok, conn: log_in(conn, admin)}
+    end
+
+    test "is offered, compared by its amount", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      assert "Fee" in texts(view, "select[name^='field_name-'] option")
+
+      uuid = filter_uuid(view)
+      filter_change(view, "field_name-#{uuid}", "fee")
+
+      assert texts(view, "select[name='operator-#{uuid}'] option") ==
+               ["=", "!=", ">", ">=", "<", "<=", "Is Empty", "Is Not Empty"]
+    end
+
+    # A value without a currency is one in the field's default, as its form
+    # input reads it, and a row in another currency is never compared with it.
+    test "keeps the rows above an amount in the same currency", %{conn: conn} do
+      amount = System.unique_integer([:positive]) + 1_000_000
+      above = filter_field(code: unique("FEE"), fee: Money.new(:USD, amount + 1))
+      below = filter_field(code: unique("FEE"), fee: Money.new(:USD, amount - 1))
+      euros = filter_field(code: unique("FEE"), fee: Money.new(:EUR, amount + 1))
+
+      view = apply_filter(conn, "/test/filter_fields", "fee", "gt", "#{amount}")
+
+      cells = texts(view, "td")
+      assert above.code in cells
+      refute below.code in cells
+      refute euros.code in cells
+      refute render(view) =~ "couldn&#39;t be applied"
+    end
+
+    test "reads a currency typed with the amount", %{conn: conn} do
+      amount = System.unique_integer([:positive]) + 1_000_000
+      dollars = filter_field(code: unique("FEE"), fee: Money.new(:USD, amount))
+      euros = filter_field(code: unique("FEE"), fee: Money.new(:EUR, amount))
+
+      view = apply_filter(conn, "/test/filter_fields", "fee", "equals", "EUR #{amount}")
+
+      cells = texts(view, "td")
+      assert euros.code in cells
+      refute dollars.code in cells
+    end
+
+    # Another currency's amount is not the one named, whatever it is.
+    test "keeps a row in another currency as not equal", %{conn: conn} do
+      amount = System.unique_integer([:positive]) + 1_000_000
+      same = filter_field(code: unique("FEE"), fee: Money.new(:USD, amount))
+      euros = filter_field(code: unique("FEE"), fee: Money.new(:EUR, amount))
+
+      view = apply_filter(conn, "/test/filter_fields", "fee", "not_equals", "#{amount}")
+
+      cells = texts(view, "td")
+      assert euros.code in cells
+      refute same.code in cells
+    end
+
+    # The link then reads the same for everyone it reaches.
+    test "holds a bare amount with its currency", %{conn: conn} do
+      view = apply_filter(conn, "/test/filter_fields", "fee", "gt", "10.5")
+
+      assert applied(view) == [{"fee", "gt", "USD 10.5"}]
+    end
+
+    # With no default currency, ex_money reads a bare amount in the currency
+    # of Localize's locale, which a host may set per reader: the pound for an
+    # Arabic one. Held with it, the row reads the same for an English one.
+    test "holds the currency a bare amount was read in on a field with no default" do
+      fields = CustomFilter.filterable_fields(FilterFields, [:deposit])
+
+      row = %CustomFilter{
+        uuid: Ash.UUID.generate(),
+        field_name: "deposit",
+        operator: "equals",
+        value: "10"
+      }
+
+      Localize.put_locale(:ar)
+      held = CustomFilter.with_currencies(row, fields)
+      assert held.value == "EGP 10"
+
+      Localize.put_locale(:en)
+      assert CustomFilter.with_currencies(held, fields).value == "EGP 10"
+    end
+
+    test "filters by the currency a link holds", %{conn: conn} do
+      amount = System.unique_integer([:positive]) + 1_000_000
+      pounds = filter_field(code: unique("DEP"), deposit: Money.new(:EGP, amount))
+      dollars = filter_field(code: unique("DEP"), deposit: Money.new(:USD, amount))
+
+      filter =
+        encode_filter([
+          %{"field_name" => "deposit", "operator" => "equals", "value" => "EGP #{amount}"}
+        ])
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+      cells = texts(view, "td")
+      assert pounds.code in cells
+      refute dollars.code in cells
+    end
+
+    test "refuses a value that is no amount under its row", %{conn: conn} do
+      view = apply_filter(conn, "/test/filter_fields", "fee", "gt", "cheap")
+
+      assert texts(view, "#value-error-#{filter_uuid(view)}") == ["is invalid"]
+      refute_patched(view)
+    end
+
+    # AshMoney's Postgres operators raise when two currencies meet, so
+    # comparing whole `Money` values refused the filter on any table holding
+    # a price in another currency.
+    test "compares prices on Postgres with another currency in the table", %{
+      conn: conn,
+      admin: admin
+    } do
+      amount = System.unique_integer([:positive]) + 1_000_000
+      above = product(name: unique("Tent "), price: Money.new(:USD, amount + 1), actor: admin)
+      below = product(name: unique("Tent "), price: Money.new(:USD, amount - 1), actor: admin)
+      euros = product(name: unique("Tent "), price: Money.new(:EUR, amount + 1), actor: admin)
+
+      view = apply_filter(conn, "/products", "price", "gte", "USD #{amount}")
+
+      cells = texts(view, "td")
+      assert above.name in cells
+      refute below.name in cells
+      refute euros.name in cells
+      refute render(view) =~ "couldn&#39;t be applied"
+    end
+  end
+
   describe "the fields offered" do
+    # Ash refuses it under an `or` or a `not`, or named twice, all of which a
+    # row of the form can be. Offering it took the list page down.
+    test "leave out one Ash filters by simple equality only", %{conn: conn, admin: admin} do
+      {:ok, view, _html} =
+        live(log_in(conn, admin), "/test/filter_fields?show_custom_filter=true")
+
+      fields = texts(view, "select[name^='field_name-'] option")
+      assert "Code" in fields
+      refute "Reference" in fields
+    end
+
     test "leave out one a field policy hides from the actor", %{conn: conn, editor: editor} do
       {:ok, view, _html} =
         live(log_in(conn, editor), "/test/filter_fields?show_custom_filter=true")

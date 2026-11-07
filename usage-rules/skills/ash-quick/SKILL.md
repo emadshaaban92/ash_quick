@@ -175,8 +175,11 @@ The URL is not an option here — it is declared in the router with
   `[:number, :placed_at, :status]`; `[]` leaves the filter button out, as does
   a visitor whom field policies leave none of them. Not given, every public,
   `filterable?` attribute, aggregate and calculation of a type the form has a
-  row for, a list of fixed-set values among them (filtered by Has Any Of), no
-  belongs_to source attribute. Each one the form offers, checked at compile
+  row for, a list of fixed-set values among them (filtered by Has Any Of),
+  and a composite AshMoney `:money` (its amount compared within its currency:
+  `EUR 10`; a bare `10` in the default currency, held as `USD 10`); no belongs_to source attribute, no
+  `filterable? :simple_equality` field, no calculation without
+  `expression/2`. Each one the form offers, checked at compile
   time; need not be list columns. A field of a related resource is reached one
   hop through a public belongs_to, `[:sku, brand: :name]` (or `[brand: :name]`
   as one entry): shown as "Brand › Name", carried in the URL as `brand.name`,
