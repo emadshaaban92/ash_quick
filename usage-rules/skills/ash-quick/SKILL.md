@@ -980,16 +980,24 @@ are not `gettext` call sites, so `mix ash_quick.gen.gettext` writes
 item title a function builds) with `dgettext_noop("ash_quick", "...")`.
 Without `:gettext`, everything is English.
 
+An export runs in a task, which inherits no locale, so it is written in the
+scope's (`AshQuick.Scope.locale/1`): the field `use AshQuick.Scope, locale:
+:locale` names, else `config :ash_quick, locale:` (`"en"`). The scope stage
+sets the page's locale from the same value,
+`Gettext.put_locale(MyAppWeb.Gettext, AshQuick.Scope.locale(scope))`, so an
+export reads like the page it came from.
+
 A humanized name is title-cased words (`vat_number` reads "Vat Number"). A
 resource rewords one once, for every page and form that names it, in
-`ash_quick do labels do ... end end`: `label :vat_no, "VAT Number"` for a
+`ash_quick do labels do ... end end`: `label :vat_number, "VAT Number"` for a
 field, relationship, action or action argument, `label :status, :paid_off,
 "Paid Off in Full"` for one value of a field. The declared label is the
 English drawn and the msgid `mix ash_quick.gen.gettext` writes; a QuickView's
 `label:` still wins on its page; a name or value the resource lacks does not
 compile. An `Ash.Type.Enum` value's own `label:` rewords it wherever the enum
-is used, and a translation in the catalogue rewords any label, English
-included (`priv/gettext/en/LC_MESSAGES/ash_quick.po`).
+is used, unless the resource labels that value, and a translation in the
+catalogue rewords any label, English included
+(`priv/gettext/en/LC_MESSAGES/ash_quick.po`).
 
 A custom template drawing a resource's labels itself calls `AshQuick.Labels`,
 passing the resource: `name/2` (the resource's label or the humanized name,
