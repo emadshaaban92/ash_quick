@@ -4,6 +4,36 @@
 
 ### Features
 
+- **Files can live in a bucket only the application can reach.**
+  `AshQuick.Storage.S3.Proxy` keeps attachments and exports in an
+  S3-compatible bucket, but hands out links to
+  `AshQuick.Storage.S3.Proxy.Plug` on the application's origin rather than
+  bucket URLs. The plug checks the link as `AshQuick.Storage.Local.Plug` does
+  (a `public/*` file by its path, any other with its `Phoenix.Token`), sends
+  the same `nosniff`, sandbox and download headers, and streams the object
+  from the bucket in ranged `GET`s of `:chunk_size` bytes (5 MiB by
+  default). It answers a single `Range` request with `206`, passes the
+  bucket's `ETag` and `Last-Modified` on, answers a matching
+  `if-none-match` with `304`, a key the bucket does not hold with `404` and a
+  bucket it cannot read with `502`. Browser uploads come over the LiveView
+  socket and are written with `AshQuick.Storage.S3.put_file/3`, so the bucket
+  needs no policy for `public/*` and no CORS rules. The bucket is
+  `config :ash_quick, AshQuick.Storage.S3.Proxy, bucket:`, falling back to
+  `:s3_bucket`. A host module written with `use AshQuick.Storage.S3.Proxy`
+  gets the three seam callbacks delegated, overridable, and adds the
+  lifecycle ones, and `mix ash_quick.check` holds the router to the forward.
+  A requested key holding an empty, `.` or `..` segment, a backslash or a
+  NUL is refused before its link is checked, by this plug and
+  `AshQuick.Storage.Local.Plug` alike, and `put_file/3` refuses it too. The
+  proxy also refuses a key holding a `?` or a `#`, which ExAws would send to
+  the bucket as signed query parameters. A
+  range under a stale `if-range` gets the whole object, and a bucket's `403`
+  reads as a `404`, logged at debug level.
+  Reads retry once unless `:ex_aws` says otherwise, each ranged `GET` is
+  pinned to the `HEAD`'s `ETag`, and a `HEAD` that `Plug.Head` turned into a
+  `GET` reads no body from the bucket. `AshQuick.Storage.S3.put_file/3` takes
+  `:ex_aws`, overrides for its `ExAws` request.
+
 - **Files can live on the server's own disk.** `AshQuick.Storage.Local`
   is a storage module that writes attachments and exports under a configured
   `:root` and serves them through `AshQuick.Storage.Local.Plug`, which the
@@ -18,8 +48,8 @@
   a `:`, is refused on write and read. It suits one node, or several sharing a volume the host
   backs up. A host module written with `use AshQuick.Storage.Local` gets the
   three seam callbacks delegated, overridable, and adds the lifecycle ones.
-  `mix ash_quick.check` reports `:unserved_local_storage` when the router
-  does not route `:at` to the plug, and `:piped_local_storage` when it does so
+  `mix ash_quick.check` reports `:unserved_storage` when the router
+  does not route `:at` to the plug, and `:piped_storage` when it does so
   inside a pipeline. Nothing deletes files, so a host clears `exports/`
   itself.
 

@@ -90,8 +90,11 @@ defmodule ExampleWeb.Router do
     # Where `AshQuick.Storage.Local` serves its objects, for the cases that
     # swap `:storage` to it (`config/test.exs` sets its `:at`). Outside every
     # pipeline: a link's token is what opens a private object, not the session.
+    # And where `AshQuick.Storage.S3.Proxy` serves its objects, for the cases
+    # that swap `:storage` to that.
     scope "/test", alias: false do
       forward "/files", AshQuick.Storage.Local.Plug
+      forward "/proxied_files", AshQuick.Storage.S3.Proxy.Plug
     end
 
     scope "/test", alias: false do

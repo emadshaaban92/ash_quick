@@ -36,6 +36,14 @@ config :ash_quick, AshQuick.Storage.Local,
   endpoint: ExampleWeb.Endpoint,
   at: "/test/files"
 
+# Only the cases that swap `:storage` to `AshQuick.Storage.S3.Proxy` read and
+# write this bucket, through `Example.Test.S3Stub`; the router forwards
+# `/test/proxied_files` to its plug.
+config :ash_quick, AshQuick.Storage.S3.Proxy,
+  bucket: "ash-quick-example-proxied",
+  endpoint: ExampleWeb.Endpoint,
+  at: "/test/proxied_files"
+
 # `ExampleWeb.Router` serves pages over `test/support` resources only when
 # this is set, the way `:dev_routes` gates the dashboard.
 config :example, test_routes: true
