@@ -648,6 +648,40 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
       """)
     end
 
+    # A second `uploaders:` key beside one that is not an inline object would
+    # silently replace one of the two, so the script is left for the host.
+    test "says how to add the uploaders when the host's are not an inline object" do
+      app_js = """
+      import {Socket} from "phoenix"
+      import {LiveSocket} from "phoenix_live_view"
+
+      const liveSocket = new LiveSocket("/live", Socket, {
+        uploaders: Uploaders,
+        hooks: {},
+      })
+      """
+
+      igniter = install(%{"assets/js/app.js" => app_js})
+
+      assert_unchanged(igniter, "assets/js/app.js")
+      assert_has_warning(igniter, &(&1 =~ "const Uploaders = {...ashQuickUploaders, ...}"))
+      refute Enum.any?(igniter.warnings, &(&1 =~ "uploaders: {...ashQuickUploaders}"))
+    end
+
+    test "says the same for the shorthand `uploaders`" do
+      app_js = """
+      import {Socket} from "phoenix"
+      import {LiveSocket} from "phoenix_live_view"
+
+      const liveSocket = new LiveSocket("/live", Socket, {hooks: {}, uploaders})
+      """
+
+      igniter = install(%{"assets/js/app.js" => app_js})
+
+      assert_unchanged(igniter, "assets/js/app.js")
+      assert_has_warning(igniter, &(&1 =~ "const Uploaders = {...ashQuickUploaders, ...}"))
+    end
+
     # The last import spread over lines: its first line, `import {`, also opens
     # earlier single-line imports, so only its position says where it ends.
     test "puts the import after a last import spread over several lines" do

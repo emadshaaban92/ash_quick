@@ -427,7 +427,9 @@ keeps a checkbox, a radio, a select or a searchable dropdown in the action
 modal from being changed from the keyboard while the action runs.
 `ashQuickUploaders` holds `S3`, the LiveView client uploader that sends a
 picked file to the presigned `PUT` `AshQuick.Storage.S3` hands out; without it
-a file picked for an attachment never leaves the browser. A storage module
+a file picked for an attachment never leaves the browser. The bucket's CORS
+rules must allow a `PUT` with a `Content-Type` header from the application's
+origin (see `AshQuick.Storage.S3`). A storage module
 that takes uploads over the socket needs neither (see `AshQuick.Storage`,
 "Browser uploads"). The installer adds the import and the spreads when they
 are missing.

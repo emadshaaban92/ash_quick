@@ -56,6 +56,25 @@ defmodule ExampleWeb.SocketUploadScenarioTest do
            |> Enum.any?()
   end
 
+  # The refusal is the only trace the pick leaves, so typing elsewhere in the
+  # form must not take it down before it is read. Acting on the upload does.
+  test "keeps the refusal up while the form is edited, until a file is picked again", ctx do
+    %{conn: conn, admin: admin} = ctx
+
+    {:ok, view, _html} = live(log_in(conn, admin), ~p"/categories/create")
+
+    pick(view, "refuse-me.jpg")
+
+    html =
+      view
+      |> form("#category-create", %{"form" => %{"name" => "Tents"}})
+      |> render_change(%{"_target" => ["form", "name"]})
+
+    assert html =~ "This file was refused and has not been uploaded"
+
+    refute pick(view, "tent.jpg") =~ "This file was refused and has not been uploaded"
+  end
+
   # A sub-form's upload is not taken when it lands: it is consumed by the save,
   # which is where the store refuses it.
   test "says so when the store refuses a sub-form's file at save", ctx do

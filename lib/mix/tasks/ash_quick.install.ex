@@ -562,6 +562,13 @@ if Code.ensure_loaded?(Igniter) do
         imports == [] or not Regex.match?(~r/hooks:\s*\{/, content) ->
           {:warning, hooks_instructions("#{@js_path} has no `hooks: {...}` to add them to")}
 
+        # `uploaders: Uploaders` or the shorthand `uploaders`: there is no
+        # object to spread into, and a second `uploaders:` key beside it would
+        # silently replace one or the other. The host spreads them in itself.
+        not Regex.match?(~r/\buploaders:\s*\{/, content) and
+            Regex.match?(~r/\buploaders\s*(:|,|\}|\n)/, content) ->
+          {:warning, named_uploaders_instructions()}
+
         true ->
           [{start, length}] = List.last(imports)
           at = after_line(content, start + length)
@@ -579,8 +586,8 @@ if Code.ensure_loaded?(Igniter) do
     # Into the host's own `uploaders: {...}` when it has one; otherwise a key of
     # its own beside `hooks`, at the same indent.
     defp add_library_uploaders(content) do
-      if Regex.match?(~r/uploaders:\s*\{/, content) do
-        String.replace(content, ~r/uploaders:\s*\{/, "uploaders: {...ashQuickUploaders, ",
+      if Regex.match?(~r/\buploaders:\s*\{/, content) do
+        String.replace(content, ~r/\buploaders:\s*\{/, "uploaders: {...ashQuickUploaders, ",
           global: false
         )
       else
@@ -627,6 +634,23 @@ if Code.ensure_loaded?(Igniter) do
             hooks: {...ashQuickHooks},
             uploaders: {...ashQuickUploaders}
           })
+      """
+    end
+
+    defp named_uploaders_instructions do
+      """
+      #{@js_path} names the LiveSocket's uploaders by a variable rather than \
+      an inline `{...}`, and a second `uploaders:` key would replace one of \
+      the two, so AshQuick's hooks and uploaders are not registered. Without them the action \
+      modal's controls still answer the keyboard while an action runs, and a \
+      file picked for an attachment is never uploaded. Import them:
+
+          #{@js_hooks_import}
+
+      spread the hooks into the LiveSocket's `hooks: {...ashQuickHooks, ...}`, \
+      and add the uploaders to the object your `uploaders` names, for example:
+
+          const Uploaders = {...ashQuickUploaders, ...}
       """
     end
 
