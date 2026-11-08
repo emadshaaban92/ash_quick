@@ -43,7 +43,7 @@ defmodule AshQuick.Audit.Row do
 
     %{
       resource_name: Ash.Resource.Info.short_name(changeset.resource),
-      resource_id: record.id,
+      resource_id: resource_id(record.id),
       action_type: changeset.action.type,
       action_name: changeset.action.name,
       attributes: storable(changeset.attributes),
@@ -59,6 +59,12 @@ defmodule AshQuick.Audit.Row do
     }
     |> put_changes(changeset, changes)
   end
+
+  # As text, so a `:string` column — what the installer generates — takes an
+  # integer key as it takes a UUID, and a `:uuid` column still casts it back.
+  defp resource_id(nil), do: nil
+  defp resource_id(id) when is_binary(id), do: id
+  defp resource_id(id), do: to_string(id)
 
   # What the action was given, as `changeset.attributes` holds it on the
   # in-memory path, so the row's `attributes` reads the same whichever path the

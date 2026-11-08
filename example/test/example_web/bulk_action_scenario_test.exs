@@ -223,6 +223,54 @@ defmodule ExampleWeb.BulkActionScenarioTest do
       assert Ash.reload!(untouched, authorize?: false).active
     end
 
+    # With every selected row skipped there is no "other" row: the flash says
+    # the action was not applied at all.
+    test "a derived action that writes no row says it was not applied", ctx do
+      %{conn: conn, admin: admin, first: first} = ctx
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products")
+        |> tick_rows([first.id])
+
+      move_behind_the_view(first)
+
+      session
+      |> run_bulk("Deactivate")
+      |> assert_has("#flash-error",
+        text:
+          "Deactivate was not applied. The selected row was not changed " <>
+            "and is still selected: check it and try again."
+      )
+      |> assert_has("input[name='#{first.id}'][checked]")
+
+      assert Ash.reload!(first, authorize?: false).active
+    end
+
+    test "a derived action that writes none of several rows says so", ctx do
+      %{conn: conn, admin: admin, first: first, second: second} = ctx
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products")
+        |> tick_rows([first.id, second.id])
+
+      move_behind_the_view(first)
+      move_behind_the_view(second)
+
+      session
+      |> run_bulk("Deactivate")
+      |> assert_has("#flash-error",
+        text:
+          "Deactivate was not applied. The 2 selected rows were not changed " <>
+            "and are still selected: check them and try again."
+      )
+      |> assert_has("input[name='#{first.id}'][checked]")
+      |> assert_has("input[name='#{second.id}'][checked]")
+    end
+
     # Destroys take the lock too (#15), and a stale one is skipped the same way
     # rather than failing the batch. Pinned so an Ash change that turns it into
     # an error, which the error branches would then report, is noticed.

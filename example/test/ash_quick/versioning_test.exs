@@ -254,6 +254,36 @@ defmodule AshQuick.VersioningTest do
       assert %{version: 2} = row(stale)
     end
 
+    # Every row's `after_batch` hook builds its own audit entry, which Ash got
+    # right only from 3.37.3: before it, each row was handed the same
+    # changeset, so the entries named one row's names for every row.
+    test "update_many writes each row's own audit entry", %{admin: admin} do
+      first = Ash.get!(AtomicBrand, brand(actor: admin).id)
+      second = Ash.get!(AtomicBrand, brand(actor: admin).id)
+      first_name = unique("Many ")
+      second_name = unique("Many ")
+
+      result =
+        Ash.update_many(
+          [{first, %{name: first_name}}, {second, %{name: second_name}}],
+          AtomicBrand,
+          :rename,
+          actor: admin,
+          return_errors?: true
+        )
+
+      assert result.status == :success
+
+      for {brand, name} <- [{first, first_name}, {second, second_name}] do
+        from = brand.name
+
+        assert %{changes: %{"name" => %{"from" => ^from, "to" => ^name}}} =
+                 AuditLog
+                 |> Ash.Query.filter(resource_id == ^brand.id and action_name == :rename)
+                 |> Ash.read_one!(authorize?: false)
+      end
+    end
+
     test "a bulk write by query declines the atomic strategy and streams, locked", %{
       brand: brand,
       admin: admin

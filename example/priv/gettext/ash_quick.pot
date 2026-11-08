@@ -607,6 +607,12 @@ msgstr ""
 msgid "%{relationship} › %{field}"
 msgstr ""
 
+#, elixir-format
+msgid "%{action} was not applied. The selected row was not changed and is still selected: check it and try again."
+msgid_plural "%{action} was not applied. The %{count} selected rows were not changed and are still selected: check them and try again."
+msgstr[0] ""
+msgstr[1] ""
+
 msgid "Accepts"
 msgstr ""
 
