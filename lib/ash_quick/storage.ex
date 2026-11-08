@@ -99,7 +99,9 @@ defmodule AshQuick.Storage do
   The default implementation is `AshQuick.Storage.S3` (plain ExAws, bucket
   from `AshQuick.Config.s3_bucket/0`). `AshQuick.Storage.Local` keeps objects
   on the server's disk and serves them through a plug of its own, for an
-  application on one node or a shared volume. A host that already owns an
+  application on one node or a shared volume. `AshQuick.Storage.S3.Proxy`
+  keeps them in a bucket only the application can reach, and streams them to
+  the browser through a plug of its own. A host that already owns an
   object-store client points the seam at it and keeps one bucket across
   both:
 
@@ -131,8 +133,9 @@ defmodule AshQuick.Storage do
       off the form, and the page flashes that it was not uploaded.
 
   Socket mode is meant for a store that is local or fast to write to, such
-  as `AshQuick.Storage.Local`. For a remote store, a large file freezes the
-  page for the whole write, so a remote store should implement
+  as `AshQuick.Storage.Local`, or one the browser cannot reach, such as
+  `AshQuick.Storage.S3.Proxy`. A large file freezes the page for the whole
+  write, so a remote store the browser can reach should implement
   `c:upload_target/2` and let the browser write the bytes itself.
 
   ## Object lifecycle
@@ -577,6 +580,10 @@ defmodule AshQuick.Storage do
 
     An S3-compatible store has the same setting under its own name.
 
+    All of this needs a bucket the reader's browser can reach. For a bucket
+    only the application can reach, use `AshQuick.Storage.S3.Proxy`, which
+    serves objects through the application instead.
+
     Every callback also takes `:bucket` and `:host` in its opts, over the
     configured ones. They are for a host whose own object-store seam owns the
     bucket: it points `:storage` at itself and delegates here with its own
@@ -584,6 +591,9 @@ defmodule AshQuick.Storage do
     per host:
 
         def url(key, opts), do: AshQuick.Storage.S3.url(key, [bucket: "mine"] ++ opts)
+
+    `put_file/3` also takes `:ex_aws`, overrides for the `ExAws` request it
+    makes, as `ExAws.request/2` takes them.
     """
     @behaviour AshQuick.Storage
 
@@ -620,7 +630,7 @@ defmodule AshQuick.Storage do
       path
       |> ExAws.S3.Upload.stream_file()
       |> ExAws.S3.upload(bucket(opts), key, s3_opts)
-      |> ExAws.request()
+      |> ExAws.request(Keyword.get(opts, :ex_aws, []))
       |> case do
         {:ok, _} -> :ok
         {:error, term} -> {:error, term}

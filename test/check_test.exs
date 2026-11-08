@@ -297,7 +297,7 @@ defmodule AshQuick.CheckLocalStorageTest do
   test "a router forwarding nothing there is a defect naming the forward to add" do
     assert {[finding], []} = Storage.run(BareRouter, Local)
 
-    assert %{check: :unserved_local_storage, subject: "/admin/files", severity: :defect} =
+    assert %{check: :unserved_storage, subject: "/admin/files", severity: :defect} =
              finding
 
     assert finding.message =~ ~s(forward "/admin/files", AshQuick.Storage.Local.Plug)
@@ -310,16 +310,90 @@ defmodule AshQuick.CheckLocalStorageTest do
 
   test "a forward inside a pipeline is a defect" do
     assert {[finding], []} = Storage.run(PipedRouter, Local)
-    assert %{check: :piped_local_storage, subject: "/admin/files"} = finding
+    assert %{check: :piped_storage, subject: "/admin/files"} = finding
     assert finding.message =~ "[:browser]"
   end
 
   test "a storage module that uses Local is held to the forward too" do
-    assert {[%{check: :unserved_local_storage}], []} = Storage.run(BareRouter, WrappedStore)
+    assert {[%{check: :unserved_storage}], []} = Storage.run(BareRouter, WrappedStore)
     assert Storage.run(ForwardingRouter, WrappedStore) == {[], []}
   end
 
   test "another storage module is not asked about" do
     assert Storage.run(BareRouter, AshQuick.Storage.S3) == {[], []}
+  end
+end
+
+defmodule AshQuick.CheckS3ProxyStorageTest do
+  # `AshQuick.Storage.S3.Proxy` reads its `:at` from configuration, so the case
+  # runs alone while it swaps it.
+  use ExUnit.Case, async: false
+
+  alias AshQuick.Check.Storage
+  alias AshQuick.Storage.S3.Proxy
+
+  defmodule ForwardingRouter do
+    use Phoenix.Router
+
+    scope "/admin" do
+      forward "/files", AshQuick.Storage.S3.Proxy.Plug
+    end
+  end
+
+  defmodule LocalRouter do
+    use Phoenix.Router
+
+    scope "/admin" do
+      forward "/files", AshQuick.Storage.Local.Plug
+    end
+  end
+
+  defmodule PipedRouter do
+    use Phoenix.Router
+
+    pipeline :browser do
+      plug :accepts, ["html"]
+    end
+
+    scope "/admin" do
+      pipe_through :browser
+      forward "/files", AshQuick.Storage.S3.Proxy.Plug
+    end
+  end
+
+  defmodule WrappedStore do
+    use AshQuick.Storage.S3.Proxy
+  end
+
+  setup do
+    previous = Application.get_env(:ash_quick, Proxy)
+    Application.put_env(:ash_quick, Proxy, at: "/admin/files")
+
+    on_exit(fn ->
+      if previous,
+        do: Application.put_env(:ash_quick, Proxy, previous),
+        else: Application.delete_env(:ash_quick, Proxy)
+    end)
+  end
+
+  test "a router forwarding the storage's path to its plug is not reported" do
+    assert Storage.run(ForwardingRouter, Proxy) == {[], []}
+    assert Storage.run(ForwardingRouter, WrappedStore) == {[], []}
+  end
+
+  test "a forward to the local plug is a defect naming the proxy's plug" do
+    assert {[finding], []} = Storage.run(LocalRouter, Proxy)
+    assert %{check: :unserved_storage, subject: "/admin/files"} = finding
+    assert finding.message =~ ~s(forward "/admin/files", AshQuick.Storage.S3.Proxy.Plug)
+    assert finding.message =~ "config :ash_quick, AshQuick.Storage.S3.Proxy"
+  end
+
+  test "a forward inside a pipeline is a defect" do
+    assert {[%{check: :piped_storage}], []} = Storage.run(PipedRouter, WrappedStore)
+  end
+
+  test "with no router, says the forward was not read" do
+    assert {[], [{:storage, reason}]} = Storage.run(nil, Proxy)
+    assert reason =~ "AshQuick.Storage.S3.Proxy"
   end
 end

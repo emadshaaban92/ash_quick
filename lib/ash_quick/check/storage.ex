@@ -1,6 +1,8 @@
 defmodule AshQuick.Check.Storage do
   @moduledoc false
-  # The router held to where `AshQuick.Storage.Local` builds its URLs.
+  # The router held to where a store that serves objects from the
+  # application's origin (`AshQuick.Storage.Local`, `AshQuick.Storage.S3.Proxy`)
+  # builds its URLs.
   #
   # The storage reads its `:at` from configuration, and the forward that serves
   # it is written in the router, so the two can drift apart with nothing to say
@@ -15,54 +17,58 @@ defmodule AshQuick.Check.Storage do
 
   alias AshQuick.Check.Finding
   alias AshQuick.Storage.Local
+  alias AshQuick.Storage.S3.Proxy
+
+  # Each store that serves its own objects, with the plug that serves them.
+  @served [{Local, Local.Plug}, {Proxy, Proxy.Plug}]
 
   def run(router, storage \\ AshQuick.Config.storage()) do
-    cond do
-      not Local.backs?(storage) ->
+    case Enum.find(@served, fn {store, _plug} -> store.backs?(storage) end) do
+      nil ->
         {[], []}
 
-      is_nil(router) ->
-        {[], [{:storage, "no router was given, so the local storage's forward was not read"}]}
+      {store, _plug} when is_nil(router) ->
+        {[], [{:storage, "no router was given, so #{inspect(store)}'s forward was not read"}]}
 
-      true ->
-        {findings(router, Local.at([])), []}
+      {store, plug} ->
+        {findings(router, store, plug, store.at([])), []}
     end
   end
 
-  defp findings(router, at) do
+  defp findings(router, store, plug, at) do
     case Phoenix.Router.route_info(router, "GET", at <> "/public/probe", nil) do
-      %{plug: Local.Plug, pipe_through: []} -> []
-      %{plug: Local.Plug, pipe_through: pipes} -> [piped(router, at, pipes)]
-      _other -> [unserved(router, at)]
+      %{plug: ^plug, pipe_through: []} -> []
+      %{plug: ^plug, pipe_through: pipes} -> [piped(router, plug, at, pipes)]
+      _other -> [unserved(router, store, plug, at)]
     end
   end
 
-  defp unserved(router, at) do
+  defp unserved(router, store, plug, at) do
     %Finding{
-      check: :unserved_local_storage,
+      check: :unserved_storage,
       subject: at,
       message: """
-      `:storage` keeps its objects through AshQuick.Storage.Local, which \
+      `:storage` keeps its objects through #{inspect(store)}, which \
       builds every URL under #{at}, but #{inspect(router)} does not route \
-      #{at} to AshQuick.Storage.Local.Plug.
+      #{at} to #{inspect(plug)}.
 
       Every attachment renders as a broken link and every export's download \
       fails. Forward the path, outside any pipeline:
 
-          forward "#{at}", AshQuick.Storage.Local.Plug
+          forward "#{at}", #{inspect(plug)}
 
-      or set `:at` under `config :ash_quick, AshQuick.Storage.Local` to the \
+      or set `:at` under `config :ash_quick, #{inspect(store)}` to the \
       path the forward is at.
       """
     }
   end
 
-  defp piped(router, at, pipes) do
+  defp piped(router, plug, at, pipes) do
     %Finding{
-      check: :piped_local_storage,
+      check: :piped_storage,
       subject: at,
       message: """
-      #{inspect(router)} forwards #{at} to AshQuick.Storage.Local.Plug \
+      #{inspect(router)} forwards #{at} to #{inspect(plug)} \
       through #{inspect(pipes)}.
 
       What opens an object is the token on its link, not the session. A \

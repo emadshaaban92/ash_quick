@@ -1065,9 +1065,17 @@ covers wiring them up.
   types are sent as downloads. Suits one node or a shared volume the host backs
   up; nothing deletes files, so the host clears `exports/`. A host module that
   adds lifecycle callbacks does `use AshQuick.Storage.Local` (delegates the
-  seam). Set options in config, not on the forward. `mix ash_quick.check`
-  reports `:unserved_local_storage` (no route to the plug at `:at`) and
-  `:piped_local_storage` (forward inside a pipeline).
+  seam). Set options in config, not on the forward.
+  `AshQuick.Storage.S3.Proxy` is for a bucket only the app can reach: `storage:
+  AshQuick.Storage.S3.Proxy`, `config :ash_quick, AshQuick.Storage.S3.Proxy,
+  bucket:, endpoint:` (or `secret_key_base:`; `at:`, `chunk_size:`), and
+  `forward "/ash_quick/files", AshQuick.Storage.S3.Proxy.Plug` outside any
+  pipeline. Links and headers as for Local; the plug streams the object from
+  the bucket in ranged chunks and answers single `Range` requests with 206.
+  Uploads come over the socket and are written with `S3.put_file/3`. A host
+  module that adds lifecycle callbacks does `use AshQuick.Storage.S3.Proxy`.
+  For either store `mix ash_quick.check` reports `:unserved_storage` (no route
+  to the plug at `:at`) and `:piped_storage` (forward inside a pipeline).
 - `AshQuick.AccessControl` — which routes a scope may navigate to. Named on the
   nav. Deliberately **not** `Ash.can?`: a filter policy allows the action and
   returns no rows, so `can?` says yes for a page that would be empty.

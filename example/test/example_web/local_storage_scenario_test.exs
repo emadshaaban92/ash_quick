@@ -83,7 +83,7 @@ defmodule ExampleWeb.LocalStorageScenarioTest do
 
   test "mix ash_quick.check finds the forward the storage builds its links under" do
     report = AshQuick.Check.run(router: ExampleWeb.Router, nav: nil, domains: [])
-    refute Enum.any?(report.findings, &(&1.check == :unserved_local_storage))
+    refute Enum.any?(report.findings, &(&1.check == :unserved_storage))
   end
 
   defp pick(view, filename) do

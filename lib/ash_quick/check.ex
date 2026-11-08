@@ -78,12 +78,13 @@ defmodule AshQuick.Check do
 
   Over the storage and the router together:
 
-    * `:unserved_local_storage` — `:storage` keeps its objects through
-      `AshQuick.Storage.Local` (it is that module, or `use`s it), but the
-      router does not route the storage's `:at` path to
-      `AshQuick.Storage.Local.Plug`, so every attachment and export link
-      fails.
-    * `:piped_local_storage` — the forward is there, inside a pipeline. The
+    * `:unserved_storage` — `:storage` keeps its objects through a store
+      that serves them from the application's origin, `AshQuick.Storage.Local`
+      or `AshQuick.Storage.S3.Proxy` (it is that module, or `use`s it), but
+      the router does not route the store's `:at` path to its plug
+      (`AshQuick.Storage.Local.Plug`, `AshQuick.Storage.S3.Proxy.Plug`), so
+      every attachment and export link fails.
+    * `:piped_storage` — the forward is there, inside a pipeline. The
       link's token is what opens an object, and a pipeline's `accepts` or
       sign-in check refuses requests the token was meant to let through.
 
