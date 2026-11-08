@@ -39,8 +39,10 @@ defmodule AshQuick.AuditTest do
   alias AshQuick.Test.Credential
   alias AshQuick.Test.LegacyAuditStore
   alias AshQuick.Test.LegacyCredential
+  alias AshQuick.Test.NumberedCredential
   alias AshQuick.Test.StampedTally
   alias AshQuick.Test.Tally
+  alias AshQuick.Test.TextKeyAuditStore
   alias AshQuick.Test.VersionedTally
 
   setup do
@@ -381,6 +383,21 @@ defmodule AshQuick.AuditTest do
       # what it always said.
       refute Map.has_key?(entry, :changes)
       assert entry.attributes[:name] == "Gateway"
+    end
+
+    # The installer's store keeps `resource_id` as text, so a host keyed by
+    # integers gets rows as one keyed by UUIDs does.
+    test "an integer key is written as text", %{actor: actor} do
+      NumberedCredential
+      |> Ash.Changeset.for_create(:create, %{id: 42, name: "Gateway"}, actor: actor)
+      |> Ash.create!()
+
+      assert [entry] =
+               TextKeyAuditStore
+               |> Ash.Query.filter(resource_id == "42")
+               |> Ash.read!()
+
+      assert entry.resource_name == :numbered_credential
     end
   end
 

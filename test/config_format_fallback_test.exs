@@ -27,10 +27,10 @@ defmodule AshQuick.ConfigFormatFallbackTest do
     IO.write(AshQuick.Config.#{call})
     """
 
+    # Only stdout is compared: a VM on a machine whose locale is not UTF-8
+    # warns about it on stderr, and that warning is no part of the answer.
     {output, 0} =
-      System.cmd("elixir", ["-pa", Application.app_dir(:ash_quick, "ebin"), "-e", script],
-        stderr_to_stdout: true
-      )
+      System.cmd("elixir", ["-pa", Application.app_dir(:ash_quick, "ebin"), "-e", script])
 
     output
   end

@@ -604,6 +604,19 @@
 
 ### Bug fixes
 
+- **The generated audit store takes a record keyed by an integer.** The
+  store `mix ash_quick.install` writes kept `resource_id` as a `:uuid`, so an
+  audited resource with an integer primary key could not write its entries.
+  The column is now a `:string`, and AshQuick writes the record's id as text,
+  which a `:uuid` column still casts, so an existing store keeps working.
+
+- **A bulk action that changed no row says it was not applied.** With every
+  selected row skipped, the flash read "Deactivate applied to 0 of 1 selected
+  row. The other row was not changed…", naming an "other" row when there was
+  only the one. It now reads "Deactivate was not applied. The selected row
+  was not changed and is still selected: check it and try again.", with its
+  Arabic translation.
+
 - **A field Ash filters by simple equality only no longer takes the list
   down.** An attribute or aggregate with `filterable? :simple_equality` made
   the filter's field lookup raise `BadBooleanError` on every list page over
@@ -1132,6 +1145,19 @@
   QuickView imports that module, so one defining its own `attachment_viewer/1`
   no longer compiles once it calls it unqualified: rename it, or call it by
   its module.
+
+- **`AshQuick.Components` has a public `zoned_datetime_input/1`.** Every
+  QuickView imports that module, so one defining its own
+  `zoned_datetime_input/1` no longer compiles once it calls it unqualified:
+  rename it, or call it by its module.
+
+- **A `filterable:` naming a calculation computed in Elixir only no longer
+  compiles.** The filter offers a calculation only when it has an
+  `expression/2`, so a QuickView whose `list: [filterable: ...]` names one
+  with `calculate/3` alone now fails to compile, naming the field. On
+  AshPostgres filtering by it always raised; on ETS it filtered, so a host on
+  ETS, or with such a calculation in a test fixture, is the one affected.
+  Give the calculation an `expression/2`, or leave it out of `filterable:`.
 
 - **`mix ash_quick.check` reports every update and destroy a page cannot
   route.** `:unroutable_action` looked only at actions taking inputs, but since

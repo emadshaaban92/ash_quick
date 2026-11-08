@@ -824,7 +824,11 @@ defmodule AshQuick.LiveView.ListUtils do
         :action_source => AshQuick.form_source(),
         AshQuick.form_stage_key() => AshQuick.form_submit_stage()
       },
-      # We shouldn't need this, but it seems to be required for some reason
+      # A write that names an actor is authorized under every domain
+      # `authorize` setting, and a `use AshQuick.Scope` scope always names one,
+      # even `nil`. A host scope with its own `Ash.Scope.ToOpts` may name none,
+      # and a `:when_requested` domain then skips authorization. The run's
+      # policy, not the menu, is what refuses a forged bulk event, so it asks.
       authorize?: true,
       strategy: :stream,
       transaction: :all,
@@ -856,6 +860,17 @@ defmodule AshQuick.LiveView.ListUtils do
 
   defp report_skipped_rows(socket, action, selected, skipped_ids) do
     put_flash(socket, :error, skipped_rows_message(action, selected, length(skipped_ids)))
+  end
+
+  # With nothing applied there is no "other" row to speak of, so the flash says
+  # the action did not go through at all.
+  defp skipped_rows_message({resource, action}, selected, selected) do
+    ngettext(
+      "%{action} was not applied. The selected row was not changed and is still selected: check it and try again.",
+      "%{action} was not applied. The %{count} selected rows were not changed and are still selected: check them and try again.",
+      selected,
+      action: Labels.name(action.name, resource)
+    )
   end
 
   defp skipped_rows_message({resource, action}, selected, skipped) do

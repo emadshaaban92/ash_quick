@@ -584,15 +584,20 @@ defmodule AshQuick do
 
   ## Field restrictions
 
-  Provides field-level access restrictions. When a field is restricted, two
-  things happen:
+  A field some actors may see but not set. Each `restrict` names an attribute
+  or argument and a check, and an actor the check refuses is kept from writing
+  that field in two places. AshQuick's forms leave the field out, so the actor
+  is never offered an input for it. And a change the extension prepends to every
+  create and update clears the field from the changeset — its attribute, its
+  argument and, on the atomic path, its atomic — so a value posted by hand, or
+  sent by any caller that is not a page, is dropped rather than written. The
+  form is the convenience; the change is what holds.
 
-    1. **UI filtering** — AshQuick forms will hide the field from actors who don't
-       pass the check.
-    2. **Backend stripping** — A change module strips restricted field values from
-       the changeset for unauthorized actors (defense in depth).
-
-  ## Usage
+  Nothing else changes. The field still reads on lists, details pages and
+  exports, and a cleared value is dropped silently rather than refused: the
+  write goes through with every other field it was given. Hiding a field from a
+  reader is a field policy's job, and refusing a write that sets one is an
+  action policy's, with `changing_attributes/1`.
 
       defmodule MyApp.Settings.User do
         use Ash.Resource,
@@ -606,19 +611,15 @@ defmodule AshQuick do
         end
       end
 
-  The check accepts any module that implements
-  `AshQuick.FieldRestrictions.Check` (i.e. has a `match?/2` callback).
-  You can pass a bare module or a `{Module, opts}` tuple when the check needs options.
+  The check is a module implementing `AshQuick.FieldRestrictions.Check`, whose
+  `match?/2` gets the actor and tenant and answers whether that actor may set
+  the field. Pass `{Module, opts}` when it needs options. A check that raises
+  counts as a refusal, so a broken check keeps the field closed rather than
+  open.
 
-  ## Options for `restrict`
-
-    * `:field` (required, positional) — The attribute or argument name.
-    * `:check` (required, positional) — A check module or `{CheckModule, opts}` tuple.
-      The module must implement `AshQuick.FieldRestrictions.Check`.
-    * `:on` (optional) — A list of action names this restriction applies to.
-      When omitted, the restriction applies to **all** create/update actions that
-      accept or include the field.
-    * `:description` (optional) — A human-readable description for documentation.
+  `on:` names the actions the restriction covers. Left out, it covers every
+  create and update that takes the field. `description:` is free text for the
+  people reading the resource; AshQuick does not show it.
   """
 
   @restriction %Spark.Dsl.Entity{

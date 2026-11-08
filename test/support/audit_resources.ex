@@ -615,6 +615,89 @@ defmodule AshQuick.Test.LegacyCredential do
   end
 end
 
+defmodule AshQuick.Test.TextKeyAuditStore do
+  @moduledoc """
+  A store whose `resource_id` is text, as the installer generates it, so one
+  store takes a row for any primary key. `AshQuick.Test.NumberedCredential`
+  records into it with an integer key.
+  """
+  use Ash.Resource, domain: AshQuick.Test.AuditDomain, data_layer: Ash.DataLayer.Ets
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_v7_primary_key :id
+    attribute :resource_name, :atom, public?: true
+    attribute :resource_id, :string, public?: true
+    attribute :action_type, :atom, public?: true
+    attribute :action_name, :atom, public?: true
+    attribute :attributes, :map, public?: true
+    attribute :arguments, :map, public?: true
+    attribute :context, :map, public?: true
+    attribute :actor_id, :uuid, public?: true
+    attribute :real_actor_id, :uuid, public?: true
+    attribute :ip, :string, public?: true
+    attribute :tenant, :uuid, public?: true
+  end
+
+  actions do
+    default_accept :*
+    defaults [:create, :read]
+  end
+end
+
+defmodule AshQuick.Test.NumberedCredential do
+  @moduledoc """
+  An audited resource keyed by an integer, recording into
+  `AshQuick.Test.TextKeyAuditStore`.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.AuditDomain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshQuick]
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    attribute :id, :integer, primary_key?: true, allow_nil?: false, public?: true
+    attribute :name, :string, public?: true
+  end
+
+  actions do
+    default_accept [:id, :name]
+    defaults [:read, :create, :update]
+  end
+
+  ash_quick do
+    audit do
+      store AshQuick.Test.TextKeyAuditStore
+    end
+
+    display do
+      label :name
+    end
+
+    liveness do
+      enabled? false
+    end
+
+    versioning do
+      enabled? false
+    end
+
+    bookkeeping do
+      inserted_at false
+      updated_at false
+      inserted_by false
+      updated_by false
+    end
+  end
+end
+
 defmodule AshQuick.Test.MistypedChangesStore do
   @moduledoc """
   A store whose `changes` column is a string. Every write would refuse it, so

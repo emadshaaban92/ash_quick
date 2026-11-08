@@ -75,7 +75,9 @@ defmodule <%= inspect @module %> do
     uuid_v7_primary_key :id
 
     attribute :resource_name, :atom, allow_nil?: false, public?: true
-    attribute :resource_id, :uuid, allow_nil?: false, public?: true
+    # Text rather than a uuid, so one store takes an entry for every audited
+    # resource whatever its primary key: a UUID or an integer, written as text.
+    attribute :resource_id, :string, allow_nil?: false, public?: true
     attribute :action_type, :atom, allow_nil?: false, public?: true
     attribute :action_name, :atom, allow_nil?: false, public?: true
     attribute :attributes, :map, allow_nil?: false, public?: true

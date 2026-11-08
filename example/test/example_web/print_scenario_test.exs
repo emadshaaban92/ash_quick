@@ -158,7 +158,7 @@ defmodule ExampleWeb.PrintScenarioTest do
       view |> element(@bulk, @print) |> render_click()
       confirm(view)
 
-      assert has_element?(view, "#flash-error", "Print applied to 0 of 2 selected rows.")
+      assert has_element?(view, "#flash-error", "Print was not applied.")
       refute_push_event(view, "ash_quick:pdf", _event)
     end
 

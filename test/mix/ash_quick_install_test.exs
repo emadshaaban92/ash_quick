@@ -435,6 +435,8 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
       assert source =~ ~r/reference[ (]:actor, on_delete: :restrict, on_update: :restrict/
       assert source =~ ~r/reference[ (]:real_actor, on_delete: :restrict, on_update: :restrict/
 
+      # Text, so a host keyed by integers can audit into it too.
+      assert source =~ ~r/attribute[ (]:resource_id, :string/
       assert source =~ ~r/index[ (]\[:resource_id, :resource_name\]/
       assert source =~ ~r/index[ (]\[:actor_id, :tenant\]/
     end

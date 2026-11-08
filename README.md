@@ -493,6 +493,14 @@ end
 
 QuickView sets no layout of its own; the `live_session` does.
 
+A QuickView has no dead render of its own: until the socket connects it draws
+a spinner inside the layout, and every page, list or details, is drawn by the
+connected mount. A full page load shows that spinner briefly, a navigation
+within the `live_session` does not, and a browser with JavaScript off sees
+nothing else. A QuickView that defines its own `render/1` draws what it likes
+then, but from no data: nothing is loaded until the socket connects, so the
+dead render has no list and no record to draw.
+
 ### Timezones
 
 Lists, details pages, exports, print file names and the filter show a
@@ -718,10 +726,12 @@ the primary key or declare `identity :unique_id, [:id]` over the key the
 resource already has. A composite-keyed join resource satisfies neither and
 should not carry the extension until a page needs it.
 
-The audit row currently records `record.id` as the audited record's identifier
-rather than resolving the resource's declared primary key, so `:id` is in
-practice the key AshQuick knows a record by. Making `:id` the primary key
-avoids the question entirely.
+The audit row records `record.id` as the audited record's identifier rather
+than resolving the resource's declared primary key, so `:id` is in practice the
+key AshQuick knows a record by. Making `:id` the primary key avoids the question
+entirely. The id is written as text, and the store the installer generates
+keeps `resource_id` as a `:string`, so one store takes entries for resources
+keyed by UUIDs and by integers alike.
 
 **A display label** — the field a record is named by, wherever AshQuick has to
 name one: a dropdown option, a details header, a print filename. A resource

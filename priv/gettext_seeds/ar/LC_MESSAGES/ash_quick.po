@@ -784,3 +784,14 @@ msgstr "يحتوي على أيٍّ من"
 #, elixir-autogen, elixir-format
 msgid "%{relationship} › %{field}"
 msgstr "%{relationship} › %{field}"
+
+#: lib/ash_quick/liveview/list_utils.ex
+#, elixir-autogen, elixir-format
+msgid "%{action} was not applied. The selected row was not changed and is still selected: check it and try again."
+msgid_plural "%{action} was not applied. The %{count} selected rows were not changed and are still selected: check them and try again."
+msgstr[0] "لم يُطبَّق «%{action}» على أي صف."
+msgstr[1] "لم يُطبَّق «%{action}». لم يتغير الصف المحدد وما زال محددًا: راجعه وحاول مرة أخرى."
+msgstr[2] "لم يُطبَّق «%{action}». لم يتغير الصفان المحددان وما زالا محددين: راجعهما وحاول مرة أخرى."
+msgstr[3] "لم يُطبَّق «%{action}». لم يتغير أي من الصفوف المحددة الـ%{count}، وما زالت محددة: راجعها وحاول مرة أخرى."
+msgstr[4] "لم يُطبَّق «%{action}». لم يتغير أي من الصفوف المحددة الـ%{count}، وما زالت محددة: راجعها وحاول مرة أخرى."
+msgstr[5] "لم يُطبَّق «%{action}». لم يتغير أي من الصفوف المحددة الـ%{count}، وما زالت محددة: راجعها وحاول مرة أخرى."
