@@ -1066,11 +1066,14 @@
   `upload_target/2`. A module without `upload_target/2` takes browser uploads
   over the LiveView socket, and AshQuick stores each with `put_file/3` when it
   arrives, after `object_arriving/2`; a file the store refuses flashes "This
-  file was refused and has not been uploaded" and is left off the form. The
-  lifecycle callbacks are unchanged. `AshQuick.Storage.S3` implements all
-  four, signing the upload's `Content-Length` as before, and takes `:bucket`
-  and `:host` in every callback's opts in place of the bucket-first heads
-  (`public_url/3`, `presigned_put_url/3`, `presigned_get_url/3`, `upload/4`).
+  file was refused and has not been uploaded" and is left off the form, and
+  the flash stays up while the rest of the form is edited. Socket uploads are
+  written from the LiveView process, so they suit a local or fast store; a
+  remote store implements `upload_target/2`. The lifecycle callbacks are
+  unchanged. `AshQuick.Storage.S3` implements all four, signing the upload's
+  `Content-Length` as before, and takes `:bucket` and `:host` in every
+  callback's opts in place of the bucket-first heads (`public_url/3`,
+  `presigned_put_url/3`, `presigned_get_url/3`, `upload/4`).
   A host module that delegated to those writes
   `def url(key, opts), do: AshQuick.Storage.S3.url(key, [bucket: bucket()] ++ opts)`,
   and so on for the others. An export's download link now carries its
@@ -1081,7 +1084,11 @@
   JS: `import { hooks as ashQuickHooks, uploaders as ashQuickUploaders } from
   "phoenix-colocated/ash_quick"` and pass `uploaders: {...ashQuickUploaders}`
   to the `LiveSocket`. Without it a file picked for an attachment never left
-  the browser. `mix ash_quick.install` adds both to a new app's `app.js`.
+  the browser. The upload is a cross-origin `PUT` carrying `Content-Type`, so
+  the bucket's CORS rules must allow both from the application's origin.
+  `mix ash_quick.install` adds both to a new app's `app.js`, and leaves an
+  `app.js` whose uploaders are not an inline object alone, saying how to
+  spread them in.
 
 - **PostgreSQL 17 or later is required.** On AshPostgres, declare it in the
   repo, `def min_pg_version, do: %Version{major: 17, minor: 0, patch: 0}`:

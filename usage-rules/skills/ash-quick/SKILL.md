@@ -1095,7 +1095,8 @@ covers wiring them up.
   uploaders (`import { hooks as ashQuickHooks, uploaders as ashQuickUploaders }
   from "phoenix-colocated/ash_quick"`, spread into the LiveSocket's `hooks`
   and `uploaders`; `uploaders.S3` sends a picked file to
-  `AshQuick.Storage.S3`'s presigned `PUT`). The hooks are written under
+  `AshQuick.Storage.S3`'s presigned `PUT`, which the bucket's CORS rules must
+  allow with a `Content-Type` header). The hooks are written under
   `Mix.Project.build_path()` when AshQuick compiles, so esbuild's `NODE_PATH`
   must include it (a Phoenix 1.8 app's does) and `mix compile` must run before
   the asset build. In `app.css`: the `@source` line for the library's classes

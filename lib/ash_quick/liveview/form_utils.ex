@@ -594,7 +594,7 @@ defmodule AshQuick.LiveView.FormUtils do
       values
       |> Enum.reduce(socket, &mint_attachment_key(&2, &1["key"]))
       |> put_uploaded_values(field, values)
-      |> flash_failed_uploads(failed)
+      |> flash_refused_upload(failed)
     else
       socket
     end
@@ -737,12 +737,12 @@ defmodule AshQuick.LiveView.FormUtils do
 
   defp handle_open_form_events("add-form", %{"path" => path}, socket, _options) do
     form = AshPhoenix.Form.add_form(socket.assigns.form, path)
-    {:halt, socket |> assign(form: form) |> allow_image_upload(form) |> clear_flash()}
+    {:halt, socket |> assign(form: form) |> allow_image_upload(form) |> clear_form_flash()}
   end
 
   defp handle_open_form_events("remove-form", %{"path" => path}, socket, _options) do
     form = AshPhoenix.Form.remove_form(socket.assigns.form, path)
-    {:halt, socket |> assign(form: form) |> clear_flash()}
+    {:halt, socket |> assign(form: form) |> clear_form_flash()}
   end
 
   # The ✕ beside a stored file. The page says which position, and nothing else:
@@ -780,7 +780,7 @@ defmodule AshQuick.LiveView.FormUtils do
       |> maybe_put_has_many(socket.assigns.form)
 
     case validate_issued(socket.assigns.form, params, socket) do
-      {_params, form} -> {:halt, socket |> assign(form: form) |> clear_flash()}
+      {_params, form} -> {:halt, socket |> assign(form: form) |> clear_form_flash()}
       :refused -> {:halt, socket}
     end
   end
@@ -1258,6 +1258,30 @@ defmodule AshQuick.LiveView.FormUtils do
       "byte_size" => value.byte_size
     }
   end
+
+  # A root field's file is consumed as it lands, so the flash saying the store
+  # refused it is the only trace the pick leaves: nothing is in the field. It
+  # stays up until the person does something about the upload (picks again,
+  # cancels an entry, removes a file) rather than going with the next keystroke
+  # elsewhere in the form, which would take it down before it is read.
+  defp flash_refused_upload(socket, 0), do: clear_refusal(socket)
+  defp flash_refused_upload(socket, failed), do: flash_failed_uploads(socket, failed)
+
+  # What an edit to the form does with the flash: takes down whatever the last
+  # save or event left, except a refused upload's, which waits on the upload.
+  defp clear_form_flash(socket) do
+    if refusal_flashed?(socket),
+      do: socket |> clear_flash() |> flash_failed_uploads(1),
+      else: clear_flash(socket)
+  end
+
+  # A pick that lands answers it too, but leaves any other flash alone.
+  defp clear_refusal(socket) do
+    if refusal_flashed?(socket), do: clear_flash(socket, :error), else: socket
+  end
+
+  defp refusal_flashed?(socket),
+    do: Phoenix.Flash.get(socket.assigns.flash, :error) == upload_error_message(:not_stored)
 
   defp flash_failed_uploads(socket, 0), do: socket
 

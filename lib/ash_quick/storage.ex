@@ -130,6 +130,11 @@ defmodule AshQuick.Storage do
       waits on the store while it writes. A file the store refuses is left
       off the form, and the page flashes that it was not uploaded.
 
+  Socket mode is meant for a store that is local or fast to write to, such
+  as `AshQuick.Storage.Local`. For a remote store, a large file freezes the
+  page for the whole write, so a remote store should implement
+  `c:upload_target/2` and let the browser write the bytes itself.
+
   ## Object lifecycle
 
   The same module is the host's hook into the life of an uploaded object.
@@ -556,6 +561,21 @@ defmodule AshQuick.Storage do
     Browser uploads are external: `upload_target/2` hands the browser a
     presigned `PUT` for the `S3` client uploader AshQuick ships (see "Browser
     uploads" in `AshQuick.Storage`).
+
+    That `PUT` is cross-origin, so the browser sends a CORS preflight first,
+    and the bucket's CORS rules must allow `PUT` from the application's
+    origin, and the `Content-Type` header the uploader sets for a file with a
+    type. Without them uploads fail before any byte is sent. On S3:
+
+        [
+          {
+            "AllowedOrigins": ["https://app.example.com"],
+            "AllowedMethods": ["PUT"],
+            "AllowedHeaders": ["content-type"]
+          }
+        ]
+
+    An S3-compatible store has the same setting under its own name.
 
     Every callback also takes `:bucket` and `:host` in its opts, over the
     configured ones. They are for a host whose own object-store seam owns the
