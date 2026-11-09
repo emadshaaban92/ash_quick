@@ -112,14 +112,25 @@ defmodule AshQuick.LiveView.Components.DetailsView do
     """
   end
 
-  # "Created by X on Y · Last updated by Z on W", from what the resource declared
-  # under `bookkeeping` rather than from those four names — nothing here knows
-  # which resource it is rendering.
+  # "Created by X on Y" and "Last updated by Z on W", one line each, from what
+  # the resource declared under `bookkeeping` rather than from those four names
+  # — nothing here knows which resource it is rendering. Each half is a line of
+  # its own so that a narrow screen wraps within a sentence's own line rather
+  # than running one sentence into the next.
   #
   # The two halves are independently absent and each degrades on its own: an
   # append-only resource records no last write, one nobody creates through has no
   # creator, and an actor the reader's policies hide leaves the timestamp
   # standing alone. A resource carrying none of the four renders nothing at all.
+  #
+  # The updated half is left out when it repeats the created one: both halves
+  # carry a timestamp, the updated one within `@same_write_tolerance` of the
+  # creation's, and both name a loaded writer with the same primary key. A
+  # record nobody has edited would otherwise say the same thing twice. The raw
+  # values are compared, not their formatted text, and the tolerance covers the
+  # two timestamps one write sets a moment apart. Where either half lacks a
+  # timestamp or a loaded writer — undeclared, hidden or not loaded — nothing
+  # shows the two are the same write, so each half shows on its own.
   #
   # The writer is a link to their details page for a reader who may navigate
   # there, and the link carries their display hint as a tooltip and in its
@@ -130,34 +141,69 @@ defmodule AshQuick.LiveView.Components.DetailsView do
   defp bookkeeping_header(%{record: %resource{} = record, linker: linker, scope: scope} = assigns) do
     timezone = AshQuick.Scope.timezone(scope)
 
-    halves = [
-      {:created, AshQuick.Info.inserted_at_field(resource),
-       AshQuick.Info.inserted_by_field(resource)},
-      {:updated, AshQuick.Info.updated_at_field(resource),
-       AshQuick.Info.updated_by_field(resource)}
-    ]
+    lines =
+      [
+        {:created, AshQuick.Info.inserted_at_field(resource),
+         AshQuick.Info.inserted_by_field(resource)},
+        {:updated, AshQuick.Info.updated_at_field(resource),
+         AshQuick.Info.updated_by_field(resource)}
+      ]
+      |> Enum.map(fn {kind, at_field, by_field} ->
+        at = at_field && Map.get(record, at_field)
+        writer = by_field && Map.get(record, by_field)
 
-    writers = Enum.map(halves, fn {_kind, _at, by} -> by && Map.get(record, by) end)
-    paths = Enum.map(writers, linker)
-
-    parts =
-      halves
-      |> Enum.zip(Enum.zip(writers, paths))
-      |> Enum.map(fn {{kind, at, _by}, {writer, path}} ->
-        half(kind, timestamp(record, at, timezone), actor(writer, path))
+        %{
+          at: at,
+          writer: writer,
+          parts: half(kind, timestamp(at, timezone), actor(writer, linker.(writer)))
+        }
       end)
-      |> Enum.reject(&is_nil/1)
-      |> Enum.intersperse([" · "])
-      |> Enum.concat()
+      |> Enum.reject(&is_nil(&1.parts))
+      |> drop_repeated_update()
+      |> Enum.map(& &1.parts)
 
-    assigns = assign(assigns, :parts, parts)
+    assigns = assign(assigns, :lines, lines)
 
-    # One line, and the parts carry their own spacing: whitespace between tags
-    # here would land in the sentence.
+    # The parts carry their own spacing: whitespace between tags here would land
+    # in the sentence.
     ~H"""
-    <span :if={@parts != []}><.bookkeeping_part :for={part <- @parts} part={part} /></span>
+    <span :for={line <- @lines} class="block"><.bookkeeping_part :for={part <- line} part={part} /></span>
     """
   end
+
+  # A second, in microseconds.
+  @same_write_tolerance 1_000_000
+
+  defp drop_repeated_update([created, updated]) do
+    if same_moment?(created.at, updated.at) and same_writer?(created.writer, updated.writer),
+      do: [created],
+      else: [created, updated]
+  end
+
+  defp drop_repeated_update(lines), do: lines
+
+  defp same_moment?(%DateTime{} = created, %DateTime{} = updated),
+    do: abs(DateTime.diff(updated, created, :microsecond)) <= @same_write_tolerance
+
+  defp same_moment?(_created, _updated), do: false
+
+  # Only two loaded records can be the same writer: one the reader may not see,
+  # that was not loaded, or that the resource does not declare says nothing
+  # about who wrote the record.
+  defp same_writer?(created, updated) do
+    case {writer_key(created), writer_key(updated)} do
+      {nil, _updated} -> false
+      {created, updated} -> created == updated
+    end
+  end
+
+  defp writer_key(%resource{} = writer) do
+    if Ash.Resource.Info.resource?(resource) do
+      {resource, Map.take(writer, Ash.Resource.Info.primary_key(resource))}
+    end
+  end
+
+  defp writer_key(_writer), do: nil
 
   defp bookkeeping_part(%{part: text} = assigns) when is_binary(text), do: ~H"{@part}"
 
@@ -212,14 +258,8 @@ defmodule AshQuick.LiveView.Components.DetailsView do
   defp sentence(:updated, actor, at),
     do: gettext("Last updated by %{actor} on %{at}", actor: actor, at: at)
 
-  defp timestamp(_record, nil, _timezone), do: nil
-
-  defp timestamp(record, field, timezone) do
-    case Map.get(record, field) do
-      %DateTime{} = at -> AshQuick.Config.format_datetime(at, timezone)
-      _ -> nil
-    end
-  end
+  defp timestamp(%DateTime{} = at, timezone), do: AshQuick.Config.format_datetime(at, timezone)
+  defp timestamp(_at, _timezone), do: nil
 
   # `AshQuick.Info.display_value/1` is total over what a hidden or unloaded relationship
   # leaves behind — `nil`, `Ash.NotLoaded`, `Ash.ForbiddenField` — so a reader

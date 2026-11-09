@@ -441,13 +441,19 @@ defmodule AshQuick do
 
   ### What the details page renders
 
-  A QuickView details page carries the declaration under its title, as
-  "Created by X on Y · Last updated by Z on W". It is built from
+  A QuickView details page carries the declaration under its title, as two
+  lines: "Created by X on Y" and "Last updated by Z on W". It is built from
   `AshQuick.Info.bookkeeping/1` and never from the four names, so it renders
   whatever the resource declared and nothing else — the two halves are
   independently absent, and a resource carrying none of the four shows no header
   at all. An append-only resource keeps only the first half; one nobody creates
   through, only the second.
+
+  The second half is left out when it repeats the first: both carry a
+  timestamp, the second within a second of the creation's, and both name a
+  writer the reader can see, with the same primary key. A record nobody has
+  edited reads only as created. Where either half has no timestamp or no
+  visible writer, each half shows on its own.
 
   Each half degrades on its own, so what is missing is a name or a time rather
   than the line. The timestamps need no query work — they are `always_select?`,

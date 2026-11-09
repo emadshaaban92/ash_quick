@@ -73,6 +73,7 @@ config :ash_quick,
         "/test/hidden_address",
         "/test/hidden_fields",
         "/test/labelled_loans",
+        "/test/last_writes",
         "/test/long_forms",
         "/test/lookup_items",
         "/test/nested_items",
@@ -90,7 +91,8 @@ config :ash_quick,
         "/test/small_pages",
         "/test/sorted_rows",
         "/test/sorted_rows_named",
-        "/test/worded_policy"
+        "/test/worded_policy",
+        "/test/writers_only"
       ],
       # Tower keeps its default reporter here on purpose: it is the one that
       # holds events in memory, and `Example.ActionErrorsTest` reads what was
