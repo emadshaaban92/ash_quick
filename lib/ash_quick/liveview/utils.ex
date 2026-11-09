@@ -54,7 +54,7 @@ defmodule AshQuick.LiveView.Utils do
     resource
     |> action_fields(action_name)
     |> Enum.filter(fn field ->
-      AshQuick.FieldRestrictions.Info.field_visible?(
+      AshQuick.ReadOnlyFields.Info.writable?(
         resource,
         action_name,
         field.name,
@@ -76,8 +76,9 @@ defmodule AshQuick.LiveView.Utils do
   left out too: the form prefills it from that field.
 
   Every path of a form that walks its fields walks this list, so none of them
-  meets a hidden value. `form_fields/2` is the same list as the actor's field
-  restrictions narrow it, which is what the form draws.
+  meets a hidden value. `form_fields/2` is the same list less the fields
+  `read_only_fields` keeps the actor from writing, which is what the form
+  draws.
   """
   def form_fields(%{resource: resource, action: action} = form) do
     resource
@@ -126,7 +127,7 @@ defmodule AshQuick.LiveView.Utils do
   defp hidden?(field, hidden), do: field.name in hidden
 
   defp scope_to_check_context(scope) do
-    %AshQuick.FieldRestrictions.Check.Context{
+    %AshQuick.ReadOnlyFields.Check.Context{
       actor: scope_to_actor(scope),
       tenant: scope_to_tenant(scope)
     }

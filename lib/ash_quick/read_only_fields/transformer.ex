@@ -1,8 +1,8 @@
-defmodule AshQuick.FieldRestrictions.Transformer do
+defmodule AshQuick.ReadOnlyFields.Transformer do
   @moduledoc false
   use Spark.Dsl.Transformer
 
-  alias AshQuick.FieldRestrictions.Info
+  alias AshQuick.ReadOnlyFields.Info
 
   @impl true
   def after?(Ash.Resource.Transformers.SetTypes), do: true
@@ -10,9 +10,9 @@ defmodule AshQuick.FieldRestrictions.Transformer do
 
   @impl true
   def transform(dsl_state) do
-    restrictions = Info.field_restrictions(dsl_state)
+    read_only_fields = Info.read_only_fields(dsl_state)
 
-    if Enum.empty?(restrictions) do
+    if Enum.empty?(read_only_fields) do
       {:ok, dsl_state}
     else
       {:ok, add_global_strip_change(dsl_state)}
@@ -25,7 +25,7 @@ defmodule AshQuick.FieldRestrictions.Transformer do
         Ash.Resource.Dsl,
         [:changes],
         :change,
-        change: AshQuick.FieldRestrictions.StripRestrictedFields,
+        change: AshQuick.ReadOnlyFields.StripReadOnlyFields,
         on: [:create, :update]
       )
 

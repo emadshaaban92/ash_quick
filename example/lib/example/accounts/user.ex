@@ -130,10 +130,10 @@ defmodule Example.Accounts.User do
       updated_by false
     end
 
-    field_restrictions do
-      # Only an admin may hand out a role — and the field is hidden from
+    read_only_fields do
+      # Only an admin may hand out a role — and the field is left out of
       # everyone else's form rather than merely refused on submit.
-      restrict :role, Example.Checks.RoleIsAdminOnly, on: [:create, :update]
+      read_only :role, writable_if: Example.Checks.RoleIsAdminOnly, on: [:create, :update]
     end
   end
 
@@ -149,7 +149,7 @@ defmodule Example.Accounts.User do
       default: :viewer,
       constraints: [one_of: [:admin, :editor, :viewer]]
 
-    # The language this person's pages render in. Unrestricted, unlike `:role`:
+    # The language this person's pages render in. Not read-only, unlike `:role`:
     # choosing your own language is not a privilege, and `/users` is an admin's
     # page only because everything else on it is.
     attribute :locale, Example.Accounts.Locale,

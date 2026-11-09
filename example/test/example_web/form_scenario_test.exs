@@ -4,7 +4,7 @@ defmodule ExampleWeb.FormScenarioTest do
 
   A QuickView writes no form. Which inputs appear comes from the action's
   `accept` list and each field's Ash type; which of them this actor may fill in
-  comes from `field_restrictions`; and whether the save lands at all comes from
+  comes from `read_only_fields`; and whether the save lands at all comes from
   the resource's validations and its optimistic lock.
 
   The lock is the part that only a page can test. Losing a concurrent write is
@@ -236,12 +236,13 @@ defmodule ExampleWeb.FormScenarioTest do
     end
   end
 
-  describe "a restricted field" do
+  describe "a read-only field" do
     test "is absent from the form of an actor the check refuses", ctx do
       %{conn: conn, admin: admin, editor: editor, product: product} = ctx
 
-      # `restrict :price, RoleIsAdminOnly, on: [:update]`. The editor may update
-      # the product — every other input is there — and has no Price to fill in.
+      # `read_only :price, writable_if: RoleIsAdminOnly, on: [:update]`. The
+      # editor may update the product — every other input is there — and has no
+      # Price to fill in.
       conn
       |> log_in(editor)
       |> visit(~p"/products/#{product.id}/update")
@@ -264,7 +265,7 @@ defmodule ExampleWeb.FormScenarioTest do
       # A missing input stops nobody from putting the key in the payload. The
       # submit below is exactly what someone adding the field in DevTools would
       # send, and the name beside it lands — so the save really ran and the one
-      # value that did not change is the restricted one.
+      # value that did not change is the read-only one.
       conn
       |> log_in(editor)
       |> visit(~p"/products/#{product.id}/update")

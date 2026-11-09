@@ -20,8 +20,8 @@ defmodule Example.Test.AtomicBrand do
 
   Everything else is the extension's defaults, as on the real resource:
   versioning, audit and the bookkeeping stamps, which the lock ignores. The
-  `field_restrictions` block keeps `:code` an admin's on `:rename`, so the
-  restriction is driven on the atomic path too.
+  `read_only_fields` block keeps `:code` an admin's on `:rename`, so a
+  read-only field is driven on the atomic path too.
   """
   use Ash.Resource,
     domain: Example.Test.AtomicBrand.Domain,
@@ -68,8 +68,8 @@ defmodule Example.Test.AtomicBrand do
       enabled? false
     end
 
-    field_restrictions do
-      restrict :code, Example.Checks.RoleIsAdminOnly, on: [:rename]
+    read_only_fields do
+      read_only :code, writable_if: Example.Checks.RoleIsAdminOnly, on: [:rename]
     end
   end
 

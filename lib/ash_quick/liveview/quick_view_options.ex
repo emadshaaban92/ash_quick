@@ -178,7 +178,7 @@ defmodule AshQuick.LiveView.QuickView.Options do
   end
 
   # `Utils.action_fields/2` without a scope is the superset the scope-filtered
-  # form can render — field restrictions only ever narrow it — so checking it is
+  # form can render — read-only fields only ever narrow it — so checking it is
   # sound rather than merely convenient. Every public create and update action
   # is walked because a QuickView reaches any of them through `?action=`, and a
   # private one never.
@@ -240,9 +240,9 @@ defmodule AshQuick.LiveView.QuickView.Options do
 
           form: [widgets: %{#{elem(hd(unsaveable), 1).name}: &__MODULE__.#{elem(hd(unsaveable), 1).name}_input/1}]
 
-      or leave it out of the action. A field restriction that hides it does not \
-      count: whether it hides the field depends on who opens the form, and the \
-      page is checked for anyone.
+      or leave it out of the action. A `read_only` entry that leaves it out does \
+      not count: whether it leaves the field out depends on who opens the \
+      form, and the page is checked for anyone.
       """
     end
 

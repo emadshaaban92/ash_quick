@@ -139,16 +139,16 @@ defmodule ExampleWeb.LocaleScenarioTest do
     test "a language is the reader's own business, unlike their role", ctx do
       %{admin: admin, editor: editor} = ctx
 
-      # `:role` is restricted to admins by `Example.Checks.RoleIsAdminOnly`;
-      # `:locale` deliberately is not. Both are on the same action, so this pins
-      # that the restriction is per field rather than per form.
-      restricted =
+      # Only admins may write `:role` (`Example.Checks.RoleIsAdminOnly`);
+      # `:locale` deliberately is not read-only. Both are on the same action, so
+      # this pins that read-only is per field rather than per form.
+      read_only =
         User
-        |> AshQuick.FieldRestrictions.Info.restricted_fields(:update)
+        |> AshQuick.ReadOnlyFields.Info.read_only_fields(:update)
         |> Enum.map(& &1.field)
 
-      assert :role in restricted
-      refute :locale in restricted
+      assert :role in read_only
+      refute :locale in read_only
 
       assert Ash.update!(editor, %{locale: :ar}, actor: admin).locale == :ar
     end

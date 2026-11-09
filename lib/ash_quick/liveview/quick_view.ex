@@ -277,9 +277,9 @@ defmodule AshQuick.LiveView.QuickView do
   the person does with it alone. Whatever the build sets on the action's
   inputs becomes the form's initial params, so it holds until the person
   changes it. Only an input the form shows carries a seed to the run: one the
-  actor cannot see (a field restriction hides it) is dropped at the first
-  `phx-change`, so its value belongs at `AshQuick.form_submit_stage/0`, or in
-  a change that runs at every stage.
+  actor may not write (a `read_only` entry leaves it out) is dropped at the
+  first `phx-change`, so its value belongs at `AshQuick.form_submit_stage/0`,
+  or in a change that runs at every stage.
 
   ### Full-page actions
 

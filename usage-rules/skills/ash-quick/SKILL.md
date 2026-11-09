@@ -357,8 +357,8 @@ context. Read it with `AshQuick.form_stage/1`, never by the key or its atoms:
   it opens (prefills included). Whatever the build sets on the action's
   inputs, an argument or an accepted attribute, becomes the form's initial
   params, so it holds until the person changes it. Only an input the form
-  shows carries a seed to the run: one the actor cannot see (a field
-  restriction hides it) is dropped at the first `phx-change`. Set such a value
+  shows carries a seed to the run: one the actor may not write (a `read_only`
+  entry leaves it out) is dropped at the first `phx-change`. Set such a value
   at `form_submit_stage/0`, or in a change that runs at every stage.
 - `AshQuick.form_validate_stage/0` (`:validate`): the open form is validated,
   on every `phx-change` and upload.
@@ -671,7 +671,7 @@ bookkeeping and auditing.
 | `versioning` | `enabled? true`, `attribute :version` | turn the optimistic lock **off** |
 | `bookkeeping` | all four fields on: `:inserted_at` / `:updated_at` / `:inserted_by` / `:updated_by` | declare a field `false`, or rename it |
 | `audit` | `enabled? true`, store from the configured `:audit_resource` | write elsewhere, exclude actions, or turn it off |
-| `field_restrictions` | none | restrict a field to actors passing a check |
+| `read_only_fields` | none | keep a field read-only for actors a check refuses |
 
 `AshQuick.Info` reads every one of them back — `display_label/1`,
 `lookup_action/1`, `versioning?/1`, `activation?/1`, `bookkeeping/1`, and so on.
@@ -855,37 +855,49 @@ and what to write.
   `belongs_to :inserted_by, SomethingElse` declares `inserted_by false` and keeps
   it.
 
-## Field restrictions DSL
+## Read-only fields DSL
 
-The `ash_quick` DSL section in Ash resources controls field-level access in forms.
-It works at **both** the UI layer (hides fields) and the backend (strips values
-from changesets as defense in depth).
+`read_only_fields` names fields some actors may read but not write. For an actor
+the `writable_if:` check refuses, the field still reads on lists, details pages
+and exports, AshQuick's forms leave it out (the field is absent from the form,
+not drawn as a disabled input), and a change the extension prepends to every
+create and update clears it from the changeset (attribute, argument and atomic),
+so a value sent by hand or by any other caller is dropped silently while the
+rest of the write goes through. To hide a field from a reader, write a field
+policy; to refuse a write that sets it, an action policy with
+`changing_attributes/1`.
+
+Unlike Ash's `writable?: false`, under which no action accepts the attribute as
+input for any actor (only a change can set it), a `read_only` field is left out
+only for the actors its check refuses, on the actions `on:` names.
 
 ### Declaration in a resource
 
 ```elixir
 ash_quick do
-  field_restrictions do
-    restrict :platform_roles, MyApp.FieldRestrictionChecks.ActorHasPlatformRole,
+  read_only_fields do
+    read_only :platform_roles,
+      writable_if: MyApp.Checks.ActorHasPlatformRole,
       on: [:create, :update]
   end
 end
 ```
 
-### Options for `restrict`
+### Options for `read_only`
 
 - First argument: the field name (attribute or argument)
-- Second argument: a check module or `{CheckModule, opts}` tuple
+- `:writable_if` — a check module or `{CheckModule, opts}` tuple (required); an
+  actor it lets through may write the field
 - `:on` — list of action names this applies to (optional, defaults to all create/update)
 - `:description` — human-readable documentation (optional)
 
 ### Writing a check module
 
-Implement the `AshQuick.FieldRestrictions.Check` behaviour with a `match?/2` callback:
+Implement the `AshQuick.ReadOnlyFields.Check` behaviour with a `match?/2` callback:
 
 ```elixir
-defmodule MyApp.FieldRestrictionChecks.ActorHasPlatformRole do
-  @behaviour AshQuick.FieldRestrictions.Check
+defmodule MyApp.Checks.ActorHasPlatformRole do
+  @behaviour AshQuick.ReadOnlyFields.Check
 
   @impl true
   def match?(%{actor: %{platform_roles: roles}}, opts) when is_list(roles) do
@@ -904,22 +916,26 @@ The callback receives:
 - `check_context` — a `%Check.Context{actor: ..., tenant: ...}` struct
 - `opts` — keyword options from the `{CheckModule, opts}` tuple (empty list if none)
 
+It returns `true` when the actor may write the field. A check that raises counts
+as `false`.
+
 ### How it works
 
-1. **UI layer**: `AshQuick.FieldRestrictions.Info.field_visible?/4` checks if the
-   current actor passes the restriction. Fields that fail are hidden from forms.
-2. **Backend layer**: `StripRestrictedFields` change is auto-added to the resource
-   by the transformer. On create/update, it clears values for fields where the
-   actor fails the check — preventing bypass via direct API calls.
+1. **UI layer**: `AshQuick.ReadOnlyFields.Info.writable?/4` asks whether the
+   current actor may write the field. Fields it refuses are left out of forms
+   entirely, not drawn disabled.
+2. **Backend layer**: the `StripReadOnlyFields` change is added to the resource
+   by the transformer. On create/update, it clears values for fields the
+   actor may not write, so a direct API call cannot set them either.
 
-### Querying field visibility at runtime
+### Asking at runtime
 
 ```elixir
-AshQuick.FieldRestrictions.Info.field_visible?(
+AshQuick.ReadOnlyFields.Info.writable?(
   MyApp.Resource,
   :update,          # action name
   :platform_roles,  # field name
-  %Check.Context{actor: current_user, tenant: tenant}
+  %AshQuick.ReadOnlyFields.Check.Context{actor: current_user, tenant: tenant}
 )
 ```
 
@@ -1080,7 +1096,7 @@ covers wiring them up.
   nav. Deliberately **not** `Ash.can?`: a filter policy allows the action and
   returns no rows, so `can?` says yes for a page that would be empty.
 - `AshQuick.Nav` — the navigation registry (see Navigation above).
-- `AshQuick.PrintTemplate`, `AshQuick.FieldRestrictions.Check` — print
+- `AshQuick.PrintTemplate`, `AshQuick.ReadOnlyFields.Check` — print
   templates and field-level checks. A create or update action prints through a
   template with `change {AshQuick.Print, template: MyTemplate, delivery: :print}`
   (`:download` is the default): run from a row, a bulk selection, the details

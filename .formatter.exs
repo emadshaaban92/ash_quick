@@ -23,14 +23,15 @@ spark_locals_without_parens = [
   on: 1,
   path: 1,
   prefix: 1,
+  read_only: 1,
+  read_only: 2,
   record_sensitive: 1,
-  restrict: 2,
-  restrict: 3,
   search_argument: 1,
   store: 1,
   updated_at: 1,
   updated_by: 1,
-  value: 1
+  value: 1,
+  writable_if: 1
 ]
 
 # Non-Spark locals (the router macro) — kept separate so `mix spark.formatter`
