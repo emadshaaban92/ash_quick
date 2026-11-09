@@ -196,7 +196,7 @@ defmodule AshQuick.VersioningTest do
       assert stale?(error)
     end
 
-    test "a restricted field is dropped on this path too", %{brand: brand, editor: editor} do
+    test "a read-only field is dropped on this path too", %{brand: brand, editor: editor} do
       name = unique("Editor's ")
 
       assert {:ok, %{code: code, name: ^name}} =

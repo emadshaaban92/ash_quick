@@ -169,8 +169,8 @@
   default. A hand-built record given a version of its own, such as
   `%Post{id: id, version: params["version"]}`, is checked as before. A bulk write by query or
   by `:atomic_batches` that changes anything still runs `:stream`, since Ash
-  gives the lock no versions there. `field_restrictions` gains the same
-  path: `StripRestrictedFields` drops a restricted value from
+  gives the lock no versions there. `read_only_fields` gains the same
+  path: `StripReadOnlyFields` drops a read-only value from
   `changeset.atomics` too.
 
 - **Timestamps show in the reader's timezone, and a form says which zone a
@@ -1096,6 +1096,29 @@
 
 ### Breaking changes
 
+- **`field_restrictions` is renamed `read_only_fields`, and `restrict` is
+  `read_only` with the check under `writable_if:`.** What it does is
+  unchanged: a field the check refuses an actor still reads on lists, details
+  pages and exports, is left out of that actor's forms, and is cleared from
+  the changeset of every create and update it covers, silently. The new name
+  says that it is the field's writes, not its reads, that the check governs.
+  Write
+
+  ```elixir
+  read_only_fields do
+    read_only :role, writable_if: MyApp.Checks.ActorIsAdmin, on: [:update]
+  end
+  ```
+
+  where you wrote `field_restrictions do restrict :role,
+  MyApp.Checks.ActorIsAdmin, on: [:update] end`. The modules move with it:
+  `AshQuick.FieldRestrictions.Check` is `AshQuick.ReadOnlyFields.Check` (the
+  same `match?/2` and `Check.Context`), and `AshQuick.FieldRestrictions.Info`
+  is `AshQuick.ReadOnlyFields.Info`, with `read_only_fields/1` and `/2` for
+  `field_restrictions/1` and `restricted_fields/2`, and `writable?/4` for
+  `field_visible?/4`. Update `locals_without_parens` (`mix spark.formatter`)
+  if you list `restrict` there.
+
 - **`AshQuick.Storage` callbacks say what AshQuick wants, not which S3 call
   makes it.** A storage module now implements `url(key, opts)` (opts
   `:visibility`, `:public` for a `public/*` key and `:private` for any other,
@@ -1237,8 +1260,8 @@
 
 - **A form shows each field error where it belongs.** An error on a field
   the form has an input for shows under that input, and only there; one with
-  no input to show it (a field set by a change, not accepted, or restricted
-  away) or about the record as a whole is flashed, a field error as `Field:
+  no input to show it (a field set by a change, not accepted, or read-only)
+  or about the record as a whole is flashed, a field error as `Field:
   message` ("Name: is required"). This used to depend on how many errors a
   save had: a single one was flashed as well as shown under its input, two or
   more showed under their inputs only, and one on a field with no input could

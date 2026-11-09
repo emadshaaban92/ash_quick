@@ -11,8 +11,8 @@ locking, an audit trail and live updates.
 Everything the library needs from the application around it is a behaviour or a
 configuration key: the actor and tenant (`AshQuick.Scope`), object storage
 (`AshQuick.Storage`), route access (`AshQuick.AccessControl`), navigation
-(`AshQuick.Nav`), print templates (`AshQuick.PrintTemplate`) and field
-restriction checks (`AshQuick.FieldRestrictions.Check`). An action prints by
+(`AshQuick.Nav`), print templates (`AshQuick.PrintTemplate`) and read-only
+field checks (`AshQuick.ReadOnlyFields.Check`). An action prints by
 carrying `AshQuick.Print`.
 
 The moduledocs are the reference. This is the order to read them in.
@@ -595,7 +595,7 @@ running it.
 It also attaches the audit change to every create, update and destroy, and
 wires the resource's PubSub publications. See the `AshQuick` moduledoc for each
 section: `liveness`, `display`, `labels`, `forms`, `lookup`, `activation`,
-`versioning`, `bookkeeping`, `audit`, `field_restrictions`.
+`versioning`, `bookkeeping`, `audit`, `read_only_fields`.
 
 ### Versioning is on by default
 
@@ -1009,7 +1009,7 @@ reference.
 | `AshQuick.Nav` | The host's navigation registry — one declaration the sidebar and the apps grid are both rendered from. QuickViews are discovered from the declared router; the declaration adds only what the router cannot say: a better label, an icon, a group, a non-QuickView path. |
 | `AshQuick.BrowserSessionPresence` | The live register of signed-in tabs. Supervised, not implemented — listed here because the tree entry is the host's. `AshQuick.LiveView.BrowserSessionsLive` is the page that reads it. |
 | `AshQuick.PrintTemplate` | One module per print template: its label, what to load, and the HTML ChromicPDF renders. A create or update action prints through it with `change {AshQuick.Print, template: ..., delivery: :print \| :download}`; the PDF is rendered after the action commits and reaches the browser over the LiveView socket, so the host imports `initPrinting` from `assets/js/print.js`. |
-| `AshQuick.FieldRestrictions.Check` | `match?/2` over an actor and tenant, deciding whether a restricted field is visible and writable. Hides the field in forms and strips it from the changeset. |
+| `AshQuick.ReadOnlyFields.Check` | `match?/2` over an actor and tenant, deciding whether that actor may write a field a `read_only_fields` entry names. For an actor it refuses, the field still reads everywhere, is left out of forms, and is stripped from the changeset. |
 
 ## Authorization on a surface
 

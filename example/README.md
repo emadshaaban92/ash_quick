@@ -85,7 +85,7 @@ browser-tab identity impersonation is resolved per
 | `AshQuick.AccessControl` | `ExampleWeb.AccessControl` — one route list per role. |
 | `AshQuick.Nav` | `ExampleWeb.Nav` — the sidebar and the apps grid. |
 | Actor resource | `Example.Accounts.User`, which is why `:impersonate` is generated onto it. |
-| Field restriction check | `Example.Checks.RoleIsAdminOnly`, over the user's `:role`. |
+| Read-only field check | `Example.Checks.RoleIsAdminOnly`, over the user's `:role`. |
 
 The resources cover the shapes a page has to render: a plain record
 (`Catalog.Brand`), a self-referencing tree with a private attachment

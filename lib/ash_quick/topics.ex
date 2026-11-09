@@ -17,7 +17,7 @@ defmodule AshQuick.Topics do
   Whether this resource publishes at all.
 
   False for a resource that does not carry the `AshQuick` extension, and for one
-  that carries it with `enabled? false` — a resource wanting field restrictions
+  that carries it with `enabled? false` — a resource wanting read-only fields
   without liveness, or one whose write volume makes broadcasting a bad trade.
   """
   def enabled?(resource) do

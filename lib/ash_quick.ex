@@ -582,16 +582,18 @@ defmodule AshQuick do
   the kill switch for the ones standing in for somebody) and
   `AshQuick.LiveView.BrowserSessionsLive` (the page that reads it).
 
-  ## Field restrictions
+  ## Read-only fields
 
-  A field some actors may see but not set. Each `restrict` names an attribute
-  or argument and a check, and an actor the check refuses is kept from writing
-  that field in two places. AshQuick's forms leave the field out, so the actor
-  is never offered an input for it. And a change the extension prepends to every
-  create and update clears the field from the changeset — its attribute, its
-  argument and, on the atomic path, its atomic — so a value posted by hand, or
-  sent by any caller that is not a page, is dropped rather than written. The
-  form is the convenience; the change is what holds.
+  A field some actors may read but not write. Each `read_only` names an
+  attribute or argument and a `writable_if:` check, and an actor the check
+  refuses is kept from writing that field in two places. AshQuick's forms leave
+  the field out, so the actor is never offered an input for it: the field is
+  absent from the form, not drawn as a disabled input. And a change the
+  extension prepends to every create and update clears the field from the
+  changeset — its attribute, its argument and, on the atomic path, its atomic —
+  so a value posted by hand, or sent by any caller that is not a page, is
+  dropped rather than written. The form is the convenience; the change is what
+  holds.
 
   Nothing else changes. The field still reads on lists, details pages and
   exports, and a cleared value is dropped silently rather than refused: the
@@ -599,63 +601,72 @@ defmodule AshQuick do
   reader is a field policy's job, and refusing a write that sets one is an
   action policy's, with `changing_attributes/1`.
 
+  This is not Ash's `writable?: false`, under which no action accepts the
+  attribute as input, whoever the actor (only a change can set it). A
+  `read_only` field is left out only for the actors its check refuses, and only
+  on the actions `on:` names; everyone else writes it as usual.
+
       defmodule MyApp.Settings.User do
         use Ash.Resource,
           extensions: [AshQuick]
 
         ash_quick do
-          field_restrictions do
-            restrict :platform_roles, MyApp.FieldRestrictionChecks.ActorHasPlatformRole,
+          read_only_fields do
+            read_only :platform_roles,
+              writable_if: MyApp.Checks.ActorHasPlatformRole,
               on: [:create, :update]
           end
         end
       end
 
-  The check is a module implementing `AshQuick.FieldRestrictions.Check`, whose
-  `match?/2` gets the actor and tenant and answers whether that actor may set
+  The check is a module implementing `AshQuick.ReadOnlyFields.Check`, whose
+  `match?/2` gets the actor and tenant and answers whether that actor may write
   the field. Pass `{Module, opts}` when it needs options. A check that raises
-  counts as a refusal, so a broken check keeps the field closed rather than
-  open.
+  counts as a refusal, so a broken check keeps the field read-only rather than
+  writable.
 
-  `on:` names the actions the restriction covers. Left out, it covers every
-  create and update that takes the field. `description:` is free text for the
-  people reading the resource; AshQuick does not show it.
+  `on:` names the actions the entry covers. Left out, it covers every create
+  and update that takes the field. `description:` is free text for the people
+  reading the resource; AshQuick does not show it.
   """
 
-  @restriction %Spark.Dsl.Entity{
-    name: :restrict,
-    describe: "Restricts a field based on a field restriction check.",
-    target: AshQuick.FieldRestrictions.FieldRestriction,
-    args: [:field, :check],
+  @read_only %Spark.Dsl.Entity{
+    name: :read_only,
+    describe: """
+    Keeps every actor its `writable_if:` check refuses from writing a field:
+    their forms leave it out (absent, not a disabled input), and the value is
+    dropped from their creates and updates. The field still reads everywhere.
+    """,
+    target: AshQuick.ReadOnlyFields.ReadOnlyField,
+    args: [:field],
     identifier: :field,
     schema: [
       field: [
         type: :atom,
         required: true,
-        doc: "The attribute or argument name to restrict."
+        doc: "The attribute or argument to keep read-only."
       ],
-      check: [
-        type: {:spark_behaviour, AshQuick.FieldRestrictions.Check},
+      writable_if: [
+        type: {:spark_behaviour, AshQuick.ReadOnlyFields.Check},
         required: true,
         doc:
-          "A check module or `{CheckModule, opts}` tuple. The module must implement `AshQuick.FieldRestrictions.Check`."
+          "A check module or `{CheckModule, opts}` tuple, implementing `AshQuick.ReadOnlyFields.Check`. An actor it lets through may write the field."
       ],
       on: [
         type: {:wrap_list, :atom},
-        doc:
-          "Action names this restriction applies to. When omitted, applies to all create/update actions."
+        doc: "The actions this entry covers. When omitted, it covers every create and update."
       ],
       description: [
         type: :string,
-        doc: "A human-readable description of the restriction."
+        doc: "Free text for the people reading the resource. AshQuick does not show it."
       ]
     ]
   }
 
-  @field_restrictions %Spark.Dsl.Section{
-    name: :field_restrictions,
-    describe: "Declare field-level access restrictions for action inputs.",
-    entities: [@restriction]
+  @read_only_fields %Spark.Dsl.Section{
+    name: :read_only_fields,
+    describe: "Fields some actors may read but not write.",
+    entities: [@read_only]
   }
 
   @liveness %Spark.Dsl.Section{
@@ -891,7 +902,7 @@ defmodule AshQuick do
       @versioning,
       @bookkeeping,
       @audit,
-      @field_restrictions
+      @read_only_fields
     ]
   }
 
@@ -909,7 +920,7 @@ defmodule AshQuick do
       AshQuick.Versioning.Transformer,
       AshQuick.Display.Transformer,
       AshQuick.Labels.Transformer,
-      AshQuick.FieldRestrictions.Transformer,
+      AshQuick.ReadOnlyFields.Transformer,
       AshQuick.PubSub.Transformer
     ],
     verifiers: [
@@ -970,8 +981,8 @@ defmodule AshQuick do
   included. Whatever the build sets on the action's inputs, an argument or an
   accepted attribute, becomes the form's initial params, so it holds until the
   person changes it. That holds only for an input the form shows: a seed on one
-  the actor cannot see (a field restriction hides it) is gone at the first
-  `phx-change` and never reaches the run. A value for such an input belongs at
+  the actor may not write (a `read_only` entry leaves it out) is gone at the
+  first `phx-change` and never reaches the run. A value for such an input belongs at
   `form_submit_stage/0`, or in a change that runs at every stage.
   """
   def form_build_stage, do: :build

@@ -8,8 +8,8 @@
 alias Example.Accounts.User
 alias Example.Catalog.{Brand, Category, PriceChange, Product, Store}
 
-# `:role` is a restricted field (see `Example.Checks.RoleIsAdminOnly`), and
-# `AshQuick.FieldRestrictions.StripRestrictedFields` drops it from the changeset
+# `:role` is a read-only field (see `Example.Checks.RoleIsAdminOnly`), and
+# `AshQuick.ReadOnlyFields.StripReadOnlyFields` drops it from the changeset
 # of any actor who is not an admin — including no actor at all, and including
 # under `authorize?: false`, since stripping is defence in depth rather than
 # authorization.

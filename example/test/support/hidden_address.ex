@@ -16,9 +16,9 @@ defmodule Example.Test.HiddenAddress.Address do
   end
 end
 
-defmodule Example.Test.HiddenAddress.NeverVisible do
-  @moduledoc "A field-restriction check no actor passes."
-  @behaviour AshQuick.FieldRestrictions.Check
+defmodule Example.Test.HiddenAddress.NeverWritable do
+  @moduledoc "A read-only field check no actor passes."
+  @behaviour AshQuick.ReadOnlyFields.Check
 
   @impl true
   def match?(_context, _opts), do: false
@@ -26,7 +26,7 @@ end
 
 defmodule Example.Test.HiddenAddress do
   @moduledoc """
-  A create whose `address` embed is restricted away from every actor, and a
+  A create whose `address` embed is read-only for every actor, and a
   page over it.
 
   The form still builds the embed's sub-form, and the sub-form refuses the save
@@ -89,8 +89,8 @@ defmodule Example.Test.HiddenAddress do
       updated_by false
     end
 
-    field_restrictions do
-      restrict :address, Example.Test.HiddenAddress.NeverVisible, on: [:create]
+    read_only_fields do
+      read_only :address, writable_if: Example.Test.HiddenAddress.NeverWritable, on: [:create]
     end
   end
 

@@ -972,7 +972,7 @@ defmodule AshQuick.LiveView.FormUtils do
   # and only there. Anything else has nowhere on the page to show: an error
   # about the record as a whole (`:_form`, the key `AshPhoenix.FormData.Error`
   # files those under), or one on a field the action sets without offering it
-  # (a change, an attribute it does not accept, a field restricted away). Those
+  # (a change, an attribute it does not accept, a read-only field). Those
   # are flashed, worded as `ActionErrors` words a field error, so the submit
   # never fails without saying why. Where an error shows depends on where it
   # belongs, not on how many there are. A sub-form's errors are held to the

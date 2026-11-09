@@ -26,7 +26,7 @@ defmodule AshQuick.LiveView.ListInputsTest do
     assert message =~ ":retag takes :flags, {:array, Ash.Type.Boolean}"
     assert message =~ ":retag takes :times, {:array, Ash.Type.TimeUsec}"
     assert message =~ ":retag takes :extras, {:array, Ash.Type.Map}"
-    assert message =~ "A field restriction that hides it does not count"
+    assert message =~ "A `read_only` entry that leaves it out does"
     assert message =~ "constraints: [items: [one_of: [:a, :b]]]"
     assert message =~ "form: [widgets: %{marks: &__MODULE__.marks_input/1}]"
 

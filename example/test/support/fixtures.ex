@@ -26,7 +26,7 @@ defmodule Example.Fixtures do
   @doc """
   A user holding `role`, in the store passed as `store:` if any.
 
-  `:role` is a restricted field, so an actor who is not an admin has the value
+  `:role` is a read-only field, so an actor who is not an admin has the value
   stripped from their changeset — including no actor at all. The first admin is
   therefore created role-less and promotes itself, which is the same bootstrap
   `priv/repo/seeds.exs` performs.
