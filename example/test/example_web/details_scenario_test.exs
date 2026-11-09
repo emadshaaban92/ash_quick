@@ -18,10 +18,11 @@ defmodule ExampleWeb.DetailsScenarioTest do
 
   require Ash.Query
 
-  import Phoenix.LiveViewTest, only: [live: 2, element: 2, render: 1]
+  import Phoenix.LiveViewTest, only: [live: 2, render: 1]
 
   alias Example.Accounts.AuditLog
   alias Example.Catalog.{PriceChange, Product}
+  alias Example.Test.{LastWrites, WritersOnly}
 
   setup %{admin: admin} do
     brand = brand(name: "Northwind Outfitters", actor: admin)
@@ -216,18 +217,63 @@ defmodule ExampleWeb.DetailsScenarioTest do
   end
 
   describe "the bookkeeping header" do
-    test "names both writers once a second person has touched the record", ctx do
-      %{conn: conn, admin: admin, editor: editor, product: product} = ctx
+    test "a record nobody has edited reads only as created", ctx do
+      %{conn: conn, admin: admin, product: product} = ctx
 
-      # Created by the admin in `setup`, updated by the editor here, so the two
-      # halves cannot both be satisfied by the same name.
-      Ash.update!(product, %{name: "Four-season tent, revised"}, actor: editor)
+      # Created by the admin in `setup` and never touched since: the updated
+      # half would repeat the writer and the moment, so it is not drawn.
+      conn
+      |> log_in(admin)
+      |> visit(~p"/products/#{product.id}")
+      |> assert_has("header p > span", text: "Created by #{admin.name}")
+      |> refute_has("header", text: "Last updated")
+    end
+
+    test "reads as created alone when the same writer's edit lands within a second", ctx do
+      %{conn: conn, admin: admin, product: product} = ctx
+
+      # Pinned half a second after the creation: one write can set the two
+      # timestamps a moment apart, so this still says nothing new.
+      Ash.update!(product, %{name: "Four-season tent, revised"}, actor: admin)
+      pin_update(product, "500 milliseconds")
 
       conn
       |> log_in(admin)
       |> visit(~p"/products/#{product.id}")
-      |> assert_has("*", text: "Created by #{admin.name}")
-      |> assert_has("*", text: "Last updated by #{editor.name}")
+      |> assert_has("header p > span", text: "Created by #{admin.name}")
+      |> refute_has("header", text: "Last updated")
+    end
+
+    test "names the same writer twice once they edit the record later", ctx do
+      %{conn: conn, admin: admin, product: product} = ctx
+
+      # Back-dated, so the edit lands well after the creation without a wait.
+      backdate(product)
+      Ash.update!(product, %{name: "Four-season tent, revised"}, actor: admin)
+
+      conn
+      |> log_in(admin)
+      |> visit(~p"/products/#{product.id}")
+      |> assert_has("header p > span", text: "Created by #{admin.name}")
+      |> assert_has("header p > span", text: "Last updated by #{admin.name}")
+    end
+
+    test "names both writers once a second person has touched the record", ctx do
+      %{conn: conn, admin: admin, editor: editor, product: product} = ctx
+
+      # Created by the admin in `setup`, updated by the editor here, so the two
+      # halves cannot both be satisfied by the same name. The edit is pinned
+      # within the tolerance of the creation, so only the writer tells them
+      # apart.
+      Ash.update!(product, %{name: "Four-season tent, revised"}, actor: editor)
+
+      pin_update(product, "500 milliseconds")
+
+      conn
+      |> log_in(admin)
+      |> visit(~p"/products/#{product.id}")
+      |> assert_has("header p > span", text: "Created by #{admin.name}")
+      |> assert_has("header p > span", text: "Last updated by #{editor.name}")
     end
 
     test "links each writer to their page, with their hint as the tooltip", ctx do
@@ -267,7 +313,7 @@ defmodule ExampleWeb.DetailsScenarioTest do
       |> refute_has("header [aria-label*='#{admin.email}']")
     end
 
-    test "reads as one sentence per half, with nothing but the separator between", ctx do
+    test "reads as one line per half, each a sentence with nothing around it", ctx do
       %{conn: conn, admin: admin, editor: editor, product: product} = ctx
 
       product = Ash.update!(product, %{name: "Four-season tent, revised"}, actor: editor)
@@ -276,16 +322,17 @@ defmodule ExampleWeb.DetailsScenarioTest do
       {:ok, view, _html} = conn |> log_in(admin) |> live(~p"/products/#{product.id}")
 
       # Exact, so whitespace the template leaves between the parts shows up.
-      text =
+      lines =
         view
-        |> element("header p > span")
         |> render()
-        |> LazyHTML.from_fragment()
-        |> LazyHTML.text()
+        |> LazyHTML.from_document()
+        |> LazyHTML.query("header p > span.block")
+        |> Enum.map(&LazyHTML.text/1)
 
-      assert text ==
-               "Created by #{admin.name} on #{at.(product.inserted_at)} · " <>
-                 "Last updated by #{editor.name} on #{at.(product.updated_at)}"
+      assert lines == [
+               "Created by #{admin.name} on #{at.(product.inserted_at)}",
+               "Last updated by #{editor.name} on #{at.(product.updated_at)}"
+             ]
     end
 
     test "an append-only resource carries no last-updated half", ctx do
@@ -314,12 +361,43 @@ defmodule ExampleWeb.DetailsScenarioTest do
 
       # `AuditLog` declares `inserted_by false` / `updated_by false`: writing the
       # row *is* the act, and the actor of the write it records is a column of
-      # its own. Both timestamps remain, so both sentences render actorless.
+      # its own. Both timestamps remain, so both sentences render actorless:
+      # with no writer on either side, nothing shows the two are one write.
       conn
       |> log_in(admin)
       |> visit(~p"/audit_logs/#{entry.id}")
-      |> assert_has("*", text: "Created on")
-      |> refute_has("*", text: "Created by")
+      |> assert_has("header p > span", text: "Created on")
+      |> assert_has("header p > span", text: "Last updated on")
+      |> refute_has("header", text: "Created by")
+    end
+
+    test "a resource recording only its last write shows that half alone", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      # `Example.Test.LastWrites` declares `inserted_at false` and
+      # `inserted_by false`: there is no created half for the updated one to
+      # repeat, so a record written once still names its writer.
+      row = Ash.create!(LastWrites, %{code: unique("last-write")}, actor: admin)
+
+      conn
+      |> log_in(admin)
+      |> visit(~p"/test/last_writes/#{row.id}")
+      |> assert_has("header p > span", text: "Last updated by #{admin.name} on")
+      |> refute_has("header", text: "Created")
+    end
+
+    test "a resource recording writers but no times keeps both halves", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      # `Example.Test.WritersOnly` declares no timestamps: the same writer on
+      # both halves does not show the last write was the creation.
+      row = Ash.create!(WritersOnly, %{code: unique("writers-only")}, actor: admin)
+
+      conn
+      |> log_in(admin)
+      |> visit(~p"/test/writers_only/#{row.id}")
+      |> assert_has("header p > span", text: "Created by #{admin.name}")
+      |> assert_has("header p > span", text: "Last updated by #{admin.name}")
     end
   end
 
@@ -403,5 +481,22 @@ defmodule ExampleWeb.DetailsScenarioTest do
   defp row_link(row, base, record) do
     ~s{tr[id="#{row.id}"] td a[href="/#{base}/#{record.id}"][title="#{record.code}"]} <>
       ~s{[aria-label="#{record.name} (#{record.code})"]}
+  end
+
+  # Sets the record's last write that long after its creation.
+  defp pin_update(%Product{id: id}, interval) do
+    Example.Repo.query!(
+      "UPDATE products SET updated_at = inserted_at + $2::text::interval WHERE id = $1",
+      [Ecto.UUID.dump!(id), interval]
+    )
+  end
+
+  # Moves the record's creation an hour back, so a write made now lands well
+  # after it.
+  defp backdate(%Product{id: id}) do
+    Example.Repo.query!(
+      "UPDATE products SET inserted_at = inserted_at - interval '1 hour' WHERE id = $1",
+      [Ecto.UUID.dump!(id)]
+    )
   end
 end

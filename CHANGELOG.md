@@ -4,6 +4,16 @@
 
 ### Features
 
+- **The details header gives each bookkeeping half its own line.**
+  "Created by X on Y" and "Last updated by Z on W" render as two lines
+  rather than one joined by " · ", so a narrow screen wraps within a
+  sentence. The updated line is left out when it repeats the created one:
+  both carry a timestamp, the updated one within a second of the creation's,
+  and both name a loaded writer with the same primary key. A record nobody
+  has edited reads only as created. Where either half has no timestamp or no
+  loaded writer (not declared, hidden or not loaded), each half shows as
+  before.
+
 - **Files can live in a bucket only the application can reach.**
   `AshQuick.Storage.S3.Proxy` keeps attachments and exports in an
   S3-compatible bucket, but hands out links to
