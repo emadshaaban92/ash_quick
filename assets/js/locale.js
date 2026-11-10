@@ -6,7 +6,13 @@
 // The connected mount is the first moment that is known, and `<html>` is
 // outside every LiveView, so no patch or navigation would ever correct it.
 // The server pushes what the page is actually in; this applies it.
-export function initLocale() {
+let listening = false
+
+// Once per page, however many sockets are built.
+export function listenForLocale() {
+  if (listening) return
+  listening = true
+
   window.addEventListener("phx:locale", event => {
     const { lang, dir } = event.detail
 

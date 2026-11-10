@@ -9,9 +9,9 @@ defmodule Example.Application do
       ExampleWeb.Telemetry,
       Example.Repo,
       {Phoenix.PubSub, name: Example.PubSub},
-      # After the PubSub server it registers against and before the endpoint
-      # whose sockets it counts — the placement `AshQuick`'s README asks for.
-      AshQuick.BrowserSessionPresence,
+      # Every process AshQuick runs: after the PubSub server they ride on and
+      # before the endpoint whose sockets they count.
+      AshQuick,
       ExampleWeb.Endpoint
     ]
 

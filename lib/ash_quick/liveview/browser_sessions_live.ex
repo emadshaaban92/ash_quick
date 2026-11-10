@@ -19,7 +19,8 @@ defmodule AshQuick.LiveView.BrowserSessionsLive do
 
       live "/browser_sessions", AshQuick.LiveView.BrowserSessionsLive, :index
 
-  and supervises the register it reads, `AshQuick.BrowserSessionPresence`.
+  and supervises `AshQuick`, which starts the register it reads,
+  `AshQuick.BrowserSessionPresence`.
 
   Each row links the person at the tab to `/profile/:id`, so a host that wants
   those links to lead anywhere serves its actor resource there.

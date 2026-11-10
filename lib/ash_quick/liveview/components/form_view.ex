@@ -479,8 +479,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       />
       <%!-- The client uploader `AshQuick.Storage.S3.upload_target/2` names: a
       `PUT` of the file to the presigned URL. Bundled into the host's app.js
-      from `phoenix-colocated/ash_quick` as `uploaders.S3`, so a strict CSP
-      lets it run. It renders nothing here. --%>
+      as `uploaders.S3` by `withAshQuick`, so a strict CSP lets it run. It renders nothing here. --%>
       <script :type={Phoenix.LiveView.ColocatedJS} name="S3" key="uploaders">
         export default function (entries, onViewError) {
           entries.forEach(entry => {

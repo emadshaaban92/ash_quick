@@ -7,8 +7,9 @@ defmodule AshQuick.LiveView.PrintUtils do
   place and flashes that the PDF could not be produced.
 
   The PDF travels over the LiveView socket as an `"ash_quick:pdf"` event, which
-  `assets/js/print.js` saves or prints. Nothing is stored and no link is
-  handed out: only the tab that ran the action gets it.
+  `attachAshQuick`'s listener (`assets/js/print.js`) saves or prints. Nothing
+  is stored and no link is handed out: only the tab that ran the action gets
+  it.
   """
 
   require Logger

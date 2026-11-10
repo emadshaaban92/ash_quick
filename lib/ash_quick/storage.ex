@@ -115,15 +115,9 @@ defmodule AshQuick.Storage do
     * **External.** The browser writes the bytes straight to the store.
       `c:upload_target/2` returns the name of a LiveView client uploader and
       the metadata it needs; AshQuick ships one, `S3`, as colocated JS that
-      the host registers on its `LiveSocket`:
+      `withAshQuick` adds to the host's LiveSocket options:
 
-          import { hooks as ashQuickHooks, uploaders as ashQuickUploaders }
-            from "phoenix-colocated/ash_quick"
-
-          let liveSocket = new LiveSocket("/live", Socket, {
-            hooks: {...ashQuickHooks},
-            uploaders: {...ashQuickUploaders}
-          })
+          new LiveSocket("/live", Socket, withAshQuick({...}))
 
     * **Socket.** Without `c:upload_target/2` the bytes travel over the
       LiveView socket to the server, and AshQuick hands the finished file to

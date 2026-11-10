@@ -164,7 +164,7 @@ CSS properties, and its arrows and chevrons turn with the page, so `dir` on
 
 The dead render resolves the locale before a tab says who it is, so a tab that
 turns out to be impersonating someone has the real user's `lang` and `dir`.
-Push the right ones from the connected mount, and `initLocale` (see
+Push the right ones from the connected mount, and `attachAshQuick` (see
 [Assets](#assets)) applies them to `<html>`:
 
 ```elixir
@@ -376,10 +376,10 @@ environment, say) and is not reported.
 
 ### Assets
 
-Two lines, so QuickViews are styled and each browser tab carries its own
-session. Without the `@source` line every QuickView renders unstyled — the
-library's classes live in its own `lib/`, which the host's Tailwind build does
-not scan by default.
+The `@source` line below, so QuickViews are styled, and two calls in `app.js`
+further down, so each browser tab carries its own session. Without the
+`@source` line every QuickView renders unstyled — the library's classes live in
+its own `lib/`, which the host's Tailwind build does not scan by default.
 
 ```css
 /* assets/css/app.css */
@@ -394,45 +394,55 @@ going still while the action runs. The installer adds it when it is missing.
 @custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
 ```
 
+In `app.js`, pass the LiveSocket's options through `withAshQuick` and attach
+the socket once it is built. The options themselves stay as they are:
+
 ```javascript
 // assets/js/app.js
-import { browserSessionParams, initBrowserSession } from "../../deps/ash_quick/assets/js/browser_session"
-import { initLocale } from "../../deps/ash_quick/assets/js/locale"
-import { initPrinting } from "../../deps/ash_quick/assets/js/print" // only if an action prints
-import { hooks as ashQuickHooks, uploaders as ashQuickUploaders } from "phoenix-colocated/ash_quick"
+import {LiveSocket} from "phoenix_live_view"
+import {withAshQuick, attachAshQuick} from "ash_quick"
 
-let liveSocket = new LiveSocket("/live", Socket, {
-  // A function, so every reconnect re-reads the tab's identity.
-  params: () => ({ _csrf_token: csrfToken, ...browserSessionParams() }),
-  hooks: { ...colocatedHooks, ...ashQuickHooks },
-  uploaders: { ...ashQuickUploaders }
-})
-
-initBrowserSession(liveSocket)
-initLocale()
-initPrinting()
+const liveSocket = new LiveSocket("/live", Socket, withAshQuick({
+  longPollFallbackMs: 2500,
+  params: {_csrf_token: csrfToken},
+  hooks: {...colocatedHooks},
+}))
+attachAshQuick(liveSocket)
 ```
 
-`browserSessionParams` is the id a tab mints for itself and replays on every
-connect — the unit `AshQuick.BrowserSessionPresence` registers, and the one its
-`revoke/1` cuts an impersonation off at. `initLocale` applies the `lang` and
-`dir` the connected mount pushes, which the dead render could not have known.
-`initPrinting` receives the PDF an action carrying `AshQuick.Print` sends over
-the socket, and saves it or opens the print dialog on it.
-`ashQuickHooks` are the library's colocated hooks. Compiling AshQuick writes
-them under `Mix.Project.build_path()`, which a Phoenix 1.8 app's esbuild
-`NODE_PATH` already includes; it has to be compiled before the assets are
-built, as a Phoenix 1.8 app's `assets.build` alias already does. One of them
-keeps a checkbox, a radio, a select or a searchable dropdown in the action
-modal from being changed from the keyboard while the action runs.
-`ashQuickUploaders` holds `S3`, the LiveView client uploader that sends a
-picked file to the presigned `PUT` `AshQuick.Storage.S3` hands out; without it
-a file picked for an attachment never leaves the browser. The bucket's CORS
-rules must allow a `PUT` with a `Content-Type` header from the application's
-origin (see `AshQuick.Storage.S3`). A storage module
-that takes uploads over the socket needs neither (see `AshQuick.Storage`,
-"Browser uploads"). The installer adds the import and the spreads when they
-are missing.
+`withAshQuick` adds what AshQuick needs to the options it is given:
+
+- The tab's identity, which the tab mints for itself, and its impersonation
+  token join the connect params on every connect. They are the unit
+  `AshQuick.BrowserSessionPresence` registers and the one its `revoke/1` cuts
+  an impersonation off at. `params` may be an object or a function; the host's
+  own keys are kept.
+- The library's colocated hooks join `hooks`. One of them keeps a checkbox, a
+  radio, a select or a searchable dropdown in the action modal from being
+  changed from the keyboard while the action runs.
+- `S3` joins `uploaders`: the LiveView client uploader that sends a picked
+  file to the presigned `PUT` `AshQuick.Storage.S3` hands out. The bucket's
+  CORS rules must allow a `PUT` with a `Content-Type` header from the
+  application's origin (see `AshQuick.Storage.S3`). A storage module that
+  takes uploads over the socket does not use it (see `AshQuick.Storage`,
+  "Browser uploads").
+
+A hook or uploader of the host's own under the same name as one of AshQuick's
+replaces it.
+
+`attachAshQuick` listens for the events the server pushes: starting and
+ending an impersonation, which reconnects every socket it was given, the `lang`
+and `dir` the connected mount pushes (which the dead render could not have
+known), and the PDF an action carrying `AshQuick.Print` sends over the socket,
+which it saves or opens the print dialog on. Its listeners are registered once
+per page, however many times it is called.
+
+`ash_quick` resolves through the esbuild `NODE_PATH` a Phoenix 1.8 app
+already sets, which holds both `deps/` (where the package is) and
+`Mix.Project.build_path()` (where compiling AshQuick writes its colocated
+hooks). So AshQuick has to be compiled before the assets are built, as a
+Phoenix 1.8 app's `assets.build` alias already does. The installer makes both
+changes when `app.js` builds its socket the way Phoenix generates it.
 
 ### Router and formatter
 
@@ -462,18 +472,23 @@ config :spark, :formatter,
 
 ### Supervision tree and mount
 
-`AshQuick.BrowserSessionPresence` goes in the application's tree, after the
-PubSub server and before the endpoint. Leaving it out costs the register of
-signed-in tabs and nothing else — the mount warns once per navigation and
-serves the page.
+`AshQuick` goes in the application's tree, after the PubSub server and before
+the endpoint. It starts every process the library runs under one supervisor,
+`AshQuick.Supervisor`; today that is the register of signed-in tabs. Leaving it
+out costs that register and nothing else: the mount warns once per navigation
+and serves the page.
 
 ```elixir
 children = [
   {Phoenix.PubSub, name: MyApp.PubSub},
-  AshQuick.BrowserSessionPresence,
+  AshQuick,
   MyAppWeb.Endpoint
 ]
 ```
+
+It rides the PubSub server the configured `:endpoint` names in its own
+configuration. A host whose endpoint is configured under another application's
+name than its own passes it: `{AshQuick, pubsub_server: MyApp.PubSub}`.
 
 `AshQuick.LiveView.Mount` goes **first** in the live session's `on_mount`. It
 resolves the tab's impersonation and reads the connection's address, and the
@@ -513,7 +528,6 @@ its params:
 ```javascript
 params: () => ({
   _csrf_token: csrfToken,
-  ...browserSessionParams(),
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
 })
 ```
@@ -1007,8 +1021,7 @@ reference.
 | `AshQuick.Storage` | Where objects live: a URL to render one from (`url/2`), a URL to download one under a filename (`download_url/2`), storing a server-side file (`put_file/3`), and where a browser sends a picked file (`upload_target/2`, optional: without it uploads come over the LiveView socket). Plus optional lifecycle callbacks for routing an arriving upload and withholding objects that are not servable yet. Defaults to `AshQuick.Storage.S3`, which serves straight from the key and implements no lifecycle. `AshQuick.Storage.Local` keeps objects on the server's disk instead (see Storing files on local disk), and `AshQuick.Storage.S3.Proxy` serves a bucket only the application can reach through the application (see Serving files from a bucket only the app can reach). |
 | `AshQuick.AccessControl` | Answers which routes a scope may navigate to. Named on the nav, and what every rendering of it filters through. Not `Ash.can?`: a filter policy allows the action and returns no rows, so `can?` says yes for a page that would be empty. |
 | `AshQuick.Nav` | The host's navigation registry — one declaration the sidebar and the apps grid are both rendered from. QuickViews are discovered from the declared router; the declaration adds only what the router cannot say: a better label, an icon, a group, a non-QuickView path. |
-| `AshQuick.BrowserSessionPresence` | The live register of signed-in tabs. Supervised, not implemented — listed here because the tree entry is the host's. `AshQuick.LiveView.BrowserSessionsLive` is the page that reads it. |
-| `AshQuick.PrintTemplate` | One module per print template: its label, what to load, and the HTML ChromicPDF renders. A create or update action prints through it with `change {AshQuick.Print, template: ..., delivery: :print \| :download}`; the PDF is rendered after the action commits and reaches the browser over the LiveView socket, so the host imports `initPrinting` from `assets/js/print.js`. |
+| `AshQuick.PrintTemplate` | One module per print template: its label, what to load, and the HTML ChromicPDF renders. A create or update action prints through it with `change {AshQuick.Print, template: ..., delivery: :print \| :download}`; the PDF is rendered after the action commits and reaches the browser over the LiveView socket, where `attachAshQuick` saves or prints it. |
 | `AshQuick.ReadOnlyFields.Check` | `match?/2` over an actor and tenant, deciding whether that actor may write a field a `read_only_fields` entry names. For an actor it refuses, the field still reads everywhere, is left out of forms, and is stripped from the changeset. |
 
 ## Authorization on a surface

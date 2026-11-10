@@ -2,7 +2,7 @@ defmodule AshQuick.LiveView.ImpersonationTest do
   @moduledoc """
   The event names a host's markup dispatches.
 
-  These are a contract with `assets/js/ash_quick/impersonation.js`, and the
+  These are a contract with `assets/js/browser_session.js`, and the
   other half of it is in a language no Elixir test loads. A rename here goes
   unnoticed until a control silently stops working in somebody's browser —
   which is the whole reason these commands exist rather than the strings being

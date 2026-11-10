@@ -69,7 +69,7 @@ defmodule ExampleWeb.LocaleScenarioTest do
 
       {:ok, view, _html} = live(log_in(conn, arabic), ~p"/products")
 
-      # `deps/ash_quick/assets/js/locale.js` is what puts these on `<html>`.
+      # `attachAshQuick` is what puts these on `<html>`.
       # Without the direction the whole layout runs the wrong way while every
       # string is correct, which is the harder half to notice.
       assert_push_event(view, "locale", %{lang: "ar", dir: "rtl"})

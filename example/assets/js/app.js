@@ -22,39 +22,27 @@ import "phoenix_html"
 // Establish Phoenix Socket and LiveView configuration.
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
+// AshQuick's hooks, its `S3` uploader and the tab's identity in the connect
+// params, then the listeners for impersonation, the page's locale and printed
+// PDFs.
+import {withAshQuick, attachAshQuick} from "ash_quick"
 import {hooks as colocatedHooks} from "phoenix-colocated/example"
-// AshQuick's hooks, and the `S3` client uploader `AshQuick.Storage.S3` sends a
-// picked file through.
-import {hooks as ashQuickHooks, uploaders as ashQuickUploaders} from "phoenix-colocated/ash_quick"
 import topbar from "../vendor/topbar"
 import live_select from "live_select"
-// A tab mints its own id and replays it on every connect — the unit
-// `AshQuick.BrowserSessionPresence` registers, and what its `revoke/1` cuts an
-// impersonation off at. `initLocale` applies the `lang`/`dir` the connected
-// mount pushes, which the dead render could not have known.
-import {
-  browserSessionParams,
-  initBrowserSession,
-} from "../../../assets/js/browser_session"
-import {initLocale} from "../../../assets/js/locale"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
-const liveSocket = new LiveSocket("/live", Socket, {
+const liveSocket = new LiveSocket("/live", Socket, withAshQuick({
   longPollFallbackMs: 2500,
-  // A function, so every reconnect re-reads the tab's identity. `timezone` is
-  // this app's choice of zone to show times in, the browser's own, which
+  // A function, so every reconnect re-reads it. `timezone` is this app's
+  // choice of zone to show times in, the browser's own, which
   // `ExampleWeb.UserAuth` puts on the scope.
   params: () => ({
     _csrf_token: csrfToken,
-    ...browserSessionParams(),
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   }),
-  hooks: {...colocatedHooks, ...ashQuickHooks, ...live_select},
-  uploaders: {...ashQuickUploaders},
-})
-
-initBrowserSession(liveSocket)
-initLocale()
+  hooks: {...colocatedHooks, ...live_select},
+}))
+attachAshQuick(liveSocket)
 
 // Show progress bar on live navigation and form submits
 topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})

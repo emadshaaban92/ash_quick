@@ -11,7 +11,7 @@ defmodule AshQuick.MixProject do
       elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
       # Writes the manifest of the colocated hooks, so a host's bundle can
-      # import them as `phoenix-colocated/ash_quick`.
+      # import them (`assets/js/index.js` does, as `phoenix-colocated/ash_quick`).
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
       start_permanent: Mix.env() == :prod,
       # The suite defines Ash resources at compile time, and each one carries
@@ -110,9 +110,10 @@ defmodule AshQuick.MixProject do
     [
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
-      # Spelled out, because three of these are not in Hex's default set and
+      # Spelled out, because four of these are not in Hex's default set and
       # each is load-bearing: `assets` is the client half a host imports into
-      # its `app.js`, and `usage-rules.md` / `usage-rules` are what
+      # its `app.js`, `package.json` is what lets it import that as
+      # `ash_quick`, and `usage-rules.md` / `usage-rules` are what
       # `mix usage_rules.sync` delivers to a consuming project's agents.
       files: [
         "lib",
@@ -122,6 +123,7 @@ defmodule AshQuick.MixProject do
         "usage-rules",
         ".formatter.exs",
         "mix.exs",
+        "package.json",
         "README.md",
         "CHANGELOG.md",
         "LICENSE"

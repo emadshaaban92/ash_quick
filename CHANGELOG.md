@@ -1106,6 +1106,44 @@
 
 ### Breaking changes
 
+- **`app.js` wires AshQuick in with `withAshQuick` and `attachAshQuick`, and
+  that is all of its client setup.** The host keeps Phoenix's own
+  `LiveSocket`. `withAshQuick(opts)` adds the tab's identity and
+  impersonation token to `params` (an object or a function), the library's
+  colocated hooks to `hooks` and `S3` to `uploaders`; `attachAshQuick(socket)`
+  listens for impersonation, the pushed `lang`/`dir` and printed PDFs, once
+  per page. Printing needs nothing more. The imports from
+  `deps/ash_quick/assets/js/*` (`browserSessionParams`,
+  `initBrowserSession`, `initLocale`, `initPrinting`) and from
+  `phoenix-colocated/ash_quick` are no longer the way in: replace them with
+
+  ```javascript
+  import {withAshQuick, attachAshQuick} from "ash_quick"
+
+  const liveSocket = new LiveSocket("/live", Socket, withAshQuick({...}))
+  attachAshQuick(liveSocket)
+  ```
+
+  and drop `...browserSessionParams()`, `...ashQuickHooks`,
+  `...ashQuickUploaders` and the three `init*` calls. The package resolves
+  through the esbuild `NODE_PATH` a Phoenix 1.8 app sets (`deps/` and
+  `Mix.Project.build_path()`); a host using AshQuick as a path dependency
+  adds an esbuild alias, `--alias:ash_quick=<path to the checkout>`. The
+  installer makes both changes when `app.js` builds its socket as Phoenix
+  generates it, and warns instead when it does not, or when `app.js` already
+  sets AshQuick up by hand.
+
+- **The supervision tree names `AshQuick`, not
+  `AshQuick.BrowserSessionPresence`.** `AshQuick` starts
+  `AshQuick.Supervisor`, which runs every process the library needs, so a
+  process added later needs no change to the host's tree. Replace the entry
+  rather than adding one beside it: both together fail to boot with
+  `already_started`. It goes where the old one went, after the PubSub server
+  and before the endpoint; `pubsub_server:` moves with it
+  (`{AshQuick, pubsub_server: MyApp.PubSub}`). The installer adds `AshQuick`,
+  and the mount's warning when it is missing names `AshQuick`.
+  `AshQuick.BrowserSessionPresence.revoke/1` and `sessions/0` are unchanged.
+
 - **`field_restrictions` is renamed `read_only_fields`, and `restrict` is
   `read_only` with the check under `writable_if:`.** What it does is
   unchanged: a field the check refuses an actor still reads on lists, details

@@ -245,8 +245,8 @@ defmodule AshQuick.LiveView.QuickView do
   controls ignore the pointer, and the form's `AshQuick.Components.SubmitLock`
   hook refuses the clicks and keys that would change a checkbox, a radio, a
   select or a searchable dropdown. A refused run leaves the modal usable again,
-  values kept. The hook is a colocated one, which the host registers from
-  `phoenix-colocated/ash_quick` (see the README).
+  values kept. The hook is a colocated one, which `withAshQuick` registers
+  (see the README).
 
   A custom `action_<name>.html.heex` gets the ✕'s part for free, whatever its
   form. The controls are the components' part: `simple_form/1` (given an `id`)

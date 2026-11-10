@@ -28,25 +28,19 @@ defmodule AshQuick.BrowserSessionPresence do
 
   ## Using it
 
-  A `Phoenix.Presence`, supervised by the host in its application's tree,
-  after the PubSub server and before the endpoint:
-
-      children = [
-        {Phoenix.PubSub, name: MyApp.PubSub},
-        AshQuick.BrowserSessionPresence,
-        MyAppWeb.Endpoint
-      ]
+  A `Phoenix.Presence`, started by `AshQuick.Supervisor`: the host puts
+  `AshQuick` in its tree and this comes with it.
 
   It rides the PubSub server the configured `:endpoint` names in its own
   configuration — the one the host's LiveViews already run on — so nothing is
   configured for it. A host whose endpoint is configured under another
-  application's name than its own passes `pubsub_server:` in the child spec
+  application's name than its own passes `pubsub_server:` to `AshQuick`
   instead.
 
-  Leaving it out of the tree costs the register and nothing else. The mount
-  that registers tabs warns once per navigation and carries on serving the
-  page, so the app works without it; only the page that reads the register
-  fails, which is the page the host has not set up.
+  Leaving `AshQuick` out of the tree costs the register and nothing else. The
+  mount that registers tabs warns once per navigation and carries on serving
+  the page, so the app works without it; only the page that reads the
+  register fails, which is the page the host has not set up.
 
   Nothing here is called by a host directly. `AshQuick.LiveView.Mount` is what
   registers a tab, so a host that mounts that stage has a working register by
@@ -86,9 +80,9 @@ defmodule AshQuick.BrowserSessionPresence do
       raise ArgumentError, """
       #{inspect(__MODULE__)} rides the PubSub server #{inspect(endpoint)} is \
       configured with, and its configuration names none. Configure one on the \
-      endpoint, or pass it in the child spec:
+      endpoint, or pass it where the host starts AshQuick:
 
-          {AshQuick.BrowserSessionPresence, pubsub_server: MyApp.PubSub}
+          {AshQuick, pubsub_server: MyApp.PubSub}
       """
   end
 
@@ -157,7 +151,7 @@ defmodule AshQuick.BrowserSessionPresence do
     # Not started is the one failure the tracker cannot return: with no
     # register in the tree there is no table to answer from, and it raises
     # instead. It gets the same treatment as a returned error, or a host that
-    # forgot the child spec would find every page 500ing rather than a
+    # left `AshQuick` out of its tree would find every page 500ing rather than a
     # sidebar's worth of feature missing.
     error -> unsupervised(error)
   end
@@ -178,12 +172,12 @@ defmodule AshQuick.BrowserSessionPresence do
     Logger.warning("""
     could not track browser session: #{Exception.message(error)}
 
-    #{inspect(__MODULE__)} has to be in the host's supervision tree, after the \
-    PubSub server and before the endpoint:
+    AshQuick has to be in the host's supervision tree, after the PubSub \
+    server and before the endpoint:
 
         children = [
           {Phoenix.PubSub, name: MyApp.PubSub},
-          #{inspect(__MODULE__)},
+          AshQuick,
           MyAppWeb.Endpoint
         ]
     """)

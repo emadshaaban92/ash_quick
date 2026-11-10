@@ -104,11 +104,13 @@ config :ex_money, auto_start_exchange_rate_service: false
 # committed. It reads this file alone, so the list is written out here.
 config :localize, otp_app: :example, supported_locales: [:en, :ar]
 
+# `ash_quick` is a path dependency here, so it is not under deps/ where a
+# host's NODE_PATH finds it: the alias points the import at the checkout.
 config :esbuild,
   version: "0.28.2",
   example: [
     args:
-      ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=.),
+      ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=. --alias:ash_quick=../..),
     cd: Path.expand("../assets", __DIR__),
     env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}
   ]
