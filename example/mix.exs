@@ -49,7 +49,7 @@ defmodule Example.MixProject do
       # Shows timestamps in the zone the reader's browser reports, which only a
       # full time zone database can shift into.
       {:tz, "~> 0.28"},
-      {:ash, "~> 3.37 and >= 3.37.3"},
+      {:ash, "~> 3.37 and >= 3.37.4"},
       {:ash_phoenix, "~> 2.3"},
       {:ash_postgres, "~> 2.15"},
       {:ecto_sql, "~> 3.14"},

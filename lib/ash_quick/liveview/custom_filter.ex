@@ -321,11 +321,20 @@ defmodule AshQuick.LiveView.CustomFilter do
   destination with: its `read_action`, or the destination's primary read,
   which `filterable_fields/2` offers none without. With `action` given as
   `nil`, the list's own fields are not narrowed.
+
+  A related field is asked as the filter reads it, through the relationship:
+  with `accessing_from` naming it in the context, so a policy written with
+  `accessing_from/2` holds as it does for the column. Every field of a
+  destination the visitor may not read through the relationship at all is
+  left out, since a row on one could never match; a read policy that only
+  filters the destination leaves its fields offered.
   """
   def visible(fields, action, scope, opts \\ []) do
     visible =
       for {relationship, group} <- Enum.group_by(fields, & &1.relationship),
           {resource, read} = read_by(relationship, group, action),
+          opts = through(relationship, opts),
+          readable?(relationship, resource, read, scope, opts),
           by_name = Map.new(group, &{&1.field.name, &1}),
           name <- visible_names(Map.keys(by_name), resource, read, scope, opts),
           into: MapSet.new(),
@@ -338,6 +347,36 @@ defmodule AshQuick.LiveView.CustomFilter do
 
   defp visible_names(names, resource, read, scope, opts),
     do: Utils.visible_fields(names, resource, read, scope, opts)
+
+  # The context Ash reads a related field's policies in, inside the `exists`
+  # a path row is built as: one naming the relationship it was reached
+  # through.
+  defp through(nil, opts), do: opts
+
+  defp through(relationship, opts) do
+    accessing_from = %{accessing_from: %{source: relationship.source, name: relationship.name}}
+    Keyword.update(opts, :context, accessing_from, &Map.merge(&1, accessing_from))
+  end
+
+  # Only a definite refusal hides a destination: a read policy refuses a read
+  # by filtering it to nothing, which `Ash.can/3` answers as allowed, so it is
+  # the filter it would read with that is asked. Run without queries, a
+  # policy that filters by the record stays a filter, and its fields offered.
+  defp readable?(nil, _resource, _read, _scope, _opts), do: true
+  defp readable?(_relationship, _resource, nil, _scope, _opts), do: true
+
+  defp readable?(_relationship, resource, read, scope, opts) do
+    case Ash.can({resource, read.name}, scope,
+           context: opts[:context],
+           alter_source?: true,
+           run_queries?: false
+         ) do
+      {:ok, false} -> false
+      {:ok, false, _error} -> false
+      {:ok, true, %{filter: %Ash.Filter{expression: false}}} -> false
+      _readable_or_error -> true
+    end
+  end
 
   defp read_by(nil, [field | _], action), do: {field.resource, action}
 

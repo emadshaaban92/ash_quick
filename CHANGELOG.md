@@ -657,6 +657,19 @@
   was not changed and is still selected: check it and try again.", with its
   Arabic translation.
 
+- **A related field's filter is offered as its column shows it.** The filter
+  form asked a field reached through a belongs_to, `filterable: [vault:
+  :code]`, as a read of the related resource itself, so a field policy
+  written with `accessing_from(Item, :vault)` hid it, and a link's row on it
+  was dropped, though its column showed the value. The form now asks the
+  related resource's read and field policies with `accessing_from` naming the
+  relationship, as the filter's `exists` reads them, and Ash 3.37.4 asks a
+  field policy there the same way, so such a row matches. A related resource
+  the reader may not read by any route, whose read policy refuses them
+  outright, offers none of its fields: a row on one could never match, and
+  Is Empty on it kept every row. One whose read policy only filters its
+  records stays offered (#152).
+
 - **A field Ash filters by simple equality only no longer takes the list
   down.** An attribute or aggregate with `filterable? :simple_equality` made
   the filter's field lookup raise `BadBooleanError` on every list page over
@@ -1364,14 +1377,16 @@
   carrying `{AshQuick.Print, template: MyTemplate}`. Prints get the action's
   policies and an audit row, and are no longer uploaded to storage.
 
-- **Ash 3.37.3, ash_phoenix 2.3.25 and phoenix_html 4.4 or later are required.**
+- **Ash 3.37.4, ash_phoenix 2.3.25 and phoenix_html 4.4 or later are required.**
   Column filtering uses `Ash.can_see_fields/4`, which arrived in 3.32.1 and from
   3.35.0 no longer skips a policy authorizer that has not loaded yet. Live pages
   re-target their subscriptions through `keep_live`'s dynamic subscriptions,
   which arrived in ash_phoenix 2.3.20, and 2.3.25 fixed CVE-2026-82724 through
   CVE-2026-82727. Ash 3.37.1 fixed EEF-CVE-2026-114214, and 3.37.3 stopped an
   update that manages a relationship from failing on a record whose embed a
-  field policy hides. phoenix_html 4.4.0 fixed EEF-CVE-2026-117645. The other floors rose to the releases the suite
+  field policy hides. 3.37.4 reads a related field's policies in a filter
+  through the relationship, as the filter form asks them. phoenix_html 4.4.0
+  fixed EEF-CVE-2026-117645. The other floors rose to the releases the suite
   runs against: spark 2.7, and for the optional features nimble_csv 1.3, exceed
   0.7, ex_aws 2.7, ex_money 6.3, localize 1.6 and sourceror 1.13.
 
