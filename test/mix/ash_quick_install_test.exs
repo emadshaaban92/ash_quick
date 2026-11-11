@@ -572,9 +572,9 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
       """)
     end
 
-    test "supervises the register of signed-in tabs" do
+    test "supervises AshQuick after the PubSub server" do
       assert_has_patch(install(), "lib/test/application.ex", """
-      + |      AshQuick.BrowserSessionPresence
+      + |      AshQuick
       """)
     end
 
@@ -607,133 +607,109 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
       assert_unchanged(igniter, "assets/css/app.css")
     end
 
-    # The submit lock in the action modal is a colocated hook, which a host's
-    # own colocated bundle does not carry.
-    test "registers the library's hooks in the LiveSocket" do
+    # Phoenix's own LiveSocket, its options wrapped and the socket attached:
+    # the host's options stay as they are.
+    test "wires AshQuick into the LiveSocket" do
       igniter = install(%{"assets/js/app.js" => @app_js})
 
-      assert_has_patch(igniter, "assets/js/app.js", """
-      + |import { hooks as ashQuickHooks, uploaders as ashQuickUploaders } from "phoenix-colocated/ash_quick"
-      """)
+      assert_content_equals(igniter, "assets/js/app.js", """
+      import "phoenix_html"
+      import {Socket} from "phoenix"
+      import {LiveSocket} from "phoenix_live_view"
+      import {withAshQuick, attachAshQuick} from "ash_quick"
+      import {hooks as colocatedHooks} from "phoenix-colocated/test"
+      import topbar from "../vendor/topbar"
 
-      assert_has_patch(igniter, "assets/js/app.js", """
-      - |  hooks: {...colocatedHooks},
-      + |  uploaders: {...ashQuickUploaders},
-      + |  hooks: {...ashQuickHooks, ...colocatedHooks},
+      const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
+      const liveSocket = new LiveSocket("/live", Socket, withAshQuick({
+        longPollFallbackMs: 2500,
+        params: {_csrf_token: csrfToken},
+        hooks: {...colocatedHooks},
+      }))
+      attachAshQuick(liveSocket)
       """)
     end
 
-    # The `S3` client uploader an external upload names comes from the same
-    # bundle; a host's own uploaders keep their place beside it.
-    test "adds the library's uploaders to the host's own" do
+    # Brackets and commas inside strings and comments are not the call's.
+    test "wraps options named by a variable, past strings and comments" do
       app_js = """
       import {Socket} from "phoenix"
-      import {LiveSocket} from "phoenix_live_view"
+      import {LiveSocket, createHook} from "phoenix_live_view";
 
-      const liveSocket = new LiveSocket("/live", Socket, {
-        uploaders: {Mine},
-        hooks: {},
-      })
+      let socket = new LiveSocket("/live(,)", Socket /* ) */, opts); // ok
+      socket.connect();
       """
 
       igniter = install(%{"assets/js/app.js" => app_js})
 
       assert_content_equals(igniter, "assets/js/app.js", """
       import {Socket} from "phoenix"
-      import {LiveSocket} from "phoenix_live_view"
-      import { hooks as ashQuickHooks, uploaders as ashQuickUploaders } from "phoenix-colocated/ash_quick"
+      import {LiveSocket, createHook} from "phoenix_live_view";
+      import {withAshQuick, attachAshQuick} from "ash_quick"
 
-      const liveSocket = new LiveSocket("/live", Socket, {
-        uploaders: {...ashQuickUploaders, Mine},
-        hooks: {...ashQuickHooks, },
-      })
+      let socket = new LiveSocket("/live(,)", Socket /* ) */, withAshQuick(opts)); // ok
+      attachAshQuick(socket)
+      socket.connect();
       """)
     end
 
-    # A second `uploaders:` key beside one that is not an inline object would
-    # silently replace one of the two, so the script is left for the host.
-    test "says how to add the uploaders when the host's are not an inline object" do
+    test "keeps the host's semicolons" do
       app_js = """
-      import {Socket} from "phoenix"
-      import {LiveSocket} from "phoenix_live_view"
-
-      const liveSocket = new LiveSocket("/live", Socket, {
-        uploaders: Uploaders,
-        hooks: {},
-      })
-      """
-
-      igniter = install(%{"assets/js/app.js" => app_js})
-
-      assert_unchanged(igniter, "assets/js/app.js")
-      assert_has_warning(igniter, &(&1 =~ "const Uploaders = {...ashQuickUploaders, ...}"))
-      refute Enum.any?(igniter.warnings, &(&1 =~ "uploaders: {...ashQuickUploaders}"))
-    end
-
-    test "says the same for the shorthand `uploaders`" do
-      app_js = """
-      import {Socket} from "phoenix"
-      import {LiveSocket} from "phoenix_live_view"
-
-      const liveSocket = new LiveSocket("/live", Socket, {hooks: {}, uploaders})
-      """
-
-      igniter = install(%{"assets/js/app.js" => app_js})
-
-      assert_unchanged(igniter, "assets/js/app.js")
-      assert_has_warning(igniter, &(&1 =~ "const Uploaders = {...ashQuickUploaders, ...}"))
-    end
-
-    # The last import spread over lines: its first line, `import {`, also opens
-    # earlier single-line imports, so only its position says where it ends.
-    test "puts the import after a last import spread over several lines" do
-      app_js = """
-      import {Socket} from "phoenix"
-      import {LiveSocket} from "phoenix_live_view"
-      import {
-        browserSessionParams,
-        initBrowserSession,
-      } from "../../deps/ash_quick/assets/js/browser_session" // the tab's id
-
-      const liveSocket = new LiveSocket("/live", Socket, {
-        hooks: {},
-      })
+      import {LiveSocket} from "phoenix_live_view";
+      const liveSocket = new LiveSocket("/live", Socket, {});
       """
 
       igniter = install(%{"assets/js/app.js" => app_js})
 
       assert_content_equals(igniter, "assets/js/app.js", """
-      import {Socket} from "phoenix"
-      import {LiveSocket} from "phoenix_live_view"
-      import {
-        browserSessionParams,
-        initBrowserSession,
-      } from "../../deps/ash_quick/assets/js/browser_session" // the tab's id
-      import { hooks as ashQuickHooks, uploaders as ashQuickUploaders } from "phoenix-colocated/ash_quick"
-
-      const liveSocket = new LiveSocket("/live", Socket, {
-        uploaders: {...ashQuickUploaders},
-        hooks: {...ashQuickHooks, },
-      })
+      import {LiveSocket} from "phoenix_live_view";
+      import {withAshQuick, attachAshQuick} from "ash_quick"
+      const liveSocket = new LiveSocket("/live", Socket, withAshQuick({}));
+      attachAshQuick(liveSocket);
       """)
     end
 
     test "leaves the script alone on a second run" do
-      app_js =
-        String.replace(
-          @app_js,
-          ~s|import topbar|,
-          ~s|import { hooks as ashQuickHooks } from "phoenix-colocated/ash_quick"\nimport topbar|
-        )
+      igniter = install(%{"assets/js/app.js" => @app_js})
+      [source] = Enum.filter(Rewrite.sources(igniter.rewrite), &(&1.path == "assets/js/app.js"))
+      installed = Rewrite.Source.get(source, :content)
 
-      assert_unchanged(install(%{"assets/js/app.js" => app_js}), "assets/js/app.js")
+      assert_unchanged(install(%{"assets/js/app.js" => installed}), "assets/js/app.js")
     end
 
-    test "says how to register the hooks when it cannot find where they go" do
+    # Patching beside a setup written by hand would register every listener
+    # twice, so it is left for the host to replace.
+    test "says how to replace a setup written by hand" do
+      app_js = """
+      import {Socket} from "phoenix"
+      import {LiveSocket} from "phoenix_live_view"
+      import {initLocale} from "../../deps/ash_quick/assets/js/locale"
+      import {hooks as ashQuickHooks} from "phoenix-colocated/ash_quick"
+      """
+
+      igniter = install(%{"assets/js/app.js" => app_js})
+
+      assert_unchanged(igniter, "assets/js/app.js")
+      assert_has_warning(igniter, &(&1 =~ "initLocale"))
+    end
+
+    test "says how to wire it in when it cannot find Phoenix's LiveSocket" do
       igniter = install(%{"assets/js/app.js" => ~s|import "phoenix_html"\n|})
 
       assert_unchanged(igniter, "assets/js/app.js")
-      assert_has_warning(igniter, &(&1 =~ "phoenix-colocated/ash_quick"))
+      assert_has_warning(igniter, &(&1 =~ "attachAshQuick(liveSocket)"))
+    end
+
+    test "says how to wire it in when the socket is not built the usual way" do
+      app_js = """
+      import {LiveSocket} from "phoenix_live_view"
+      window.liveSocket = new LiveSocket("/live", Socket, {})
+      """
+
+      igniter = install(%{"assets/js/app.js" => app_js})
+
+      assert_unchanged(igniter, "assets/js/app.js")
+      assert_has_warning(igniter, &(&1 =~ "withAshQuick({"))
     end
 
     test "warns rather than half-patches when there is no stylesheet" do
@@ -744,11 +720,9 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
       assert_has_warning(igniter, &(&1 =~ "assets/css/app.css"))
     end
 
-    # The params have to become a function, so every reconnect re-reads the
-    # tab's identity. That is a rewrite rather than a line to append, so it is
-    # stated rather than guessed at.
-    test "states the client half instead of patching it" do
-      assert_has_notice(install(), &(&1 =~ "initBrowserSession"))
+    # Which live_session serves the QuickViews is the host's to say.
+    test "states where the mount goes instead of patching it" do
+      assert_has_notice(install(), &(&1 =~ "AshQuick.LiveView.Mount"))
     end
   end
 

@@ -313,11 +313,10 @@ is no `data-confirm` and no browser dialog anywhere.
   action runs it can't be closed: ✕ and Cancel are disabled, Save or Confirm
   shows a spinner, and the form's controls are locked until the reply. The
   keyboard half of the lock is the colocated hook
-  `AshQuick.Components.SubmitLock`: the host spreads
-  `import { hooks as ashQuickHooks } from "phoenix-colocated/ash_quick"` into
-  its LiveSocket `hooks`. A custom template that renders its own `<.form>`
-  rather than `simple_form/1` opts in with an `id` and
-  `phx-hook="AshQuick.Components.SubmitLock"`.
+  `AshQuick.Components.SubmitLock`, which `withAshQuick` (from `ash_quick`,
+  wrapping the LiveSocket's options in `app.js`) registers. A custom
+  template that renders its own `<.form>` rather than `simple_form/1` opts in
+  with an `id` and `phx-hook="AshQuick.Components.SubmitLock"`.
 - A custom `action_<name>.html.heex` for a form renders inside the modal; a
   custom read template renders as the page underneath.
 - A control is drawn where `AshQuick.can?/4` allows it on its surface. A click
@@ -1101,8 +1100,8 @@ covers wiring them up.
   template with `change {AshQuick.Print, template: MyTemplate, delivery: :print}`
   (`:download` is the default): run from a row, a bulk selection, the details
   page or its form, the PDF is rendered after the action commits and goes over
-  the socket to `assets/js/print.js`'s `initPrinting/0`, which the host's
-  `app.js` calls once. On a resource carrying the `AshQuick` extension, a
+  the socket to `attachAshQuick`'s listener, which saves or prints it. On a
+  resource carrying the `AshQuick` extension, a
   print on a destroy, with bad options, or without `chromic_pdf` in the deps
   (and no `:pdf_renderer` of the host's own) does not compile
   (`AshQuick.Print.Verifier`); on any other resource the same mistakes surface
@@ -1112,19 +1111,25 @@ covers wiring them up.
   the `"ash_quick:pdf"` push event. A template that writes nothing
   prints from an update with
   `manual fn changeset, _context -> {:ok, changeset.data} end`.
-- `AshQuick.BrowserSessionPresence` in the supervision tree, and
+- `AshQuick` in the supervision tree, after the PubSub server and before the
+  endpoint (it starts `AshQuick.Supervisor`, which runs every process the
+  library needs; `{AshQuick, pubsub_server: MyApp.PubSub}` when the endpoint's
+  configuration names no PubSub server under its own application), and
   `AshQuick.LiveView.Mount` **first** in the live session's `on_mount`.
-- In `app.js`: `browserSessionParams` / `initBrowserSession` and `initLocale`
-  from `deps/ash_quick/assets/js/`, and the library's colocated hooks and
-  uploaders (`import { hooks as ashQuickHooks, uploaders as ashQuickUploaders }
-  from "phoenix-colocated/ash_quick"`, spread into the LiveSocket's `hooks`
-  and `uploaders`; `uploaders.S3` sends a picked file to
-  `AshQuick.Storage.S3`'s presigned `PUT`, which the bucket's CORS rules must
-  allow with a `Content-Type` header). The hooks are written under
-  `Mix.Project.build_path()` when AshQuick compiles, so esbuild's `NODE_PATH`
-  must include it (a Phoenix 1.8 app's does) and `mix compile` must run before
-  the asset build. In `app.css`: the `@source` line for the library's classes
-  and the `phx-submit-loading` variant the modal's spinner and lock hang on.
+- In `app.js`: `import {withAshQuick, attachAshQuick} from "ash_quick"`,
+  then `new LiveSocket("/live", Socket, withAshQuick({...}))` with the host's
+  options unchanged, and `attachAshQuick(liveSocket)`. `withAshQuick` adds the
+  tab's identity and impersonation token to `params` (an object or a
+  function), the library's colocated hooks to `hooks` and `S3` to `uploaders`
+  (it sends a picked file to `AshQuick.Storage.S3`'s presigned `PUT`, which
+  the bucket's CORS rules must allow with a `Content-Type` header).
+  `attachAshQuick` listens for impersonation, the pushed `lang`/`dir` and
+  printed PDFs. The hooks are
+  written under `Mix.Project.build_path()` when AshQuick compiles, so
+  esbuild's `NODE_PATH` must include it and `deps/` (a Phoenix 1.8 app's
+  does) and `mix compile` must run before the asset build. In `app.css`: the
+  `@source` line for the library's classes and the `phx-submit-loading`
+  variant the modal's spinner and lock hang on.
 
 ## Checking the application
 

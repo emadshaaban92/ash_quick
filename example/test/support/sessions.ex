@@ -5,8 +5,8 @@ defmodule ExampleWeb.Sessions do
 
   Both are things the real client supplies and a test has no browser to get
   them from. `log_in/2` writes the session key `ExampleWeb.UserAuth` reads, and
-  `in_tab/2` / `impersonating/2` write the LiveSocket connect params
-  `deps/ash_quick/assets/js/browser_session.js` replays on every connect.
+  `in_tab/2` / `impersonating/2` write the connect params `withAshQuick`
+  replays on every connect.
 
   The tab half matters more than it looks. AshQuick resolves an impersonation
   per *tab*, not per session, so "an admin impersonating in one window and

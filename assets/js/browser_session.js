@@ -3,7 +3,7 @@
 // ends it.
 //
 // Both values here have to be in the connect params before the socket connects,
-// which is why this is a module the host spreads into `params` rather than a
+// which is why `withAshQuick` (index.js) adds them to `params` rather than a
 // hook: a hook binds to a DOM element inside an already-connected socket.
 const TAB_KEY = "ash_quick:tab"
 const IMPERSONATION_KEY = "ash_quick:impersonation"
@@ -26,8 +26,8 @@ function tab() {
   return tab
 }
 
-// Spread into the LiveSocket's `params`, which must stay a function so each
-// (re)connect re-reads both.
+// Read on every (re)connect, so a reconnect picks up a token set or dropped
+// since the last one.
 export function browserSessionParams() {
   return { tab: tab(), impersonation: sessionStorage.getItem(IMPERSONATION_KEY) }
 }
@@ -36,11 +36,22 @@ export function browserSessionParams() {
 //
 //     <.link phx-click={JS.dispatch("ash_quick:end-impersonation")}>End Impersonation</.link>
 //     <a href={~p"/sign-out"} phx-click={JS.dispatch("ash_quick:clear-impersonation")}>Sign out</a>
-export function initBrowserSession(liveSocket) {
+//
+// The token belongs to the whole tab, so every socket in it reconnects on a
+// change. The listeners are registered once per page, and each attached socket
+// reconnects once: a second set of listeners would reconnect them all twice.
+const sockets = new Set()
+
+export function listenForImpersonation(liveSocket) {
+  const listening = sockets.size > 0
+  sockets.add(liveSocket)
+  if (listening) return
+
   // Reconnecting is what applies a change: every LiveView remounts and reads the
   // new connect params. Cheaper and less jarring than reloading the page, and it
   // leaves the other tabs connected as whoever they already were.
-  const reconnectSocket = () => liveSocket.disconnect(() => liveSocket.connect())
+  const reconnectSocket = () =>
+    sockets.forEach(socket => socket.disconnect(() => socket.connect()))
 
   // A destination means somebody started this from the register, to go and look
   // at the page the other person is on. Navigating first and reconnecting on

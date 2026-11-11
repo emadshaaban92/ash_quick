@@ -941,6 +941,35 @@ defmodule AshQuick do
       AshQuick.Forms.Verifier
     ]
 
+  @doc """
+  Starts every process AshQuick runs, as `AshQuick.Supervisor`. The host's
+  tree names it after the PubSub server and before the endpoint:
+
+      children = [
+        {Phoenix.PubSub, name: MyApp.PubSub},
+        AshQuick,
+        MyAppWeb.Endpoint
+      ]
+
+  ## Options
+
+    * `:pubsub_server` - The PubSub server the register of signed-in tabs
+      rides on. Defaults to the one the configured `:endpoint` names in its
+      configuration.
+  """
+  def child_spec(opts) do
+    # Here rather than in the supervisor's `init/1`, so a misspelt option
+    # fails as the host's child list is built, naming the key, instead of
+    # inside a start failure.
+    opts = Keyword.validate!(opts, [:pubsub_server])
+
+    %{
+      id: __MODULE__,
+      start: {AshQuick.Supervisor, :start_link, [opts]},
+      type: :supervisor
+    }
+  end
+
   @surface_sources [:ash_quick_details, :ash_quick_list, :ash_quick_list_bulk]
   @form_source :ash_quick_form
   @form_stage_key :ash_quick_form_stage

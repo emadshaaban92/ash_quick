@@ -48,7 +48,9 @@ defmodule AshQuick.Impersonation.Token do
   `AshQuick.LiveView.Mount` does both, so a host that names that stage has
   them by construction.
 
-  The client half is `assets/js/ash_quick/browser_session.js`.
+  The client half is `assets/js/browser_session.js`, which a host's `app.js`
+  runs through `withAshQuick` and `attachAshQuick` (imported from
+  `ash_quick`).
   """
 
   alias AshQuick.Config

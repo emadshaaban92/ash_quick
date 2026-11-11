@@ -1,11 +1,14 @@
 // Receives the PDF an action printed (AshQuick.Print) over the LiveView socket
 // and saves it or sends it to the print dialog. It never touches a URL anyone
 // else could open: the bytes live in this tab, as a blob, until they are used.
-//
-//     import { initPrinting } from "../../deps/ash_quick/assets/js/print"
-//     initPrinting()
+let listening = false
 
-export function initPrinting() {
+// Once per page, however many sockets are built: a second listener would save
+// or print every PDF twice.
+export function listenForPdfs() {
+    if (listening) return;
+    listening = true;
+
     window.addEventListener("phx:ash_quick:pdf", ({ detail }) => {
         const url = URL.createObjectURL(pdfBlob(detail.data));
         if (detail.delivery === "print") printPdf(url);

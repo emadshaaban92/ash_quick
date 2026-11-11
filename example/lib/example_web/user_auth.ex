@@ -191,7 +191,7 @@ defmodule ExampleWeb.UserAuth do
   # The dead render already carried `lang` and `dir` — but it was rendered before
   # the tab said who it is, so an impersonating tab's first paint is the *real*
   # user's language. The connected mount is the first moment the answer is known,
-  # and `deps/ash_quick/assets/js/locale.js` is what applies it to `<html>`.
+  # and `attachAshQuick` is what applies it to `<html>`.
   defp push_document_locale(socket, locale) do
     if Phoenix.LiveView.connected?(socket) do
       Phoenix.LiveView.push_event(socket, "locale", %{

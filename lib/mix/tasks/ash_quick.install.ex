@@ -36,17 +36,20 @@ if Code.ensure_loaded?(Igniter) do
         reached through a plain `live/3` has no base path and says so at request
         time.
       * Adds `:ash_quick` to `import_deps` and to Spark's `section_order`.
-      * Supervises `AshQuick.BrowserSessionPresence`, and points the Tailwind
-        build at the library's own classes.
+      * Adds `AshQuick` to the application's supervision tree, after the
+        PubSub server, or puts it in place of `AshQuick.BrowserSessionPresence`
+        where an earlier setup listed that, and points the Tailwind build at
+        the library's own classes.
       * Adds the `phx-submit-loading` Tailwind variant when `app.css` lacks it,
-        which the action modal's spinner and lock hang on, and registers the
-        library's colocated hooks and its `S3` client uploader in `app.js`.
+        which the action modal's spinner and lock hang on.
+      * Passes the LiveSocket's options in `app.js` through `withAshQuick`
+        (the library's hooks, its `S3` client uploader and the tab's session
+        params) and attaches the socket with `attachAshQuick` (its listeners
+        for impersonation, the page's locale and printed PDFs).
 
-    The rest of `app.js` (the tab's session params, the locale, and printing)
-    is stated in a notice rather than patched in, and so is writing the
-    templates the host translates Ash's error messages and AshQuick in
-    (`mix ash.gen.gettext`, `mix ash_quick.gen.gettext`), which write into
-    `priv/gettext`.
+    Writing the templates the host translates Ash's error messages and
+    AshQuick in (`mix ash.gen.gettext`, `mix ash_quick.gen.gettext`), which
+    write into `priv/gettext`, is stated in a notice rather than done.
 
     ## Options
 
@@ -101,7 +104,7 @@ if Code.ensure_loaded?(Igniter) do
     @css_source ~s|@source "../../deps/ash_quick/lib/**/*.*ex";|
     @css_submit_loading ~s|@custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);|
     @js_path "assets/js/app.js"
-    @js_hooks_import ~s|import { hooks as ashQuickHooks, uploaders as ashQuickUploaders } from "phoenix-colocated/ash_quick"|
+    @js_import ~s|import {withAshQuick, attachAshQuick} from "ash_quick"|
 
     @impl Igniter.Mix.Task
     def info(_argv, _parent) do
@@ -151,13 +154,11 @@ if Code.ensure_loaded?(Igniter) do
       |> configure_section_order()
       |> configure_error_reporting()
       |> import_router_macro(router)
-      |> Igniter.Project.Application.add_new_child(AshQuick.BrowserSessionPresence,
-        after: [Phoenix.PubSub]
-      )
+      |> supervise_library()
       |> source_library_classes()
-      |> import_library_hooks()
+      |> import_library_live_socket()
       |> Ash.Igniter.codegen("install_ash_quick")
-      |> Igniter.add_notice(client_notice())
+      |> Igniter.add_notice(mount_notice())
     end
 
     # The store is generated rather than shipped, because a project will add
@@ -536,121 +537,282 @@ if Code.ensure_loaded?(Igniter) do
       end
     end
 
-    # A dependency's colocated hooks are not in the host's own colocated bundle,
-    # so the host imports them by name. Without them the action modal's
-    # controls still answer the keyboard while an action runs. The `S3` client
-    # uploader comes from the same bundle: without it a picked file never
-    # leaves the browser.
-    defp import_library_hooks(igniter) do
-      if Igniter.exists?(igniter, @js_path) do
-        Igniter.update_file(igniter, @js_path, &add_library_hooks/1)
-      else
-        Igniter.add_warning(igniter, hooks_instructions("#{@js_path} was not found"))
-      end
-    end
+    # `AshQuick` starts the register itself, so a tree still naming it beside
+    # `AshQuick` fails to boot with `already_started`. Renamed in place, which
+    # keeps its position and any `pubsub_server:` it was given; `add_new_child`
+    # then finds `AshQuick` there and adds nothing. The lookahead leaves calls
+    # such as `AshQuick.BrowserSessionPresence.revoke/1` alone.
+    @presence_child ~r/\bAshQuick\.BrowserSessionPresence\b(?!\.)/
 
-    defp add_library_hooks(source) do
-      content = Rewrite.Source.get(source, :content)
-      # A whole import statement: one spread over several lines ends at its
-      # module specifier, the first quoted string after the keyword.
-      imports = Regex.scan(~r/^import\b[^"'`]*["'][^"'\n]*["']/m, content, return: :index)
+    # An alias means the tree may name the register by its short name, which
+    # no rename of the long one would reach.
+    @presence_alias ~r/\balias\s+AshQuick\.(BrowserSessionPresence\b|\{[^}]*\bBrowserSessionPresence\b)/
+
+    defp supervise_library(igniter) do
+      path = Igniter.Project.Module.proper_location(igniter, application_module(igniter))
+
+      igniter =
+        if Igniter.exists?(igniter, path),
+          do: Igniter.include_existing_file(igniter, path),
+          else: igniter
+
+      content = application_content(igniter, path)
 
       cond do
-        String.contains?(content, "phoenix-colocated/ash_quick") ->
-          source
+        content && Regex.match?(@presence_alias, content) ->
+          Igniter.add_warning(igniter, presence_alias_instructions(path))
 
-        imports == [] or not Regex.match?(~r/hooks:\s*\{/, content) ->
-          {:warning, hooks_instructions("#{@js_path} has no `hooks: {...}` to add them to")}
-
-        # `uploaders: Uploaders` or the shorthand `uploaders`: there is no
-        # object to spread into, and a second `uploaders:` key beside it would
-        # silently replace one or the other. The host spreads them in itself.
-        not Regex.match?(~r/\buploaders:\s*\{/, content) and
-            Regex.match?(~r/\buploaders\s*(:|,|\}|\n)/, content) ->
-          {:warning, named_uploaders_instructions()}
+        content && Regex.match?(@presence_child, content) ->
+          igniter
+          |> Igniter.update_file(path, fn source ->
+            Rewrite.Source.update(
+              source,
+              :content,
+              Regex.replace(@presence_child, content, "AshQuick")
+            )
+          end)
+          |> Igniter.Project.Application.add_new_child(AshQuick, after: [Phoenix.PubSub])
 
         true ->
-          [{start, length}] = List.last(imports)
-          at = after_line(content, start + length)
-          <<head::binary-size(^at), rest::binary>> = content
-
-          content =
-            (head <> "\n" <> @js_hooks_import <> rest)
-            |> String.replace(~r/hooks:\s*\{/, "hooks: {...ashQuickHooks, ", global: false)
-            |> add_library_uploaders()
-
-          Rewrite.Source.update(source, :content, content)
+          Igniter.Project.Application.add_new_child(igniter, AshQuick, after: [Phoenix.PubSub])
       end
     end
 
-    # Into the host's own `uploaders: {...}` when it has one; otherwise a key of
-    # its own beside `hooks`, at the same indent.
-    defp add_library_uploaders(content) do
-      if Regex.match?(~r/\buploaders:\s*\{/, content) do
-        String.replace(content, ~r/\buploaders:\s*\{/, "uploaders: {...ashQuickUploaders, ",
-          global: false
-        )
+    defp application_content(igniter, path) do
+      case Rewrite.source(igniter.rewrite, path) do
+        {:ok, source} -> Rewrite.Source.get(source, :content)
+        _ -> nil
+      end
+    end
+
+    defp presence_alias_instructions(path) do
+      """
+      #{path} aliases `AshQuick.BrowserSessionPresence`, so AshQuick was not \
+      added to the supervision tree: the tree may already start the register \
+      by its short name, and `AshQuick` starts it too, which fails to boot \
+      with `already_started`. Replace the register's entry with `AshQuick`, \
+      keeping any `pubsub_server:` it was given:
+
+          children = [
+            {Phoenix.PubSub, name: MyApp.PubSub},
+            AshQuick,
+            MyAppWeb.Endpoint
+          ]
+      """
+    end
+
+    # The module `add_new_child/3` writes to: the one `mix.exs` names under
+    # `mod:`, or `<App>.Application` when it names none.
+    defp application_module(igniter) do
+      case Igniter.Project.Application.app_module(igniter) do
+        nil -> Igniter.Project.Module.module_name(igniter, "Application")
+        {module, _args} -> module
+        module -> module
+      end
+    end
+
+    # The host keeps Phoenix's LiveSocket: its options go through
+    # `withAshQuick` and the socket is attached once built. Patched where the
+    # script is the shape Phoenix generates (`<const|let|var> name = new
+    # LiveSocket(url, Socket, options)`); anything else gets instructions.
+    defp import_library_live_socket(igniter) do
+      if Igniter.exists?(igniter, @js_path) do
+        Igniter.update_file(igniter, @js_path, &use_library_live_socket/1)
       else
-        own_line = ~r/^([ \t]*)hooks: \{\.\.\.ashQuickHooks, /m
-
-        if Regex.match?(own_line, content) do
-          String.replace(
-            content,
-            own_line,
-            "\\1uploaders: {...ashQuickUploaders},\n\\1hooks: {...ashQuickHooks, ",
-            global: false
-          )
-        else
-          String.replace(
-            content,
-            "hooks: {...ashQuickHooks, ",
-            "uploaders: {...ashQuickUploaders}, hooks: {...ashQuickHooks, ",
-            global: false
-          )
-        end
+        Igniter.add_warning(igniter, live_socket_instructions("#{@js_path} was not found"))
       end
     end
 
-    # Where the line holding `offset` ends, so a comment trailing the last
-    # import stays on its line. Byte offsets, as `Regex.scan/3` returns them.
-    defp after_line(content, offset) do
-      <<_::binary-size(^offset), rest::binary>> = content
+    @live_view_import ~r/^import\s*\{[^}]*\bLiveSocket\b[^}]*\}\s*from\s*["']phoenix_live_view["'];?[ \t]*$/m
+    @live_socket_call ~r/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*new\s+LiveSocket\s*\(/
 
-      case :binary.match(rest, "\n") do
-        {newline, _} -> offset + newline
+    defp use_library_live_socket(source) do
+      content = Rewrite.Source.get(source, :content)
+
+      cond do
+        Regex.match?(~r/from\s*["']ash_quick["']/, content) ->
+          source
+
+        # The hand-written setup these replace. Patching beside it would
+        # register every listener twice.
+        String.contains?(content, "deps/ash_quick/assets/js") or
+            String.contains?(content, "phoenix-colocated/ash_quick") ->
+          {:warning, earlier_setup_instructions()}
+
+        true ->
+          case wrap_live_socket(content) do
+            {:ok, content} -> Rewrite.Source.update(source, :content, content)
+            {:error, reason} -> {:warning, live_socket_instructions(reason)}
+          end
+      end
+    end
+
+    defp wrap_live_socket(content) do
+      with {:import, [{import_at, import_length}]} <-
+             {:import, Regex.run(@live_view_import, content, return: :index)},
+           {:call, [{call_at, call_length}, {name_at, name_length}]} <-
+             {:call, Regex.run(@live_socket_call, content, return: :index)},
+           args_at = call_at + call_length,
+           {:args, {:ok, args, close_at}} <- {:args, call_arguments(content, args_at)},
+           {:options, [_url, _socket, {options_at, options_end}]} <- {:options, args},
+           import_end = import_at + import_length,
+           {:order, true} <- {:order, import_end < call_at} do
+        name = binary_part(content, name_at, name_length)
+        statement_end = statement_end(content, close_at + 1)
+        # The host's own style: a semicolon after the call means one after ours.
+        semicolon = if binary_part(content, statement_end - 1, 1) == ";", do: ";", else: ""
+
+        content =
+          content
+          |> splice(statement_end, 0, "\nattachAshQuick(#{name})#{semicolon}")
+          |> splice(options_end, 0, ")")
+          |> splice(options_at, 0, "withAshQuick(")
+          |> splice(import_end, 0, "\n" <> @js_import)
+
+        {:ok, content}
+      else
+        {:import, _} ->
+          {:error, ~s|#{@js_path} does not import `LiveSocket` from "phoenix_live_view"|}
+
+        _ ->
+          {:error,
+           "#{@js_path} does not build its socket as " <>
+             "`const liveSocket = new LiveSocket(url, Socket, options)`"}
+      end
+    end
+
+    defp splice(content, at, drop, insert) do
+      <<head::binary-size(^at), _::binary-size(^drop), rest::binary>> = content
+      head <> insert <> rest
+    end
+
+    # The call's top-level arguments as `{start, end}` byte ranges, trimmed,
+    # and the offset of its closing parenthesis. Skips strings, template
+    # literals and comments, so a bracket inside one is not counted.
+    defp call_arguments(content, from) do
+      scan_arguments(content, from, from, 0, [])
+    end
+
+    defp scan_arguments(content, at, arg_start, depth, args) when at < byte_size(content) do
+      case token(content, at) do
+        {:skip, next} ->
+          scan_arguments(content, next, arg_start, depth, args)
+
+        :open ->
+          scan_arguments(content, at + 1, arg_start, depth + 1, args)
+
+        :close when depth == 0 ->
+          {:ok, Enum.reverse(add_argument(content, arg_start, at, args)), at}
+
+        :close ->
+          scan_arguments(content, at + 1, arg_start, depth - 1, args)
+
+        :comma when depth == 0 ->
+          scan_arguments(
+            content,
+            at + 1,
+            at + 1,
+            depth,
+            add_argument(content, arg_start, at, args)
+          )
+
+        _other ->
+          scan_arguments(content, at + 1, arg_start, depth, args)
+      end
+    end
+
+    defp scan_arguments(_content, _at, _arg_start, _depth, _args), do: :error
+
+    defp token(content, at) do
+      case binary_part(content, at, 1) do
+        quote when quote in ["\"", "'", "`"] -> {:skip, skip_string(content, at + 1, quote)}
+        "/" -> comment(content, at)
+        open when open in ["(", "[", "{"] -> :open
+        close when close in [")", "]", "}"] -> :close
+        "," -> :comma
+        _other -> :other
+      end
+    end
+
+    defp comment(content, at) do
+      case binary_part(content, at, min(2, byte_size(content) - at)) do
+        "//" -> {:skip, skip_until(content, at, "\n")}
+        "/*" -> {:skip, skip_until(content, at, "*/") + 2}
+        _other -> :other
+      end
+    end
+
+    # A trailing comma leaves an empty last argument, which is not one.
+    defp add_argument(content, from, to, args) do
+      text = binary_part(content, from, to - from)
+      leading = byte_size(text) - byte_size(String.trim_leading(text))
+      trimmed = String.trim(text)
+
+      if trimmed == "",
+        do: args,
+        else: [{from + leading, from + leading + byte_size(trimmed)} | args]
+    end
+
+    defp skip_string(content, at, quote) do
+      cond do
+        at >= byte_size(content) -> at
+        binary_part(content, at, 1) == "\\" -> skip_string(content, at + 2, quote)
+        binary_part(content, at, 1) == quote -> at + 1
+        true -> skip_string(content, at + 1, quote)
+      end
+    end
+
+    defp skip_until(content, at, marker) do
+      <<_::binary-size(^at), rest::binary>> = content
+
+      case :binary.match(rest, marker) do
+        {found, _} -> at + found
         :nomatch -> byte_size(content)
       end
     end
 
-    defp hooks_instructions(reason) do
+    # The end of the line the call's closing parenthesis is on.
+    defp statement_end(content, at) do
+      <<_::binary-size(^at), rest::binary>> = content
+
+      case :binary.match(rest, "\n") do
+        {newline, _} -> at + newline
+        :nomatch -> byte_size(content)
+      end
+    end
+
+    defp live_socket_instructions(reason) do
       """
-      #{reason}, so AshQuick's hooks and uploaders are not registered. Without \
-      them the action modal's controls still answer the keyboard while an action \
-      runs, and a file picked for an attachment is never uploaded. Add:
+      #{reason}, so AshQuick is not wired into the LiveSocket. Without it \
+      the action modal's controls still answer the keyboard while an action \
+      runs, a file picked for an attachment is never uploaded, impersonation \
+      never starts and printed PDFs never arrive. Add:
 
-          #{@js_hooks_import}
+          #{@js_import}
 
-          let liveSocket = new LiveSocket("/live", Socket, {
-            hooks: {...ashQuickHooks},
-            uploaders: {...ashQuickUploaders}
-          })
+          const liveSocket = new LiveSocket("/live", Socket, withAshQuick({
+            // your options, unchanged
+          }))
+          attachAshQuick(liveSocket)
       """
     end
 
-    defp named_uploaders_instructions do
+    defp earlier_setup_instructions do
       """
-      #{@js_path} names the LiveSocket's uploaders by a variable rather than \
-      an inline `{...}`, and a second `uploaders:` key would replace one of \
-      the two, so AshQuick's hooks and uploaders are not registered. Without them the action \
-      modal's controls still answer the keyboard while an action runs, and a \
-      file picked for an attachment is never uploaded. Import them:
+      #{@js_path} sets AshQuick up by hand: it imports from \
+      "deps/ash_quick/assets/js" or "phoenix-colocated/ash_quick". Replace all \
+      of that with:
 
-          #{@js_hooks_import}
+          #{@js_import}
 
-      spread the hooks into the LiveSocket's `hooks: {...ashQuickHooks, ...}`, \
-      and add the uploaders to the object your `uploaders` names, for example:
+          const liveSocket = new LiveSocket("/live", Socket, withAshQuick({
+            // your options, without the AshQuick parts below
+          }))
+          attachAshQuick(liveSocket)
 
-          const Uploaders = {...ashQuickUploaders, ...}
+      dropping `browserSessionParams()` from the params, `ashQuickHooks` and \
+      `ashQuickUploaders` from the hooks and uploaders, and the \
+      `initBrowserSession`, `initLocale` and `initPrinting` calls.
       """
     end
 
@@ -721,35 +883,9 @@ if Code.ensure_loaded?(Igniter) do
       """
     end
 
-    # The client half is structural rather than a line to append — the params
-    # have to become a function, so every reconnect re-reads the tab's identity
-    # — so it is stated rather than patched in.
-    defp client_notice do
+    defp mount_notice do
       """
-      One step left, in `assets/js/app.js`:
-
-          import { browserSessionParams, initBrowserSession } from "../../deps/ash_quick/assets/js/browser_session"
-          import { initLocale } from "../../deps/ash_quick/assets/js/locale"
-
-          let liveSocket = new LiveSocket("/live", Socket, {
-            // A function, so every reconnect re-reads the tab's identity.
-            params: () => ({ _csrf_token: csrfToken, ...browserSessionParams() }),
-            hooks: hooks
-          })
-
-          initBrowserSession(liveSocket)
-          initLocale()
-
-      `browserSessionParams` is the id a tab mints for itself and replays on
-      every connect — the unit `AshQuick.BrowserSessionPresence` registers, and
-      the one an impersonation is revoked at. `initLocale` applies the `lang`
-      and `dir` the connected mount pushes.
-
-      If an action prints (`AshQuick.Print`), also import `initPrinting` from
-      "../../deps/ash_quick/assets/js/print" and call it once: it receives the
-      PDF over the socket.
-
-      Then put `AshQuick.LiveView.Mount` first in the `on_mount` of the
+      Put `AshQuick.LiveView.Mount` first in the `on_mount` of the
       live_session serving the QuickViews, and route one with
       `mix ash_quick.gen.quick_view`.
       """

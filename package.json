@@ -1,0 +1,8 @@
+{
+  "name": "ash_quick",
+  "description": "The client half of AshQuick: LiveSocket options and listeners for its hooks, uploaders and server events",
+  "license": "MIT",
+  "module": "./assets/js/index.js",
+  "main": "./assets/js/index.js",
+  "files": ["assets/js"]
+}

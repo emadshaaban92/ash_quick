@@ -4,8 +4,8 @@ defmodule AshQuick.LiveView.Impersonation do
 
   Impersonation lives in the browser tab rather than on the actor's account, so
   ending one is a client-side act: drop the token and reconnect. Both commands
-  below dispatch a DOM event that `assets/js/ash_quick/browser_session.js` is
-  listening for.
+  below dispatch a DOM event that `attachAshQuick`
+  (`assets/js/browser_session.js`) is listening for.
 
   They exist so that no host has to spell an event name this library owns. A
   misspelling renders a control that looks right and does nothing, and nothing
