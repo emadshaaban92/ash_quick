@@ -539,6 +539,27 @@ defmodule AshQuick do
         record_sensitive [:masked_card_number]
       end
 
+  Reads are not recorded unless a resource lists the read actions to record —
+  the ones that open a record, such as a confidential document:
+
+      audit do
+        read_actions [:open]
+      end
+
+  Every read through a listed action writes one row per record it returns, with
+  `action_type: :read`, the query's arguments (redacted as above) and the same
+  actor, real actor, IP, context and tenant as a write. That holds however the
+  action runs: `Ash.read`, `Ash.get` or a code interface on a `get?` action, a
+  page, `Ash.stream!`, or loading a relationship of another resource. Nothing
+  else is recorded: a read through an action not listed — a list or a search,
+  where a page of twenty rows is not twenty reads anyone needs — a read that
+  returns nothing, and a `can?` check on a listed action. The rows are written
+  before the records are handed back, so a store that refuses them fails the
+  read with an `AshQuick.Audit.WriteError` and the read returns nothing.
+  `AshQuick.Audit.Preparation` has the details. A resource that does not audit
+  cannot list `read_actions`, and neither can a name that is not one of its
+  read actions: `AshQuick.Audit.Verifier` refuses both.
+
   ## Impersonation
 
   A privileged actor browsing the application as somebody else. There is
@@ -834,7 +855,8 @@ defmodule AshQuick do
 
   @audit %Spark.Dsl.Section{
     name: :audit,
-    describe: "Declare that every write to this resource is recorded in an audit log.",
+    describe:
+      "Declare that every write to this resource, and every read through the actions it lists, is recorded in an audit log.",
     schema: [
       enabled?: [
         type: :boolean,
@@ -852,6 +874,12 @@ defmodule AshQuick do
         default: AshQuick.Audit.Declaration.default_exclude_actions(),
         doc:
           "Actions that record nothing — an action that authorizes and emits but writes nothing, where a row per record would say a change happened that did not."
+      ],
+      read_actions: [
+        type: {:list, :atom},
+        default: AshQuick.Audit.Declaration.default_read_actions(),
+        doc:
+          "Read actions whose every returned record is recorded, one row per record, through the same store as a write. Lists, `can?` checks and empty results record nothing, and a read whose rows cannot be written fails. See `AshQuick.Audit.Preparation`."
       ],
       record_sensitive: [
         type: {:list, :atom},

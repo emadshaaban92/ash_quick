@@ -10,6 +10,13 @@ defmodule AshQuick.Audit.Transformer do
   # the log records.
   #
   # `only_when_valid?` so a write that never happened records nothing.
+  #
+  # A resource listing `read_actions` also gets `AshQuick.Audit.Preparation`,
+  # as a resource-wide preparation that checks the action's name itself rather
+  # than one added to each listed action. That keeps this transformer free of
+  # any ordering against the ones that build actions, and the check is one list
+  # lookup on an unlisted read. A resource listing none gets nothing, so its
+  # reads are exactly as they were.
   use Spark.Dsl.Transformer
 
   alias Ash.Resource.Dsl
@@ -35,9 +42,23 @@ defmodule AshQuick.Audit.Transformer do
           only_when_valid?: true
         )
 
-      {:ok, Transformer.add_entity(dsl_state, [:changes], change, type: :append)}
+      {:ok,
+       dsl_state
+       |> Transformer.add_entity([:changes], change, type: :append)
+       |> add_read_preparation(Declaration.read_actions(dsl_state))}
     else
       {:ok, dsl_state}
     end
+  end
+
+  defp add_read_preparation(dsl_state, []), do: dsl_state
+
+  defp add_read_preparation(dsl_state, actions) do
+    {:ok, preparation} =
+      Transformer.build_entity(Dsl, [:preparations], :prepare,
+        preparation: {AshQuick.Audit.Preparation, actions: actions}
+      )
+
+    Transformer.add_entity(dsl_state, [:preparations], preparation, type: :append)
   end
 end

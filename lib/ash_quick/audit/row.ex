@@ -1,7 +1,11 @@
 defmodule AshQuick.Audit.Row do
   @moduledoc false
-  # The audit row AshQuick writes for one `{changeset, record, changes}` triple,
-  # and the field list `AshQuick.Audit.Verifier` holds a store to.
+  # The audit row AshQuick writes for one `{subject, record, changes}` triple,
+  # and the field list `AshQuick.Audit.Verifier` holds a store to. The subject
+  # is the changeset of a write or the query of an audited read: both carry the
+  # resource, the action, its arguments, its context and the provenance, which
+  # is all a row is made of. A read was given no attributes and changed nothing,
+  # so its `attributes` and `changes` are empty.
   #
   # Built here rather than by the host, because half of it is the library's own
   # answer and not a convention a project can be expected to reproduce:
@@ -38,27 +42,31 @@ defmodule AshQuick.Audit.Row do
 
   def fields, do: @fields
 
-  def build({%Ash.Changeset{} = changeset, record, changes}, actor) do
-    actor_id = actor_id(changeset, actor)
+  def build({%struct{} = subject, record, changes}, actor)
+      when struct in [Ash.Changeset, Ash.Query] do
+    actor_id = actor_id(subject, actor)
 
     %{
-      resource_name: Ash.Resource.Info.short_name(changeset.resource),
+      resource_name: Ash.Resource.Info.short_name(subject.resource),
       resource_id: resource_id(record.id),
-      action_type: changeset.action.type,
-      action_name: changeset.action.name,
-      attributes: storable(changeset.attributes),
-      arguments: storable(changeset.arguments),
-      context: simple_context(changeset.context),
+      action_type: subject.action.type,
+      action_name: subject.action.name,
+      attributes: storable(attributes(subject)),
+      arguments: storable(subject.arguments),
+      context: simple_context(subject.context),
       actor_id: actor_id,
       # Never `nil` while there is an actor: the two are simply equal unless
-      # someone was impersonating. A write with no actor and no scope behind it
-      # has neither, and both are `nil`.
-      real_actor_id: id(AshQuick.Scope.real_actor(changeset)) || actor_id,
-      ip: AshQuick.Scope.ip(changeset),
-      tenant: changeset.tenant
+      # someone was impersonating. An action with no actor and no scope behind
+      # it has neither, and both are `nil`.
+      real_actor_id: id(AshQuick.Scope.real_actor(subject)) || actor_id,
+      ip: AshQuick.Scope.ip(subject),
+      tenant: subject.tenant
     }
-    |> put_changes(changeset, changes)
+    |> put_changes(subject, changes)
   end
+
+  defp attributes(%Ash.Changeset{attributes: attributes}), do: attributes
+  defp attributes(%Ash.Query{}), do: %{}
 
   # As text, so a `:string` column — what the installer generates — takes an
   # integer key as it takes a UUID, and a `:uuid` column still casts it back.
@@ -136,8 +144,8 @@ defmodule AshQuick.Audit.Row do
 
   # Only for a store that has somewhere to put it: an input the `:create` action
   # does not know is a refused batch, and a refused batch is a failed write.
-  defp put_changes(row, changeset, changes) do
-    store = Declaration.store(changeset.resource)
+  defp put_changes(row, subject, changes) do
+    store = Declaration.store(subject.resource)
 
     if store && Ash.Resource.Info.attribute(store, :changes) do
       Map.put(row, :changes, changes)
@@ -347,11 +355,11 @@ defmodule AshQuick.Audit.Row do
   # says so with `nil`. Anything else is an actor that cannot be named, and an
   # entry that says nobody did it when somebody did is worse than the write
   # failing here: that is the record somebody will come looking for.
-  defp actor_id(_changeset, nil), do: nil
+  defp actor_id(_subject, nil), do: nil
 
-  defp actor_id(changeset, actor) do
+  defp actor_id(subject, actor) do
     case id(actor) do
-      nil -> raise AshQuick.Audit.ActorError, resource: changeset.resource, actor: actor
+      nil -> raise AshQuick.Audit.ActorError, resource: subject.resource, actor: actor
       id -> id
     end
   end

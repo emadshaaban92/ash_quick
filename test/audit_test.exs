@@ -37,9 +37,13 @@ defmodule AshQuick.AuditTest do
   alias AshQuick.Test.Actor
   alias AshQuick.Test.AuditLog
   alias AshQuick.Test.Credential
+  alias AshQuick.Test.Dossier
+  alias AshQuick.Test.DossierFolder
   alias AshQuick.Test.LegacyAuditStore
   alias AshQuick.Test.LegacyCredential
   alias AshQuick.Test.NumberedCredential
+  alias AshQuick.Test.RefusedDossier
+  alias AshQuick.Test.Scopes.FullScope
   alias AshQuick.Test.StampedTally
   alias AshQuick.Test.Tally
   alias AshQuick.Test.TextKeyAuditStore
@@ -842,6 +846,253 @@ defmodule AshQuick.AuditTest do
                count: %{from: 0},
                pin: %{from: "**redacted**"}
              }
+    end
+  end
+
+  describe "an audited read" do
+    # `Dossier` lists `:open` and `:browse` in `read_actions`; its primary
+    # `:read` stands for every list and search, which records nothing. Its read
+    # policy shows an actor only their own dossiers.
+    setup %{actor: actor} do
+      folder =
+        DossierFolder |> Ash.Changeset.for_create(:create, %{name: "Case"}) |> Ash.create!()
+
+      dossiers =
+        for title <- ["One", "Two", "Three"] do
+          Dossier
+          |> Ash.Changeset.for_create(:create, %{
+            title: title,
+            owner_id: actor.id,
+            folder_id: folder.id
+          })
+          |> Ash.create!()
+        end
+
+      %{dossiers: dossiers, folder: folder}
+    end
+
+    # Every row a dossier read wrote, oldest first. A dossier's create is
+    # audited too, so the reads are picked out by their type.
+    defp reads(dossiers) do
+      ids = Enum.map(List.wrap(dossiers), & &1.id)
+
+      AuditLog
+      |> Ash.Query.filter(resource_id in ^ids and action_type == :read)
+      |> Ash.Query.sort(id: :asc)
+      |> Ash.read!()
+    end
+
+    test "a get? read records the record it returned, with who, from where and why",
+         %{actor: actor, dossiers: [dossier | _]} do
+      real = Actor |> Ash.Changeset.for_create(:create, %{name: "Support"}) |> Ash.create!()
+      scope = %FullScope{user: actor, behind: real, pretending?: true, from: "10.0.0.9"}
+
+      opened =
+        Dossier
+        |> Ash.Query.filter(id == ^dossier.id)
+        |> Ash.Query.for_read(
+          :open,
+          %{code: "pin-zq-code", badge: "badge-7", purpose: "review"},
+          scope: scope,
+          context: %{action_source: "dossier_page", run: %{id: 42}}
+        )
+        |> Ash.read_one!()
+
+      assert opened.id == dossier.id
+
+      assert [entry] = reads(dossier)
+      assert entry.resource_name == :dossier
+      assert entry.action_type == :read
+      assert entry.action_name == :open
+      assert entry.actor_id == actor.id
+      assert entry.real_actor_id == real.id
+      assert entry.ip == "10.0.0.9"
+      assert entry.attributes == %{}
+      assert entry.changes == %{}
+      assert entry.arguments[:purpose] == "review"
+      assert entry.arguments[:code] == "**redacted**"
+      # Named in `record_sensitive`, so kept, as on a write.
+      assert entry.arguments[:badge] == "badge-7"
+      assert entry.context[:action_source] == "dossier_page"
+      refute Map.has_key?(entry.context, :run)
+      refute inspect(entry) =~ "pin-zq-code"
+    end
+
+    test "Ash.get and a code interface record the same way",
+         %{actor: actor, dossiers: [dossier | _]} do
+      Ash.get!(Dossier, dossier.id, action: :open, actor: actor)
+      Dossier.open!(dossier.id, actor: actor)
+
+      assert [first, second] = reads(dossier)
+      assert first.action_name == :open
+      assert second.action_name == :open
+      assert first.real_actor_id == actor.id
+    end
+
+    test "a read returning several records records each of them",
+         %{actor: actor, dossiers: dossiers} do
+      assert length(Ash.read!(Dossier, action: :browse, actor: actor)) == 3
+
+      entries = reads(dossiers)
+      assert length(entries) == 3
+
+      assert entries |> Enum.map(& &1.resource_id) |> Enum.sort() ==
+               dossiers |> Enum.map(& &1.id) |> Enum.sort()
+
+      assert Enum.all?(entries, &(&1.action_name == :browse))
+    end
+
+    test "a page records the records on it, and no others", %{actor: actor, dossiers: dossiers} do
+      sorted = Ash.Query.sort(Dossier, title: :asc)
+
+      # One, Three / Three, Two.
+      for pagination <- [[limit: 2], [limit: 2, offset: 1]] do
+        page = Ash.read!(sorted, action: :browse, actor: actor, page: pagination)
+        assert length(page.results) == 2
+      end
+
+      # Keyset pagination reads one row past the page to know whether there is
+      # another; that one was not returned and is not recorded.
+      page = Ash.read!(sorted, action: :browse, actor: actor, page: [limit: 1])
+      assert [%{title: "One"}] = page.results
+      assert page.more?
+
+      entries = reads(dossiers)
+
+      assert Map.new(dossiers, fn dossier ->
+               {dossier.title, Enum.count(entries, &(&1.resource_id == dossier.id))}
+             end) == %{"One" => 2, "Three" => 2, "Two" => 1}
+    end
+
+    test "a stream records every record it yields", %{actor: actor, dossiers: dossiers} do
+      # `Ash.stream!/2` takes the action off the query.
+      streamed =
+        Dossier
+        |> Ash.Query.for_read(:browse, %{}, actor: actor)
+        |> Ash.stream!(actor: actor, batch_size: 2)
+        |> Enum.to_list()
+
+      assert length(streamed) == 3
+
+      entries = reads(dossiers)
+
+      assert entries |> Enum.map(& &1.resource_id) |> Enum.sort() ==
+               dossiers |> Enum.map(& &1.id) |> Enum.sort()
+    end
+
+    test "loading a relationship through a listed action records what it loaded",
+         %{actor: actor, dossiers: dossiers, folder: folder} do
+      loaded = Ash.load!(folder, :dossiers, actor: actor)
+      assert length(loaded.dossiers) == 3
+
+      entries = reads(dossiers)
+      assert length(entries) == 3
+      assert Enum.all?(entries, &(&1.action_name == :browse))
+      # The folder's own read is not listed.
+      assert reads(folder) == []
+    end
+
+    test "loading onto records already in hand records nothing",
+         %{actor: actor, dossiers: dossiers} do
+      loaded = Ash.load!(dossiers, :heading, action: :browse, actor: actor)
+      assert Enum.map(loaded, & &1.heading) == ["One!", "Two!", "Three!"]
+
+      # A field the records were read without is read again for them, through
+      # the action, and that is still not a read of anything new.
+      bare =
+        Dossier
+        |> Ash.Query.select([:id, :owner_id])
+        |> Ash.read!(actor: actor)
+
+      reloaded = Ash.load!(bare, [:title, :heading], action: :browse, actor: actor)
+      assert reloaded |> Enum.map(& &1.heading) |> Enum.sort() == ["One!", "Three!", "Two!"]
+
+      assert reads(dossiers) == []
+    end
+
+    test "a read that returns nothing records nothing",
+         %{actor: actor, dossiers: [dossier | _] = dossiers} do
+      stranger = Actor |> Ash.Changeset.for_create(:create, %{name: "Stranger"}) |> Ash.create!()
+
+      # Not found.
+      assert {:error, _} = Ash.get(Dossier, Ash.UUID.generate(), action: :open, actor: actor)
+      # There, but the read policy filters it out for this actor.
+      assert {:error, _} = Ash.get(Dossier, dossier.id, action: :open, actor: stranger)
+      assert [] = Ash.read!(Dossier, action: :browse, actor: stranger)
+
+      assert reads(dossiers) == []
+    end
+
+    test "a record another hook drops after the read is not recorded",
+         %{actor: actor, dossiers: dossiers, folder: folder} do
+      hidden =
+        Dossier
+        |> Ash.Changeset.for_create(:create, %{
+          title: "Hidden",
+          owner_id: actor.id,
+          folder_id: folder.id,
+          hidden?: true
+        })
+        |> Ash.create!()
+
+      assert length(Ash.read!(Dossier, action: :browse, actor: actor)) == 3
+      assert {:error, _} = Ash.get(Dossier, hidden.id, action: :open, actor: actor)
+      assert length(Ash.load!(folder, :dossiers, actor: actor).dossiers) == 3
+
+      streamed =
+        Dossier
+        |> Ash.Query.for_read(:browse, %{}, actor: actor)
+        |> Ash.stream!(actor: actor, batch_size: 2)
+        |> Enum.to_list()
+
+      assert length(streamed) == 3
+
+      assert reads(hidden) == []
+      assert length(reads(dossiers)) == 9
+    end
+
+    test "a read through an action that is not listed records nothing",
+         %{actor: actor, dossiers: dossiers} do
+      assert length(Ash.read!(Dossier, actor: actor)) == 3
+      assert Ash.get!(Dossier, hd(dossiers).id, actor: actor)
+
+      assert reads(dossiers) == []
+    end
+
+    # Ash builds the read's query for a check, and with it the preparation, so
+    # what is asserted is that nothing at all is written under the checks'
+    # context — not only nothing naming these dossiers.
+    test "a permission check on a listed action records nothing",
+         %{actor: actor, dossiers: [dossier | _] = dossiers} do
+      probe = "can-#{System.unique_integer([:positive])}"
+      opts = [context: %{probe: probe}]
+
+      assert Ash.can?({Dossier, :browse}, actor, opts)
+      assert Ash.can?({Dossier, :open, %{purpose: "check"}}, actor, opts)
+      assert Ash.can?({dossier, :open, %{code: "pin-zq-code"}}, actor, opts)
+      assert Ash.can?({dossier, :browse}, actor, opts)
+      assert AshQuick.can?({Dossier, :browse}, actor, :ash_quick_list, opts)
+      assert AshQuick.can?({dossier, :browse}, actor, :ash_quick_details, opts)
+
+      assert reads(dossiers) == []
+      refute Enum.any?(Ash.read!(AuditLog), &(&1.context[:probe] == probe))
+    end
+
+    test "a read whose rows the store refuses fails, and returns nothing" do
+      record =
+        RefusedDossier |> Ash.Changeset.for_create(:create, %{title: "Sealed"}) |> Ash.create!()
+
+      error =
+        assert_raise Ash.Error.Unknown, fn ->
+          Ash.get!(RefusedDossier, record.id, action: :open)
+        end
+
+      assert Exception.message(error) =~ "the audit entry could not be written"
+      assert Exception.message(error) =~ "The read it records returns nothing"
+
+      # The same read through an unlisted action is not recorded, and so not
+      # refused.
+      assert Ash.get!(RefusedDossier, record.id).id == record.id
     end
   end
 end
