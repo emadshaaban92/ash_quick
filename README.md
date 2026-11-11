@@ -1160,18 +1160,21 @@ list: [
 ```
 
 The form lists such a field as "Brand › Name", draws its value as the brand's
-field is drawn (a fixed set of values is picked, by the brand's own labels),
-and the URL names its rows `brand.name`. A row asks whether the product's
-brand matches, as `exists(brand, ...)`, inside which Ash applies the brand's
-read policies, so a product is never kept for a brand its reader may not
-read; the brand's field policies narrow the fields offered, as the list's own
-do. Is Empty on such a field keeps a product with no brand, when the
+field is drawn (a fixed set of values is picked, by the brand's own labels), and
+the URL names its rows `brand.name`. A row asks whether the product's brand
+matches, as `exists(brand, ...)`, inside which Ash applies the brand's read
+policies, so a product is never kept for a brand its reader may not read; the
+brand's field policies narrow the fields offered, as the list's own do. Both are
+asked as a read through the relationship, so a policy written with
+`accessing_from(Product, :brand)` holds as it does for the brand column. A brand
+whose read policy refuses the reader outright, through the relationship too,
+offers them none of its fields; one that only filters which brands they read
+stays offered. Is Empty on such a field keeps a product with no brand, when the
 relationship allows none, and one whose brand its reader may not read: the
-column shows both blank. A list without `filterable:` offers no related
-field, and a link's row on one it does not offer is dropped. Index the
-relationship's source attribute and the related field on a large table.
-To-many relationships and longer paths are refused when the QuickView
-compiles.
+column shows both blank. A list without `filterable:` offers no related field,
+and a link's row on one it does not offer is dropped. Index the relationship's
+source attribute and the related field on a large table. To-many relationships
+and longer paths are refused when the QuickView compiles.
 
 ## Testing a details page
 

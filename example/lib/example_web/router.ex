@@ -144,6 +144,7 @@ defmodule ExampleWeb.Router do
         quick_view "/small_pages", Example.Test.SmallPagesLive.Quick
         quick_view "/sorted_rows", Example.Test.SortedRowsLive.Quick
         quick_view "/sorted_rows_named", Example.Test.SortedRowsNamedLive.Quick
+        quick_view "/vault_filter", Example.Test.VaultFilterLive.Quick
         quick_view "/worded_policy", Example.Test.WordedPolicyLive.Quick
         quick_view "/writers_only", Example.Test.WritersOnlyLive.Quick
       end

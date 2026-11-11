@@ -183,7 +183,9 @@ The URL is not an option here — it is declared in the router with
   time; need not be list columns. A field of a related resource is reached one
   hop through a public belongs_to, `[:sku, brand: :name]` (or `[brand: :name]`
   as one entry): shown as "Brand › Name", carried in the URL as `brand.name`,
-  read through the brand's read and field policies; no to-many or longer
+  read through the brand's read and field policies, asked as a read through
+  the relationship (`accessing_from` holds; a brand the reader may not read
+  at all offers none of its fields); no to-many or longer
   paths, and none offered unless named. Name the indexed ones on a large
   table. A link's filter row on any other field is dropped, with a flash
 

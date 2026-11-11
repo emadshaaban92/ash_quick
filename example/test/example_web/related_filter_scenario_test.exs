@@ -13,6 +13,9 @@ defmodule ExampleWeb.RelatedFilterScenarioTest do
 
   An owner's motto shows only to its `:index` read, which an item's steward
   reads it with, so the filter offers it through `steward` and not `owner`.
+
+  `/test/vault_filter` reaches a vault an editor may read only through an
+  item, and a locked record only an admin reads.
   """
   use ExampleWeb.FeatureCase, async: true
 
@@ -21,7 +24,9 @@ defmodule ExampleWeb.RelatedFilterScenarioTest do
   alias AshQuick.LiveView.CustomFilter
   alias AshQuick.LiveView.QuickView.Options
   alias Example.Test.RelatedFilter.Item
+  alias Example.Test.RelatedFilter.Locked
   alias Example.Test.RelatedFilter.Owner
+  alias Example.Test.RelatedFilter.Vault
   alias Example.Test.S3Stub
 
   @refused "That filter couldn&#39;t be applied to this list"
@@ -306,6 +311,98 @@ defmodule ExampleWeb.RelatedFilterScenarioTest do
     end
   end
 
+  # A vault's read and code are allowed through an item's `vault` only, so an
+  # editor sees both in the vault's column and never on a read of the vault
+  # itself. The filter asks as the column does, through the relationship.
+  describe "a row on a destination read only through the relationship" do
+    test "is offered as its column shows it, and a destination no route reaches is not",
+         %{conn: conn, admin: admin, editor: editor} do
+      for {actor, options} <- [
+            {admin, ["Code", "Vault › Name", "Vault › Code", "Locked › Name"]},
+            {editor, ["Code", "Vault › Name", "Vault › Code"]}
+          ] do
+        {:ok, view, _html} =
+          live(log_in(conn, actor), "/test/vault_filter?show_custom_filter=true")
+
+        assert texts(view, "select[name^='field_name-'] option") == options
+      end
+    end
+
+    test "keeps the items whose vault matches, for a reader who reaches it only so",
+         %{conn: conn, editor: editor} do
+      code = "vault-#{unique("zq")}"
+      gold = vault(code: code)
+      kept = item(vault: gold)
+      dropped = item(vault: vault(code: "x#{code}"))
+      unvaulted = item()
+
+      for {field, value} <- [{"vault.code", code}, {"vault.name", gold.name}] do
+        filter =
+          encode_filter([%{"field_name" => field, "operator" => "equals", "value" => value}])
+
+        {:ok, view, html} =
+          live(log_in(conn, editor), "/test/vault_filter?custom_filter=#{filter}")
+
+        refute html =~ @refused
+        cells = texts(view, "td")
+        assert kept.code in cells, "#{field} dropped the matching item"
+        refute dropped.code in cells
+        refute unvaulted.code in cells
+      end
+    end
+
+    test "asks whether a vault's code is empty, for a reader who reaches it only so",
+         %{conn: conn, editor: editor} do
+      prefix = unique("RF")
+      vaulted = item(code: "#{prefix}-vaulted", vault: vault(code: "vault-#{unique("zq")}"))
+      unvaulted = item(code: "#{prefix}-unvaulted")
+
+      {:ok, view, _html} =
+        live(log_in(conn, editor), "/test/vault_filter?show_custom_filter=true")
+
+      uuid = filter_uuid(view)
+      filter_change(view, "field_name-#{uuid}", "vault.code")
+      assert emptiness(view, uuid) == ["Is Empty", "Is Not Empty"]
+
+      filter =
+        encode_filter([
+          %{"field_name" => "code", "operator" => "starts_with", "value" => prefix},
+          %{"field_name" => "vault.code", "operator" => "is_nil", "value" => ""}
+        ])
+
+      {:ok, view, html} =
+        live(log_in(conn, editor), "/test/vault_filter?custom_filter=#{filter}")
+
+      refute html =~ @refused
+      assert unvaulted.code in texts(view, "td")
+      refute vaulted.code in texts(view, "td")
+    end
+
+    test "is dropped on a destination the reader may not read by any route, saying so",
+         %{conn: conn, admin: admin, editor: editor} do
+      name = unique("Locked")
+      row = item(locked: Ash.Seed.seed!(Locked, %{name: name}))
+      other = item()
+
+      filter =
+        encode_filter([%{"field_name" => "locked.name", "operator" => "equals", "value" => name}])
+
+      {:ok, view, html} =
+        live(log_in(conn, editor), "/test/vault_filter?custom_filter=#{filter}")
+
+      assert html =~ @refused
+      assert row.code in texts(view, "td")
+      assert other.code in texts(view, "td")
+
+      {:ok, view, html} =
+        live(log_in(conn, admin), "/test/vault_filter?custom_filter=#{filter}")
+
+      refute html =~ @refused
+      assert row.code in texts(view, "td")
+      refute other.code in texts(view, "td")
+    end
+  end
+
   # A link written for another page or reader, or by hand.
   describe "a link's row through a relationship" do
     test "is dropped where `filterable:` names no such field, saying so",
@@ -469,14 +566,21 @@ defmodule ExampleWeb.RelatedFilterScenarioTest do
   defp item(attrs \\ []) do
     {owner, attrs} = Keyword.pop(attrs, :owner)
     {steward, attrs} = Keyword.pop(attrs, :steward)
+    {vault, attrs} = Keyword.pop(attrs, :vault)
+    {locked, attrs} = Keyword.pop(attrs, :locked)
 
-    Ash.Seed.seed!(
-      Item,
-      Map.merge(
-        %{code: unique("RF"), owner_id: owner && owner.id, steward_id: steward && steward.id},
-        Map.new(attrs)
-      )
-    )
+    ids = %{
+      owner_id: owner && owner.id,
+      steward_id: steward && steward.id,
+      vault_id: vault && vault.id,
+      locked_id: locked && locked.id
+    }
+
+    Ash.Seed.seed!(Item, %{code: unique("RF")} |> Map.merge(ids) |> Map.merge(Map.new(attrs)))
+  end
+
+  defp vault(attrs) do
+    Ash.Seed.seed!(Vault, Map.merge(%{name: unique("Vault")}, Map.new(attrs)))
   end
 
   defp apply_filter(conn, field, operator, value) do

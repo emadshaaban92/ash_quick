@@ -52,10 +52,11 @@ defmodule AshQuick.MixProject do
       # loaded yet, and ash_phoenix 2.3.20, for the dynamic `keep_live`
       # subscriptions `AshQuick.LiveView.Liveness` re-targets. ash_phoenix sits
       # at 2.3.25 because that release fixed CVE-2026-82724..82727. ash sits at
-      # 3.37.3: 3.37.1 fixed EEF-CVE-2026-114214, and 3.37.3 stopped an update
+      # 3.37.4: 3.37.1 fixed EEF-CVE-2026-114214, 3.37.3 stopped an update
       # that manages a relationship failing on a record whose embed a field
-      # policy hides.
-      {:ash, "~> 3.37 and >= 3.37.3"},
+      # policy hides, and 3.37.4 asks a related field's policies in a filter
+      # with `accessing_from`, as the filter form does.
+      {:ash, "~> 3.37 and >= 3.37.4"},
       {:ash_phoenix, "~> 2.3 and >= 2.3.25"},
       {:spark, "~> 2.7"},
       {:phoenix, "~> 1.8"},

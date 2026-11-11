@@ -108,6 +108,119 @@ defmodule Example.Test.RelatedFilter.Ledger do
   end
 end
 
+defmodule Example.Test.RelatedFilter.Vault do
+  @moduledoc """
+  A resource only an admin reads directly, and anyone reads through an
+  `Example.Test.RelatedFilter.Item`'s `vault`: its read policy and its code's
+  field policy both hold through `accessing_from/2`. So the item's filter
+  offers its name and code to an editor, as their columns show them, though
+  no read of the vault itself would.
+  """
+  use Ash.Resource,
+    domain: Example.Test.FilterFields.Domain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshQuick],
+    authorizers: [Ash.Policy.Authorizer]
+
+  field_policies do
+    field_policy :code do
+      authorize_if actor_attribute_equals(:role, :admin)
+      authorize_if accessing_from(Example.Test.RelatedFilter.Item, :vault)
+    end
+
+    field_policy :* do
+      authorize_if always()
+    end
+  end
+
+  actions do
+    defaults [:read]
+  end
+
+  policies do
+    policy action_type(:read) do
+      authorize_if actor_attribute_equals(:role, :admin)
+      authorize_if accessing_from(Example.Test.RelatedFilter.Item, :vault)
+    end
+  end
+
+  ash_quick do
+    display do
+      label :name
+    end
+
+    versioning do
+      enabled? false
+    end
+
+    audit do
+      enabled? false
+    end
+
+    bookkeeping do
+      inserted_at false
+      inserted_by false
+      updated_at false
+      updated_by false
+    end
+  end
+
+  attributes do
+    uuid_v7_primary_key :id
+    attribute :name, :string, allow_nil?: false, public?: true
+    attribute :code, :string, public?: true
+  end
+end
+
+defmodule Example.Test.RelatedFilter.Locked do
+  @moduledoc """
+  A resource only an admin reads, by any route: an
+  `Example.Test.RelatedFilter.Item`'s `locked` gives an editor no way in, so
+  the item's filter offers an editor none of its fields.
+  """
+  use Ash.Resource,
+    domain: Example.Test.FilterFields.Domain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshQuick],
+    authorizers: [Ash.Policy.Authorizer]
+
+  actions do
+    defaults [:read]
+  end
+
+  policies do
+    policy action_type(:read) do
+      authorize_if actor_attribute_equals(:role, :admin)
+    end
+  end
+
+  ash_quick do
+    display do
+      label :name
+    end
+
+    versioning do
+      enabled? false
+    end
+
+    audit do
+      enabled? false
+    end
+
+    bookkeeping do
+      inserted_at false
+      inserted_by false
+      updated_at false
+      updated_by false
+    end
+  end
+
+  attributes do
+    uuid_v7_primary_key :id
+    attribute :name, :string, allow_nil?: false, public?: true
+  end
+end
+
 defmodule Example.Test.RelatedFilter.Item do
   @moduledoc """
   A resource whose list is filtered by its owner's fields, through `owner`, a
@@ -176,6 +289,8 @@ defmodule Example.Test.RelatedFilter.Item do
     belongs_to :steward, Example.Test.RelatedFilter.Owner, public?: true, read_action: :index
     belongs_to :keeper, Example.Test.RelatedFilter.Owner
     belongs_to :ledger, Example.Test.RelatedFilter.Ledger, public?: true
+    belongs_to :vault, Example.Test.RelatedFilter.Vault, public?: true
+    belongs_to :locked, Example.Test.RelatedFilter.Locked, public?: true
     belongs_to :parent, __MODULE__, public?: true
     has_many :children, __MODULE__, destination_attribute: :parent_id, public?: true
   end
@@ -214,6 +329,22 @@ defmodule Example.Test.RelatedFilterDefaultLive.Quick do
   use AshQuick.LiveView.QuickView,
     resource: Example.Test.RelatedFilter.Item,
     list: [fields: [:code, {[owner: :name], label: "Owner"}]],
+    details: [fields: [:code]]
+end
+
+defmodule Example.Test.VaultFilterLive.Quick do
+  @moduledoc """
+  The page over `Example.Test.RelatedFilter.Item` whose filter offers the
+  item's code, its vault's name and code, which a reader reaches only
+  through the item, and its locked record's name, which only an admin reads.
+  Routed only in the test build.
+  """
+  use AshQuick.LiveView.QuickView,
+    resource: Example.Test.RelatedFilter.Item,
+    list: [
+      fields: [:code, {[vault: :code], label: "Vault code"}],
+      filterable: [:code, vault: :name, vault: :code, locked: :name]
+    ],
     details: [fields: [:code]]
 end
 
