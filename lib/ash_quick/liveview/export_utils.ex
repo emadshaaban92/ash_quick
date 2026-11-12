@@ -112,7 +112,17 @@ defmodule AshQuick.LiveView.ExportUtils do
   end
 
   defp generate_stream_data(query, options, ctx) do
-    rows = Ash.stream!(query, timeout: :infinity)
+    # Keyset where the action offers it, offset where it pages by offset alone:
+    # a list reads offset pages, so an action it lists is one it can export.
+    # Never a full read, which would hold the whole table in memory. Offset
+    # batches can repeat or skip a row that another writer moves meanwhile;
+    # keyset batches cannot.
+    #
+    # Batches of up to 250 rows, held to the action's `max_page_size`, not
+    # its `default_limit`: a batch is a read, and a count too on a countable
+    # action, so batches of a page's 20 rows read a large table many times.
+    rows =
+      Ash.stream!(query, timeout: :infinity, allow_stream_with: :offset, batch_size: 250)
 
     header =
       options.export_fields

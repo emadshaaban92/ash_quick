@@ -13,6 +13,7 @@ for resource <- [
       Example.Test.LookupItems.Item,
       Example.Test.NestedItems,
       Example.Test.NestedItems.Item,
+      Example.Test.OffsetPages,
       Example.Test.PickedLabels,
       Example.Test.PickedLabels.Label,
       Example.Test.PickedLabels.Labelling,
@@ -28,6 +29,7 @@ for resource <- [
       Example.Test.ShelvedCrates.Item,
       Example.Test.ShelvedCrates.Shelf,
       Example.Test.SmallPages,
+      Example.Test.WideOffsetPages,
       Example.Test.WordedPolicy
     ] do
   {:ok, _table} = Ash.DataLayer.Ets.TableManager.start(resource, nil)
