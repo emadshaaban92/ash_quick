@@ -2,7 +2,9 @@ defmodule AshQuick.Bookkeeping.Transformer do
   @moduledoc false
   # Adds the bookkeeping fields a resource declared and does not already define:
   # the two timestamps, the two `belongs_to` relationships to the configured
-  # actor resource, and the `relate_actor` changes that stamp them.
+  # actor resource, and the changes that stamp them: `relate_actor` on create,
+  # and `AshQuick.Bookkeeping.StampWriter` on an update, which stamps only a
+  # write that changes something besides bookkeeping.
   #
   # Add-if-absent throughout, and each of the five pieces is checked on its own.
   # A resource keeping its own `belongs_to :updated_by` keeps it whole — the
@@ -21,6 +23,8 @@ defmodule AshQuick.Bookkeeping.Transformer do
   alias Ash.Resource.Dsl
   alias Ash.Resource.Info
   alias AshQuick.Bookkeeping.Declaration
+  alias AshQuick.Bookkeeping.StampWriter
+  alias AshQuick.Versioning.Declaration, as: VersioningDeclaration
   alias Spark.Dsl.Transformer
 
   # The fields have to exist before anything reading them runs.
@@ -38,12 +42,10 @@ defmodule AshQuick.Bookkeeping.Transformer do
      |> add_timestamp(:updated_at, :update_timestamp)
      |> add_actor(:inserted_by)
      |> add_actor(:updated_by)
-     # `:inserted_by` on create only; `:updated_by` on every write, which is why
-     # a create stamps both. `:updated_by` passes no `on:` at all rather than a
-     # list of its own — the option has a default, and naming the types here
-     # would fix them at whatever they are today.
-     |> add_relate_actor(:inserted_by, on: [:create])
-     |> add_relate_actor(:updated_by, [])}
+     # `:inserted_by` on create only; `:updated_by` on every create and on
+     # every meaningful update, which is why a create stamps both.
+     |> add_relate_actor(:inserted_by)
+     |> add_relate_actor(:updated_by)}
   end
 
   # `always_select?` for the same reason `:active` and `:version` carry it: a
@@ -112,26 +114,53 @@ defmodule AshQuick.Bookkeeping.Transformer do
   # into a foreign key against another table. `AshQuick.Bookkeeping.Verifier`
   # refuses that resource outright, so this is what keeps the two consistent
   # rather than the only thing standing in the way.
-  defp add_relate_actor(dsl_state, key, opts) do
+  defp add_relate_actor(dsl_state, key) do
     with name when not is_nil(name) <- Declaration.field(dsl_state, key),
          false <- stamped?(dsl_state, name),
          true <- actor_relationship?(dsl_state, name) do
-      # Built through the builtin rather than as a literal tuple, so the
-      # generated change carries exactly what the hand-written
-      # `change relate_actor(:inserted_by)` carried — `allow_nil?: false`
-      # included, which a literal would have quietly dropped.
-      {:ok, change} =
-        Transformer.build_entity(
-          Dsl,
-          [:changes],
-          :change,
-          Keyword.put(opts, :change, Builtins.relate_actor(name))
-        )
+      Enum.reduce(stamps(dsl_state, key, name), dsl_state, fn {change, on}, dsl_state ->
+        # `relate_actor` is built through the builtin rather than as a literal
+        # tuple, so the generated change carries exactly what the hand-written
+        # `change relate_actor(:inserted_by)` carried — `allow_nil?: false`
+        # included, which a literal would have quietly dropped.
+        {:ok, change} =
+          Transformer.build_entity(Dsl, [:changes], :change, change: change, on: on)
 
-      Transformer.add_entity(dsl_state, [:changes], change, type: :append)
+        Transformer.add_entity(dsl_state, [:changes], change, type: :append)
+      end)
     else
       _ -> dsl_state
     end
+  end
+
+  defp stamps(_dsl_state, :inserted_by, name), do: [{Builtins.relate_actor(name), [:create]}]
+
+  # An update stamps `:updated_by` only when it is meaningful — when it changes
+  # something besides bookkeeping — so a write that changes nothing names
+  # nobody as its writer and leaves `:updated_at` alone. See
+  # `AshQuick.Bookkeeping.StampWriter`. It writes the foreign key, so it takes
+  # a `belongs_to`; any other kind keeps `relate_actor/1` on every update.
+  #
+  # The lock's counter is passed in because the lock sets it after this has
+  # run on the atomic path, and a write meaningful to one is meaningful to the
+  # other.
+  defp stamps(dsl_state, :updated_by, name) do
+    case Info.relationship(dsl_state, name) do
+      %{type: :belongs_to} ->
+        [
+          {Builtins.relate_actor(name), [:create]},
+          {{StampWriter, relationship: name, ignore: lock_counter(dsl_state)}, [:update]}
+        ]
+
+      _ ->
+        [{Builtins.relate_actor(name), [:create, :update]}]
+    end
+  end
+
+  defp lock_counter(dsl_state) do
+    if VersioningDeclaration.enabled?(dsl_state),
+      do: [VersioningDeclaration.attribute(dsl_state)],
+      else: []
   end
 
   defp actor_relationship?(dsl_state, name) do
@@ -153,6 +182,10 @@ defmodule AshQuick.Bookkeeping.Transformer do
   end
 
   defp relates_actor?(%{change: {Change.RelateActor, opts}}, name) do
+    Keyword.get(opts, :relationship) == name
+  end
+
+  defp relates_actor?(%{change: {StampWriter, opts}}, name) do
     Keyword.get(opts, :relationship) == name
   end
 

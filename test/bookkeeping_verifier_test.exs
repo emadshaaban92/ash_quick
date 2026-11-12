@@ -69,6 +69,14 @@ defmodule AshQuick.BookkeepingVerifierTest do
     Module.concat([name])
   end
 
+  defp stamp(%{change: {Change.RelateActor, opts}}),
+    do: {:relate_actor, opts[:relationship], opts[:allow_nil?]}
+
+  defp stamp(%{change: {AshQuick.Bookkeeping.StampWriter, opts}}),
+    do: {:stamp_writer, opts[:relationship], opts[:ignore]}
+
+  defp stamp(_change), do: nil
+
   # The errors the compiler would have raised for that probe.
   defp verifier_errors(body), do: VerifierErrors.errors(probe(body))
 
@@ -147,17 +155,36 @@ defmodule AshQuick.BookkeepingVerifierTest do
       stamped =
         for type <- [:create, :update],
             change <- Info.changes(module, type),
-            %{change: {Change.RelateActor, opts}} <- [change],
-            do: {type, opts[:relationship], opts[:allow_nil?]}
+            stamp = stamp(change),
+            do: {type, stamp}
 
       # `allow_nil?: false` comes from `relate_actor/1` itself — the generated
       # change is built through the builtin so it cannot drift from what a
-      # hand-written `change relate_actor(:inserted_by)` produces.
+      # hand-written `change relate_actor(:inserted_by)` produces. An update
+      # stamps through `StampWriter`, which stamps only a meaningful write and,
+      # with versioning on, does not count the lock's counter as one.
       assert Enum.sort(stamped) == [
-               {:create, :inserted_by, false},
-               {:create, :updated_by, false},
-               {:update, :updated_by, false}
+               {:create, {:relate_actor, :inserted_by, false}},
+               {:create, {:relate_actor, :updated_by, false}},
+               {:update, {:stamp_writer, :updated_by, [:version]}}
              ]
+    end
+
+    test "an unversioned resource has no counter to leave out of the stamp" do
+      module =
+        probe("""
+        ash_quick do
+          versioning do
+            enabled? false
+          end
+        end
+
+        attributes do
+          uuid_primary_key :id
+        end
+        """)
+
+      assert {:stamp_writer, :updated_by, []} in Enum.map(Info.changes(module, :update), &stamp/1)
     end
 
     test "a field declared absent is not generated" do
@@ -254,6 +281,24 @@ defmodule AshQuick.BookkeepingVerifierTest do
                Info.changes(module, :create),
                &match?(%{change: {AshQuick.Audit.Change, _opts}}, &1)
              ) == []
+    end
+
+    test "a resource stamping updated_by itself keeps its own stamp on every update" do
+      module =
+        probe("""
+        attributes do
+          uuid_primary_key :id
+        end
+
+        changes do
+          change relate_actor(:updated_by)
+        end
+        """)
+
+      # The hand-written stamp is the resource's own decision, so nothing
+      # narrows it to meaningful writes.
+      assert [{:relate_actor, :updated_by, false}] =
+               module |> Info.changes(:update) |> Enum.map(&stamp/1) |> Enum.reject(&is_nil/1)
     end
   end
 

@@ -1133,6 +1133,26 @@
 
 ### Breaking changes
 
+- **An update stamps `updated_by` only when it changes something.** The
+  stamp AshQuick generates used to name the actor on every update, so a print,
+  a download, or a form resubmitted unchanged made whoever ran it the record's
+  last writer, and the stamp then moved `updated_at` too. It is now written
+  only for a write that changes something besides bookkeeping, the same answer
+  the optimistic lock bumps `version` on, on the in-memory and the atomic path
+  alike, `Ash.update_many/4` included. A write that changes nothing leaves
+  `updated_by`, `updated_at` and `version` as they were, and is still
+  authorized and audited. A resource stamping `updated_by` itself is
+  unchanged. A host relying on every update stamping its actor gets that only
+  from its own `change relate_actor(:updated_by)`.
+
+- **An in-memory update writing through `atomic_update/3` takes the lock.**
+  The lock counted only `changeset.attributes` and relationships on the
+  in-memory path, so a `require_atomic? false` action whose change set a value
+  with `Ash.Changeset.atomic_update/3` wrote the row without filtering on or
+  bumping `version`. Such a value is an expression memory cannot compare with
+  the row, so it now counts as a change: the write is locked, bumps `version`
+  and stamps `updated_by`.
+
 - **`app.js` wires AshQuick in with `withAshQuick` and `attachAshQuick`, and
   that is all of its client setup.** The host keeps Phoenix's own
   `LiveSocket`. `withAshQuick(opts)` adds the tab's identity and

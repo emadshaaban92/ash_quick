@@ -5,7 +5,9 @@ defmodule AshQuick.Versioning.Lock do
   # The lock is taken only for a *meaningful* write: one that changes an
   # attribute or relationship other than the counter itself and the ones
   # `AshQuick.Config.versioning_ignored_attributes/1` and
-  # `versioning_ignored_relationships/1` name. A destroy is always meaningful.
+  # `versioning_ignored_relationships/1` name, as
+  # `AshQuick.Bookkeeping.Meaningful` decides it. A destroy is always
+  # meaningful.
   # Taking it means refusing the write unless the row still holds the version
   # the actor loaded, and bumping that version.
   #
@@ -70,6 +72,8 @@ defmodule AshQuick.Versioning.Lock do
 
   require Ash.Expr
 
+  alias AshQuick.Bookkeeping.Meaningful
+
   @impl true
   def change(changeset, opts, _context) do
     attribute = Keyword.fetch!(opts, :attribute)
@@ -110,7 +114,7 @@ defmodule AshQuick.Versioning.Lock do
   end
 
   defp apply_lock_if_meaningful(changeset, attribute) do
-    if meaningful?(changeset, attribute) do
+    if Meaningful.meaningful?(changeset, [attribute]) do
       apply_lock(changeset, attribute)
     else
       changeset
@@ -142,26 +146,6 @@ defmodule AshQuick.Versioning.Lock do
   end
 
   defp loaded_version(data, attribute), do: Map.get(data, attribute)
-
-  defp meaningful?(changeset, attribute) do
-    {attributes, relationships} = meaningful_changes(changeset, attribute)
-    not (attributes == %{} and relationships == %{})
-  end
-
-  defp meaningful_changes(%{resource: resource} = changeset, attribute) do
-    attributes =
-      Map.drop(changeset.attributes, [
-        attribute | AshQuick.Config.versioning_ignored_attributes(resource)
-      ])
-
-    relationships =
-      Map.drop(
-        changeset.relationships,
-        AshQuick.Config.versioning_ignored_relationships(resource)
-      )
-
-    {attributes, relationships}
-  end
 
   # The counter moves only when something meaningful does: the row's own value
   # is kept otherwise. The check is a filter rather than an `error(...)` in the
@@ -207,61 +191,9 @@ defmodule AshQuick.Versioning.Lock do
     )
   end
 
-  # `nil` when the write cannot be meaningful whatever the row holds, `true`
-  # when it is meaningful whatever the row holds, and otherwise an expression
-  # that is true when a value being written differs from the row's.
+  # See `AshQuick.Bookkeeping.Meaningful.condition/2`; a destroy is always
+  # meaningful.
   defp changed_condition(%{action_type: :destroy}, _attribute), do: true
 
-  defp changed_condition(changeset, attribute) do
-    {attributes, relationships} = meaningful_changes(changeset, attribute)
-
-    atomics =
-      Keyword.drop(changeset.atomics, [
-        attribute | AshQuick.Config.versioning_ignored_attributes(changeset.resource)
-      ])
-
-    if relationships == %{} do
-      atomics
-      |> Enum.concat(attributes)
-      |> Enum.map(fn {key, value} -> differs(changeset.resource, key, value) end)
-      |> Enum.reduce(nil, fn
-        differs, nil -> differs
-        differs, condition -> Ash.Expr.expr(^condition or ^differs)
-      end)
-    else
-      true
-    end
-  end
-
-  # How Ash compares a written value with the row when it decides whether an
-  # `update_default` applies — `atomic_default_condition` in `Ash.Changeset` —
-  # but with a write from or to `nil` counted as a change wherever the data
-  # layer cannot say `is_distinct_from`: missing one is an under-lock, where
-  # Ash only misses a timestamp.
-  defp differs(resource, key, value) do
-    ref = Ash.Expr.ref(key)
-    distinct = Ash.Expr.expr(is_distinct_from(^value, ^ref))
-
-    cond do
-      not Ash.Expr.can_return_nil?(value) and
-          not Ash.Resource.Info.attribute(resource, key).allow_nil? ->
-        Ash.Expr.expr(^value != ^ref)
-
-      Ash.DataLayer.data_layer_can?(resource, {:filter_expr, distinct}) ->
-        distinct
-
-      true ->
-        nil_safe_differs(value, ref)
-    end
-  end
-
-  defp nil_safe_differs(value, ref) do
-    Ash.Expr.expr(
-      cond do
-        is_nil(^value) and is_nil(^ref) -> false
-        is_nil(^value) or is_nil(^ref) -> true
-        true -> ^value != ^ref
-      end
-    )
-  end
+  defp changed_condition(changeset, attribute), do: Meaningful.condition(changeset, [attribute])
 end
