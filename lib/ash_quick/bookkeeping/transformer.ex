@@ -36,16 +36,86 @@ defmodule AshQuick.Bookkeeping.Transformer do
 
   @impl true
   def transform(dsl_state) do
-    {:ok,
-     dsl_state
-     |> add_timestamp(:inserted_at, :create_timestamp)
-     |> add_timestamp(:updated_at, :update_timestamp)
-     |> add_actor(:inserted_by)
-     |> add_actor(:updated_by)
-     # `:inserted_by` on create only; `:updated_by` on every create and on
-     # every meaningful update, which is why a create stamps both.
-     |> add_relate_actor(:inserted_by)
-     |> add_relate_actor(:updated_by)}
+    with :ok <- refuse_writable_actor_columns(dsl_state) do
+      {:ok,
+       dsl_state
+       |> add_timestamp(:inserted_at, :create_timestamp)
+       |> add_timestamp(:updated_at, :update_timestamp)
+       |> add_actor(:inserted_by)
+       |> add_actor(:updated_by)
+       # `:inserted_by` on create only; `:updated_by` on every create and on
+       # every meaningful update, which is why a create stamps both.
+       |> add_relate_actor(:inserted_by)
+       |> add_relate_actor(:updated_by)}
+    end
+  end
+
+  # A hand-written actor `belongs_to` keeps whatever it was declared with, and
+  # a writable column lets a client name anyone as the writer through an
+  # action accepting it — `accept :*` is enough. An update sending only the
+  # column is not meaningful, so the stamp never replaces it, and nothing
+  # re-stamps `inserted_by` after the create.
+  #
+  # Refused here rather than in `AshQuick.Bookkeeping.Verifier`: Spark reports
+  # a verifier's error as a compile warning, and this one has to fail the build
+  # whatever the host compiles with. Only the column is checked: a writable
+  # relationship is reached only through an argument the host manages onto it
+  # by name, which is a choice and not an accident. A relationship pointing
+  # elsewhere is the verifier's to report, and is not stamped.
+  defp refuse_writable_actor_columns(dsl_state) do
+    case Enum.flat_map(Declaration.actors(), &writable_actor_column(dsl_state, &1)) do
+      [] -> :ok
+      problems -> {:error, writable_actor_error(dsl_state, problems)}
+    end
+  end
+
+  defp writable_actor_column(dsl_state, key) do
+    with name when not is_nil(name) <- Declaration.field(dsl_state, key),
+         %{type: :belongs_to, destination: destination} = relationship <-
+           Info.relationship(dsl_state, name),
+         true <- Declaration.actor_destination?(destination),
+         true <- column_writable?(dsl_state, relationship) do
+      [{key, name, relationship.source_attribute}]
+    else
+      _ -> []
+    end
+  end
+
+  # A `belongs_to` defining its column generates it later, from
+  # `attribute_writable?`, which Ash has already defaulted to `writable?`.
+  defp column_writable?(_dsl_state, %{define_attribute?: true} = relationship),
+    do: relationship.attribute_writable?
+
+  defp column_writable?(dsl_state, relationship) do
+    case Info.attribute(dsl_state, relationship.source_attribute) do
+      %{writable?: writable?} -> writable?
+      nil -> false
+    end
+  end
+
+  defp writable_actor_error(dsl_state, problems) do
+    module = Transformer.get_persisted(dsl_state, :module)
+
+    Spark.Error.DslError.exception(
+      module: module,
+      path: [:ash_quick, :bookkeeping],
+      message: """
+      #{inspect(module)} lets an action write who wrote a record:
+
+      #{Enum.map_join(problems, "\n", &describe_writable/1)}
+
+      A writable column lets a client name anyone as the record's writer \
+      through any action accepting it, and the stamp does not overwrite an \
+      update that writes only that. Add `writable?: false` to the `belongs_to` \
+      when it defines the column, and drop any `attribute_writable? true` \
+      there, or add it to the attribute under a `define_attribute? false` \
+      one. AshQuick generates its actor relationships that way.
+      """
+    )
+  end
+
+  defp describe_writable({key, name, column}) do
+    "  #{key} names #{inspect(name)}, whose column #{inspect(column)} is writable"
   end
 
   # `always_select?` for the same reason `:active` and `:version` carry it: a
@@ -74,6 +144,15 @@ defmodule AshQuick.Bookkeeping.Transformer do
     end
   end
 
+  # Not writable, so no action can accept the column — `accept :*` included —
+  # and no argument can manage the relationship: who wrote a record is the
+  # stamp's to say, never the client's. Writable, an update sending only the
+  # column is not meaningful, so the stamp never replaces what it sent, and
+  # nothing re-stamps `:inserted_by` after the create. The stamps write the
+  # column with `force_change_attribute/3`, which writability does not govern.
+  # `refuse_writable_actor_columns/1` holds hand-written actor columns to the
+  # same rule.
+  #
   # Nothing is added when the host configures no actor resource — a resource
   # then declares `inserted_by false` and carries none, which the verifier checks.
   #
@@ -94,6 +173,7 @@ defmodule AshQuick.Bookkeeping.Transformer do
           destination: destination,
           domain: Ash.Resource.Info.domain(destination),
           public?: true,
+          writable?: false,
           allow_nil?: false
         )
 

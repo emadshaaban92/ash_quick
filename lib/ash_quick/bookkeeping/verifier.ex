@@ -33,6 +33,9 @@ defmodule AshQuick.Bookkeeping.Verifier do
   # for most resources and quietly not for the rest, which is the worst shape for
   # something a generic details header reads.
   #
+  # A writable actor column is refused by `AshQuick.Bookkeeping.Transformer`
+  # instead, since this verifier's errors reach the host as warnings.
+  #
   # Every mismatch is reported at once: a resource declaring nothing and having
   # none of the four should learn that in one compile, not four.
   #

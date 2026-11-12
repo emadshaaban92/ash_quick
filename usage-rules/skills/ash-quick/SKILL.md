@@ -864,7 +864,11 @@ and what to write.
   `:inserted_by` / `:updated_by` name **relationships**, and only a relationship
   to the configured `:actor_resource` satisfies one. A resource with its own
   `belongs_to :inserted_by, SomethingElse` declares `inserted_by false` and keeps
-  it.
+  it. The generated relationships are `writable?: false`, so no action accepts
+  `inserted_by_id` / `updated_by_id` (not even `accept :*`); a hand-written
+  actor relationship whose column is writable does not compile, so add
+  `writable?: false` to the `belongs_to` (or to the attribute under a
+  `define_attribute? false` one).
 
   An update stamps `:updated_by` only when it changes something besides
   bookkeeping, the same rule the lock bumps `version` on. A print, a download
