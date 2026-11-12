@@ -763,6 +763,14 @@
   the first page. The README says `countable false` is the knob for a table
   too big to count.
 
+- **Sub-form rows with dropdowns can be added.** A dropdown for a
+  relationship, a fixed set of values or a many-to-many argument took its
+  field name as its id, so a second row of a sub-form, or a row whose field
+  shares a name with the parent's, drew two components with one id, and the
+  form crashed as the row was added. Each dropdown's id now carries the
+  sub-form's path (`select-form_rows_0_kind`), and a top-level one its form's
+  (`select-bin` is now `select-form_bin`), for a host test that targets it.
+
 - **The generated audit store takes a record keyed by an integer.** The
   store `mix ash_quick.install` writes kept `resource_id` as a `:uuid`, so an
   audited resource with an integer primary key could not write its entries.

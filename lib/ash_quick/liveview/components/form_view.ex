@@ -313,6 +313,10 @@ defmodule AshQuick.LiveView.Components.FormView do
     """
   end
 
+  # The dropdowns below are live components, so each id has to be unique on
+  # the page. It takes the input's id (`form_rows_0_kind`), which carries the
+  # sub-form's path: two rows of a sub-form, or a row and its parent, share
+  # field names.
   defp field_input(%{field: %Argument{type: {:array, item_type}}} = assigns)
        when item_type in [Type.UUID, Type.UUIDv7] do
     case Utils.argument_to_relationship(assigns.field, assigns.resource, assigns.form.action) do
@@ -323,7 +327,7 @@ defmodule AshQuick.LiveView.Components.FormView do
         <.live_component
           :if={@relationship}
           required={not @field.allow_nil?}
-          id={"select-#{@field.name}"}
+          id={"select-#{@phx_field.id}"}
           module={AshQuick.LiveView.Components.HasManyInput}
           label={Labels.name(@relationship.name, @resource)}
           relationship={@relationship}
@@ -341,7 +345,7 @@ defmodule AshQuick.LiveView.Components.FormView do
   defp field_input(%{field: %BelongsTo{}} = assigns) do
     ~H"""
     <.live_component
-      id={"select-#{@field.name}"}
+      id={"select-#{@phx_field.id}"}
       required={not @field.allow_nil?}
       module={AshQuick.LiveView.Components.BelongsToInput}
       label={Labels.name(@field.name, @resource)}
@@ -357,7 +361,7 @@ defmodule AshQuick.LiveView.Components.FormView do
   defp field_input(%{choice: choice} = assigns) when choice in [:single, :array] do
     ~H"""
     <.live_component
-      id={"select-#{@field.name}"}
+      id={"select-#{@phx_field.id}"}
       required={not @field.allow_nil?}
       module={AshQuick.LiveView.Components.ChoiceInput}
       multiple={@choice == :array}
