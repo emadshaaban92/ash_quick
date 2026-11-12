@@ -27,11 +27,18 @@ defmodule AshQuick.Bookkeeping.Transformer do
   alias AshQuick.Versioning.Declaration, as: VersioningDeclaration
   alias Spark.Dsl.Transformer
 
-  # The fields have to exist before anything reading them runs.
+  # The fields have to exist before anything reading them runs. The stamps come
+  # after the audit change and before the optimistic lock in every resource's
+  # change list, so this runs after `AshQuick.Audit.Transformer` and before
+  # `AshQuick.Versioning.Transformer`, which says so itself. Every one of the
+  # three asks to run before everything, so without the pair named here Spark
+  # leaves their order to chance.
   @impl true
+  def after?(AshQuick.Audit.Transformer), do: true
   def after?(_), do: false
 
   @impl true
+  def before?(AshQuick.Audit.Transformer), do: false
   def before?(_), do: true
 
   @impl true

@@ -771,6 +771,32 @@
   sub-form's path (`select-form_rows_0_kind`), and a top-level one its form's
   (`select-bin` is now `select-form_bin`), for a host test that targets it.
 
+- **An optional single attachment can be cleared from its form.** A field
+  like `attribute :image, :attachment, allow_nil?: true` showed its stored
+  file with no way to take it off: a new pick replaced it, and a blank save
+  kept it. Its preview now carries a ✕ that empties the field, and the save
+  writes `nil`. A required one has no ✕, and neither does one in a nested
+  form.
+
+- **The not-found page lets go of the page before it.** A patch from a list,
+  details page or form to a URL the page cannot serve left that page's hooks
+  attached, so the list's events still acted on a selection the page no
+  longer showed. The not-found page now drops the previous page's events,
+  refetches and notifications, and the selection with them.
+
+- **AshQuick's changes run in a fixed order.** The audit change, the actor
+  stamps and the optimistic lock are appended by three transformers that each
+  asked to run before everything, which left their order to Spark's graph
+  walk; in practice the lock ran before the stamps. The bookkeeping and
+  versioning transformers now name the order, so a resource's changes are
+  always the audit, then the stamps, then the lock. See Breaking changes.
+
+- **The audit docs say which writes with no actor reach the log.** A resource
+  whose bookkeeping stamps `inserted_by` or `updated_by` refuses a create or
+  update with no actor before it is audited, so there only a destroy is
+  recorded with `actor_id: nil`. `AshQuick.Audit.Change`, the README, the
+  skill and `AshQuick.Audit.ActorError` now say so.
+
 - **The generated audit store takes a record keyed by an integer.** The
   store `mix ash_quick.install` writes kept `resource_id` as a `:uuid`, so an
   audited resource with an integer primary key could not write its entries.
@@ -1272,6 +1298,15 @@
   of, a private field, or an Ash operator the form never writes (`eq`,
   `greater_than`) used to reach the read, and now filters by nothing, with
   the refused-filter flash.
+
+- **The optimistic lock runs after the actor stamps.** On a versioned
+  resource that stamps `inserted_by` or `updated_by`, the lock's change used
+  to be appended before the stamps and now comes after them, so on the
+  in-memory path its `before_action` runs last and on the atomic path its
+  `version` atomic follows the stamp's. The stamps are bookkeeping, which the
+  lock ignores, so no write changes whether it takes the lock or bumps
+  `version`. A host change that reads a resource's change list by position,
+  or a hook that relied on running after the lock's, sees the new order.
 
 - **An update stamps `updated_by` only when it changes something.** The
   stamp AshQuick generates used to name the actor on every update, so a print,

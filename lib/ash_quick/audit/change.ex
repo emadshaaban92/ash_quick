@@ -12,6 +12,13 @@ defmodule AshQuick.Audit.Change do
   job, a scheduled task, an integration. Its row has `actor_id: nil`, which says
   that nobody was behind it rather than leaving no trace that it happened.
 
+  Such a write has to get as far as the audit first. A resource whose
+  bookkeeping stamps the actor (`inserted_by` and `updated_by`, on unless
+  declared `false` once `:actor_resource` is configured) refuses a create or
+  an update with no actor, so there the rows with `actor_id: nil` are destroys.
+  A write nobody is behind, on such a resource, needs an actor to stamp, or a
+  resource that stamps none.
+
   To say *what* made a write, name it under `action_source` in the action's
   context — `context: %{action_source: "nightly_sync"}` — and it is kept in the
   row's `context`. That is a convention rather than a requirement: nothing

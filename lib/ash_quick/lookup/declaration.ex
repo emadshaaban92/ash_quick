@@ -9,9 +9,6 @@ defmodule AshQuick.Lookup.Declaration do
   # that says nothing gets. Holding them here rather than at each call site is
   # what keeps the DSL schema, the verifier, `AshQuick.Info` and the QuickView's
   # own check from drifting apart — the schema reads them from here too.
-  #
-  # Not `AshQuick.Lookup`: Spark generates a module by that name for the
-  # section's own imports, and defining one shadows the `lookup` macro.
 
   @path [:ash_quick, :lookup]
   @action :index

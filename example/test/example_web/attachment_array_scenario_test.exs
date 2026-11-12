@@ -15,6 +15,7 @@ defmodule ExampleWeb.AttachmentArrayScenarioTest do
   alias Example.Catalog.Category
 
   @upload "form[documents]_upload"
+  @clear_image "[data-attachment-field=image] button[aria-label='Remove']"
   @jpeg File.read!("priv/static/favicon.ico")
   @pdf "%PDF-1.4\n%%EOF\n"
 
@@ -119,6 +120,48 @@ defmodule ExampleWeb.AttachmentArrayScenarioTest do
       save(view)
 
       assert Ash.reload!(category, authorize?: false).image.original_filename == "second.jpg"
+    end
+
+    # `Category.image` may be empty, and its value rides a hidden input, so a ✕
+    # has to empty that input: without one, a stored image could be replaced
+    # but never taken off.
+    test "is cleared by its ✕, and stays cleared through a validate", ctx do
+      %{conn: conn, admin: admin} = ctx
+      category = category(actor: admin)
+      put_image(category, admin, document("private/categories/cover.jpg"))
+
+      view = open(conn, category)
+      assert has_element?(view, @clear_image)
+
+      view |> element(@clear_image) |> render_click()
+      refute has_element?(view, @clear_image)
+
+      change(view, %{"name" => "Tents and tarps"})
+      refute has_element?(view, @clear_image)
+      save(view, %{"name" => "Tents and tarps"})
+
+      category = Ash.reload!(category, authorize?: false)
+      assert category.image == nil
+      assert category.name == "Tents and tarps"
+    end
+
+    test "takes a pick after its ✕", %{conn: conn, admin: admin} do
+      category = category(actor: admin)
+      put_image(category, admin, document("private/categories/cover.jpg"))
+
+      view = open(conn, category)
+      view |> element(@clear_image) |> render_click()
+      pick(view, "back.jpg", "form[image]_upload")
+      save(view)
+
+      assert Ash.reload!(category, authorize?: false).image.original_filename == "back.jpg"
+    end
+
+    test "has no ✕ with nothing stored", %{conn: conn, admin: admin} do
+      view = open(conn, category(actor: admin))
+
+      assert has_element?(view, "[data-attachment-field=image]")
+      refute has_element?(view, @clear_image)
     end
   end
 
@@ -271,6 +314,8 @@ defmodule ExampleWeb.AttachmentArrayScenarioTest do
             %{"field" => "documents", "index" => "1.0"},
             %{"field" => "documents", "index" => %{"0" => "1"}},
             %{"field" => "documents"},
+            %{"field" => "name"},
+            %{"field" => "no_such_field_anywhere"},
             %{"field" => "image", "index" => "0"},
             %{"field" => "name", "index" => "0"},
             %{"field" => "no_such_field_anywhere", "index" => "0"},
@@ -441,6 +486,12 @@ defmodule ExampleWeb.AttachmentArrayScenarioTest do
   defp put_documents(category, actor, documents) do
     category
     |> Ash.Changeset.for_update(:update, %{documents: documents}, actor: actor)
+    |> Ash.update!(authorize?: false)
+  end
+
+  defp put_image(category, actor, image) do
+    category
+    |> Ash.Changeset.for_update(:update, %{image: image}, actor: actor)
     |> Ash.update!(authorize?: false)
   end
 

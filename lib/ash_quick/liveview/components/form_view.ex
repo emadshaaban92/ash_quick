@@ -451,10 +451,20 @@ defmodule AshQuick.LiveView.Components.FormView do
       |> List.wrap()
       |> Enum.filter(&match?(%AshQuick.AshTypes.Attachment.Value{}, &1))
 
+    # A field that may be empty offers a ✕ that empties it. The value rides the
+    # hidden input below, so the ✕ asks the server to put nil there, and the
+    # next post sends it blank. Only the root form's: a nested form's params are
+    # not addressed from the root. A required field has no ✕, since the only
+    # way out of a file is another file.
+    clearable? =
+      saved_values != [] and Map.get(assigns.field, :allow_nil?, false) and
+        not String.contains?(assigns.form.name, "[")
+
     assigns =
       assigns
       |> assign(:upload_name, upload_name)
       |> assign(:saved_values, saved_values)
+      |> assign(:clearable?, clearable?)
       |> assign(:states, AshQuick.Storage.states_for(saved_values, scope: assigns[:scope]))
       |> assign(:errors, FieldErrors.for_hidden_input(assigns.phx_field))
 
@@ -474,6 +484,15 @@ defmodule AshQuick.LiveView.Components.FormView do
             value={value}
             states={@states}
           />
+          <button
+            :if={@clearable?}
+            type="button"
+            phx-click={JS.push("remove-attachment", value: %{field: @field.name})}
+            aria-label={gettext("Remove")}
+            class="btn btn-ghost btn-sm btn-square"
+          >
+            <.icon name="hero-x-mark" class="w-4 h-4" />
+          </button>
         </div>
       </div>
       <.live_file_input

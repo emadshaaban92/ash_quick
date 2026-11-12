@@ -8,11 +8,18 @@ defmodule AshQuick.Versioning.Transformer do
   alias Spark.Dsl.Transformer
 
   # The attribute has to exist before anything reading the resource's fields
-  # runs over it.
+  # runs over it. The lock is the last of AshQuick's changes, after the audit
+  # change and the actor stamps, so this runs after both transformers that
+  # append them. Each of the three asks to run before everything, so without
+  # the names here Spark leaves their order to chance.
+  @runs_after [AshQuick.Audit.Transformer, AshQuick.Bookkeeping.Transformer]
+
   @impl true
+  def after?(transformer) when transformer in @runs_after, do: true
   def after?(_), do: false
 
   @impl true
+  def before?(transformer) when transformer in @runs_after, do: false
   def before?(_), do: true
 
   @impl true

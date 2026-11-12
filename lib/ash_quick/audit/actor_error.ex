@@ -12,7 +12,9 @@ defmodule AshQuick.Audit.ActorError do
   a struct with no `:id` — cannot be identified, and a row saying nobody did it
   when somebody did is the entry somebody will come looking for. A write with
   nobody behind it should pass no actor at all: that one is recorded, with
-  `actor_id: nil`.
+  `actor_id: nil`, unless the resource stamps the actor in `inserted_by` or
+  `updated_by` and the write is a create or an update, which the stamp then
+  refuses (see `AshQuick.Audit.Change`).
   """
 
   defexception [:resource, :actor]
@@ -34,7 +36,8 @@ defmodule AshQuick.Audit.ActorError do
     An actor without an id cannot be identified, so the actor has to carry an \
     `:id`, or be one. Pass the record (or its id) as the actor. For a write \
     nobody is behind, pass no actor at all — that one is recorded with \
-    `actor_id: nil`.
+    `actor_id: nil`, on a resource that does not stamp the actor in \
+    `inserted_by` or `updated_by`.
     """
   end
 end
