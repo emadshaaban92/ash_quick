@@ -167,6 +167,27 @@ defmodule ExampleWeb.AttachmentForgeryTest do
     end
   end
 
+  describe "an upload in a sub-form row" do
+    test "stays on its row when an earlier row is removed", %{conn: conn, admin: admin} do
+      # Its key was minted at presign, under the row's name then.
+      product = product_with_image(admin, "public/products/mine.jpg")
+
+      {:ok, view, _html} = live(conn, ~p"/products/#{product.id}/update")
+      add_image_row(view)
+      add_image_row(view)
+      pick(view, "kept.jpg", "form[images][2][attachment]_upload")
+      pick(view, "removed.jpg", "form[images][1][attachment]_upload")
+
+      render_click(view, "remove-form", %{"path" => "form[images][1]"})
+      submit(view, %{"name" => "Renamed"})
+
+      reloaded = Ash.reload!(product, authorize?: false)
+      assert reloaded.name == "Renamed"
+      assert ["public/products/mine.jpg", kept] = image_keys(reloaded.images)
+      assert kept =~ "kept.jpg"
+    end
+  end
+
   describe "a related record's sub-form" do
     test "is not set by a forged key", %{conn: conn} do
       # `create_with_children` takes `:children` as a map argument and hands it
@@ -285,6 +306,10 @@ defmodule ExampleWeb.AttachmentForgeryTest do
   end
 
   defp image_keys(images), do: Enum.map(images, & &1.attachment.key)
+
+  defp add_image_row(view) do
+    view |> element("[phx-click=add-form][phx-value-path='form[images]']") |> render_click()
+  end
 
   defp pick(view, filename, upload) do
     view

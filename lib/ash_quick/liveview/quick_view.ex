@@ -689,6 +689,7 @@ defmodule AshQuick.LiveView.QuickView do
         @doc false
         # sobelow_skip ["DOS.StringToAtom"]
         def __ash_quick_render__(assigns) do
+          assigns = AshQuick.LiveView.FormUtils.with_upload_names(assigns)
           template_function_name = "action_#{assigns.ash_action.name}_html" |> String.to_atom()
 
           if function_exported?(__MODULE__, template_function_name, 1) and
