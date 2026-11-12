@@ -1,6 +1,8 @@
 // Receives the PDF an action printed (AshQuick.Print) over the LiveView socket
 // and saves it or sends it to the print dialog. It never touches a URL anyone
 // else could open: the bytes live in this tab, as a blob, until they are used.
+import { fileUrl, saveFile } from "./download"
+
 let listening = false
 
 // Once per page, however many sockets are built: a second listener would save
@@ -10,26 +12,10 @@ export function listenForPdfs() {
     listening = true;
 
     window.addEventListener("phx:ash_quick:pdf", ({ detail }) => {
-        const url = URL.createObjectURL(pdfBlob(detail.data));
+        const url = fileUrl(detail.data, "application/pdf");
         if (detail.delivery === "print") printPdf(url);
-        else downloadPdf(url, detail.filename);
+        else saveFile(url, detail.filename);
     });
-}
-
-function pdfBlob(base64) {
-    const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
-    return new Blob([bytes], { type: "application/pdf" });
-}
-
-function downloadPdf(url, filename) {
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    // The download has its own copy by the time the click returns.
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function printPdf(url) {

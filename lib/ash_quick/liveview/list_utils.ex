@@ -21,6 +21,7 @@ defmodule AshQuick.LiveView.ListUtils do
   alias AshQuick.LiveView.LocalDatetime
   alias AshQuick.LiveView.Components.FilterForm
   alias AshQuick.LiveView.Liveness
+  alias AshQuick.LiveView.DownloadUtils
   alias AshQuick.LiveView.PrintUtils
   alias AshQuick.LiveView.Utils
   alias AshQuick.LiveView.QuickView.Options
@@ -758,7 +759,7 @@ defmodule AshQuick.LiveView.ListUtils do
     records = selected_records(socket)
 
     result = records |> bulk_run(action, input, socket) |> in_selection_order(records)
-    socket = PrintUtils.print(socket, result)
+    socket = socket |> PrintUtils.print(result) |> DownloadUtils.deliver(result)
 
     case result do
       # `transaction: :all` rolled every row back, so the modal stays as it was

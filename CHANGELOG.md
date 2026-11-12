@@ -35,6 +35,19 @@
 
 ### Features
 
+- **An action can hand the browser a file it made itself.** An action marks the
+  record it returns with `:ash_quick_download` in its metadata, a map of `:data`
+  (the raw bytes), `:filename` and `:content_type`, and a QuickView that ran it
+  (a row or bulk action, the details page or an action form) pushes the file to
+  the tab once the action has committed, where `attachAshQuick` saves it under
+  that name as a blob of that type. Nothing is stored and no link is handed out.
+  A bulk run delivers one file per marked record. A mark missing a key, holding
+  non-binary data, or with an empty or non-string filename or content type is
+  logged and flashed as recorded but not delivered. AshQuick never sets the
+  mark, and an action run outside a QuickView just returns the record. The file
+  travels base64-encoded in one `"ash_quick:download"` event, so it should be of
+  a size that is sensible to send that way (`AshQuick.LiveView.DownloadUtils`).
+
 - **Reads can be audited, for the actions a resource lists.**
   `audit do read_actions [:open] end` records every record a listed read
   action returns, one row each, in the resource's audit store: `action_type:

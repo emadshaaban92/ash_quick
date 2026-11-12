@@ -805,3 +805,8 @@ msgstr "يتسع التصدير لما يصل إلى %{max} صف. ابحث في 
 #, elixir-autogen, elixir-format
 msgid "Too many rows to export"
 msgstr "عدد الصفوف أكبر من أن يُصدَّر"
+
+#: lib/ash_quick/liveview/download_utils.ex
+#, elixir-autogen, elixir-format
+msgid "It was recorded, but its file could not be delivered."
+msgstr "تم تسجيل العملية، لكن تعذّر تسليم الملف."

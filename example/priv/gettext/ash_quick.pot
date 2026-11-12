@@ -621,6 +621,10 @@ msgstr ""
 msgid "Too many rows to export"
 msgstr ""
 
+#, elixir-format
+msgid "It was recorded, but its file could not be delivered."
+msgstr ""
+
 msgid "Accepts"
 msgstr ""
 

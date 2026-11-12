@@ -433,9 +433,10 @@ replaces it.
 `attachAshQuick` listens for the events the server pushes: starting and
 ending an impersonation, which reconnects every socket it was given, the `lang`
 and `dir` the connected mount pushes (which the dead render could not have
-known), and the PDF an action carrying `AshQuick.Print` sends over the socket,
-which it saves or opens the print dialog on. Its listeners are registered once
-per page, however many times it is called.
+known), the PDF an action carrying `AshQuick.Print` sends over the socket,
+which it saves or opens the print dialog on, and the file an action marked for
+download (see Files an action produces), which it saves. Its listeners are
+registered once per page, however many times it is called.
 
 `ash_quick` resolves through the esbuild `NODE_PATH` a Phoenix 1.8 app
 already sets, which holds both `deps/` (where the package is) and
@@ -934,6 +935,35 @@ create). A create goes on to the record it made, and a destroy of the record
 the page was about goes to the list. Each name must be a public create, update
 or destroy, or the resource does not compile. A bulk run of the action still
 opens in the modal over the list, which keeps the selection it runs over.
+
+## Files an action produces
+
+An action that makes a file of its own, a watermarked copy of an upload say,
+hands it to the tab that ran it by marking the record it returns:
+
+```elixir
+Ash.Resource.put_metadata(record, :ash_quick_download, %{
+  data: bytes,
+  filename: "contract-watermarked.pdf",
+  content_type: "application/pdf"
+})
+```
+
+`:data` is the file's raw bytes, `:filename` the name the browser saves it
+under and `:content_type` its media type. AshQuick never sets the mark; the
+host's own change or action does, typically in an `after_action`. Run from a
+QuickView (a row or bulk action, the details page or an action form), each
+marked record's file is pushed over the LiveView socket once the action has
+committed, and `attachAshQuick` saves it. Nothing is stored and no link is
+handed out. A bulk run delivers one file per marked record. A mark missing a
+key, holding non-binary data, or with an empty or non-string filename or
+content type is logged, and the page says the action was recorded but its
+file could not be delivered. An action run anywhere else (a seed, another
+action, a controller) just returns the record.
+
+The file travels base64-encoded in one `"ash_quick:download"` event, held
+whole in the LiveView process on its way, so keep such files to a size that
+is sensible to send that way. See `AshQuick.LiveView.DownloadUtils`.
 
 ## Generators
 
