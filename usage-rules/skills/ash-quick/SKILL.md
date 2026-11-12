@@ -1093,9 +1093,13 @@ covers wiring them up.
   pipeline. Uploads come over the socket; `public/*` is served without a token,
   anything else needs the link's `Phoenix.Token`; HTML/SVG and other runnable
   types are sent as downloads. Suits one node or a shared volume the host backs
-  up; nothing deletes files, so the host clears `exports/`. A host module that
-  adds lifecycle callbacks does `use AshQuick.Storage.Local` (delegates the
-  seam). Set options in config, not on the forward.
+  up. `AshQuick.Storage.Sweeper` (under `{AshQuick, ...}`) deletes exports
+  older than `:export_retention` (a day; `nil` keeps them) on Local; S3 and the
+  proxy are not swept, so give the bucket a lifecycle rule on `exports/`. An
+  export over `:export_max_rows` (100,000; `:infinity` lifts it) is refused.
+  Attachments are never deleted. A host module that adds lifecycle callbacks
+  does `use AshQuick.Storage.Local` (delegates the seam). Set options in
+  config, not on the forward.
   `AshQuick.Storage.S3.Proxy` is for a bucket only the app can reach: `storage:
   AshQuick.Storage.S3.Proxy`, `config :ash_quick, AshQuick.Storage.S3.Proxy,
   bucket:, endpoint:` (or `secret_key_base:`; `at:`, `chunk_size:`), and

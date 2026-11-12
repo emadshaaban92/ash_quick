@@ -273,4 +273,51 @@ defmodule AshQuick.Storage.LocalTest do
                "/ash_quick/files/public/x.png"
     end
   end
+
+  describe "delete_expired/3" do
+    defp age(ctx, key, seconds) do
+      {:ok, path} = Local.file_path(key, ctx.opts)
+      File.touch!(path, System.os_time(:second) - seconds)
+      path
+    end
+
+    test "deletes what is older than the age given, below the prefix only", ctx do
+      store(ctx, "exports/a/old.csv", "old")
+      store(ctx, "exports/a/new.csv", "new")
+      store(ctx, "exports/b/deep/old.xlsx", "old")
+      store(ctx, "attachments/old.pdf", "old")
+
+      old = age(ctx, "exports/a/old.csv", 7200)
+      deep = age(ctx, "exports/b/deep/old.xlsx", 7200)
+      new = age(ctx, "exports/a/new.csv", 60)
+      other = age(ctx, "attachments/old.pdf", 7200)
+
+      assert Local.delete_expired("exports", 3600, ctx.opts) == {:ok, 2}
+
+      refute File.exists?(old)
+      refute File.exists?(deep)
+      assert File.exists?(new)
+      assert File.exists?(other)
+    end
+
+    test "a prefix nothing was written under deletes nothing", ctx do
+      assert Local.delete_expired("exports", 3600, ctx.opts) == {:ok, 0}
+    end
+
+    test "does not follow a link out of the root", ctx do
+      outside = Path.join(ctx.root <> "-source", "kept")
+      File.write!(outside, "kept")
+      File.touch!(outside, System.os_time(:second) - 7200)
+
+      File.mkdir_p!(Path.join(ctx.root, "exports"))
+      File.ln_s!(Path.dirname(outside), Path.join(ctx.root, "exports/link"))
+
+      assert Local.delete_expired("exports", 3600, ctx.opts) == {:ok, 0}
+      assert File.exists?(outside)
+    end
+
+    test "refuses a prefix that could reach outside the root", ctx do
+      assert Local.delete_expired("../elsewhere", 3600, ctx.opts) == {:error, :invalid_key}
+    end
+  end
 end

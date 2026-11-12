@@ -86,11 +86,13 @@ defmodule AshQuick.Storage.Local do
   with a `:`, which `Plug.Static` will not serve; refusing it on write keeps
   `put_file/3` from storing what could never be read back.
 
-  ## Files are never deleted
+  ## What is deleted
 
-  Nothing here removes a file: an export stays under `exports/<actor id>/`,
-  and an attachment a record no longer holds stays at its key. A full disk
-  stops the application, so clear `exports/` on a schedule of your own.
+  Exports are: `AshQuick.Storage.Sweeper`, which runs under `AshQuick` in the
+  host's supervision tree, removes every file under `exports/` older than
+  `:export_retention` (a day by default) through `delete_expired/3`.
+
+  Nothing else is. An attachment a record no longer holds stays at its key.
   """
   @behaviour AshQuick.Storage
 
@@ -113,7 +115,11 @@ defmodule AshQuick.Storage.Local do
       @impl AshQuick.Storage
       def put_file(key, path, opts), do: AshQuick.Storage.Local.put_file(key, path, opts)
 
-      defoverridable url: 2, download_url: 2, put_file: 3
+      @impl AshQuick.Storage
+      def delete_expired(prefix, max_age, opts),
+        do: AshQuick.Storage.Local.delete_expired(prefix, max_age, opts)
+
+      defoverridable url: 2, download_url: 2, put_file: 3, delete_expired: 3
     end
   end
 
@@ -160,6 +166,52 @@ defmodule AshQuick.Storage.Local do
           File.rm(partial)
           error
       end
+    end
+  end
+
+  @doc """
+  Deletes every file below `prefix` last written more than `max_age` seconds
+  ago, and answers how many went. Directories are left in place.
+
+  A `prefix` nothing was ever written under is not an error: there is nothing
+  to delete.
+  """
+  @impl true
+  def delete_expired(prefix, max_age, opts)
+      when is_integer(max_age) and max_age > 0 do
+    with {:ok, directory} <- file_path(prefix, opts) do
+      cutoff = System.os_time(:second) - max_age
+      {:ok, directory |> files_below() |> Enum.count(&delete_if_older(&1, cutoff))}
+    end
+  end
+
+  defp files_below(path) do
+    case File.lstat(path) do
+      {:ok, %File.Stat{type: :directory}} ->
+        case File.ls(path) do
+          {:ok, names} -> Enum.flat_map(names, &files_below(Path.join(path, &1)))
+          {:error, _reason} -> []
+        end
+
+      {:ok, %File.Stat{type: :regular}} ->
+        [path]
+
+      # A link is not followed: what it points at may be outside `:root`.
+      _other ->
+        []
+    end
+  end
+
+  # Only a path `files_below/1` found under `file_path/2`'s answer, which is
+  # inside `:root`, and never through a link.
+  # sobelow_skip ["Traversal.FileModule"]
+  defp delete_if_older(path, cutoff) do
+    with {:ok, %File.Stat{mtime: written}} when written < cutoff <-
+           File.lstat(path, time: :posix),
+         :ok <- File.rm(path) do
+      true
+    else
+      _kept -> false
     end
   end
 

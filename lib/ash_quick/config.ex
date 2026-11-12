@@ -84,6 +84,17 @@ defmodule AshQuick.Config do
     refetches, including those caused by a PubSub notification. Defaults to
     5 seconds.
 
+  * `:export_max_rows` — The most rows one Excel/CSV export may hold. A list
+    with more is refused with a message asking for a narrower one. Defaults to
+    100,000; `:infinity` lifts the ceiling.
+
+  * `:export_retention` — How long an export is kept, in seconds, before
+    `AshQuick.Storage.Sweeper` deletes it. Defaults to a day; `nil` keeps
+    exports for ever. Only a storage that implements
+    `c:AshQuick.Storage.delete_expired/3` is swept, which
+    `AshQuick.Storage.Local` does. An export's download link lasts an hour, so
+    a retention under 3600 seconds can delete a file its link still names.
+
   * `:actor_resource` — The resource a record's `inserted_by` / `updated_by`
     relationships point at, and that AshQuick loads an actor through when it
     has to name who wrote a record. `nil` when the host stamps no actor. Its
@@ -234,6 +245,47 @@ defmodule AshQuick.Config do
   """
   def refetch_window do
     get(:refetch_window, :timer.seconds(5))
+  end
+
+  @doc """
+  The most rows one export may hold, or `:infinity`. Defaults to 100,000.
+
+  An export streams the whole list it is asked for, so without a ceiling one
+  click on a large table holds a database connection and a temporary file for
+  as long as the table takes to read.
+  """
+  def export_max_rows do
+    case get(:export_max_rows, 100_000) do
+      :infinity ->
+        :infinity
+
+      max when is_integer(max) and max > 0 ->
+        max
+
+      other ->
+        raise ArgumentError,
+              "config :ash_quick, :export_max_rows must be a positive integer or :infinity, " <>
+                "got: #{inspect(other)}"
+    end
+  end
+
+  @doc """
+  How long an export is kept, in seconds, or `nil` to keep every one.
+  Defaults to a day. See `AshQuick.Storage.Sweeper`.
+  """
+  def export_retention do
+    case get(:export_retention, 86_400) do
+      nil ->
+        nil
+
+      seconds when is_integer(seconds) and seconds > 0 ->
+        seconds
+
+      other ->
+        raise ArgumentError,
+              "config :ash_quick, :export_retention must be a positive number of seconds " <>
+                "or nil, got: #{inspect(other)}"
+    end
   end
 
   @doc """

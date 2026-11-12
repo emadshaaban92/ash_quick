@@ -517,6 +517,8 @@ defmodule AshQuick.LiveView.Components.ListView do
     """
   end
 
+  defp too_many_rows_max({:error, {:too_many_rows, max}}), do: max
+
   defp export_modal(assigns) do
     ~H"""
     <ActionModal.action_modal
@@ -542,7 +544,26 @@ defmodule AshQuick.LiveView.Components.ListView do
           </.link>
         </div>
 
-        <div :if={@export_data.failed} class="flex flex-col items-center gap-4">
+        <div
+          :if={match?({:error, {:too_many_rows, _max}}, @export_data.failed)}
+          class="flex flex-col items-center gap-2 text-center"
+        >
+          <div class="flex items-center gap-2 text-error">
+            <.icon name="hero-exclamation-circle" class="w-6 h-6" />
+            <p>{gettext("Too many rows to export")}</p>
+          </div>
+          <p>
+            {gettext(
+              "An export holds up to %{max} rows. Search or filter the list, then export again.",
+              max: too_many_rows_max(@export_data.failed)
+            )}
+          </p>
+        </div>
+
+        <div
+          :if={@export_data.failed && !match?({:error, {:too_many_rows, _max}}, @export_data.failed)}
+          class="flex flex-col items-center gap-4"
+        >
           <div class="flex items-center gap-2 text-error">
             <.icon name="hero-exclamation-circle" class="w-6 h-6" />
             <p>{gettext("Failed to export")}</p>

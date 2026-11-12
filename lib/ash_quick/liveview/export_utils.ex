@@ -6,9 +6,56 @@ defmodule AshQuick.LiveView.ExportUtils do
 
   alias AshQuick.LiveView.Utils
 
+  @formula_triggers ["=", "+", "-", "@", "\t", "\r"]
+
+  @doc """
+  Writes the rows `query` reads to a file in `format`, stores it under
+  `exports/<actor id>/` and answers `{:ok, download_url}`.
+
+  Answers `{:error, {:too_many_rows, max}}`, having written nothing, when the
+  query reads more rows than `AshQuick.Config.export_max_rows/0` allows.
+  """
+  def generate_export_url(query, actor, %Options{} = options, format, timezone)
+      when format in [:xlsx, :csv] do
+    case over_ceiling(query) do
+      nil -> write_export(query, actor, options, format, timezone)
+      max -> {:error, {:too_many_rows, max}}
+    end
+  end
+
+  # One count ahead of the stream, so a table too large to export is refused
+  # before a row of it is read rather than after a file of it is written.
+  defp over_ceiling(query) do
+    case AshQuick.Config.export_max_rows() do
+      :infinity -> nil
+      max -> if Ash.count!(query) > max, do: max
+    end
+  end
+
+  @doc """
+  A text cell as a spreadsheet reads as text.
+
+  Opened from a CSV, a cell starting with `=`, `+`, `-`, `@`, a tab or a
+  carriage return is run as a formula, so a record named `=HYPERLINK(...)`
+  would be live in the export of whoever opened it. Such a cell is written
+  behind a `'`, which a spreadsheet takes as "this is text". A cell that is
+  wholly a number is left alone: `-5` is a value, not a formula.
+  """
+  def neutralize(<<first::binary-size(1), _rest::binary>> = text)
+      when first in @formula_triggers do
+    case Float.parse(text) do
+      {_number, ""} -> text
+      _not_a_number -> "'" <> text
+    end
+  end
+
+  def neutralize(text), do: text
+
   # sobelow_skip ["Traversal.FileModule"]
-  def generate_export_url(query, actor, %Options{} = options, :xlsx, timezone) do
-    {header, body} = generate_stream_data(query, options, timezone)
+  defp write_export(query, actor, %Options{} = options, :xlsx, timezone) do
+    # An xlsx string cell is an inline string, which no spreadsheet evaluates,
+    # so its text is written as it is.
+    {header, body} = generate_stream_data(query, options, %{timezone: timezone, text: & &1})
 
     resource_name = Ash.Resource.Info.plural_name(options.resource)
 
@@ -39,8 +86,9 @@ defmodule AshQuick.LiveView.ExportUtils do
   end
 
   # sobelow_skip ["Traversal.FileModule"]
-  def generate_export_url(query, actor, %Options{} = options, :csv, timezone) do
-    {header, body} = generate_stream_data(query, options, timezone)
+  defp write_export(query, actor, %Options{} = options, :csv, timezone) do
+    {header, body} =
+      generate_stream_data(query, options, %{timezone: timezone, text: &neutralize/1})
 
     {:ok, csv_tmp_file_name} = Briefly.create(extname: ".csv")
 
@@ -63,7 +111,7 @@ defmodule AshQuick.LiveView.ExportUtils do
     {:ok, AshQuick.Storage.download_url(key, filename: filename, expires_in: 3600)}
   end
 
-  defp generate_stream_data(query, options, timezone) do
+  defp generate_stream_data(query, options, ctx) do
     rows = Ash.stream!(query, timeout: :infinity)
 
     header =
@@ -74,78 +122,82 @@ defmodule AshQuick.LiveView.ExportUtils do
       rows
       |> Stream.map(fn row ->
         options.export_fields
-        |> Enum.map(&field_export_value(row, Utils.field_path(&1), timezone))
+        |> Enum.map(&field_export_value(row, Utils.field_path(&1), ctx))
       end)
 
     {header, body}
   end
 
-  defp field_export_value(nil, _path, _timezone) do
+  defp field_export_value(nil, _path, _ctx) do
     ""
   end
 
-  defp field_export_value(value, _path, _timezone) when is_number(value) do
+  defp field_export_value(value, _path, _ctx) when is_number(value) do
     value
   end
 
-  defp field_export_value(value, _path, _timezone) when is_atom(value) do
-    Atom.to_string(value)
+  defp field_export_value(value, _path, ctx) when is_atom(value) do
+    ctx.text.(Atom.to_string(value))
   end
 
-  defp field_export_value(value, _path, _timezone) when is_binary(value) do
-    value
+  defp field_export_value(value, _path, ctx) when is_binary(value) do
+    ctx.text.(value)
   end
 
-  defp field_export_value(value, _path, _timezone) when is_non_struct_map(value) do
+  defp field_export_value(value, _path, _ctx) when is_non_struct_map(value) do
     Jason.encode!(value, pretty: true)
   end
 
-  defp field_export_value(%DateTime{} = value, _path, timezone) do
-    AshQuick.Config.format_datetime(value, timezone)
+  defp field_export_value(%DateTime{} = value, _path, ctx) do
+    AshQuick.Config.format_datetime(value, ctx.timezone)
   end
 
-  defp field_export_value(%Date{} = value, _path, _timezone) do
+  defp field_export_value(%Date{} = value, _path, _ctx) do
     AshQuick.Config.format_date(value)
   end
 
-  defp field_export_value(%NaiveDateTime{} = value, _path, _timezone) do
+  defp field_export_value(%NaiveDateTime{} = value, _path, _ctx) do
     AshQuick.Config.format_datetime(value)
   end
 
-  defp field_export_value(%Time{} = value, _path, timezone) do
-    AshQuick.Config.format_time(value, format: :medium, timezone: timezone)
+  defp field_export_value(%Time{} = value, _path, ctx) do
+    AshQuick.Config.format_time(value, format: :medium, timezone: ctx.timezone)
   end
 
-  defp field_export_value(%{__struct__: Money} = value, _path, _timezone) do
+  defp field_export_value(%{__struct__: Money} = value, _path, _ctx) do
     AshQuick.Config.format_money(value)
   end
 
-  defp field_export_value(value, path, timezone) when is_list(value) do
-    Enum.map_join(value, ", ", &field_export_value(&1, path, timezone))
+  # Guarded once, as the cell it becomes: a spreadsheet reads a formula off a
+  # cell's first character, so an entry further in needs no `'` of its own.
+  defp field_export_value(value, path, ctx) when is_list(value) do
+    value
+    |> Enum.map_join(", ", &field_export_value(&1, path, %{ctx | text: fn text -> text end}))
+    |> ctx.text.()
   end
 
-  defp field_export_value(value, [path], timezone) do
-    field_export_value(value, path, timezone)
+  defp field_export_value(value, [path], ctx) do
+    field_export_value(value, path, ctx)
   end
 
   # A `sensitive?` field is redacted in a file the way it is on the page. A
   # plain map has gone to JSON above, so a struct is all that reaches here.
-  defp field_export_value(%resource{} = value, field_name, timezone) when is_atom(field_name) do
+  defp field_export_value(%resource{} = value, field_name, ctx) when is_atom(field_name) do
     case {AshQuick.Info.sensitive?(resource, field_name), Map.get(value, field_name)} do
       {true, nil} -> ""
       {true, field_value} -> AshQuick.Info.mask(field_value)
-      {false, field_value} -> field_export_value(field_value, [], timezone)
+      {false, field_value} -> field_export_value(field_value, [], ctx)
     end
   end
 
-  defp field_export_value(value, {relationship_name, rest}, timezone)
+  defp field_export_value(value, {relationship_name, rest}, ctx)
        when is_map(value) and is_atom(relationship_name) do
-    field_export_value(Map.get(value, relationship_name), rest, timezone)
+    field_export_value(Map.get(value, relationship_name), rest, ctx)
   end
 
-  defp field_export_value(value, _path, _timezone) do
+  defp field_export_value(value, _path, ctx) do
     if String.Chars.impl_for(value) do
-      to_string(value)
+      ctx.text.(to_string(value))
     else
       ""
     end

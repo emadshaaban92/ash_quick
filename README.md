@@ -1004,9 +1004,11 @@ A host that wants the lifecycle callbacks on disk storage writes its own module
 with `use AshQuick.Storage.Local`, which delegates the rest, and points
 `:storage` at it.
 
-Nothing deletes a file. Exports pile up under `exports/<actor id>/` and
-replaced attachments stay where they were, so clear `exports/` on a schedule
-of your own before the disk fills.
+Exports are deleted for you: `AshQuick.Storage.Sweeper`, started by the
+`AshQuick` entry in the supervision tree, removes every file under `exports/`
+older than `:export_retention` (a day by default, `nil` to keep them). Keep
+it above an hour, the life of an export's download link. Nothing else is
+deleted: a replaced attachment stays where it was.
 
 ## Serving files from a bucket only the app can reach
 

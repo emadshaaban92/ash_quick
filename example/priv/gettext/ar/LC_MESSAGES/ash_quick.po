@@ -645,6 +645,14 @@ msgstr[3] "لم يُطبَّق «%{action}». لم يتغير أي من الصف
 msgstr[4] "لم يُطبَّق «%{action}». لم يتغير أي من الصفوف المحددة الـ%{count}، وما زالت محددة: راجعها وحاول مرة أخرى."
 msgstr[5] "لم يُطبَّق «%{action}». لم يتغير أي من الصفوف المحددة الـ%{count}، وما زالت محددة: راجعها وحاول مرة أخرى."
 
+#, elixir-format
+msgid "An export holds up to %{max} rows. Search or filter the list, then export again."
+msgstr "يتسع التصدير لما يصل إلى %{max} صف. ابحث في القائمة أو صفِّها ثم أعد التصدير."
+
+#, elixir-format
+msgid "Too many rows to export"
+msgstr "عدد الصفوف أكبر من أن يُصدَّر"
+
 msgid "Accepts"
 msgstr ""
 
