@@ -33,6 +33,20 @@
   `AshQuick.Storage.S3` and `AshQuick.Storage.S3.Proxy` do not: expire a
   bucket's `exports/` prefix with a lifecycle rule. See Breaking changes.
 
+- **A filter link filters only by what the filter form could have written.**
+  A row is read only on a field the list offers, by an operator the form
+  offers, with one value or, for Any Of and Has Any Of, a list of them; a
+  group only joins its rows by And or Or. Before, every part of a row went
+  into Ash's filter input as written, so a link naming `brand` as the field,
+  `name` as the operator and `{"contains": "x"}` as the value filtered the
+  list by its brands' names, a relationship the page never offered. A row
+  on any other field or operator is dropped before the read, with the
+  refused-filter flash, and a filter holding JSON objects where the form
+  writes text or values reads as no filter. A link whose filter is one row
+  rather than a group reads as that row in an And group, as the form draws
+  it, rather than taking the page down with the filter form open. See
+  Breaking changes.
+
 ### Features
 
 - **An action can hand the browser a file it made itself.** An action marks the
@@ -1190,6 +1204,12 @@
 - **Exports on `AshQuick.Storage.Local` are deleted after a day.** A host
   that relied on them staying sets `config :ash_quick, :export_retention` to
   the seconds it wants them kept, or to `nil` to keep them all.
+
+- **A filter link on a field or operator the filter form does not offer is
+  dropped.** A link naming one of the list's fields the filter takes no type
+  of, a private field, or an Ash operator the form never writes (`eq`,
+  `greater_than`) used to reach the read, and now filters by nothing, with
+  the refused-filter flash.
 
 - **An update stamps `updated_by` only when it changes something.** The
   stamp AshQuick generates used to name the actor on every update, so a print,

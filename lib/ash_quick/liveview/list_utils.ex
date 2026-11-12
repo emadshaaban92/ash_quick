@@ -16,7 +16,6 @@ defmodule AshQuick.LiveView.ListUtils do
   alias AshQuick.LiveView.FormUtils
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.CustomFilter
-  alias AshQuick.LiveView.FilterField
   alias AshQuick.LiveView.DetailsUtils
   alias AshQuick.LiveView.LocalDatetime
   alias AshQuick.LiveView.Components.FilterForm
@@ -146,10 +145,17 @@ defmodule AshQuick.LiveView.ListUtils do
     end
   end
 
-  # The fields a row can name, whose types say how some rows are asked: Is
-  # Empty on a string or a list, and a row comparing a `Money`.
-  defp row_fields(query, options),
-    do: CustomFilter.fields_by_name(query.resource, options.list_filterable)
+  # The fields a row can name, the ones the list offers, whose types say how
+  # some rows are asked: Is Empty on a string or a list, and a row comparing
+  # a `Money`. `drop_refused_rows/4` has dropped a row on any other, and
+  # `build_ash_filter/2` reads none.
+  defp row_fields(query, options), do: listed_fields(query.resource, options)
+
+  defp listed_fields(resource, options),
+    do:
+      resource
+      |> CustomFilter.filterable_fields(options.list_filterable)
+      |> Map.new(&{&1.name, &1})
 
   defp emptiness_rows(filter),
     do:
@@ -177,26 +183,32 @@ defmodule AshQuick.LiveView.ListUtils do
   # layer for something it does not have: Postgres would refuse the read with
   # an error, logged before the list is read again without the filter.
   #
-  # And so is a row on a field the QuickView's `filterable:` leaves out, which
-  # the form does not offer either: the host named the fields this list may be
-  # filtered by, most likely the ones its table has indexes for. A row through
-  # a relationship, `"brand.name"`, is dropped unless `filterable:` names it,
-  # so a link can reach no related field, nor go further, by itself.
+  # And so is a row on a field the list does not offer, which the form does
+  # not offer either: one the QuickView's `filterable:` leaves out, as the
+  # host named the fields this list may be filtered by, most likely the ones
+  # its table has indexes for, or without `filterable:` one the filter takes
+  # no type of, or that is no field at all. A row through a relationship,
+  # `"brand.name"`, is dropped unless `filterable:` names it, so a link can
+  # reach no related field, nor go further, by itself. Ash's filter input
+  # reads a relationship's name as one to filter through, so a row naming
+  # `brand` with `name` as its operator would otherwise do just that.
   #
-  # A root that is itself such a row, as a hand-written link can be, leaves no
-  # filter at all.
+  # And so is a row comparing by an operator the form does not offer, or with
+  # a value its operator cannot take, `CustomFilter.readable?/1`: Ash's filter
+  # input reads any name where an operator goes, and a list where one value
+  # goes as something else again.
+  #
+  # A root left with no rows, as one a hand-written link wrote as a single
+  # row is, leaves no filter at all.
   defp drop_refused_rows(socket, %URLParams{custom_filter: nil} = params, _action, _options),
     do: {socket, params}
 
   defp drop_refused_rows(socket, %URLParams{custom_filter: filter} = params, action, options) do
     scope = socket.assigns[:scope]
-    by_name = CustomFilter.fields_by_name(options.resource, options.list_filterable)
+    by_name = listed_fields(options.resource, options)
 
     names = CustomFilter.field_names(filter)
-
-    hidden =
-      hidden_fields(names, by_name, action, scope) ++
-        unoffered_fields(names, options.list_filterable)
+    hidden = hidden_fields(names, by_name, action, scope) ++ unoffered_fields(names, by_name)
 
     partly_hidden =
       case filter |> emptiness_rows() |> Enum.map(& &1.field_name) |> Enum.uniq() do
@@ -204,7 +216,9 @@ defmodule AshQuick.LiveView.ListUtils do
         names -> hidden_fields(names, by_name, action, scope, filter_is: false)
       end
 
-    refused? = &refused_row?(&1, partly_hidden, by_name, scope)
+    # A group whose rows were all removed is a leaf to `leaves/1`, and
+    # filters by nothing, so it is never refused.
+    refused? = &(not CustomFilter.group?(&1) and refused_row?(&1, partly_hidden, by_name, scope))
 
     case {hidden, filter |> CustomFilter.leaves() |> Enum.filter(refused?)} do
       {[], []} ->
@@ -215,11 +229,17 @@ defmodule AshQuick.LiveView.ListUtils do
           filter
           |> CustomFilter.reject_fields(hidden)
           |> CustomFilter.reject_rows(refused?)
+          |> unless_emptied()
 
         {put_flash(socket, :error, refused_filter_message()),
          %URLParams{params | custom_filter: filter}}
     end
   end
+
+  # A root left with no rows by the drop leaves no filter at all, and no
+  # filter in the URL: a link's root that was one row is that row in a group.
+  defp unless_emptied(%CustomFilter{children: []}), do: nil
+  defp unless_emptied(filter), do: filter
 
   # The fields the filter offers this visitor, by name: the ones the
   # QuickView's `filterable:` names, or every one the form can take, less those
@@ -231,17 +251,14 @@ defmodule AshQuick.LiveView.ListUtils do
     |> Enum.map(& &1.spec)
   end
 
-  defp unoffered_fields(names, nil), do: Enum.filter(names, &FilterField.path?/1)
+  defp unoffered_fields(names, by_name), do: Enum.reject(names, &Map.has_key?(by_name, &1))
 
-  defp unoffered_fields(names, filterable) do
-    offered = Enum.map(filterable, &FilterField.name/1)
-    Enum.reject(names, &(&1 in offered))
-  end
-
-  # Whether `row` is refused by its operator: Is Empty on a field hidden on
-  # some rows, On Day on no day, and Has Any Of on a field holding no list.
+  # Whether `row` is refused by its operator: one the form does not offer, or
+  # with a value it cannot take, Is Empty on a field hidden on some rows, On
+  # Day on no day, and Has Any Of on a field holding no list.
   defp refused_row?(row, partly_hidden, by_name, scope) do
-    case CustomFilter.value_shape(row.operator) do
+    case CustomFilter.readable?(row) and CustomFilter.value_shape(row.operator) do
+      false -> true
       :none -> row.field_name in partly_hidden
       :day -> unreadable_day?(row, scope)
       :list -> row.operator == "has_any" and not list_row?(row, by_name)
@@ -250,8 +267,8 @@ defmodule AshQuick.LiveView.ListUtils do
   end
 
   # Whether a row names a field holding a list. A row left without a value
-  # filters by nothing, and a name that is no field is left to the read, which
-  # refuses it, so neither is refused here.
+  # filters by nothing, and a name the list does not offer is refused with
+  # its field, so neither is refused here.
   defp list_row?(%CustomFilter{field_name: name} = row, by_name) do
     case by_name[name] do
       %{field: %{type: {:array, _type}}} -> true
@@ -267,8 +284,8 @@ defmodule AshQuick.LiveView.ListUtils do
   end
 
   # Those of `names` that are fields a row can name, `by_name`, the actor may
-  # not see: on every record, or with `filter_is: false` on some. A name that
-  # is no field is left to the read, which refuses it.
+  # not see: on every record, or with `filter_is: false` on some. A name the
+  # list does not offer is refused by `unoffered_fields/2`.
   defp hidden_fields(names, by_name, action, scope, opts \\ []) do
     named = Enum.filter(names, &(is_binary(&1) and Map.has_key?(by_name, &1)))
 
@@ -282,21 +299,20 @@ defmodule AshQuick.LiveView.ListUtils do
   end
 
   # A custom filter is the one part of this query a visitor authors, and there
-  # is no asking in advance whether it works. It can fail in two places and
-  # nothing before the read sees either:
+  # is no asking in advance whether it works. `drop_refused_rows/4` has
+  # dropped every row on a field the list does not offer, or by an operator
+  # the form does not offer, but a row can still fail where nothing before the
+  # read sees it:
   #
-  #   * a `field_name` the resource does not have — `from_string/1` decodes it
-  #     as written, knowing no resource, and `filter_input/2` invalidates the
-  #     query;
   #   * a real field carrying a value its type cannot cast — which
   #     `filter_input/2` accepts, and the *data layer* refuses, as an
   #     `Ecto.Query.CastError`. `FilterForm` refuses such a value on Apply,
   #     under its row, by asking the field's type as Ash's filter does
   #     (`Ash.Type.coerce/3`), so a typed one never gets here. A link still
-  #     can: written by hand, or naming a field the form does not offer and so
-  #     does not check.
+  #     can, written by hand;
+  #   * anything else the data layer refuses that the form cannot know of.
   #
-  # Both arrive the same way: raised by `Ash.read!` from inside
+  # Each arrives the same way: raised by `Ash.read!` from inside
   # `handle_params/3`, taking the mount down rather than showing on the page.
   # The form's check is for the visitor, who is told which row was wrong; it
   # sees only what the form offers, and only the cast, not everything the data
@@ -311,10 +327,10 @@ defmodule AshQuick.LiveView.ListUtils do
   # `filters` and `sort_by` are the host's own, and a bug in one should keep
   # raising loudly rather than become a flash a visitor can do nothing about.
   #
-  # Only the first of those two is recognisable. An uncastable value reaches us
-  # as an `Ash.Error.Unknown` whose `:error` is the data layer's
-  # `Ecto.Query.CastError` already rendered to a string — the same struct a bug
-  # in the read produces, so there is nothing to tell them apart. What the
+  # Neither is recognisable. An uncastable value reaches us as an
+  # `Ash.Error.Unknown` whose `:error` is the data layer's
+  # `Ecto.Query.CastError` already rendered to a string — the same struct a
+  # bug in the read produces, so there is nothing to tell them apart. What the
   # rescue can say is that the error came from the read at all:
   # `ash_error?/1` lets a raise out of `load_data!/3`'s own pipeline keep
   # raising instead of being reported as the visitor's filter.

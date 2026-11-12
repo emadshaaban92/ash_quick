@@ -187,7 +187,10 @@ The URL is not an option here — it is declared in the router with
   the relationship (`accessing_from` holds; a brand the reader may not read
   at all offers none of its fields); no to-many or longer
   paths, and none offered unless named. Name the indexed ones on a large
-  table. A link's filter row on any other field is dropped, with a flash
+  table. A link's filter row on any other field is dropped, with a flash,
+  and so is one by an operator the form does not offer, or holding a JSON
+  object as its value; unset, the fields offered are the only ones a link
+  can filter by too.
 
 ### Details options (`:details`)
 - `:fields` — Fields in the detail view

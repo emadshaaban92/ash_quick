@@ -440,9 +440,10 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
     end
 
     # A real field the form cannot filter on, from a link written by hand: the
-    # select shows it, rather than the first field offered, which the browser
-    # would show and which could then not be picked.
-    test "show a row's field the form does not offer as held", %{conn: conn, admin: admin} do
+    # list does not offer it, so the row is dropped before the read, as one
+    # through a relationship the list does not offer is, and never reaches
+    # the form.
+    test "drop a link's row on a field the form does not offer", %{conn: conn, admin: admin} do
       filter = encode_filter([%{"field_name" => "tags", "operator" => "equals", "value" => "x"}])
 
       {:ok, view, _html} =
@@ -451,7 +452,8 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
           "/test/filter_fields?show_custom_filter=true&custom_filter=#{filter}"
         )
 
-      assert texts(view, "select[name^='field_name-'] option[disabled][selected]") == ["Tags"]
+      assert render(view) =~ "That filter couldn&#39;t be applied to this list"
+      assert texts(view, "select[name^='field_name-'] option[disabled]") == []
     end
 
     # Only from a stale page or a forged event, since the select never offers
@@ -1474,8 +1476,9 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
     end
 
     # A list of strings has no fixed set to pick from, so the form offers it
-    # nothing, and a link's values are typed in.
-    test "from a link on a list without a fixed set is typed in", %{conn: conn} do
+    # nothing, and the list does not offer it either: a link's row on it is
+    # dropped, with the refused-filter flash.
+    test "from a link on a list without a fixed set is dropped", %{conn: conn} do
       code = unique("HT")
       # Seeded: no form could save the list, so no action takes it.
       kept = Ash.Seed.seed!(FilterFields, %{code: "#{code}-kept", tags: ["red", "blue"]})
@@ -1490,14 +1493,13 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       {:ok, view, _html} =
         live(conn, "/test/filter_fields?custom_filter=#{filter}&show_custom_filter=true")
 
-      [_code, uuid] = filter_uuids(view)
-      assert attribute(view, "input[name='value-#{uuid}']", "value") == ["blue, pink"]
-      assert texts(view, "select[name='operator-#{uuid}'] option[selected]") == ["Has Any Of"]
+      assert [_code] = filter_uuids(view)
+      assert render(view) =~ "That filter couldn&#39;t be applied to this list"
 
       cells = texts(view, "td")
       assert kept.code in cells
-      refute dropped.code in cells
-      assert chips(view) == ["Code starts with #{code}", "Tags has any of blue, pink"]
+      assert dropped.code in cells
+      assert chips(view) == ["Code starts with #{code}"]
     end
 
     # On Postgres, too, where Ash reads it as the `&&` of two arrays.
