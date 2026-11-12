@@ -38,7 +38,7 @@ defmodule AshQuick.LiveView.URLParams do
     limit = params |> Map.get("limit") |> parse_limit()
 
     %__MODULE__{
-      id: Map.get(params, "id"),
+      id: params |> Map.get("id") |> parse_id(),
       action: params |> Map.get("action") |> parse_action(),
       limit: limit || @default_limit,
       limit_given?: limit != nil,
@@ -51,6 +51,13 @@ defmodule AshQuick.LiveView.URLParams do
       show_custom_filter: Map.has_key?(params, "show_custom_filter")
     }
   end
+
+  # A details URL's id is a path segment, always a string, but the list and
+  # create routes have no `:id` segment, so there the query's `?id` is read, and
+  # `?id[a]=b` or `?id[]=x` nest it into a map or a list that every path built
+  # from these params would interpolate. Neither names a record.
+  defp parse_id(id) when is_binary(id), do: id
+  defp parse_id(_), do: nil
 
   # An unknown segment stays a string. Nothing here knows the resource, so it
   # cannot tell a real action from an atom that merely happens to exist —

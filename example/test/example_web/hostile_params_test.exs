@@ -284,6 +284,37 @@ defmodule ExampleWeb.HostileParamsTest do
     end
   end
 
+  # The id is a path segment on a details URL, but the list and create shapes
+  # have no `:id` segment, so there a query's `?id` is what the page reads,
+  # and the query can nest it into a map or a list.
+  test "an id the query nests into a map or a list does not take the page down", %{
+    conn: conn,
+    admin: admin
+  } do
+    product(name: "Four-season tent", actor: admin)
+
+    for url <- [
+          "/products?id[a]=b",
+          "/products?id[]=x",
+          "/products/create?id[a]=b",
+          "/products/create?id[]=x"
+        ] do
+      assert {:ok, view, _html} = live(conn, url)
+      assert page_id(view) == nil
+    end
+  end
+
+  test "and the nested id is gone from the URL the visitor is left looking at", %{conn: conn} do
+    for {asked, canonical} <- [
+          {"/products?id[a]=b", "/products"},
+          {"/products/create?id[]=x", "/products/create"}
+        ] do
+      {:ok, view, _html} = live(conn, ~p"/products")
+
+      assert assert_patch(navigate(view, asked)) == canonical
+    end
+  end
+
   describe "a URL reached at a path the parsed params do not rebuild" do
     # `/create` takes its action from the router's `live_action`, not from a URL
     # param, so `params.action` is `nil` and `full_path/2` writes the bare base
