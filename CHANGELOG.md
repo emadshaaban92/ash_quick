@@ -742,6 +742,17 @@
   sub-form's hidden input back, and every later save was refused as naming an
   attachment the form never issued. The save now records the keys it makes.
 
+- **A list whose action does not count by default pages without crashing.**
+  A lookup action has to paginate with a default limit, but nothing asks it
+  to count, and a page read from one that does not say `countable
+  :by_default` came back with no count, so the list raised on every render.
+  An action that counts on request, Ash's default `countable true`, is now
+  asked for its count. One that says `countable false` reads "Showing 1-20"
+  with no total, and its pager steps to the previous and next page while
+  there is one, with no last page to link to. Past the end it leads back to
+  the first page. The README says `countable false` is the knob for a table
+  too big to count.
+
 - **The generated audit store takes a record keyed by an integer.** The
   store `mix ash_quick.install` writes kept `resource_id` as a `:uuid`, so an
   audited resource with an integer primary key could not write its entries.

@@ -207,12 +207,13 @@ defmodule AshQuick.LiveView.Components.ListView do
 
           <%!-- Clamped here rather than in the query: the pager's links are all
           built off it, so a page past the last would otherwise offer two more
-          of them and draw `98` as though it were a page. --%>
+          of them and draw `98` as though it were a page. A list read without
+          a count has no last page to clamp to. --%>
           <.footer
             meta={@data}
             params={@params}
             path_for_page={@path_for_page}
-            current_page={min(@params.page, pages_count(@data))}
+            current_page={current_page(@params.page, pages_count(@data))}
             pages_count={pages_count(@data)}
           />
         </div>
@@ -659,7 +660,29 @@ defmodule AshQuick.LiveView.Components.ListView do
   defp present_actions(nil), do: nil
   defp present_actions(actions), do: Enum.filter(actions, & &1)
 
-  defp pages_count(%{count: count, limit: limit}), do: ceil(count / limit)
+  # A lookup action has to paginate but need not count: one that declares
+  # `countable false` reads back `count: nil`, and the list pages it by
+  # `more?` instead, with no total and no last page.
+  defp pages_count(%{count: count, limit: limit}) when is_integer(count), do: ceil(count / limit)
+  defp pages_count(_page), do: nil
+
+  defp current_page(page, nil), do: page
+  defp current_page(page, pages_count), do: min(page, pages_count)
+
+  # Whether the list holds more rows than `size`. Without a count, only the
+  # rows up to this page's end are known, and `more?` says there is at least
+  # one past it. An empty page past the end knows of none.
+  defp more_rows_than?(%{count: count}, size) when is_integer(count), do: count > size
+  defp more_rows_than?(%{results: []}, _size), do: false
+
+  defp more_rows_than?(%{offset: offset, results: results, more?: more?}, size),
+    do: more? or offset + length(results) > size
+
+  # An empty page past the end of an uncounted list cannot tell how far back
+  # the last row is, so it leads back to the first page rather than to another
+  # empty one.
+  defp previous_page(%{results: []}, _current_page), do: 1
+  defp previous_page(_page, current_page), do: current_page - 1
 
   # Offered only when a pick would change the page: an action whose ceiling is
   # its default has one page size, and a list that fits on the smallest size
@@ -670,7 +693,7 @@ defmodule AshQuick.LiveView.Components.ListView do
 
     ~H"""
     <.form
-      :if={length(@options) > 1 and @meta.count > Enum.min(@options)}
+      :if={length(@options) > 1 and more_rows_than?(@meta, Enum.min(@options))}
       for={%{}}
       id="page-size-form"
       phx-change="page_size"
@@ -701,19 +724,57 @@ defmodule AshQuick.LiveView.Components.ListView do
       past the last read "Showing 5-5 of 5" over an empty table. --%>
       <div class="flex flex-wrap items-center gap-3">
         <span class="text-sm text-base-content/70">
-          {if @meta.results == [] and @meta.count > 0 do
-            gettext("No results on this page, of %{count} in total", count: @meta.count)
-          else
-            gettext("Showing %{from}-%{to} of %{count}",
-              from: min(@meta.offset + 1, @meta.count),
-              to: min(@meta.offset + @meta.limit, @meta.count),
-              count: @meta.count
-            )
+          {cond do
+            is_nil(@meta.count) and @meta.results == [] and @meta.offset > 0 ->
+              gettext("No results on this page")
+
+            is_nil(@meta.count) ->
+              gettext("Showing %{from}-%{to}",
+                from: min(@meta.offset + 1, @meta.offset + length(@meta.results)),
+                to: @meta.offset + length(@meta.results)
+              )
+
+            @meta.results == [] and @meta.count > 0 ->
+              gettext("No results on this page, of %{count} in total", count: @meta.count)
+
+            true ->
+              gettext("Showing %{from}-%{to} of %{count}",
+                from: min(@meta.offset + 1, @meta.count),
+                to: min(@meta.offset + @meta.limit, @meta.count),
+                count: @meta.count
+              )
           end}
         </span>
         <.page_size_form meta={@meta} params={@params} />
       </div>
-      <div :if={@meta.count > @meta.limit} class="join">
+      <%!-- Without a count there is no last page to link to: the pager steps
+      one page either way, and forward only while Ash says there is more. --%>
+      <div :if={is_nil(@pages_count) and (@current_page > 1 or @meta.more?)} class="join">
+        <.link
+          :if={@current_page > 1}
+          patch={@path_for_page.(previous_page(@meta, @current_page))}
+          aria-label={gettext("Previous page")}
+          class="join-item btn btn-sm"
+        >
+          <.icon name="hero-chevron-left" class="w-4 h-4 rtl:rotate-180" />
+        </.link>
+        <.link
+          patch={@path_for_page.(@current_page)}
+          aria-current="page"
+          class="join-item btn btn-sm btn-active"
+        >
+          {@current_page}
+        </.link>
+        <.link
+          :if={@meta.more?}
+          patch={@path_for_page.(@current_page + 1)}
+          aria-label={gettext("Next page")}
+          class="join-item btn btn-sm"
+        >
+          <.icon name="hero-chevron-right" class="w-4 h-4 rtl:rotate-180" />
+        </.link>
+      </div>
+      <div :if={@pages_count && @meta.count > @meta.limit} class="join">
         <.link
           :if={@current_page > 1}
           patch={@path_for_page.(@current_page - 1)}

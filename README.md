@@ -838,10 +838,16 @@ dropdown pointing *at* this resource. The action has to exist, accept the
 search argument (including `nil`), and declare `pagination`. A list page
 opens at the action's `default_limit` and reads at most its `max_page_size`
 rows (Ash's default is 250), whatever `?limit=` asks for. A "Rows per page"
-select beside the footer's count offers the default, then each of 10, 25, 50,
-100 and 250 that is at least twice the default and within `max_page_size`,
-and writes `?limit=`. It is left out when no pick would change the page: the
-default is the only size, or every row fits on the smallest one.
+select in the footer offers the default, then each of 10, 25, 50, 100 and 250
+that is at least twice the default and within `max_page_size`, and writes
+`?limit=`. It is left out when no pick would change the page: the default is
+the only size, or every row fits on the smallest one.
+
+The list asks for a total on every read, so its footer reads "Showing 1-20 of
+340" and its pager links to the last page, unless the action says
+`countable false`. That is the knob for a table too big to count: the footer
+reads "Showing 1-20" with no total, and the pager steps to the previous and
+next page, offering the next only while there are more rows.
 
 ```elixir
 ash_quick do

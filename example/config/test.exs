@@ -92,6 +92,7 @@ config :ash_quick,
         "/test/small_pages",
         "/test/sorted_rows",
         "/test/sorted_rows_named",
+        "/test/uncounted_pages",
         "/test/vault_filter",
         "/test/worded_policy",
         "/test/writers_only"
