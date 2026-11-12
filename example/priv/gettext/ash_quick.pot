@@ -625,6 +625,14 @@ msgstr ""
 msgid "It was recorded, but its file could not be delivered."
 msgstr ""
 
+#, elixir-format
+msgid "No results on this page"
+msgstr ""
+
+#, elixir-format
+msgid "Showing %{from}-%{to}"
+msgstr ""
+
 msgid "Accepts"
 msgstr ""
 

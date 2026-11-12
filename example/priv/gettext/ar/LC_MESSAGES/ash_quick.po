@@ -657,6 +657,14 @@ msgstr "عدد الصفوف أكبر من أن يُصدَّر"
 msgid "It was recorded, but its file could not be delivered."
 msgstr "تم تسجيل العملية، لكن تعذّر تسليم الملف."
 
+#, elixir-format
+msgid "No results on this page"
+msgstr "لا توجد نتائج في هذه الصفحة"
+
+#, elixir-format
+msgid "Showing %{from}-%{to}"
+msgstr "عرض %{from}-%{to}"
+
 msgid "Accepts"
 msgstr ""
 

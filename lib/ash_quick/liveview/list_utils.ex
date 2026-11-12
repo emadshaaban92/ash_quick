@@ -114,9 +114,16 @@ defmodule AshQuick.LiveView.ListUtils do
       )
     )
     |> maybe_load_active(options.resource)
-    |> Ash.Query.page(limit: limit, offset: offset)
+    |> Ash.Query.page(limit: limit, offset: offset, count: countable?(socket.assigns.ash_action))
     |> Ash.read!()
   end
+
+  # An action that counts on request (Ash's default, `countable true`) is asked
+  # to, so its pager can say how many pages there are. One that declares
+  # `countable false` refuses the request outright, and its list pages without
+  # a total.
+  defp countable?(%{pagination: %{countable: countable}}), do: countable != false
+  defp countable?(_action), do: false
 
   defp maybe_apply_base_filter(query, nil), do: query
   defp maybe_apply_base_filter(query, base_filter), do: Ash.Query.filter(query, ^base_filter)

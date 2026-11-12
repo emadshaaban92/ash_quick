@@ -810,3 +810,13 @@ msgstr "عدد الصفوف أكبر من أن يُصدَّر"
 #, elixir-autogen, elixir-format
 msgid "It was recorded, but its file could not be delivered."
 msgstr "تم تسجيل العملية، لكن تعذّر تسليم الملف."
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "No results on this page"
+msgstr "لا توجد نتائج في هذه الصفحة"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Showing %{from}-%{to}"
+msgstr "عرض %{from}-%{to}"
