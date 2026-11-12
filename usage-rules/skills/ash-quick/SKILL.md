@@ -1130,6 +1130,16 @@ covers wiring them up.
   the `"ash_quick:pdf"` push event. A template that writes nothing
   prints from an update with
   `manual fn changeset, _context -> {:ok, changeset.data} end`.
+- A file an action makes itself (no template, no renderer) reaches the tab that
+  ran it when the action marks the record it returns:
+  `Ash.Resource.put_metadata(record, :ash_quick_download, %{data: bytes,
+  filename: "x.pdf", content_type: "application/pdf"})`. AshQuick never sets
+  the mark, and only a QuickView reads it, after the action commits; a bulk
+  run delivers one file per marked record. The file goes base64-encoded in one
+  `"ash_quick:download"` push event, so keep it to a sensible size. A mark
+  missing a key, with non-binary `:data`, or with an empty or non-string
+  `:filename` or `:content_type` is logged and flashed as recorded but not
+  delivered (`AshQuick.LiveView.DownloadUtils`).
 - `AshQuick` in the supervision tree, after the PubSub server and before the
   endpoint (it starts `AshQuick.Supervisor`, which runs every process the
   library needs; `{AshQuick, pubsub_server: MyApp.PubSub}` when the endpoint's
@@ -1142,8 +1152,8 @@ covers wiring them up.
   function), the library's colocated hooks to `hooks` and `S3` to `uploaders`
   (it sends a picked file to `AshQuick.Storage.S3`'s presigned `PUT`, which
   the bucket's CORS rules must allow with a `Content-Type` header).
-  `attachAshQuick` listens for impersonation, the pushed `lang`/`dir` and
-  printed PDFs. The hooks are
+  `attachAshQuick` listens for impersonation, the pushed `lang`/`dir`,
+  printed PDFs and files actions mark for download. The hooks are
   written under `Mix.Project.build_path()` when AshQuick compiles, so
   esbuild's `NODE_PATH` must include it and `deps/` (a Phoenix 1.8 app's
   does) and `mix compile` must run before the asset build. In `app.css`: the
@@ -1216,6 +1226,7 @@ config :ash_quick,
 - `deps/ash_quick/lib/ash_quick/liveview/form_utils.ex` — Form logic
 - `deps/ash_quick/lib/ash_quick/liveview/bulk_actions.ex`, `bulk_form.ex` — the bulk menu and the record-less bulk form
 - `deps/ash_quick/lib/ash_quick/print.ex`, `print_template.ex`, `liveview/print_utils.ex` — printing
+- `deps/ash_quick/lib/ash_quick/liveview/download_utils.ex` — files actions mark for download
 - `deps/ash_quick/lib/ash_quick/components.ex` — UI components (icon, label, button, header, simple_form, input) and the `SubmitLock` hook
 - `deps/ash_quick/lib/ash_quick/liveview/components/` — ListView, DetailsView, FormView, ActionModal, BulkActionView, Sidebar, NavGrid, FilterForm
 - `deps/ash_quick/lib/ash_quick/nav.ex`, `deps/ash_quick/lib/ash_quick/nav/` — The nav DSL, its verifier, and the resolution the sidebar and grid render

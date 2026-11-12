@@ -9,6 +9,7 @@ defmodule AshQuick.LiveView.FormUtils do
   alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.FieldErrors
+  alias AshQuick.LiveView.DownloadUtils
   alias AshQuick.LiveView.PrintUtils
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.QuickView.Options
@@ -817,7 +818,7 @@ defmodule AshQuick.LiveView.FormUtils do
         action_opts: action_opts(form)
       )
 
-    socket = PrintUtils.print(socket, result)
+    socket = socket |> PrintUtils.print(result) |> DownloadUtils.deliver(result)
 
     case result do
       {:ok, rec} ->

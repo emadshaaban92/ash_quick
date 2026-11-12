@@ -16,6 +16,7 @@
 import {hooks, uploaders} from "phoenix-colocated/ash_quick"
 import {browserSessionParams, listenForImpersonation} from "./browser_session"
 import {listenForLocale} from "./locale"
+import {listenForDownloads} from "./download"
 import {listenForPdfs} from "./print"
 
 // The host's LiveSocket options with AshQuick's added: the tab's identity and
@@ -33,12 +34,13 @@ export function withAshQuick(opts = {}) {
 
 // Listens for the events the server pushes: starting and ending an
 // impersonation (which reconnects every attached socket), the page's `lang`
-// and `dir`, and printed PDFs. The listeners are registered once per page,
-// however many times it is called.
+// and `dir`, printed PDFs and the files actions produce. The listeners are
+// registered once per page, however many times it is called.
 export function attachAshQuick(liveSocket) {
   listenForImpersonation(liveSocket)
   listenForLocale()
   listenForPdfs()
+  listenForDownloads()
   return liveSocket
 }
 
