@@ -838,9 +838,16 @@ and what to write.
       enabled? false                       # keep no record, and say so where a reader sees it
       exclude_actions [:refresh_cache]     # or drop just the noisy ones
       record_sensitive [:masked_card_no]   # `sensitive?` values are "**redacted**" otherwise
+      read_actions [:open]                 # record who read a record (off for every read by default)
     end
   end
   ```
+
+  Reads are recorded only through the actions named in `read_actions`: one row
+  per record returned, `action_type: :read`, same actor/IP/context columns as a
+  write. Lists, searches, empty results and `can?` checks record nothing, and a
+  store that refuses the rows fails the read. Never list a list or search
+  action.
 
   To audit only *some* actions, turn the section off and attach the change by
   hand: `update :do_something do change AshQuick.Audit.Change end`.

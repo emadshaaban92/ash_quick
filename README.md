@@ -729,6 +729,43 @@ Six things to know about what it holds:
   decided on the real values, so one that did not change is left out rather
   than shown as a change between two redactions.
 
+### Auditing reads, for the actions you list
+
+Reads are not recorded unless a resource lists the read actions to record.
+List the ones that open a record, such as a confidential document:
+
+```elixir
+ash_quick do
+  audit do
+    read_actions [:open]
+  end
+end
+```
+
+* **Every record a listed read returns gets one row**, in the same store as a
+  write: `action_type: :read`, the action's name, the record's id, the query's
+  arguments (a `sensitive?` one redacted, as on a write), `attributes` and
+  `changes` empty, and the same actor, real actor, IP, context and tenant. That
+  holds for `Ash.read`, `Ash.get` or a code interface on a `get?` action, a
+  page (the records on it), `Ash.stream!` (each batch) and the action loading
+  a relationship of another resource.
+* **Nothing else is recorded.** A read through an action that is not listed,
+  such as a list or a search, writes no row: a page of twenty rows is not
+  twenty reads anyone needs. Neither does a read that returns nothing (not
+  found, or filtered out by policies), nor `Ash.can?` or `AshQuick.can?` on a
+  listed action, which never run the read.
+* **A read that cannot be recorded fails.** Reads run in no transaction, so
+  the rows are written before the records are handed back, and a store that
+  refuses them raises `AshQuick.Audit.WriteError`: the read returns nothing.
+* **A QuickView details page reads its record more than once.** With a listed
+  action as the details `default_action`, each visit records a read when the
+  page first renders, another when it connects, and one more every time a
+  change elsewhere makes it read the record again.
+* **A resource that does not audit cannot list reads.** One with auditing off,
+  the store itself and an embedded resource do not compile with
+  `read_actions`, and neither does a name that is not one of the resource's
+  read actions.
+
 ### What a resource must satisfy
 
 Three things, each checked while the resource compiles.

@@ -393,4 +393,91 @@ defmodule AshQuick.AuditVerifierTest do
     assert audited?(probe(name(), @default))
     refute audited?(probe(name(), @default, "data_layer: :embedded"))
   end
+
+  describe "read_actions" do
+    defp reads(audit, actions \\ "defaults [:read, :create]") do
+      """
+      ash_quick do
+        audit do
+          #{audit}
+        end
+      end
+
+      actions do
+        #{actions}
+
+        read :open do
+          get? true
+        end
+      end
+
+      attributes do
+        uuid_primary_key :id
+      end
+      """
+    end
+
+    test "naming read actions compiles, and attaches the preparation that records them" do
+      module = probe(name(), reads("read_actions [:open, :read]"))
+
+      assert [%{preparation: {AshQuick.Audit.Preparation, actions: [:open, :read]}}] =
+               Ash.Resource.Info.preparations(module)
+    end
+
+    test "a resource listing none gets no preparation" do
+      assert Ash.Resource.Info.preparations(probe(name(), reads("store AshQuick.Test.AuditLog"))) ==
+               []
+    end
+
+    test "a name that is not an action refuses to compile, naming it and the reads there are" do
+      message = message(reads("read_actions [:open, :peek]"))
+
+      assert message =~ "lists `peek` in `read_actions`, which is not a read action"
+      assert message =~ "Its read actions are: `read`, `open`."
+    end
+
+    test "a write action is not a read action" do
+      message =
+        message(reads("read_actions [:create, :destroy]", "defaults [:read, :create, :destroy]"))
+
+      assert message =~ "lists `create`, `destroy` in `read_actions`, which are not read actions"
+    end
+
+    test "a resource whose auditing is off refuses to compile, saying so" do
+      message = message(reads("enabled? false\n      read_actions [:open]"))
+
+      assert message =~ "lists `read_actions`, but it records nothing"
+      assert message =~ "its auditing is turned off (`enabled? false`)"
+    end
+
+    test "the audit store refuses to compile with them, saying why" do
+      store = name()
+
+      with_audit_resource(Module.concat([store]), fn ->
+        assert [%Spark.Error.DslError{} = error] =
+                 VerifierErrors.errors(probe(store, reads("read_actions [:open]")))
+
+        assert Exception.message(error) =~ "it is the audit store"
+      end)
+    end
+
+    test "an embedded resource refuses to compile with them, saying why" do
+      body = """
+      ash_quick do
+        audit do
+          read_actions [:read]
+        end
+      end
+
+      attributes do
+        uuid_primary_key :id
+      end
+      """
+
+      assert [%Spark.Error.DslError{} = error] =
+               VerifierErrors.errors(probe(name(), body, "data_layer: :embedded"))
+
+      assert Exception.message(error) =~ "it is an embedded resource"
+    end
+  end
 end

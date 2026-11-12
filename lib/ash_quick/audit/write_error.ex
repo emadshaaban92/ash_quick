@@ -1,6 +1,6 @@
 defmodule AshQuick.Audit.WriteError do
   @moduledoc """
-  An audited write whose entry the store refused.
+  An audited write or read whose entry the store refused.
 
   Raised from `AshQuick.Audit.Store` inside the action's transaction, so the
   write that produced the entry goes back with it. That is the store's contract
@@ -16,33 +16,43 @@ defmodule AshQuick.Audit.WriteError do
   action to collect.
   """
 
-  defexception [:resource, :store, :errors]
+  defexception [:resource, :store, :errors, :action_type]
 
   @impl true
   def exception(opts) do
     %__MODULE__{
       resource: opts[:resource],
       store: opts[:store],
-      errors: List.wrap(opts[:errors])
+      errors: List.wrap(opts[:errors]),
+      action_type: opts[:action_type]
     }
   end
 
   @impl true
-  def message(%__MODULE__{resource: resource, store: store, errors: errors}) do
+  def message(%__MODULE__{resource: resource, store: store, errors: errors} = error) do
     """
     #{inspect(resource)}: the audit entry could not be written to #{inspect(store)}.
 
-    The write it records is rolled back with it — an audited write that cannot \
-    be recorded did not happen.
+    #{consequence(error)}
 
     The store reported:
 
     #{describe(errors)}
 
-    An audit store is written on the critical path of every write to \
+    An audit store is written on the critical path of every audited action on \
     #{inspect(resource)}, so keep it dumb: no policies, no validations, and \
     every column AshQuick fills present on the resource.
     """
+  end
+
+  defp consequence(%__MODULE__{action_type: :read}) do
+    "The read it records returns nothing — an audited read that cannot be " <>
+      "recorded does not hand its records back."
+  end
+
+  defp consequence(_error) do
+    "The write it records is rolled back with it — an audited write that " <>
+      "cannot be recorded did not happen."
   end
 
   defp describe([]), do: "(nothing — the batch failed without reporting an error)"

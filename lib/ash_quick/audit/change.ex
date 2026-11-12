@@ -283,7 +283,11 @@ defmodule AshQuick.Audit.Change do
   # both are the same secret.
   defp param_keys(names), do: Enum.flat_map(names, &[&1, to_string(&1)])
 
-  defp to_redact(%Ash.Changeset{resource: resource, action: action}) do
+  @doc false
+  # The attribute and argument names whose values never reach the store, for a
+  # write's changeset or an audited read's query: `AshQuick.Audit.Preparation`
+  # redacts a read's arguments with the same answer.
+  def to_redact(%{resource: resource, action: action}) do
     recorded = Declaration.record_sensitive(resource)
 
     {sensitive_names(Ash.Resource.Info.attributes(resource)) -- recorded,
@@ -294,7 +298,8 @@ defmodule AshQuick.Audit.Change do
     for %{sensitive?: true, name: name} <- fields, do: name
   end
 
+  @doc false
   # `Map.replace/3` leaves a name the changeset never set alone, so the entry
   # says nothing about a field the action did not touch.
-  defp redact(values, names), do: Enum.reduce(names, values, &Map.replace(&2, &1, @redacted))
+  def redact(values, names), do: Enum.reduce(names, values, &Map.replace(&2, &1, @redacted))
 end

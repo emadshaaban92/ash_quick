@@ -4,6 +4,20 @@
 
 ### Features
 
+- **Reads can be audited, for the actions a resource lists.**
+  `audit do read_actions [:open] end` records every record a listed read
+  action returns, one row each, in the resource's audit store: `action_type:
+  :read`, the record's id, the query's arguments with `sensitive?` ones
+  redacted, empty `attributes` and `changes`, and the same actor, real actor,
+  IP, context and tenant as a write. `Ash.read`, `Ash.get`, code interfaces,
+  pages, `Ash.stream!` and relationship loads through a listed action are all
+  recorded. Unlisted actions, reads that return nothing and `Ash.can?` /
+  `AshQuick.can?` checks record nothing. The rows are written before the
+  records are returned, so a store that refuses them fails the read with
+  `AshQuick.Audit.WriteError`. `AshQuick.Audit.Verifier` refuses a name that
+  is not a read action of the resource, and `read_actions` on a resource that
+  does not audit. Nothing changes for a resource that lists none.
+
 - **The details header gives each bookkeeping half its own line.**
   "Created by X on Y" and "Last updated by Z on W" render as two lines
   rather than one joined by " · ", so a narrow screen wraps within a

@@ -47,21 +47,26 @@ defmodule AshQuick.Audit.Store do
   that cannot be recorded did not happen, which puts the audit table on the
   critical path of every write. Keep the store dumb — no policies to evaluate,
   no validations to trip, one bulk insert.
+
+  An audited read (`read_actions`, see `AshQuick.Audit.Preparation`) is held to
+  the same rule: its rows are written before the records are handed back, and a
+  store that refuses them fails the read, which returns nothing.
   """
 
   alias AshQuick.Audit.Declaration
   alias AshQuick.Audit.Row
 
   @doc """
-  Writes a row per `{changeset, record, changes}` triple, and raises naming the
+  Writes a row per `{subject, record, changes}` triple, and raises naming the
   resource and the store if the batch does not land.
 
-  The third element is what the write changed, worked out by
-  `AshQuick.Audit.Change` before it redacts the changeset; its moduledoc says
-  what the map holds.
+  The subject is the changeset of a write or the query of an audited read,
+  already redacted. The third element is what the write changed, worked out by
+  `AshQuick.Audit.Change` before it redacts the changeset — its moduledoc says
+  what the map holds — and `%{}` for a read, which changed nothing.
   """
-  def write([{changeset, _record, _changes} | _] = changes, actor) do
-    resource = changeset.resource
+  def write([{subject, _record, _changes} | _] = changes, actor) do
+    resource = subject.resource
     store = Declaration.store(resource)
 
     changes
@@ -87,7 +92,11 @@ defmodule AshQuick.Audit.Store do
         :ok
 
       %Ash.BulkResult{errors: errors} ->
-        raise AshQuick.Audit.WriteError, resource: resource, store: store, errors: errors
+        raise AshQuick.Audit.WriteError,
+          resource: resource,
+          store: store,
+          errors: errors,
+          action_type: subject.action.type
     end
   end
 end

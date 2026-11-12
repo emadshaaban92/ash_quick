@@ -16,6 +16,7 @@ defmodule AshQuick.Audit.Declaration do
   @enabled? true
   @record_sensitive []
   @exclude_actions []
+  @read_actions []
 
   def default_enabled?, do: @enabled?
 
@@ -68,5 +69,15 @@ defmodule AshQuick.Audit.Declaration do
 
   def exclude_actions(dsl_or_resource) do
     Spark.Dsl.Extension.get_opt(dsl_or_resource, @path, :exclude_actions, @exclude_actions)
+  end
+
+  def default_read_actions, do: @read_actions
+
+  # The read actions whose every returned record is recorded, which
+  # `AshQuick.Audit.Transformer` attaches `AshQuick.Audit.Preparation` to. Only
+  # read when `audits?/1` holds: a resource that does not audit its writes does
+  # not audit its reads either.
+  def read_actions(dsl_or_resource) do
+    Spark.Dsl.Extension.get_opt(dsl_or_resource, @path, :read_actions, @read_actions)
   end
 end

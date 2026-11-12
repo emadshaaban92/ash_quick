@@ -37,11 +37,81 @@ defmodule AshQuick.Audit.Verifier do
 
   @impl true
   def verify(dsl_state) do
-    if audits?(dsl_state) do
-      dsl_state |> Declaration.store() |> check(dsl_state)
-    else
-      :ok
+    with :ok <- check_read_actions(dsl_state, Declaration.read_actions(dsl_state)) do
+      if audits?(dsl_state) do
+        dsl_state |> Declaration.store() |> check(dsl_state)
+      else
+        :ok
+      end
     end
+  end
+
+  # `read_actions` names reads to record, and both ways it can name nothing are
+  # a resource that believes its reads are recorded when none are: a name that
+  # is not one of its read actions, and a resource that records nothing at all.
+  defp check_read_actions(_dsl_state, []), do: :ok
+
+  defp check_read_actions(dsl_state, names) do
+    cond do
+      not Declaration.audits?(dsl_state) ->
+        {:error, read_error(dsl_state, unaudited_reads(dsl_state))}
+
+      (unknown = Enum.reject(names, &read_action?(dsl_state, &1))) != [] ->
+        {:error, read_error(dsl_state, not_read_actions(dsl_state, unknown))}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp read_action?(dsl_state, name) do
+    match?(%{type: :read}, Ash.Resource.Info.action(dsl_state, name))
+  end
+
+  defp unaudited_reads(dsl_state) do
+    module = Verifier.get_persisted(dsl_state, :module)
+
+    reason =
+      cond do
+        Ash.Resource.Info.embedded?(dsl_state) ->
+          "it is an embedded resource, which has no row of its own for an entry to name"
+
+        not Declaration.enabled?(dsl_state) ->
+          "its auditing is turned off (`enabled? false`)"
+
+        true ->
+          "it is the audit store, whose own rows are the entries"
+      end
+
+    """
+    #{inspect(module)} lists `read_actions`, but it records nothing: #{reason}.
+
+    Its reads would not be recorded, and nothing would say so. Remove \
+    `read_actions`, or audit the resource.
+    """
+  end
+
+  defp not_read_actions(dsl_state, unknown) do
+    module = Verifier.get_persisted(dsl_state, :module)
+    reads = for %{type: :read, name: name} <- Ash.Resource.Info.actions(dsl_state), do: name
+
+    """
+    #{inspect(module)} lists #{fields(unknown)} in `read_actions`, which \
+    #{if length(unknown) == 1, do: "is not a read action", else: "are not read actions"} \
+    on it.
+
+    `read_actions` records the reads through the actions it names, so a name \
+    that is not one records nothing. Its read actions are: \
+    #{if reads == [], do: "none", else: fields(reads)}.
+    """
+  end
+
+  defp read_error(dsl_state, message) do
+    Spark.Error.DslError.exception(
+      module: Verifier.get_persisted(dsl_state, :module),
+      path: [:ash_quick, :audit, :read_actions],
+      message: message
+    )
   end
 
   defp check(nil, dsl_state), do: {:error, error(dsl_state, no_store())}

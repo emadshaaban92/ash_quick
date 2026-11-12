@@ -898,3 +898,225 @@ defmodule AshQuick.Test.RequiredRealActorAuditStore do
     defaults [:create, :read]
   end
 end
+
+defmodule AshQuick.Test.Dossier do
+  @moduledoc """
+  A confidential record whose opening is recorded.
+
+  `:open` and `:browse` are listed in `read_actions`, so every record they
+  return gets an audit row; `:read`, the primary action, is not, and stands for
+  the lists and searches that must record nothing. `:open` takes a `sensitive?`
+  argument and one named in `record_sensitive`, so a read's arguments are
+  redacted on the same rule as a write's.
+
+  Its read policy lets an actor see only their own dossiers, so a read the
+  policies filter to nothing is a read that returns nothing.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.AuditDomain,
+    data_layer: Ash.DataLayer.Ets,
+    authorizers: [Ash.Policy.Authorizer],
+    extensions: [AshQuick]
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :title, :string, public?: true
+    attribute :owner_id, :uuid, public?: true
+    attribute :folder_id, :uuid, public?: true
+    attribute :hidden?, :boolean, public?: true, default: false, allow_nil?: false
+  end
+
+  # A host's own hook that drops records after the data layer returned them,
+  # as a resource-wide preparation: the read does not return a hidden dossier,
+  # so it must not be recorded as read either.
+  preparations do
+    prepare fn query, _context ->
+      Ash.Query.after_action(query, fn _query, records ->
+        {:ok, Enum.reject(records, &(&1.hidden? == true))}
+      end)
+    end
+  end
+
+  calculations do
+    calculate :heading, :string, expr(title <> "!"), public?: true
+  end
+
+  relationships do
+    belongs_to :folder, AshQuick.Test.DossierFolder do
+      define_attribute? false
+      public? true
+    end
+  end
+
+  actions do
+    default_accept [:title, :owner_id, :folder_id, :hidden?]
+    defaults [:read, :create]
+
+    read :open do
+      get? true
+
+      argument :code, :string, sensitive?: true
+      argument :badge, :string, sensitive?: true
+      argument :purpose, :string
+    end
+
+    read :browse do
+      pagination offset?: true, keyset?: true, required?: false
+    end
+  end
+
+  code_interface do
+    define :open, get_by: [:id]
+  end
+
+  policies do
+    policy action_type(:read) do
+      authorize_if expr(owner_id == ^actor(:id))
+    end
+
+    policy action_type(:create) do
+      authorize_if always()
+    end
+  end
+
+  ash_quick do
+    audit do
+      read_actions [:open, :browse]
+      record_sensitive [:badge]
+    end
+
+    display do
+      label :title
+    end
+
+    liveness do
+      enabled? false
+    end
+
+    versioning do
+      enabled? false
+    end
+
+    bookkeeping do
+      inserted_at false
+      updated_at false
+      inserted_by false
+      updated_by false
+    end
+  end
+end
+
+defmodule AshQuick.Test.DossierFolder do
+  @moduledoc """
+  Holds dossiers, and loads them through `AshQuick.Test.Dossier`'s listed
+  `:browse` — so loading the relationship is a read of each dossier it returns.
+  Its own reads are not listed, and record nothing.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.AuditDomain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshQuick]
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true
+  end
+
+  relationships do
+    has_many :dossiers, AshQuick.Test.Dossier do
+      destination_attribute :folder_id
+      read_action :browse
+      public? true
+    end
+  end
+
+  actions do
+    default_accept [:name]
+    defaults [:read, :create]
+  end
+
+  ash_quick do
+    display do
+      label :name
+    end
+
+    liveness do
+      enabled? false
+    end
+
+    versioning do
+      enabled? false
+    end
+
+    bookkeeping do
+      inserted_at false
+      updated_at false
+      inserted_by false
+      updated_by false
+    end
+  end
+end
+
+defmodule AshQuick.Test.RefusedDossier do
+  @moduledoc """
+  An opened record whose store refuses every row: `AshQuick.Test.RefusingStore`.
+  Its create is excluded, so a record can exist for the read to fail on.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.AuditDomain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshQuick]
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :title, :string, public?: true
+  end
+
+  actions do
+    default_accept [:title]
+    defaults [:read, :create]
+
+    read :open do
+      get? true
+    end
+  end
+
+  ash_quick do
+    audit do
+      store AshQuick.Test.RefusingStore
+      exclude_actions [:create]
+      read_actions [:open]
+    end
+
+    display do
+      label :title
+    end
+
+    liveness do
+      enabled? false
+    end
+
+    versioning do
+      enabled? false
+    end
+
+    bookkeeping do
+      inserted_at false
+      updated_at false
+      inserted_by false
+      updated_by false
+    end
+  end
+end
