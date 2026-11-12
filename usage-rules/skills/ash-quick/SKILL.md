@@ -884,12 +884,29 @@ and what to write.
 `read_only_fields` names fields some actors may read but not write. For an actor
 the `writable_if:` check refuses, the field still reads on lists, details pages
 and exports, AshQuick's forms leave it out (the field is absent from the form,
-not drawn as a disabled input), and a change the extension prepends to every
-create and update clears it from the changeset (attribute, argument and atomic),
-so a value sent by hand or by any other caller is dropped silently while the
-rest of the write goes through. To hide a field from a reader, write a field
-policy; to refuse a write that sets it, an action policy with
-`changing_attributes/1`.
+not drawn as a disabled input), and a change the extension adds to every create,
+update and destroy keeps the action from writing it (attribute, argument and
+atomic), so a value sent by hand or by any other caller is dropped silently
+while the rest of the write goes through. It runs first among the action's own
+changes, so a refused argument never reaches a `manage_relationship` or
+`set_attribute(:x, arg(:y))` that consumes it, then again after them and in a
+`before_action` after the hooks they register, putting back what it left the
+first time: for a refused actor a covered action does not write the field, not
+even from its own changes or their hooks (`set_attribute(:status, "draft")`, an
+activation action's `active`). A resource-level global change whose own hook
+writes the field is not undone; keep it off the covered actions with `on:`. To
+let an action set the field, leave it out of the entry's `on:`. A cleared input
+acts as if it was never sent: argument and attribute defaults still apply (still
+defaults, so an upsert keeps the existing row's value), a required argument with
+no default is reported missing, and the action's validations see it absent. To
+hide a field from a reader, write a field policy; to refuse a write that sets
+it, an action policy with `changing_attributes/1`.
+
+An entry that would keep nothing read-only does not compile: a field no covered
+create, update or destroy takes as input (an accepted attribute or a public
+argument), most often a misspelt name, or an `on:` naming anything but a create,
+update or destroy that takes the field, or an action whose own changes run
+before the strip (one another extension added).
 
 Unlike Ash's `writable?: false`, under which no action accepts the attribute as
 input for any actor (only a change can set it), a `read_only` field is left out
@@ -912,7 +929,7 @@ end
 - First argument: the field name (attribute or argument)
 - `:writable_if` — a check module or `{CheckModule, opts}` tuple (required); an
   actor it lets through may write the field
-- `:on` — list of action names this applies to (optional, defaults to all create/update)
+- `:on` — list of action names this applies to (optional, defaults to all create/update/destroy)
 - `:description` — human-readable documentation (optional)
 
 ### Writing a check module

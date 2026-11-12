@@ -667,17 +667,41 @@ defmodule AshQuick do
   refuses is kept from writing that field in two places. AshQuick's forms leave
   the field out, so the actor is never offered an input for it: the field is
   absent from the form, not drawn as a disabled input. And a change the
-  extension prepends to every create and update clears the field from the
-  changeset — its attribute, its argument and, on the atomic path, its atomic —
-  so a value posted by hand, or sent by any caller that is not a page, is
-  dropped rather than written. The form is the convenience; the change is what
-  holds.
+  extension adds to every create, update and destroy (a soft destroy can
+  accept fields too) keeps the action from writing the field for that actor —
+  its attribute, its argument and, on the atomic path, its atomic — so a value
+  posted by hand, or sent by any caller that is not a page, is dropped rather
+  than written. The form is the convenience; the change is what holds.
+
+  The change runs first among the action's own changes, so a refused argument
+  never reaches a `manage_relationship` or `set_attribute(:x, arg(:y))` that
+  would consume it. It runs again after them, ahead of the resource's own global
+  changes, and once more in a `before_action` hook after the hooks the action's
+  changes register (whenever the write is not atomic: an atomic one runs no
+  hooks), and each time it puts back what it left the first time. So for a
+  refused actor a covered action does not write the field from the actor's
+  input, nor from the action's own changes or the hooks they register, whether
+  they copy another input or set a constant (`set_attribute(:status, "draft")`,
+  or `active` on an activation action). A global change in the resource's
+  `changes` block that writes the field in a hook of its own is not undone: keep
+  such a change off the actions the entry covers with its own `on:` or `where:`.
+  To let an action set the field itself for everyone, leave that action out with
+  `on:`.
+
+  A cleared input acts as if it was never sent. A read-only argument's
+  `default` still applies, and so does an attribute's `default` on a create and
+  `update_default` on an update, resolved once, and still a default to Ash, so
+  an upsert leaves the existing row's value alone. A required argument
+  (`allow_nil? false`, no default) is reported missing, as when it is left
+  out, so a refused actor cannot run that action: give the argument a default
+  or leave the action out with `on:`. The action's validations see the field
+  absent.
 
   Nothing else changes. The field still reads on lists, details pages and
-  exports, and a cleared value is dropped silently rather than refused: the
-  write goes through with every other field it was given. Hiding a field from a
-  reader is a field policy's job, and refusing a write that sets one is an
-  action policy's, with `changing_attributes/1`.
+  exports, and a cleared value is dropped silently rather than refused: unless
+  the action requires it, the write goes through with every other field it was
+  given. Hiding a field from a reader is a field policy's job, and refusing a
+  write that sets one is an action policy's, with `changing_attributes/1`.
 
   This is not Ash's `writable?: false`, under which no action accepts the
   attribute as input, whoever the actor (only a change can set it). A
@@ -703,17 +727,27 @@ defmodule AshQuick do
   counts as a refusal, so a broken check keeps the field read-only rather than
   writable.
 
-  `on:` names the actions the entry covers. Left out, it covers every create
-  and update that takes the field. `description:` is free text for the people
-  reading the resource; AshQuick does not show it.
+  `on:` names the actions the entry covers. Left out, it covers every create,
+  update and destroy that takes the field. `description:` is free text for the
+  people reading the resource; AshQuick does not show it.
+
+  An entry that would keep nothing read-only does not compile: a field no
+  create, update or destroy it covers takes as input (an accepted attribute or
+  a public argument), which is most often a misspelt name, or an `on:` naming
+  anything but a create, update or destroy of the resource that takes the
+  field. Nor does an
+  entry covering an action another extension adds after AshQuick's
+  transformer, when that action takes the field and has changes of its own:
+  those would run before the strip. Leave such an action out with `on:`.
   """
 
   @read_only %Spark.Dsl.Entity{
     name: :read_only,
     describe: """
     Keeps every actor its `writable_if:` check refuses from writing a field:
-    their forms leave it out (absent, not a disabled input), and the value is
-    dropped from their creates and updates. The field still reads everywhere.
+    their forms leave it out (absent, not a disabled input), and their
+    creates, updates and destroys do not write it. The field still reads
+    everywhere.
     """,
     target: AshQuick.ReadOnlyFields.ReadOnlyField,
     args: [:field],
@@ -732,7 +766,8 @@ defmodule AshQuick do
       ],
       on: [
         type: {:wrap_list, :atom},
-        doc: "The actions this entry covers. When omitted, it covers every create and update."
+        doc:
+          "The actions this entry covers. When omitted, it covers every create, update and destroy."
       ],
       description: [
         type: :string,
@@ -1017,7 +1052,8 @@ defmodule AshQuick do
       AshQuick.Lookup.Verifier,
       AshQuick.Print.Verifier,
       AshQuick.Labels.Verifier,
-      AshQuick.Forms.Verifier
+      AshQuick.Forms.Verifier,
+      AshQuick.ReadOnlyFields.Verifier
     ]
 
   @doc """
