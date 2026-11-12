@@ -99,6 +99,107 @@ defmodule ExampleWeb.SocketUploadScenarioTest do
              ["public/products/mine.jpg", nil]
   end
 
+  # A socket upload's key is made when the save consumes the entry, not at
+  # presign. The failed save leaves it in the sub-form's hidden input, which
+  # the next post names back, so the form must count it as one it issued.
+  test "keeps a sub-form's file across a save that fails", ctx do
+    %{conn: conn, admin: admin} = ctx
+    product = product_with_image(admin, "public/products/mine.jpg")
+
+    {:ok, view, _html} = live(log_in(conn, admin), ~p"/products/#{product.id}/update")
+    view |> element("[phx-click=add-form][phx-value-path='form[images]']") |> render_click()
+    pick(view, "fresh.jpg", "form[images][1][attachment]_upload")
+
+    submit(view, %{"name" => ""})
+    submit(view, %{"name" => "Renamed"})
+
+    reloaded = Ash.reload!(product, authorize?: false)
+    assert reloaded.name == "Renamed"
+    assert ["public/products/mine.jpg", fresh] = image_keys(reloaded.images)
+    assert fresh =~ "fresh.jpg"
+    assert SocketStore.read(fresh) == @jpeg
+  end
+
+  # Removing a row renumbers the rows after it. A file picked on one of them
+  # goes with its row, and the removed row's file goes nowhere.
+  describe "removing a sub-form row" do
+    test "keeps a later row's file on that row", ctx do
+      %{conn: conn, admin: admin} = ctx
+      product = product_with_image(admin, "public/products/mine.jpg")
+
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/products/#{product.id}/update")
+      add_image_row(view)
+      add_image_row(view)
+      pick(view, "kept.jpg", "form[images][2][attachment]_upload")
+
+      remove_image_row(view, 1)
+      submit(view, %{"name" => "Renamed"})
+
+      reloaded = Ash.reload!(product, authorize?: false)
+      assert reloaded.name == "Renamed"
+      assert ["public/products/mine.jpg", kept] = image_keys(reloaded.images)
+      assert kept =~ "kept.jpg"
+    end
+
+    test "drops the removed row's file rather than moving it to the next row", ctx do
+      %{conn: conn, admin: admin} = ctx
+      product = product_with_image(admin, "public/products/mine.jpg")
+
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/products/#{product.id}/update")
+      add_image_row(view)
+      add_image_row(view)
+      pick(view, "removed.jpg", "form[images][1][attachment]_upload")
+
+      remove_image_row(view, 1)
+      submit(view, %{"name" => "Renamed"})
+
+      reloaded = Ash.reload!(product, authorize?: false)
+      assert reloaded.name == "Renamed"
+      assert image_keys(reloaded.images) == ["public/products/mine.jpg", nil]
+    end
+
+    test "gives a row added after the removal an upload of its own", ctx do
+      %{conn: conn, admin: admin} = ctx
+      product = product_with_image(admin, "public/products/mine.jpg")
+
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/products/#{product.id}/update")
+      add_image_row(view)
+      add_image_row(view)
+      pick(view, "kept.jpg", "form[images][2][attachment]_upload")
+      remove_image_row(view, 1)
+
+      # Named `form[images][2]`, as the row that kept its file was.
+      add_image_row(view)
+      refute image_upload(view, 2) == image_upload(view, 1)
+      pick(view, "added.jpg", image_upload(view, 2))
+
+      submit(view, %{"name" => "Renamed"})
+
+      reloaded = Ash.reload!(product, authorize?: false)
+      assert ["public/products/mine.jpg", kept, added] = image_keys(reloaded.images)
+      assert kept =~ "kept.jpg"
+      assert added =~ "added.jpg"
+    end
+
+    test "takes a file picked on a row after the removal", ctx do
+      %{conn: conn, admin: admin} = ctx
+      product = product_with_image(admin, "public/products/mine.jpg")
+
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/products/#{product.id}/update")
+      add_image_row(view)
+      add_image_row(view)
+      remove_image_row(view, 1)
+      # The row now second keeps the upload it was given as the third.
+      pick(view, "later.jpg", image_upload(view, 1))
+
+      submit(view, %{"name" => "Renamed"})
+
+      reloaded = Ash.reload!(product, authorize?: false)
+      assert ["public/products/mine.jpg", later] = image_keys(reloaded.images)
+      assert later =~ "later.jpg"
+    end
+  end
+
   describe "an external store whose upload meta names a path" do
     setup do
       Application.put_env(:ash_quick, :storage, Example.Test.PathMetaStore)
@@ -130,6 +231,30 @@ defmodule ExampleWeb.SocketUploadScenarioTest do
 
     render(view)
   end
+
+  defp submit(view, params) do
+    view |> form("form[phx-submit=save]") |> render_submit(%{"form" => params})
+  end
+
+  defp add_image_row(view) do
+    view |> element("[phx-click=add-form][phx-value-path='form[images]']") |> render_click()
+  end
+
+  defp remove_image_row(view, index) do
+    render_click(view, "remove-form", %{"path" => "form[images][#{index}]"})
+  end
+
+  # The upload behind the file input the page draws on that image row.
+  defp image_upload(view, row) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(~s(input[type="file"][name^="form[images]"]))
+    |> LazyHTML.attribute("name")
+    |> Enum.at(row)
+  end
+
+  defp image_keys(images), do: Enum.map(images, &(&1.attachment && &1.attachment.key))
 
   defp product_with_image(actor, key) do
     [actor: actor]

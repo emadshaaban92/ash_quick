@@ -729,6 +729,19 @@
   destroy action and took the LiveView down. A form now drops it, and
   closing the modal reads the list afresh.
 
+- **A file picked on a sub-form row stays with that row.** An upload on a
+  sub-form row was named after the row's position, and removing a row
+  renumbers the rows after it, so a removed row's file was saved onto the row
+  that took its place, and a later row's file was dropped. Each row now keeps
+  its upload under the name it was given, the removed row's picks are
+  cancelled, and a row added afterwards gets an upload of its own.
+
+- **A sub-form's file survives a failed save with socket uploads.** A save
+  consumes a sub-form's socket upload and makes its key, but the form did not
+  record that key as one it issued. After a failed save the key rode the
+  sub-form's hidden input back, and every later save was refused as naming an
+  attachment the form never issued. The save now records the keys it makes.
+
 - **The generated audit store takes a record keyed by an integer.** The
   store `mix ash_quick.install` writes kept `resource_id` as a `:uuid`, so an
   audited resource with an integer primary key could not write its entries.
