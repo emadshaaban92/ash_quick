@@ -114,6 +114,40 @@ defmodule ExampleWeb.LivenessScenarioTest do
       |> visit(~p"/products")
       |> assert_has("td", text: later.name)
     end
+
+    # A notification inside `:refetch_window` is not dropped but deferred: the
+    # list's `keep_live` sends itself `{:refetch, :data, ...}` for later. A form
+    # runs no `keep_live` of its own and leaves the list's message hook in
+    # place, so a refetch deferred before the visitor clicked New arrives on the
+    # form. Sent by hand here, exactly as `Process.send_after/3` would.
+    test "a refetch deferred before a form opened leaves the form alone", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      product = product(name: "Listed before New", actor: admin)
+
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/products?search=#{product.sku}")
+      assert render(view) =~ product.name
+
+      render_patch(view, ~p"/products/create")
+      renamed = rename_behind_the_view(product)
+
+      send(view.pid, {:refetch, :data, [requested_at: System.monotonic_time(:millisecond)]})
+
+      html = render(view)
+      assert Process.alive?(view.pid)
+      assert html =~ "ash-quick-action-modal"
+
+      # Nor does it re-read the list under the modal, which would also listen
+      # again on the rows `Liveness.unsubscribe_all/2` let go of. Closing the
+      # modal reads the list afresh. The list drawn behind the modal is a
+      # snapshot, so the page's own `:data` is what shows whether it was read.
+      %{ash_live_config: config, data: data} = :sys.get_state(view.pid).socket.assigns
+      assert %{subscribed_topics: []} = config.data
+      assert Enum.map(data.results, & &1.name) == [product.name]
+
+      render_patch(view, ~p"/products?search=#{product.sku}")
+      assert render(view) =~ renamed.name
+    end
   end
 
   describe "a bulk action" do

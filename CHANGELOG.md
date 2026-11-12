@@ -708,6 +708,13 @@
   path, which took the mount down. An id that is not a string is now dropped,
   and the address bar is corrected to leave it out.
 
+- **A list refresh that was waiting no longer crashes a form opened over
+  it.** A live update inside `:refetch_window` is deferred, not dropped, and
+  a form opened before it fired left the list's message hook in place: the
+  deferred refresh then read the list with the form's create, update or
+  destroy action and took the LiveView down. A form now drops it, and
+  closing the modal reads the list afresh.
+
 - **The generated audit store takes a record keyed by an integer.** The
   store `mix ash_quick.install` writes kept `resource_id` as a `:uuid`, so an
   audited resource with an integer primary key could not write its entries.

@@ -823,6 +823,16 @@ defmodule AshQuick.LiveView.ListUtils do
     {:halt, AshPhoenix.LiveView.handle_live(socket, topic, :data)}
   end
 
+  # A refetch `keep_live` deferred inside `:refetch_window` can arrive after a
+  # patch to an action form, which runs no `keep_live` of its own and leaves
+  # this hook in place. The list's callback reads through `ash_action`, which a
+  # form has made a create, update or destroy, so it is dropped there: closing
+  # the modal reads the list afresh, and refetching under it would also listen
+  # again on the rows `Liveness.unsubscribe_all/2` let go of.
+  defp handle_list_info({:refetch, :data, _refetch_info}, socket, _)
+       when not is_struct(socket.assigns.ash_action, Actions.Read),
+       do: {:halt, socket}
+
   defp handle_list_info({:refetch, :data, refetch_info}, socket, _) do
     {:halt, AshPhoenix.LiveView.handle_live(socket, :refetch, :data, refetch_info)}
   end
