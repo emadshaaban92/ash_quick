@@ -131,6 +131,7 @@ defmodule ExampleWeb.Router do
         quick_view "/long_forms", Example.Test.LongFormsLive.Quick
         quick_view "/lookup_items", Example.Test.LookupItemsLive.Quick
         quick_view "/nested_items", Example.Test.NestedItemsLive.Quick
+        quick_view "/offset_pages", Example.Test.OffsetPagesLive.Quick
         quick_view "/picked_labels", Example.Test.PickedLabelsLive.Quick
         quick_view "/picked_rows", Example.Test.PickedRowsLive.Quick
         quick_view "/printable", Example.Test.PrintableLive.Quick
@@ -148,6 +149,7 @@ defmodule ExampleWeb.Router do
         quick_view "/sorted_rows_named", Example.Test.SortedRowsNamedLive.Quick
         quick_view "/uncounted_pages", Example.Test.UncountedPagesLive.Quick
         quick_view "/vault_filter", Example.Test.VaultFilterLive.Quick
+        quick_view "/wide_offset_pages", Example.Test.WideOffsetPagesLive.Quick
         quick_view "/worded_policy", Example.Test.WordedPolicyLive.Quick
         quick_view "/writers_only", Example.Test.WritersOnlyLive.Quick
       end
