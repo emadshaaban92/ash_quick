@@ -828,12 +828,15 @@ and what to write.
   `audit do store ... end`, else the configured `:audit_resource`) **does not
   compile**. A write with no actor (a background job, an integration) is
   recorded too, with `actor_id: nil` and `real_actor_id: nil`, so the store
-  must allow `nil` in both. Say what made a write under `action_source` in
+  must allow `nil` in both. On a resource that stamps `inserted_by` /
+  `updated_by` (the default with an `:actor_resource`), the stamp refuses a
+  create or update with no actor before it is audited; only its destroys
+  reach the log actor-less. Say what made a write under `action_source` in
   the action's context — `context: %{action_source: "nightly_sync"}` — on any
   write a person did not make through a form, with an actor or without. It is a
   convention, not enforced; other top-level string or atom values are kept too,
   nested ones are not. To keep a write out of the log, use `exclude_actions` or
-  turn audit off — passing no actor no longer does it.
+  turn audit off — passing no actor does not.
 
   ```elixir
   ash_quick do

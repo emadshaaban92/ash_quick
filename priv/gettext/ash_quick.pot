@@ -417,6 +417,7 @@ msgid "One file"
 msgstr ""
 
 #: lib/ash_quick/components.ex
+#: lib/ash_quick/liveview/components/form_view.ex
 #, elixir-autogen, elixir-format
 msgid "Remove"
 msgstr ""

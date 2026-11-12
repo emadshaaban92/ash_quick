@@ -9,9 +9,6 @@ defmodule AshQuick.Bookkeeping.Declaration do
   # them here rather than at each call site is what keeps the DSL schema, the
   # verifier and `AshQuick.Info` from drifting apart — the schema reads them
   # from here too.
-  #
-  # Not `AshQuick.Bookkeeping`: Spark generates a module by that name for the
-  # section's own imports, and defining one shadows the `bookkeeping` macro.
 
   @path [:ash_quick, :bookkeeping]
   @defaults [

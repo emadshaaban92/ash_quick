@@ -615,7 +615,7 @@ defmodule AshQuick.LiveView.QuickView do
               |> QuickView.do_handle_params(params, ash_action, @options)
               |> after_handle_params(@options)
             else
-              socket
+              QuickView.leave_page(socket)
             end
 
           socket = QuickView.canonicalize_query(socket, uri, base_path, ash_action)
@@ -847,6 +847,34 @@ defmodule AshQuick.LiveView.QuickView do
     assigns
     |> assign(:record, nil)
     |> AshQuick.LiveView.Components.DetailsView.details_view()
+  end
+
+  @doc false
+  # Public only because the generated `handle_params/3` calls it.
+  #
+  # A patch to a URL this page cannot serve leaves the page it came from. The
+  # hooks that page attached would otherwise stay: a list's refetch already
+  # scheduled would read through an action that is now nil and crash the view,
+  # and its events would act on a selection the not-found page does not show.
+  # So the page's own events and messages are dropped here, as the form drops
+  # the page under it, and the selection goes with the page. Anything else is
+  # the host's and goes on.
+  def leave_page(socket) do
+    page_events = ListUtils.events() ++ DetailsUtils.events() ++ FormUtils.events()
+
+    socket
+    |> Phoenix.LiveView.detach_hook(:quick_view_events_hook, :handle_event)
+    |> Phoenix.LiveView.attach_hook(:quick_view_events_hook, :handle_event, fn
+      event, _params, socket ->
+        if event in page_events, do: {:halt, socket}, else: {:cont, socket}
+    end)
+    |> Phoenix.LiveView.detach_hook(:quick_view_info_hook, :handle_info)
+    |> Phoenix.LiveView.attach_hook(:quick_view_info_hook, :handle_info, fn
+      {:refetch, _assign, _info}, socket -> {:halt, socket}
+      %{payload: %Ash.Notifier.Notification{}}, socket -> {:halt, socket}
+      _message, socket -> {:cont, socket}
+    end)
+    |> assign(selected_rows: %{}, row_actions: nil)
   end
 
   @doc false

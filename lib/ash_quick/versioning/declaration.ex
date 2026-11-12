@@ -9,9 +9,6 @@ defmodule AshQuick.Versioning.Declaration do
   # resource that says nothing gets. Holding them here rather than at each call
   # site is what keeps the DSL schema, the transformer, the verifier and
   # `AshQuick.Info` from drifting apart — the schema reads them from here too.
-  #
-  # Not `AshQuick.Versioning`: Spark generates a module by that name for the
-  # section's own imports, and defining one shadows the `versioning` macro.
 
   @path [:ash_quick, :versioning]
   @enabled? true

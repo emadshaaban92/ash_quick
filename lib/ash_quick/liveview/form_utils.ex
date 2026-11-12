@@ -265,7 +265,8 @@ defmodule AshQuick.LiveView.FormUtils do
   # recorded where they are created (`presign_attachment_upload/3`), so it does
   # not matter which path consumes the entry, or where an action folds it. They
   # belong to this form, so a new form starts without any, as it does after a
-  # save: a key uploaded for one record must not be taken into the next.
+  # save: a key uploaded for one record must not be taken into the next. So do
+  # the single attachments this form's ✕ emptied (`kept_attachment/4`).
   defp assign_issued_attachment_keys(socket) do
     socket
     |> assign(
@@ -273,6 +274,7 @@ defmodule AshQuick.LiveView.FormUtils do
     )
     |> assign(ash_quick_minted_attachment_keys: MapSet.new())
     |> assign(@upload_names, %{})
+    |> assign(ash_quick_cleared_attachments: MapSet.new())
   end
 
   # Every attachment key a form holds, by the top-level field it sits under.
@@ -860,20 +862,17 @@ defmodule AshQuick.LiveView.FormUtils do
     end)
   end
 
+  @events ~w(cancel-upload add-form remove-form remove-attachment validate save)
+
+  @doc false
+  def events, do: @events
+
   # The page shows the forbidden panel in place of the form: the actor may not
   # run the action, may change none of what it takes, or may not read the
   # record, in which case no form was built. Nothing stops someone pushing a
   # form event at it anyway. Refuse it as the panel words it, rather than build
   # on a nil form or run what the panel says is refused.
-  defp handle_form_events(event, params, socket, options)
-       when event in [
-              "cancel-upload",
-              "add-form",
-              "remove-form",
-              "remove-attachment",
-              "validate",
-              "save"
-            ] do
+  defp handle_form_events(event, params, socket, options) when event in @events do
     case FormView.held_refusal(socket.assigns) do
       :ok ->
         handle_open_form_events(event, params, socket, options)
@@ -917,10 +916,32 @@ defmodule AshQuick.LiveView.FormUtils do
      |> clear_form_flash()}
   end
 
-  # The ✕ beside a stored file. The page says which position, and nothing else:
-  # the list itself is held here, so there is no value of the client's to take.
-  # Anything that does not name a position in an array attribute of attachments
-  # is ignored rather than passed on to the host's own `handle_event/3`.
+  # The ✕ beside a stored file. The page says which field and, in a list, which
+  # position, and nothing else: there is no value of the client's to take.
+  #
+  # Without a position it is the ✕ beside a single attachment the field may
+  # leave empty: the field is emptied, and its hidden input then posts it blank.
+  # With one, it names a position in an array attribute of attachments, whose
+  # list is held here. Anything else (a required attachment, a position that is
+  # not there, a field of another kind) is ignored rather than passed on to the
+  # host's own `handle_event/3`.
+  defp handle_open_form_events("remove-attachment", %{"field" => name} = params, socket, _options)
+       when is_binary(name) and not is_map_key(params, "index") do
+    case clearable_attachment_field(socket.assigns.form, name) do
+      %{} = field ->
+        cleared = Map.get(socket.assigns, :ash_quick_cleared_attachments, MapSet.new())
+
+        {:halt,
+         socket
+         |> assign(ash_quick_cleared_attachments: MapSet.put(cleared, field.name))
+         |> put_field_value(field, nil)
+         |> clear_flash()}
+
+      nil ->
+        {:halt, socket}
+    end
+  end
+
   defp handle_open_form_events("remove-attachment", params, socket, _options) do
     form = socket.assigns.form
 
@@ -1402,6 +1423,13 @@ defmodule AshQuick.LiveView.FormUtils do
 
   defp held_attachments?(_field), do: false
 
+  defp clearable_attachment_field(form, name) do
+    Utils.form_fields(form)
+    |> Enum.find(
+      &(&1.type == AshQuick.AshTypes.Attachment and &1.allow_nil? and to_string(&1.name) == name)
+    )
+  end
+
   defp held_attachments_field(form, name) do
     Utils.form_fields(form)
     |> Enum.find(&(held_attachments?(&1) and to_string(&1.name) == name))
@@ -1716,7 +1744,8 @@ defmodule AshQuick.LiveView.FormUtils do
           params
 
         {_, [], data} ->
-          params |> Map.put_new(field.name |> to_string(), Map.get(data, field.name))
+          params
+          |> Map.put_new(field.name |> to_string(), kept_attachment(field, data, socket, form))
 
         {AshQuick.AshTypes.Attachment, [value], _} ->
           params |> Map.put(field.name |> to_string(), value)
@@ -1812,6 +1841,18 @@ defmodule AshQuick.LiveView.FormUtils do
         Logger.error("upload of #{serving_key} was not stored: #{inspect(reason)}")
         :error
     end
+  end
+
+  # A blank single attachment on an update keeps the record's own, unless its ✕
+  # emptied it on this form: the hidden input posts blank either way, so the ✕
+  # is remembered here.
+  defp kept_attachment(field, data, socket, form) do
+    cleared = Map.get(socket.assigns, :ash_quick_cleared_attachments, MapSet.new())
+
+    if field.type == AshQuick.AshTypes.Attachment and not String.contains?(form.name, "[") and
+         MapSet.member?(cleared, field.name),
+       do: nil,
+       else: Map.get(data, field.name)
   end
 
   # The field's hidden input posts an empty string when it is carrying nothing —

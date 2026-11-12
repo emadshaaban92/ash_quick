@@ -8,9 +8,6 @@ defmodule AshQuick.Audit.Declaration do
   # section the resource never entered. Holding it here rather than at each call
   # site is what keeps the DSL schema, the transformer and `AshQuick.Info` from
   # drifting apart — the schema reads it from here too.
-  #
-  # Not `AshQuick.Audit`: Spark generates a module by that name for the
-  # section's own imports, and defining one shadows the `audit` macro.
 
   @path [:ash_quick, :audit]
   @enabled? true

@@ -360,7 +360,7 @@ defmodule AshQuick.Audit.Verifier do
      #{refusing} has `allow_nil?: false`.
      """,
      """
-     Writes with no actor, such as a background job's, are now recorded with \
+     Writes with no actor, such as a background job's, are recorded with \
      `actor_id: nil` and `real_actor_id: nil`. A store that refuses either does \
      not fail here — it fails every one of those writes, inside the action's \
      transaction.\

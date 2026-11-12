@@ -379,6 +379,30 @@ defmodule ExampleWeb.LivenessScenarioTest do
     end
   end
 
+  describe "a not-found page reached from the list" do
+    # A patch to a URL the page cannot serve leaves the list's hooks behind
+    # unless something takes them off. A refetch the list had already scheduled
+    # then read through a nil action and took the view down, and the list's
+    # events still acted on a selection the page no longer shows.
+    test "drops the list's refetch, events and selection", %{conn: conn, admin: admin} do
+      product = product(name: "Four-season tent", actor: admin)
+
+      {:ok, view, _html} = conn |> log_in(admin) |> live(~p"/products")
+      render_change(view, "table-form-change", %{product.id => "on"})
+
+      render_patch(view, ~p"/products?action=read")
+      assert has_element?(view, "h1", "404")
+
+      # The refetch a coalesced notification schedules, landing after the patch.
+      send(view.pid, {:refetch, :data, []})
+      render_click(view, "bulk_action", %{"action_name" => "destroy"})
+
+      assert Process.alive?(view.pid)
+      assert has_element?(view, "h1", "404")
+      assert :sys.get_state(view.pid).socket.assigns.selected_rows == %{}
+    end
+  end
+
   describe "a resource that publishes nothing" do
     test "leaves its pages inert, however much is written to it", %{conn: conn, admin: admin} do
       # `Example.Accounts.AuditLog` declares `liveness enabled? false` — it is
