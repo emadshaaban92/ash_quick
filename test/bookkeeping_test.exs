@@ -20,9 +20,14 @@ defmodule AshQuick.BookkeepingTest do
   """
   use ExUnit.Case, async: true
 
+  require Ash.Query
+
   alias AshQuick.Config
+  alias AshQuick.Test.Actor
+  alias AshQuick.Test.AuditLog
   alias AshQuick.Test.Bookkeeping.AllFour
   alias AshQuick.Test.Bookkeeping.CreateOnly
+  alias AshQuick.Test.Bookkeeping.Stamped
   alias AshQuick.Test.Bookkeeping.HandWrittenActorColumn
   alias AshQuick.Test.Bookkeeping.TimestampsOnly
   alias AshQuick.Test.PlainRecord
@@ -78,5 +83,163 @@ defmodule AshQuick.BookkeepingTest do
       assert AshQuick.Info.actor_fields(PlainRecord) == []
       assert AshQuick.Info.actor_attributes(PlainRecord) == []
     end
+  end
+
+  describe "the updated_by stamp" do
+    # Mona created the record; Ahmed is the one who writes to it afterwards. A
+    # stamp by the creator would match what is already there, so every write
+    # here is by someone else.
+    setup do
+      mona = actor("Mona")
+      ahmed = actor("Ahmed")
+
+      record =
+        Stamped
+        |> Ash.Changeset.for_create(:create, %{name: "Invoice"}, actor: mona)
+        |> Ash.create!()
+
+      %{mona: mona, ahmed: ahmed, record: record}
+    end
+
+    test "each action runs on the path its name says", %{record: record} do
+      # Without this the atomic tests below would pass just as well in memory.
+      for action <- [:rename, :download] do
+        assert %Ash.Changeset{} =
+                 Ash.Changeset.fully_atomic_changeset(Stamped, action, %{}, data: record)
+      end
+
+      for action <- [:rename_in_memory, :download_in_memory, :exclaim_in_memory] do
+        assert {:not_atomic, _reason} =
+                 Ash.Changeset.fully_atomic_changeset(Stamped, action, %{}, data: record)
+      end
+    end
+
+    for action <- [:download, :download_in_memory] do
+      test "#{action}, which writes nothing, leaves updated_by, updated_at and version alone",
+           %{mona: mona, ahmed: ahmed, record: record} do
+        downloaded = update!(record, unquote(action), %{}, ahmed)
+
+        for result <- [downloaded, reread(record)] do
+          assert_untouched(result, record, mona)
+        end
+      end
+
+      test "#{action} is still audited, under the actor who ran it",
+           %{ahmed: ahmed, record: record} do
+        update!(record, unquote(action), %{}, ahmed)
+
+        assert [_created, entry] = entries(record)
+        assert entry.action_name == unquote(action)
+        assert entry.actor_id == ahmed.id
+      end
+
+      test "#{action} still needs an actor", %{record: record} do
+        assert {:error, error} =
+                 record
+                 |> Ash.Changeset.for_update(unquote(action), %{})
+                 |> Ash.update()
+
+        assert Exception.message(error) =~ "could not relate to actor"
+      end
+    end
+
+    for action <- [:rename, :rename_in_memory] do
+      test "#{action} stamps the writer and moves updated_at and version",
+           %{ahmed: ahmed, record: record} do
+        renamed = update!(record, unquote(action), %{name: "Invoice 2"}, ahmed)
+
+        for result <- [renamed, reread(record)] do
+          assert result.name == "Invoice 2"
+          assert result.updated_by_id == ahmed.id
+          assert DateTime.after?(result.updated_at, record.updated_at)
+          assert result.version == record.version + 1
+        end
+
+        # In memory the record comes back with the relationship set, as
+        # `relate_actor` leaves it; neither sets it on the atomic path.
+        if unquote(action) == :rename_in_memory do
+          assert renamed.updated_by.id == ahmed.id
+        end
+      end
+
+      # A form resubmitted unchanged: on the atomic path the name still arrives
+      # as an atomic, so this is the row comparison and not an empty changeset.
+      test "#{action} to the value the record already holds stamps nothing",
+           %{mona: mona, ahmed: ahmed, record: record} do
+        resubmitted = update!(record, unquote(action), %{name: "Invoice"}, ahmed)
+
+        for result <- [resubmitted, reread(record)] do
+          assert_untouched(result, record, mona)
+        end
+      end
+    end
+
+    # Memory cannot compare an expression with the row, so it counts as a
+    # change: the write is stamped and locked rather than let through as Mona's.
+    test "an in-memory write through an expression stamps the writer and takes the lock",
+         %{ahmed: ahmed, record: record} do
+      exclaimed = update!(record, :exclaim_in_memory, %{}, ahmed)
+
+      for result <- [exclaimed, reread(record)] do
+        assert result.name == "Invoice!"
+        assert result.updated_by_id == ahmed.id
+        assert DateTime.after?(result.updated_at, record.updated_at)
+        assert result.version == record.version + 1
+      end
+    end
+
+    # Versioning declines an atomic write by query, so this runs down whichever
+    # strategy Ash falls back to; the stamp has to hold on each.
+    test "a bulk update stamps only the rows it changes",
+         %{mona: mona, ahmed: ahmed, record: record} do
+      other =
+        Stamped
+        |> Ash.Changeset.for_create(:create, %{name: "Receipt"}, actor: mona)
+        |> Ash.create!()
+
+      assert %Ash.BulkResult{status: :success} =
+               Stamped
+               |> Ash.Query.filter(id in ^[record.id, other.id])
+               |> Ash.bulk_update(:rename, %{name: "Invoice"},
+                 actor: ahmed,
+                 strategy: [:atomic, :atomic_batches, :stream],
+                 authorize?: false,
+                 return_errors?: true
+               )
+
+      assert_untouched(reread(record), record, mona)
+
+      changed = reread(other)
+      assert changed.name == "Invoice"
+      assert changed.updated_by_id == ahmed.id
+      assert DateTime.after?(changed.updated_at, other.updated_at)
+    end
+  end
+
+  defp assert_untouched(result, record, writer) do
+    assert result.updated_by_id == writer.id
+    assert result.updated_at == record.updated_at
+    assert result.version == record.version
+  end
+
+  defp reread(record), do: Ash.get!(Stamped, record.id, authorize?: false)
+
+  defp actor(name) do
+    Actor
+    |> Ash.Changeset.for_create(:create, %{name: name})
+    |> Ash.create!()
+  end
+
+  defp update!(record, action, input, actor) do
+    record
+    |> Ash.Changeset.for_update(action, input, actor: actor)
+    |> Ash.update!()
+  end
+
+  defp entries(record) do
+    AuditLog
+    |> Ash.Query.filter(resource_id == ^record.id)
+    |> Ash.Query.sort(id: :asc)
+    |> Ash.read!()
   end
 end

@@ -863,6 +863,12 @@ and what to write.
   `belongs_to :inserted_by, SomethingElse` declares `inserted_by false` and keeps
   it.
 
+  An update stamps `:updated_by` only when it changes something besides
+  bookkeeping, the same rule the lock bumps `version` on. A print, a download
+  or an unchanged resubmit leaves `:updated_by`, `:updated_at` and `version` as
+  they were, and is still authorized and audited. A resource that stamps
+  `:updated_by` itself keeps its own stamp.
+
 ## Read-only fields DSL
 
 `read_only_fields` names fields some actors may read but not write. For an actor

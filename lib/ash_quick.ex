@@ -359,11 +359,40 @@ defmodule AshQuick do
   all. The exceptions say so.
 
   Declaring a field adds it: the two timestamps, the two `belongs_to`
-  relationships to the configured `:actor_resource`, and the `relate_actor`
-  changes that stamp them — `:inserted_by` on create, `:updated_by` on every
-  write, which is why a create stamps both. The changes are built through
-  `relate_actor/1` itself rather than as a literal, so a generated stamp cannot
-  drift from a hand-written one.
+  relationships to the configured `:actor_resource`, and the changes that
+  stamp them — `:inserted_by` on create, `:updated_by` on create and on every
+  update that changes something, which is why a create stamps both. The create
+  stamps are built through `relate_actor/1` itself rather than as a literal, so
+  a generated stamp cannot drift from a hand-written one.
+
+  ### When an update stamps
+
+  An update stamps `:updated_by` only when it is meaningful: when it changes
+  something besides bookkeeping, the same answer the optimistic lock bumps
+  `version` on (see Versioning above). A write that changes nothing names nobody
+  as the record's writer: a print or a download that only records that it
+  happened, or a form resubmitted unchanged by someone else. Since the stamp is
+  then not written, Ash moves no `update_timestamp` either, so `:updated_by`,
+  `:updated_at` and `version` move together or not at all, and the details
+  header never names one person beside another's time. The write is still
+  authorized and audited under the actor who ran it, and it still needs an
+  actor, as `relate_actor/1` with `allow_nil?: false` does.
+
+  It is decided where the final write is visible, as the lock is. In memory it
+  is a `before_action` appended last, and the record comes back with
+  `:updated_by` set to the actor when it was stamped. A value written there
+  through `atomic_update/3` is an expression memory cannot compare with the row,
+  so it counts as a change, for the stamp and the lock alike. On the atomic path
+  it is an expression the data layer evaluates against the row, `if <meaningful>
+  do ^actor_id else updated_by_id end`, which covers `Ash.update_many/4` and
+  bulk writes too; that path writes every accepted input, so "changes something"
+  is judged against the row rather than the copy. It sees what the lock sees and
+  shares its limit: a global change another extension appends after AshQuick's
+  can write a value it never compared.
+
+  The rule covers only the stamp AshQuick generates, over a `belongs_to`. A
+  resource stamping `:updated_by` itself, globally or inside an action, keeps
+  its own stamp and stamps whenever that says.
 
   **Add-if-absent throughout**, and each of the five pieces is checked
   separately. A resource writing any of them keeps what it wrote, which is what

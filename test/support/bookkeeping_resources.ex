@@ -1,7 +1,8 @@
 defmodule AshQuick.Test.Bookkeeping.Domain do
   @moduledoc """
-  Holds the shapes the derived ignore list is read off. None of them is ever
-  written — the derivation only introspects.
+  Holds the shapes the derived ignore list is read off, which are never written
+  — the derivation only introspects — and `AshQuick.Test.Bookkeeping.Stamped`,
+  which is.
   """
   use Ash.Domain, validate_config_inclusion?: false
 
@@ -190,6 +191,76 @@ defmodule AshQuick.Test.Bookkeeping.HandWrittenActorColumn do
     end
 
     versioning do
+      enabled? false
+    end
+  end
+end
+
+defmodule AshQuick.Test.Bookkeeping.Stamped do
+  @moduledoc """
+  A resource whose updates show when `updated_by` is stamped: only on a write
+  that changes something besides bookkeeping.
+
+  It carries all four bookkeeping fields, is versioned and is audited, so one
+  write shows the stamp, the timestamp, the lock and the audit row together.
+  `:rename` and `:download` keep Ash's `require_atomic? true`; the
+  `_in_memory` twins are the same writes on the in-memory path. `:download`
+  records that something happened and writes nothing. `:exclaim_in_memory`
+  writes through an expression on the in-memory path.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.Bookkeeping.Domain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshQuick]
+
+  require Ash.Expr
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true
+  end
+
+  actions do
+    defaults [:read, create: [:name]]
+
+    update :rename, accept: [:name]
+
+    update :rename_in_memory do
+      accept [:name]
+      require_atomic? false
+      change fn changeset, _context -> changeset end
+    end
+
+    update :download, accept: []
+
+    # An in-memory write whose value is an expression: `atomic_update/3` files
+    # it under `changeset.atomics` on this path too.
+    update :exclaim_in_memory do
+      accept []
+      require_atomic? false
+
+      change fn changeset, _context ->
+        Ash.Changeset.atomic_update(changeset, :name, Ash.Expr.expr(name <> "!"))
+      end
+    end
+
+    update :download_in_memory do
+      accept []
+      require_atomic? false
+      change fn changeset, _context -> changeset end
+    end
+  end
+
+  ash_quick do
+    display do
+      label :name
+    end
+
+    liveness do
       enabled? false
     end
   end
