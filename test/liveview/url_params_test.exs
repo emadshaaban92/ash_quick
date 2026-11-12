@@ -83,6 +83,20 @@ defmodule AshQuick.LiveView.URLParamsTest do
     end
   end
 
+  describe "id" do
+    test "a string is taken as written" do
+      assert URLParams.from_url_params(%{"id" => "abc"}).id == "abc"
+    end
+
+    # `?id[a]=b` and `?id[]=x` on a list or create URL, which have no `:id`
+    # segment for the router to fill.
+    test "a map or a list names no record" do
+      for id <- [%{"a" => "b"}, ["x"]] do
+        assert URLParams.from_url_params(%{"id" => id}).id == nil
+      end
+    end
+  end
+
   describe "action" do
     test "a name something has already made an atom of becomes that atom" do
       assert URLParams.from_url_params(%{"action" => "create"}).action == :create

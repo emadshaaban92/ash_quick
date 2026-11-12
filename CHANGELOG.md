@@ -702,6 +702,12 @@
 
 ### Bug fixes
 
+- **A list or create URL with a nested `?id` opens the page.** Those routes
+  have no `:id` segment, so the query's `?id` is read there, and `?id[a]=b`
+  or `?id[]=x` handed the page a map or a list that it interpolated into a
+  path, which took the mount down. An id that is not a string is now dropped,
+  and the address bar is corrected to leave it out.
+
 - **The generated audit store takes a record keyed by an integer.** The
   store `mix ash_quick.install` writes kept `resource_id` as a `:uuid`, so an
   audited resource with an integer primary key could not write its entries.
