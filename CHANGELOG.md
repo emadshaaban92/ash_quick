@@ -47,6 +47,16 @@
   it, rather than taking the page down with the filter form open. See
   Breaking changes.
 
+- **No action can name who wrote a record.** The `inserted_by` and
+  `updated_by` relationships AshQuick generates were writable, so their
+  columns were public writable attributes, and any action accepting `:*` took
+  `inserted_by_id` and `updated_by_id` from the client. An update sending only
+  one of them is not meaningful, so the stamp left the forged value in place,
+  and nothing re-stamps `inserted_by` after the create. Both are now generated
+  with `writable?: false`, and the stamps write the columns themselves. A
+  hand-written actor relationship whose column is writable does not compile.
+  See Breaking changes.
+
 ### Features
 
 - **An action can hand the browser a file it made itself.** An action marks the
@@ -1227,6 +1237,19 @@
   default interpolation gets the same treatment.
 
 ### Breaking changes
+
+- **Actor columns are not writable.** An action naming `inserted_by_id` or
+  `updated_by_id` in its `accept` list gets Ash's compile warning that it
+  cannot accept them, and one accepting `:*` no longer takes them, so a
+  client sending one gets an error either way. A
+  resource writing its own `inserted_by` or `updated_by` relationship adds
+  `writable?: false` to the `belongs_to`, or to the attribute under a
+  `define_attribute? false` one, or the resource fails to compile (an error,
+  not a warning). Seeds and imports that set the writer pass that writer as
+  the actor; on a create they can also call
+  `Ash.Changeset.force_change_attribute/3` after `for_create`, but on an
+  update that changes something the stamp names the actor whatever was
+  forced.
 
 - **An export holding more than 100,000 rows is refused.** A host that
   exports larger lists at once raises `config :ash_quick, :export_max_rows`,

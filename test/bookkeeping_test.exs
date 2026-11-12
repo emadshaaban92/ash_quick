@@ -216,6 +216,80 @@ defmodule AshQuick.BookkeepingTest do
     end
   end
 
+  describe "the actor columns" do
+    # A client names whoever it likes as the writer when the columns are
+    # writable: an update sending only the column is not meaningful, so the
+    # stamp never replaces it, and nothing ever re-stamps `inserted_by`.
+    setup do
+      mona = actor("Mona")
+
+      record =
+        Stamped
+        |> Ash.Changeset.for_create(:create, %{name: "Invoice"}, actor: mona)
+        |> Ash.create!()
+
+      %{mona: mona, ahmed: actor("Ahmed"), salma: actor("Salma"), record: record}
+    end
+
+    test "are not writable, so no action can accept them" do
+      for resource <- [AllFour, Stamped], name <- [:inserted_by, :updated_by] do
+        relationship = Ash.Resource.Info.relationship(resource, name)
+        refute relationship.writable?
+        refute Ash.Resource.Info.attribute(resource, relationship.source_attribute).writable?
+      end
+
+      for action <- [:create_any, :edit_any] do
+        accept = Ash.Resource.Info.action(Stamped, action).accept
+        assert :name in accept
+        refute :inserted_by_id in accept
+        refute :updated_by_id in accept
+      end
+    end
+
+    for field <- [:inserted_by_id, :updated_by_id] do
+      test "an update accepting every attribute refuses #{field}",
+           %{mona: mona, ahmed: ahmed, salma: salma, record: record} do
+        assert {:error, _error} =
+                 record
+                 |> Ash.Changeset.for_update(:edit_any, %{unquote(field) => salma.id},
+                   actor: ahmed
+                 )
+                 |> Ash.update()
+
+        result = reread(record)
+        assert result.inserted_by_id == mona.id
+        assert result.updated_by_id == mona.id
+      end
+
+      test "a create accepting every attribute refuses #{field}",
+           %{ahmed: ahmed, salma: salma} do
+        assert {:error, _error} =
+                 Stamped
+                 |> Ash.Changeset.for_create(
+                   :create_any,
+                   %{:name => "Forged", unquote(field) => salma.id},
+                   actor: ahmed
+                 )
+                 |> Ash.create()
+
+        assert [] = Stamped |> Ash.Query.filter(name == "Forged") |> Ash.read!()
+      end
+    end
+
+    test "the stamp still writes them", %{ahmed: ahmed, record: record} do
+      created =
+        Stamped
+        |> Ash.Changeset.for_create(:create_any, %{name: "Receipt"}, actor: ahmed)
+        |> Ash.create!()
+
+      assert created.inserted_by_id == ahmed.id
+      assert created.updated_by_id == ahmed.id
+
+      edited = update!(record, :edit_any, %{name: "Invoice 2"}, ahmed)
+      assert edited.updated_by_id == ahmed.id
+    end
+  end
+
   defp assert_untouched(result, record, writer) do
     assert result.updated_by_id == writer.id
     assert result.updated_at == record.updated_at

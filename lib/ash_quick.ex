@@ -394,6 +394,21 @@ defmodule AshQuick do
   resource stamping `:updated_by` itself, globally or inside an action, keeps
   its own stamp and stamps whenever that says.
 
+  ### Who can write the actor columns
+
+  Nobody but the stamps. The generated relationships carry `writable?: false`,
+  so their columns are not writable either: no action can accept them, `accept
+  :*` leaves them out, and a client sending one gets an error. Writable, an
+  update sending only `updated_by_id` would not be meaningful, so the stamp
+  would leave the value it sent in place, and `inserted_by_id` is never
+  re-stamped after the create. The stamps write the columns with
+  `Ash.Changeset.force_change_attribute/3`, which writability does not govern.
+
+  A seed or an import that has to set a writer itself passes that writer as
+  the actor. On a create it can also call `force_change_attribute/3` after
+  `for_create`; on an update that changes something the stamp runs last and
+  names the actor, whatever was forced before it.
+
   **Add-if-absent throughout**, and each of the five pieces is checked
   separately. A resource writing any of them keeps what it wrote, which is what
   the variations here depend on: a resource may keep `public? false` actor
@@ -437,6 +452,13 @@ defmodule AshQuick do
   guarantee rather than a property of whichever resources happened to be
   generated — without it a hand-written timestamp would quietly lack it and the
   header would work everywhere but there.
+
+  The verifier's errors reach the host as compile warnings. An actor
+  `belongs_to` whose column is writable is refused by the transformer instead,
+  so it fails the build whatever the host compiles with. A hand-written one
+  adds `writable?: false` to the `belongs_to` (and drops any
+  `attribute_writable? true`), or to the attribute under a `define_attribute?
+  false` one.
 
   Between them, add-if-absent and the verifier are why this could replace ~35
   resources' hand-written blocks without a single schema change: anything the

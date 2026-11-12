@@ -80,6 +80,13 @@ defmodule AshQuick.BookkeepingVerifierTest do
   # The errors the compiler would have raised for that probe.
   defp verifier_errors(body), do: VerifierErrors.errors(probe(body))
 
+  # A writable actor column fails the build itself, from the transformer:
+  # Spark reports a verifier's error only as a warning.
+  defp refusal(body) do
+    error = assert_raise Spark.Error.DslError, fn -> probe(body) end
+    Exception.message(error)
+  end
+
   defp message(body) do
     assert [%Spark.Error.DslError{} = error] = verifier_errors(body)
     Exception.message(error)
@@ -137,8 +144,10 @@ defmodule AshQuick.BookkeepingVerifierTest do
         assert relationship.domain == AshQuick.Test.Accounts
 
         # The `belongs_to` brings its own column, which is what
-        # `AshQuick.Info.actor_attributes/1` reads back.
-        assert Info.attribute(module, relationship.source_attribute)
+        # `AshQuick.Info.actor_attributes/1` reads back. Neither is writable:
+        # who wrote a record is the stamp's to say, not an action's input.
+        refute relationship.writable?
+        refute Info.attribute(module, relationship.source_attribute).writable?
       end
 
       assert AshQuick.Info.actor_attributes(module) == [:inserted_by_id, :updated_by_id]
@@ -230,6 +239,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
             domain AshQuick.Test.Accounts
             public? false
             allow_nil? true
+            writable? false
           end
         end
         """)
@@ -260,6 +270,7 @@ defmodule AshQuick.BookkeepingVerifierTest do
         relationships do
           belongs_to :inserted_by, AshQuick.Test.Actor do
             domain AshQuick.Test.Accounts
+            writable? false
           end
         end
 
@@ -414,6 +425,94 @@ defmodule AshQuick.BookkeepingVerifierTest do
 
       assert message =~ "inserted_at names :inserted_at, which is not `always_select?: true`"
       assert message =~ "add that option to the attribute itself"
+    end
+
+    test "a hand-written actor relationship whose column is writable" do
+      message =
+        refusal("""
+        ash_quick do
+          bookkeeping do
+            inserted_at false
+            updated_at false
+            updated_by false
+          end
+        end
+
+        attributes do
+          uuid_primary_key :id
+        end
+
+        relationships do
+          belongs_to :inserted_by, AshQuick.Test.Actor do
+            domain AshQuick.Test.Accounts
+          end
+        end
+        """)
+
+      assert message =~
+               "inserted_by names :inserted_by, whose column :inserted_by_id is writable"
+
+      assert message =~ "Add `writable?: false`"
+    end
+
+    test "a non-writable actor relationship that keeps its column writable" do
+      message =
+        refusal("""
+        ash_quick do
+          bookkeeping do
+            inserted_at false
+            updated_at false
+            updated_by false
+          end
+        end
+
+        attributes do
+          uuid_primary_key :id
+        end
+
+        relationships do
+          belongs_to :inserted_by, AshQuick.Test.Actor do
+            domain AshQuick.Test.Accounts
+            writable? false
+            attribute_writable? true
+          end
+        end
+        """)
+
+      assert message =~
+               "inserted_by names :inserted_by, whose column :inserted_by_id is writable"
+
+      assert message =~ "drop any `attribute_writable? true`"
+    end
+
+    test "a hand-written actor column that is writable, under a define_attribute? false relationship" do
+      message =
+        refusal("""
+        ash_quick do
+          bookkeeping do
+            inserted_at false
+            updated_at false
+            inserted_by false
+          end
+        end
+
+        attributes do
+          uuid_primary_key :id
+          attribute :updated_by_id, :uuid, public?: true
+        end
+
+        relationships do
+          belongs_to :updated_by, AshQuick.Test.Actor do
+            domain AshQuick.Test.Accounts
+            define_attribute? false
+            writable? false
+          end
+        end
+        """)
+
+      # The relationship is not writable, but the column is, and `accept :*`
+      # takes the column.
+      assert message =~ "updated_by names :updated_by, whose column :updated_by_id is writable"
     end
 
     test "an actor declared with no :actor_resource configured to point it at" do

@@ -166,7 +166,7 @@ defmodule AshQuick.Test.Bookkeeping.HandWrittenActorColumn do
   attributes do
     uuid_primary_key :id
     attribute :name, :string, public?: true
-    attribute :updated_by_id, :uuid, always_select?: true
+    attribute :updated_by_id, :uuid, always_select?: true, writable?: false
   end
 
   relationships do
@@ -206,7 +206,8 @@ defmodule AshQuick.Test.Bookkeeping.Stamped do
   `:rename` and `:download` keep Ash's `require_atomic? true`; the
   `_in_memory` twins are the same writes on the in-memory path. `:download`
   records that something happened and writes nothing. `:exclaim_in_memory`
-  writes through an expression on the in-memory path.
+  writes through an expression on the in-memory path. `:create_any` and
+  `:edit_any` accept `:*`.
   """
   use Ash.Resource,
     domain: AshQuick.Test.Bookkeeping.Domain,
@@ -228,6 +229,11 @@ defmodule AshQuick.Test.Bookkeeping.Stamped do
     defaults [:read, create: [:name]]
 
     update :rename, accept: [:name]
+
+    # Every public writable attribute, which is where a forged writer would
+    # arrive if the actor columns were among them.
+    create :create_any, accept: :*
+    update :edit_any, accept: :*
 
     update :rename_in_memory do
       accept [:name]
