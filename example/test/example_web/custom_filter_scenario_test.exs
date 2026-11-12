@@ -1651,7 +1651,14 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
   end
 
   # The rows the URL the form just applied carries, as written there.
+  #
+  # Apply is the filter form's: it sends the list a message, and the list
+  # patches once it has read the filtered rows, after `render_submit/1` has
+  # returned. `render/1` waits for the view to work through that message, and
+  # so for the patch, rather than racing the read against `assert_patch/1`'s
+  # timeout.
   defp applied(view) do
+    render(view)
     %URI{query: query} = view |> assert_patch() |> URI.parse()
     %{"custom_filter" => encoded} = URI.decode_query(query)
 
