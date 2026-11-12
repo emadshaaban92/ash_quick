@@ -15,6 +15,15 @@ defmodule AshQuick.LiveView.CustomFilter do
   # The operators that compare a field with no value.
   @valueless ~w(is_nil is_not_nil)
 
+  # Every operator `FilterForm` offers a row, and so the only ones a row is
+  # read by: a link can name any, and Ash's filter input reads the name as an
+  # operator, a field, or a relationship to filter through.
+  @operators ~w(equals not_equals gt gte lt lte contains not_contains starts_with ends_with
+                in has_any on) ++ @valueless
+
+  # And the ones a group joins its rows by.
+  @group_operators ~w(and or)
+
   # The operators a `Money` row compares by, its amount in its currency.
   @money_operators ~w(equals not_equals gt gte lt lte)
 
@@ -554,6 +563,13 @@ defmodule AshQuick.LiveView.CustomFilter do
   @doc """
   The filter Ash reads `filter` as, or `nil` when it filters by nothing.
 
+  Only what `FilterForm` could have written is read: a group joining its
+  rows by `"and"` or `"or"`, and a row comparing a field by an operator the
+  form offers with one value or a list of them. A link can carry any JSON,
+  and Ash's filter input reads a name where an operator goes as an
+  operator, a field or a relationship to filter through, so anything else
+  filters by nothing.
+
   Options:
 
     * `:timezone` — the zone On Day reads its date in, as the instants from
@@ -561,27 +577,70 @@ defmodule AshQuick.LiveView.CustomFilter do
       timestamps in, `AshQuick.Scope.timezone/1`, which the list passes;
       `AshQuick.Config.timezone/0` when none is given.
     * `:fields` — the fields a row can name, by name, as `fields_by_name/2`
-      gives them. Is Empty on a string also keeps one holding `""`, and on a
-      list one holding `[]`, which read as empty in the list, and only a
-      field's type says which it is.
+      gives them, and the only ones: a row naming any other filters by
+      nothing. Unsaid, a row can name any field. Is Empty on a string also
+      keeps one holding `""`, and on a list one holding `[]`, which read as
+      empty in the list, and only a field's type says which it is.
   """
   def build_ash_filter(filter, opts \\ []) do
     timezone = Keyword.get_lazy(opts, :timezone, &AshQuick.Config.timezone/0)
-    build(filter, timezone, Keyword.get(opts, :fields, %{}))
+    build(filter, timezone, Keyword.get(opts, :fields, :any))
   end
 
   defp build(%__MODULE__{operator: operator, children: children}, timezone, fields)
-       when is_list(children) and children != [] do
+       when is_list(children) and children != [] and operator in @group_operators do
     case Enum.map(children, &build(&1, timezone, fields)) |> Enum.reject(&is_nil/1) do
       [] -> nil
       filters -> %{operator => filters}
     end
   end
 
+  defp build(%__MODULE__{children: [_ | _]}, _timezone, _fields), do: nil
+
+  # Only an operator the form offers is read, on a field the list offers, as
+  # `:fields` names them, with a value that is one value or a list of them.
+  defp build(%__MODULE__{} = row, timezone, fields) do
+    if readable_row?(row, fields),
+      do: build_row(row, timezone, if(fields == :any, do: %{}, else: fields))
+  end
+
+  defp readable_row?(%__MODULE__{field_name: name} = row, fields),
+    do: is_binary(name) and readable?(row) and (fields == :any or Map.has_key?(fields, name))
+
+  @doc """
+  Whether `row` compares by an operator `FilterForm` offers, with a value
+  that operator can take: none, one value, or for Any Of and Has Any Of a
+  list of them. `build_ash_filter/2` reads no other row.
+  """
+  def readable?(%__MODULE__{operator: operator, value: value}) when operator in @operators do
+    case value_shape(operator) do
+      :none -> true
+      :list -> value?(value)
+      _shape -> not is_list(value) and value?(value)
+    end
+  end
+
+  def readable?(%__MODULE__{}), do: false
+
+  @doc false
+  # The operators a row is read by, and the types a field is offered by, for
+  # the test holding them to what `FilterForm` offers.
+  def operators, do: @operators
+  def offered_types, do: @offered_types
+
+  # One value as JSON writes one, a list of them, or none. A link's list can
+  # hold blanks and empty lists beside its values, which hold nothing.
+  defp value?(values) when is_list(values), do: Enum.all?(values, &(&1 == [] or one_value?(&1)))
+  defp value?(value), do: one_value?(value)
+
+  defp one_value?(value), do: is_nil(value) or scalar?(value)
+
+  defp scalar?(value), do: is_binary(value) or is_number(value) or is_boolean(value)
+
   # Is Empty on a field through a relationship asks that no related record
   # holds a value: a row with no owner has an empty owner's name, as one
   # whose owner the reader may not read does, which its column shows blank.
-  defp build(%__MODULE__{field_name: field_name, operator: operator}, _timezone, fields)
+  defp build_row(%__MODULE__{field_name: field_name, operator: operator}, _timezone, fields)
        when is_binary(field_name) and operator in @valueless do
     empty = fields[field_name] && empty_value(fields[field_name].field.type)
 
@@ -593,7 +652,7 @@ defmodule AshQuick.LiveView.CustomFilter do
   end
 
   # A link can hand Any Of one value rather than a list.
-  defp build(
+  defp build_row(
          %__MODULE__{field_name: field_name, operator: "in", value: value},
          _timezone,
          _fields
@@ -612,7 +671,11 @@ defmodule AshQuick.LiveView.CustomFilter do
   # refused-filter flash, so neither is applied as something else: compared
   # as written, a timestamp would cast a bare date as its midnight UTC, and a
   # datetime string as that instant.
-  defp build(%__MODULE__{field_name: field_name, operator: "on", value: value}, timezone, _fields)
+  defp build_row(
+         %__MODULE__{field_name: field_name, operator: "on", value: value},
+         timezone,
+         _fields
+       )
        when is_binary(field_name) do
     case LocalDatetime.day_range(value, timezone) do
       {:ok, from, to} -> at(field_name, %{"gte" => from, "lt" => to})
@@ -623,7 +686,7 @@ defmodule AshQuick.LiveView.CustomFilter do
   # Has Any Of keeps a row whose list holds any value picked. Ash's
   # `intersects/2`, which AshPostgres reads as `&&`, rather than its
   # `overlaps` operator, which a filter's input cannot name.
-  defp build(
+  defp build_row(
          %__MODULE__{field_name: field_name, operator: "has_any", value: value},
          _timezone,
          _fields
@@ -635,7 +698,7 @@ defmodule AshQuick.LiveView.CustomFilter do
     end
   end
 
-  defp build(
+  defp build_row(
          %__MODULE__{field_name: field_name, operator: "not_contains", value: value},
          _timezone,
          _fields
@@ -644,7 +707,7 @@ defmodule AshQuick.LiveView.CustomFilter do
     on(field_name, &%{"not" => %{&1 => %{"contains" => value}}})
   end
 
-  defp build(
+  defp build_row(
          %__MODULE__{field_name: field_name, operator: operator, value: value},
          _timezone,
          _fields
@@ -665,7 +728,7 @@ defmodule AshQuick.LiveView.CustomFilter do
   # currency, or with none, that of Localize's locale. A value that will not
   # cast is compared as written, and the read refuses it, with the
   # refused-filter flash, as it does any value its field's type cannot cast.
-  defp build(
+  defp build_row(
          %__MODULE__{field_name: field_name, operator: operator, value: value},
          _timezone,
          fields
@@ -681,7 +744,7 @@ defmodule AshQuick.LiveView.CustomFilter do
     end
   end
 
-  defp build(
+  defp build_row(
          %__MODULE__{field_name: field_name, operator: operator, value: value},
          _timezone,
          _fields
@@ -690,9 +753,7 @@ defmodule AshQuick.LiveView.CustomFilter do
     at(field_name, %{operator => value})
   end
 
-  defp build(%__MODULE__{}, _timezone, _fields) do
-    nil
-  end
+  defp build_row(%__MODULE__{}, _timezone, _fields), do: nil
 
   defp at(field_name, predicate), do: on(field_name, &%{&1 => predicate})
 
@@ -838,7 +899,7 @@ defmodule AshQuick.LiveView.CustomFilter do
   """
   def from_string(filter_string) when is_binary(filter_string) do
     case Base.decode64(filter_string) do
-      {:ok, json} -> json |> JSON.decode!() |> from_map()
+      {:ok, json} -> json |> JSON.decode!() |> from_map() |> root()
       :error -> nil
     end
   rescue
@@ -847,8 +908,51 @@ defmodule AshQuick.LiveView.CustomFilter do
     JSON.DecodeError -> nil
   end
 
-  defp from_map(%{"children" => children} = filter_map)
-       when is_list(children) and children != [] do
+  # The form draws its root as a group, and reads its rows from it, so a
+  # root that is one row, as a link can write one, is that row in an And
+  # group, which filters as the row does, and an empty root is a group with
+  # no rows.
+  defp root(nil), do: nil
+  defp root(%__MODULE__{children: [_ | _]} = group), do: group
+
+  defp root(%__MODULE__{field_name: nil, children: children} = empty)
+       when children in [nil, []],
+       do: %__MODULE__{empty | operator: "and", children: []}
+
+  defp root(%__MODULE__{} = row),
+    do: %__MODULE__{uuid: Ash.UUID.generate(), operator: "and", children: [row]}
+
+  # A group joins its rows by `"and"` or `"or"`, the only ones the form
+  # writes; any other name reads as no filter, as a group whose operator is
+  # no string does.
+  defp from_map(%{"children" => [_ | _] = children} = filter_map) do
+    if filter_map["operator"] in @group_operators and well_formed?(filter_map),
+      do: group(filter_map, children)
+  end
+
+  # Each slot holds what the form writes there, and nothing else reaches the
+  # form or the read: text for the operator and field name, one value or a
+  # list of them for the value, and a list for the children. Every slot is
+  # JSON, so an object or a list could stand anywhere, and the form reads the
+  # operator and field name as text.
+  defp from_map(%{} = filter_map) do
+    if well_formed?(filter_map), do: row(filter_map)
+  end
+
+  # Valid JSON that is not a filter — a bare list, a number, or one of those
+  # nested under `"children"`. Answered here so that a `FunctionClauseError`
+  # from this module stays distinguishable from a real bug.
+  defp from_map(_), do: nil
+
+  defp well_formed?(filter_map) do
+    text?(filter_map["operator"]) and text?(filter_map["field_name"]) and
+      value?(filter_map["value"]) and
+      (is_nil(filter_map["children"]) or is_list(filter_map["children"]))
+  end
+
+  defp text?(value), do: is_nil(value) or is_binary(value)
+
+  defp group(filter_map, children) do
     filter_map
     |> Map.put("uuid", Ash.UUID.generate())
     |> Map.put("children", children |> Enum.map(&from_map/1) |> Enum.reject(&is_nil/1))
@@ -856,15 +960,10 @@ defmodule AshQuick.LiveView.CustomFilter do
     |> then(&struct(__MODULE__, &1))
   end
 
-  defp from_map(%{} = filter_map) do
+  defp row(filter_map) do
     filter_map
     |> Map.put("uuid", Ash.UUID.generate())
     |> Enum.into(%{}, fn {key, val} -> {String.to_existing_atom(key), val} end)
     |> then(&struct(__MODULE__, &1))
   end
-
-  # Valid JSON that is not a filter — a bare list, a number, or one of those
-  # nested under `"children"`. Answered here so that a `FunctionClauseError`
-  # from this module stays distinguishable from a real bug.
-  defp from_map(_), do: nil
 end

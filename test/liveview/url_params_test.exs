@@ -171,9 +171,12 @@ defmodule AshQuick.LiveView.URLParamsTest do
 
       decoded = URLParams.from_url_params(%{"custom_filter" => CustomFilter.to_string!(filter)})
 
-      assert decoded.custom_filter.field_name == "name"
-      assert decoded.custom_filter.operator == "equals"
-      assert decoded.custom_filter.value == "widget"
+      # A root written as one row comes back as that row in an And group,
+      # the root the form draws.
+      assert %CustomFilter{operator: "and", children: [row]} = decoded.custom_filter
+      assert row.field_name == "name"
+      assert row.operator == "equals"
+      assert row.value == "widget"
     end
 
     test "a filter that does not decode is no filter, however it fails to" do
@@ -196,7 +199,22 @@ defmodule AshQuick.LiveView.URLParamsTest do
         :base64.encode(JSON.encode!(%{"no_such_key" => 1})),
         # JSON that is not a filter at all.
         :base64.encode(JSON.encode!([1, 2])),
-        :base64.encode(JSON.encode!("filter"))
+        :base64.encode(JSON.encode!("filter")),
+        # A filter with JSON where the form writes text, or values: the form
+        # reads its operator and field name as text, and Ash's filter input
+        # reads a map where a value goes as more filter.
+        :base64.encode(JSON.encode!(%{"operator" => %{"a" => 1}, "field_name" => "name"})),
+        :base64.encode(JSON.encode!(%{"operator" => "equals", "field_name" => ["name"]})),
+        :base64.encode(JSON.encode!(%{"operator" => "equals", "value" => %{"eq" => 1}})),
+        :base64.encode(JSON.encode!(%{"operator" => "in", "value" => [%{"eq" => 1}]})),
+        :base64.encode(JSON.encode!(%{"operator" => "equals", "children" => %{"a" => 1}})),
+        # A group joining its rows by anything but `and` or `or`.
+        :base64.encode(
+          JSON.encode!(%{
+            "operator" => "brand",
+            "children" => [%{"operator" => "equals", "field_name" => "name", "value" => "x"}]
+          })
+        )
       ]
 
       for custom_filter <- undecodable do

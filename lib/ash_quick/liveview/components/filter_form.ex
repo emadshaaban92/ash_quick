@@ -805,10 +805,12 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     |> MapSet.new(& &1.name)
   end
 
-  # A row can name a field this form does not offer: a link written for an
-  # actor who could see it, or by hand. The select holds it as a disabled
-  # option, so it shows the field the row filters on instead of the first one
-  # offered, which a browser would show and could not then be picked.
+  # A row can name a field this form does not offer: the list drops a link's
+  # before the form sees it, so only a page opened before the actor's scope
+  # changed, or a caller that drops nothing, hands it one. The select holds
+  # it as a disabled option, so it shows the field the row filters on instead
+  # of the first one offered, which a browser would show and could not then
+  # be picked.
   defp field_options(fields, field_name, labels, resource) do
     options = Enum.map(fields, &{field_label(&1.name, labels, resource), &1.name})
 
@@ -924,6 +926,18 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       :single -> @equality ++ ["in"]
       :array -> ["has_any"]
       nil -> type_operators(field)
+    end
+  end
+
+  @doc false
+  # Every operator a row on `field` can offer, Is Empty included whatever the
+  # actor sees: the ones `CustomFilter.readable?/1` has to read, which a test
+  # holds the two to, so an operator the form gains is not dropped from the
+  # URL it writes.
+  def offered_operators(field) do
+    case base_operators(field) do
+      [] -> []
+      operators -> operators ++ @emptiness
     end
   end
 

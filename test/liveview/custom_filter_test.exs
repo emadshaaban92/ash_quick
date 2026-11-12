@@ -1,6 +1,7 @@
 defmodule AshQuick.LiveView.CustomFilterTest do
   use ExUnit.Case, async: true
 
+  alias AshQuick.LiveView.Components.FilterForm
   alias AshQuick.LiveView.CustomFilter
   alias AshQuick.LiveView.FilterField
 
@@ -225,6 +226,74 @@ defmodule AshQuick.LiveView.CustomFilterTest do
 
       assert CustomFilter.build_ash_filter(not_empty, fields: fields) ==
                Ash.Query.Exists.new([:owner], filled)
+    end
+
+    # A link can carry any JSON, and Ash's filter input reads a name where an
+    # operator goes as an operator, a field or a relationship: `brand` with
+    # `name` as its operator and a map as its value once read as
+    # `%{"brand" => %{"name" => %{"contains" => "x"}}}`.
+    test "a row is read only by an operator the form offers, with one value or a list" do
+      for {operator, value} <- [
+            {"name", %{"contains" => "x"}},
+            {"eq", "x"},
+            {"equals", %{"contains" => "x"}},
+            {"equals", ["x", "y"]},
+            {"in", [%{"contains" => "x"}]},
+            {"in", [["x"]]}
+          ] do
+        filter = %CustomFilter{row("brand") | operator: operator, value: value}
+
+        assert CustomFilter.build_ash_filter(filter) == nil
+        refute CustomFilter.readable?(filter)
+      end
+
+      assert CustomFilter.build_ash_filter(%CustomFilter{row("name") | value: "x"}) ==
+               %{"name" => %{"equals" => "x"}}
+    end
+
+    # The allow-list repeats what `FilterForm` offers: an operator the form
+    # gained and the list did not would apply, write its URL, and be dropped
+    # from it on the next read. One the list holds and the form never offers
+    # is one a link reaches and the form cannot show. A `Money` is offered
+    # equality and comparisons, as a number is; the package has no AshMoney
+    # to build one with.
+    test "reads every operator the form offers, and only those" do
+      enum = %{type: Ash.Type.Atom, constraints: [one_of: [:a, :b]]}
+      enums = %{type: {:array, Ash.Type.Atom}, constraints: [items: [one_of: [:a, :b]]]}
+
+      fields =
+        [enum, enums] ++
+          Enum.map(CustomFilter.offered_types(), &%{type: &1, constraints: []})
+
+      offered = fields |> Enum.flat_map(&FilterForm.offered_operators/1) |> Enum.uniq()
+
+      for operator <- offered do
+        value = if CustomFilter.value_shape(operator) == :list, do: ["x"], else: "x"
+        assert CustomFilter.readable?(%CustomFilter{row("f") | operator: operator, value: value})
+      end
+
+      assert Enum.sort(offered) == Enum.sort(CustomFilter.operators())
+    end
+
+    test "a group is read only when it joins its rows by `and` or `or`" do
+      leaf = %CustomFilter{row("name") | value: "x"}
+
+      for operator <- ["brand", "not", nil] do
+        assert CustomFilter.build_ash_filter(%CustomFilter{group([leaf]) | operator: operator}) ==
+                 nil
+      end
+
+      assert CustomFilter.build_ash_filter(%CustomFilter{group([leaf]) | operator: "or"}) ==
+               %{"or" => [%{"name" => %{"equals" => "x"}}]}
+    end
+
+    test "with `:fields`, a row on any other field filters by nothing" do
+      fields = typed(%{"name" => Ash.Type.String})
+      name = %CustomFilter{row("name") | value: "x"}
+      brand = %CustomFilter{row("brand") | value: "x"}
+
+      assert CustomFilter.build_ash_filter(group([name, brand]), fields: fields) ==
+               %{"and" => [%{"name" => %{"equals" => "x"}}]}
     end
 
     test "On Day is the day's instants in the zone given" do

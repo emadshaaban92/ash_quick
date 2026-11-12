@@ -109,21 +109,24 @@ defmodule ExampleWeb.HostileParamsTest do
 
     # The flash names the filter whatever actually raised, so without this a
     # read that merely failed once leaves no trace but a wrong explanation.
+    # A field the list does not offer never gets this far, so this one is an
+    # offered field with a value its type cannot cast, which only the read
+    # refuses.
     test "and the error behind it is logged rather than discarded", %{conn: conn, admin: admin} do
       product(name: "Four-season tent", actor: admin)
+      filter = %{"operator" => "equals", "field_name" => "id", "value" => "not-a-uuid"}
 
       log =
         capture_log(fn ->
-          {:ok, _view, _html} = live(conn, ~p"/products?custom_filter=#{refused_filter()}")
+          {:ok, _view, _html} = live(conn, ~p"/products?custom_filter=#{encode_filter(filter)}")
         end)
 
-      assert log =~ "Ash.Error.Query.NoSuchField"
-      assert log =~ "No such field"
+      assert log =~ "Ash.Error.Query.InvalidFilterValue"
       # Where it was raised, from the error's own frames rather than the
       # rescue's, which only say where `Ash.read!` re-raised.
-      assert log =~ "Ash.Query.filter_input/"
+      assert log =~ "Ecto.Repo.Queryable"
       # And the field it fired on, which the flash deliberately does not name.
-      assert log =~ ~s(Filtered fields: "no_such_field")
+      assert log =~ ~s(Filtered fields: "id")
     end
 
     # A filter's value is whatever the visitor typed into it, an email or a
@@ -152,18 +155,20 @@ defmodule ExampleWeb.HostileParamsTest do
     end
 
     # The field names come from the URL as well, so one carrying a newline
-    # would otherwise write a line of the visitor's into the log.
-    test "with the field names escaped", %{conn: conn} do
+    # would otherwise write a line of the visitor's into the log. It names no
+    # field the list offers, so it is dropped before the read, and never
+    # reaches the log at all.
+    test "with no field name the list does not offer", %{conn: conn} do
       forged = "x\n[error] forged line"
       filter = %{"operator" => "equals", "field_name" => forged, "value" => "1"}
 
       log =
         capture_log(fn ->
-          {:ok, _view, _html} = live(conn, ~p"/products?custom_filter=#{encode_filter(filter)}")
+          {:ok, view, _html} = live(conn, ~p"/products?custom_filter=#{encode_filter(filter)}")
+          assert render(view) =~ "That filter couldn&#39;t be applied to this list"
         end)
 
-      assert log =~ ~s(Filtered fields: "x\\n[error] forged line")
-      refute log =~ "\n[error] forged line"
+      refute log =~ "forged line"
     end
 
     # The second way a filter fails, and the one that is not only a hostile-URL
@@ -199,6 +204,186 @@ defmodule ExampleWeb.HostileParamsTest do
 
       assert html =~ "Four-season tent"
       refute html =~ "Three-season tent"
+    end
+  end
+
+  # The list offers its own fields only: `/products` names no `filterable:`,
+  # so no field through a relationship. A link can still write any JSON, and
+  # every part of a row once went into Ash's filter input as written, so a
+  # relationship's name as the field, its field's name as the operator and a
+  # map as the value read as `%{"brand" => %{"name" => %{"contains" => ...}}}`:
+  # a filter through a relationship the page never offered.
+  describe "a custom filter reaching past the fields the list offers" do
+    setup %{admin: admin} do
+      acme = brand(name: "Acme", actor: admin)
+      other = brand(name: "Zenith", actor: admin)
+      product(name: "Acme tent", brand: acme, actor: admin)
+      product(name: "Zenith tent", brand: other, actor: admin)
+      :ok
+    end
+
+    test "through a relationship named as the field is not applied", %{conn: conn} do
+      filter = %{
+        "operator" => "name",
+        "field_name" => "brand",
+        "value" => %{"contains" => "Acme"}
+      }
+
+      {:ok, _view, html} = live(conn, ~p"/products?custom_filter=#{encode_filter(filter)}")
+
+      assert html =~ "Acme tent"
+      assert html =~ "Zenith tent"
+    end
+
+    test "through a group whose operator names a relationship is not applied", %{conn: conn} do
+      filter = %{
+        "operator" => "brand",
+        "children" => [
+          %{"operator" => "contains", "field_name" => "name", "value" => "Acme"}
+        ]
+      }
+
+      {:ok, _view, html} = live(conn, ~p"/products?custom_filter=#{encode_filter(filter)}")
+
+      assert html =~ "Acme tent"
+      assert html =~ "Zenith tent"
+    end
+
+    test "through `not` named as the field is not applied", %{conn: conn} do
+      filter = %{
+        "operator" => "brand",
+        "field_name" => "not",
+        "value" => %{"name" => %{"contains" => "Acme"}}
+      }
+
+      {:ok, _view, html} = live(conn, ~p"/products?custom_filter=#{encode_filter(filter)}")
+
+      assert html =~ "Acme tent"
+      assert html =~ "Zenith tent"
+    end
+
+    test "an operator the form never offers is not applied", %{conn: conn} do
+      # `"eq"` is an Ash operator, but no operator of this form: only what the
+      # form offers is read.
+      filter = %{"operator" => "eq", "field_name" => "name", "value" => "Acme tent"}
+
+      {:ok, view, html} = live(conn, ~p"/products?custom_filter=#{encode_filter(filter)}")
+
+      assert html =~ "Zenith tent"
+      assert render(view) =~ "That filter couldn&#39;t be applied to this list"
+    end
+
+    test "a value that is a map is not applied", %{conn: conn} do
+      filter = %{
+        "operator" => "equals",
+        "field_name" => "name",
+        "value" => %{"contains" => "Acme"}
+      }
+
+      {:ok, _view, html} = live(conn, ~p"/products?custom_filter=#{encode_filter(filter)}")
+
+      assert html =~ "Acme tent"
+      assert html =~ "Zenith tent"
+    end
+
+    # A filter decodes from JSON, so every slot of a row can hold any JSON: an
+    # object or a list where an operator, a field name or a value goes. The
+    # filter form interpolates the operator and field name, and compares and
+    # renders all three, so none of these may reach it as anything but text.
+    test "a slot holding a JSON object or list lists everything, form open or not", %{
+      conn: conn
+    } do
+      leaf = %{"operator" => "equals", "field_name" => "name", "value" => "Acme tent"}
+
+      for filter <- [
+            %{"operator" => %{"a" => 1}, "children" => [leaf]},
+            %{"operator" => ["and"], "children" => [leaf]},
+            %{leaf | "operator" => %{"a" => 1}},
+            %{leaf | "operator" => ["equals"]},
+            %{"operator" => "and", "children" => [%{leaf | "operator" => %{"a" => 1}}]},
+            %{leaf | "field_name" => %{"a" => 1}},
+            %{leaf | "field_name" => ["name"]},
+            %{leaf | "value" => %{"a" => 1}},
+            %{leaf | "value" => [%{"a" => 1}]},
+            %{"operator" => "and", "children" => [%{leaf | "value" => %{"a" => 1}}]}
+          ],
+          show <- ["", "&show_custom_filter=true"] do
+        url = "/products?custom_filter=#{URI.encode_www_form(encode_filter(filter))}#{show}"
+
+        assert {:ok, view, html} = live(conn, url), "crashed on #{inspect(filter)}#{show}"
+        assert html =~ "Zenith tent", "applied #{inspect(filter)}#{show}"
+        assert render(view) =~ "Zenith tent"
+      end
+    end
+
+    # A group whose rows were all removed is what the form writes once the
+    # visitor removes them, the root included: it filters by nothing, and is
+    # not refused.
+    test "removing the only row and applying is no refused filter", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/products?show_custom_filter=true")
+
+      [uuid] =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("select[name^='field_name-']")
+        |> LazyHTML.attribute("name")
+        |> Enum.map(&String.replace_prefix(&1, "field_name-", ""))
+
+      view
+      |> element(
+        "#custom-filter-form button[phx-click='remove_filter'][phx-value-uuid='#{uuid}']"
+      )
+      |> render_click()
+
+      view |> element("#custom-filter-form") |> render_submit()
+
+      html = render(view)
+      assert html =~ "Acme tent"
+      assert html =~ "Zenith tent"
+      refute html =~ "couldn&#39;t be applied"
+    end
+
+    test "a row beside an emptied group still filters, unrefused", %{conn: conn} do
+      filter = %{
+        "operator" => "and",
+        "children" => [
+          %{"operator" => "contains", "field_name" => "name", "value" => "Acme"},
+          %{"operator" => "or", "children" => []}
+        ]
+      }
+
+      {:ok, view, html} = live(conn, ~p"/products?custom_filter=#{encode_filter(filter)}")
+
+      assert html =~ "Acme tent"
+      refute html =~ "Zenith tent"
+      refute render(view) =~ "couldn&#39;t be applied"
+    end
+
+    # The form writes its root as a group, but a link can write it as one
+    # row, which the form draws as the group's one row rather than taking the
+    # page down.
+    test "a root that is one row filters, form open or not", %{conn: conn} do
+      filter = %{"operator" => "equals", "field_name" => "name", "value" => "Acme tent"}
+
+      for show <- ["", "&show_custom_filter=true"] do
+        url = "/products?custom_filter=#{URI.encode_www_form(encode_filter(filter))}#{show}"
+
+        assert {:ok, view, html} = live(conn, url), "crashed#{show}"
+        assert html =~ "Acme tent"
+        refute html =~ "Zenith tent"
+        refute render(view) =~ "couldn&#39;t be applied"
+      end
+    end
+
+    # The negative: a row the form could have written still filters.
+    test "a row on an offered field with an offered operator still filters", %{conn: conn} do
+      filter = %{"operator" => "contains", "field_name" => "name", "value" => "Acme"}
+
+      {:ok, _view, html} = live(conn, ~p"/products?custom_filter=#{encode_filter(filter)}")
+
+      assert html =~ "Acme tent"
+      refute html =~ "Zenith tent"
     end
   end
 

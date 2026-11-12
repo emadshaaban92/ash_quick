@@ -1198,6 +1198,12 @@ of the values picked. Is Empty is offered on every list, `allow_nil?: false`
 or not, and counts one holding nothing as empty, as it counts a blank string
 on a string field.
 
+A filter travels in the URL, so a link can carry one written by hand. The
+list reads only what the form could have written: rows on the fields the form
+offers, by its operators, each with one value or, for Any Of and Has Any Of, a
+list of them, joined by And or Or. It drops any other row before it reads, and
+tells the visitor the filter couldn't be applied.
+
 Filtering by an unindexed column reads the whole table, which is nothing on a
 small one; for a large one, name the fields it has indexes for, in the order
 the form lists them:
