@@ -72,8 +72,8 @@ defmodule Example.Accounts.AuditLog do
 
   ash_quick do
     liveness do
-      # Append-only, and a refetch only refreshes rows already on screen — a new
-      # row could never appear. Publishing would be traffic no page can act on.
+      # Every write in the app writes a row here, so a live list would be
+      # offering "new records" to every reader all the time. It stays static.
       enabled? false
     end
 

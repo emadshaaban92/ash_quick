@@ -39,6 +39,9 @@ defmodule AshQuick.LiveView.Components.ListViewDiffTest do
       row_actions: nil,
       export_data: nil,
       export_format: nil,
+      row_order: ["row-one", "row-two"],
+      gone_rows: MapSet.new(),
+      list_news: false,
       data: %{
         results: [
           %OtherName{id: "row-one", name: "Alpha Row Name"},
@@ -88,7 +91,12 @@ defmodule AshQuick.LiveView.Components.ListViewDiffTest do
     {_first, prints} = render_diff(socket, Diff.new_fingerprints())
 
     data = %{socket.assigns.data | results: [%OtherName{id: "row-three", name: "Gamma Row Name"}]}
-    socket = socket |> rendered() |> Phoenix.Component.assign(:data, data)
+
+    socket =
+      socket
+      |> rendered()
+      |> Phoenix.Component.assign(data: data, row_order: ["row-three"])
+
     {second, _prints} = render_diff(socket, prints)
 
     assert second =~ "Gamma Row Name"

@@ -57,6 +57,21 @@ defmodule AshQuick.LiveView.Components.ListView do
   attr(:selected_rows, :map, default: nil)
   attr(:action_running, :boolean, default: false)
 
+  attr(:row_order, :list,
+    default: nil,
+    doc: "the ids drawn, in the order drawn, placeholders among them; `nil` draws `@data.results`"
+  )
+
+  attr(:gone_rows, :any,
+    default: MapSet.new(),
+    doc: "a `MapSet` of the ids drawn as \"No longer available\" placeholders"
+  )
+
+  attr(:list_news, :boolean,
+    default: false,
+    doc: "whether records not on screen now belong on the page, which shows the Reload bar"
+  )
+
   attr(:row_actions, :map,
     default: nil,
     doc: "`%{id: record_id, actions: [action]}` for the row whose menu was last opened"
@@ -118,6 +133,17 @@ defmodule AshQuick.LiveView.Components.ListView do
             scope={@scope}
             columns={@fields}
           />
+          <div
+            :if={@list_news}
+            id="list-news"
+            role="status"
+            class="alert alert-info alert-soft mx-4 mb-3 flex flex-wrap items-center justify-between gap-2"
+          >
+            <span>{gettext("This list has new records.")}</span>
+            <button type="button" phx-click="reload_list" class="btn btn-sm">
+              {gettext("Reload")}
+            </button>
+          </div>
           <.form for={%{}} id="table-form" phx-change="table-form-change">
             <div class="overflow-x-auto min-h-[20rem] lg:min-h-[30rem]">
               <table class="table table-sm text-base-content">
@@ -155,50 +181,62 @@ defmodule AshQuick.LiveView.Components.ListView do
                 </thead>
                 <tbody id={@id}>
                   <tr
-                    :for={row <- @data.results}
+                    :for={{kind, row} <- screen_rows(@data.results, @row_order, @gone_rows)}
                     id={row.id}
                     :key={row.id}
-                    class={[
-                      @row_css_class && @row_css_class.(row),
-                      AshQuick.Info.inactive?(row) && "opacity-50"
-                    ]}
+                    data-gone={kind == :gone}
+                    class={
+                      if kind == :gone,
+                        do: "text-base-content/60",
+                        else: [
+                          @row_css_class && @row_css_class.(row),
+                          AshQuick.Info.inactive?(row) && "opacity-50"
+                        ]
+                    }
                   >
-                    <td :if={@selected_rows} class="w-4">
-                      <input
-                        id={"select_row_#{row.id}"}
-                        name={"#{row.id}"}
-                        type="checkbox"
-                        aria-label={gettext("Select row")}
-                        checked={@selected_rows[row.id] == "on"}
-                        class="checkbox checkbox-sm bg-base-300 text-base-content"
-                      />
-                    </td>
-                    <td :for={field <- @fields}>
-                      <.render_field
-                        field={field}
-                        record={row}
-                        scope={@scope}
-                        linker={@linker}
-                      />
-                    </td>
-                    <td>
-                      <div class="flex items-center justify-end">
-                        <.link
-                          patch={
-                            URLParams.full_path(
-                              @base_path,
-                              @params |> URLParams.to_details_params(row.id)
-                            )
-                          }
-                          class="btn btn-ghost btn-xs btn-square"
-                        >
-                          <span class="sr-only">{gettext("View details")}</span>
-                          <.icon name="hero-eye" class="w-5 h-5" />
-                        </.link>
+                    <%= if kind == :gone do %>
+                      <td :if={@selected_rows} class="w-4"></td>
+                      <td colspan={length(@fields) + 1} class="italic">
+                        {gettext("No longer available")}
+                      </td>
+                    <% else %>
+                      <td :if={@selected_rows} class="w-4">
+                        <input
+                          id={"select_row_#{row.id}"}
+                          name={"#{row.id}"}
+                          type="checkbox"
+                          aria-label={gettext("Select row")}
+                          checked={@selected_rows[row.id] == "on"}
+                          class="checkbox checkbox-sm bg-base-300 text-base-content"
+                        />
+                      </td>
+                      <td :for={field <- @fields}>
+                        <.render_field
+                          field={field}
+                          record={row}
+                          scope={@scope}
+                          linker={@linker}
+                        />
+                      </td>
+                      <td>
+                        <div class="flex items-center justify-end">
+                          <.link
+                            patch={
+                              URLParams.full_path(
+                                @base_path,
+                                @params |> URLParams.to_details_params(row.id)
+                              )
+                            }
+                            class="btn btn-ghost btn-xs btn-square"
+                          >
+                            <span class="sr-only">{gettext("View details")}</span>
+                            <.icon name="hero-eye" class="w-5 h-5" />
+                          </.link>
 
-                        <.record_actions record={row} row_actions={@row_actions} />
-                      </div>
-                    </td>
+                          <.record_actions record={row} row_actions={@row_actions} />
+                        </div>
+                      </td>
+                    <% end %>
                   </tr>
                 </tbody>
               </table>
@@ -225,6 +263,24 @@ defmodule AshQuick.LiveView.Components.ListView do
       />
     </section>
     """
+  end
+
+  # The rows in the order they were drawn, each record still read back as
+  # `{:row, record}` and each one that was not as `{:gone, %{id: id}}`: a
+  # live refetch never moves a row, so what the reader was about to click is
+  # still where it was. See `AshQuick.LiveView.ListUtils`.
+  defp screen_rows(results, nil, _gone), do: Enum.map(results, &{:row, &1})
+
+  defp screen_rows(results, order, gone) do
+    by_id = Map.new(results, &{&1.id, &1})
+
+    for id <- order,
+        slot =
+          if(MapSet.member?(gone, id),
+            do: {:gone, %{id: id}},
+            else: by_id[id] && {:row, by_id[id]}
+          ),
+        do: slot
   end
 
   # The header's link leads to the next sort `URLParams.cycle_sort/2` gives the

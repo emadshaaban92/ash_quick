@@ -29,7 +29,8 @@ defmodule AshQuick.Topics do
   The resource-wide topic: `"product"`.
 
   Published for every create, update and destroy, so a subscriber hears about
-  the whole collection — including records it has never seen.
+  the whole collection — including records it has never seen. A list listens
+  here, which is how it knows to offer a Reload.
   """
   def collection(resource) do
     Spark.Dsl.Extension.get_opt(resource, [:ash_quick, :liveness], :prefix, nil) ||
@@ -39,9 +40,9 @@ defmodule AshQuick.Topics do
   @doc """
   One record's topic: `"product:<id>"`.
 
-  Published alongside `collection/1` for the same changes. A subscriber that
-  knows which records are on screen listens on these instead and hears nothing
-  about the rest.
+  Published alongside `collection/1` for the same changes. A details page, and
+  a list for the related records its rows show, listen on these and hear
+  nothing about the rest.
   """
   def record(resource, id) do
     "#{collection(resource)}#{delimiter()}#{id}"
