@@ -382,6 +382,41 @@ defmodule ExampleWeb.ListScenarioTest do
       refute csv =~ lamp.name
     end
 
+    # Opened from a CSV, a cell that starts like a formula is run as one.
+    test "writes a name that starts like a formula as text", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      product(name: "=HYPERLINK(\"http://example.test\")", actor: admin)
+
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/products")
+
+      view |> element("a", "CSV") |> render_click()
+      render_async(view, @export_timeout)
+
+      csv = exported_csv(admin)
+      assert csv =~ "'=HYPERLINK("
+      refute csv =~ ~r/(^|,)"?=HYPERLINK/m
+    end
+
+    # A ticked id reaches the page as an event, which anybody can write. The
+    # rows a selection exports are the ticked rows the page is showing.
+    test "a ticked id the page is not showing exports nothing of it", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      tent = product(name: "Four-season tent", actor: admin)
+      lamp = product(name: "Headlamp", actor: admin)
+
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/products?search=tent")
+      render_change(view, "table-form-change", %{tent.id => "on", lamp.id => "on"})
+
+      view |> element("a", "CSV") |> render_click()
+      render_async(view, @export_timeout)
+
+      csv = exported_csv(admin)
+      assert csv =~ tent.name
+      refute csv =~ lamp.name
+    end
+
     # Issue #141: Retry pushed an event nothing handled, and the page crashed.
     test "a failed export's Retry runs it again", ctx do
       %{conn: conn, admin: admin} = ctx
@@ -440,6 +475,62 @@ defmodule ExampleWeb.ListScenarioTest do
 
       assert has_element?(view, "#ash-quick-export-modal a", "Download")
       assert [_workbook] = Enum.filter(S3Stub.keys(), &(&1 =~ key and &1 =~ ".xlsx"))
+    end
+
+    # Each export streams a whole list, so a page runs one at a time. A held
+    # upload keeps the first one running; a second would be held too.
+    test "an export asked for while one runs is ignored", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      product(name: "Four-season tent", actor: admin)
+
+      key = "exports/#{admin.id}/products-"
+      S3Stub.refuse(key, hold: true)
+      on_exit(fn -> S3Stub.accept(key) end)
+
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/products")
+
+      capture_log(fn ->
+        view |> element("a", "CSV") |> render_click()
+        assert_receive {S3Stub, :held, upload}, @export_timeout
+
+        view |> element("a", "Excel") |> render_click()
+        refute_receive {S3Stub, :held, _second}, 300
+
+        S3Stub.release(upload)
+        render_async(view, @export_timeout)
+      end)
+
+      assert has_element?(view, "#ash-quick-export-modal", "Failed to export")
+    end
+
+    # The running export is what refuses a second, so a patch keeps it.
+    test "an export asked for after a patch, while one runs, is ignored", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      product(name: "Four-season tent", actor: admin)
+
+      key = "exports/#{admin.id}/products-"
+      S3Stub.refuse(key, hold: true)
+      on_exit(fn -> S3Stub.accept(key) end)
+
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/products")
+
+      capture_log(fn ->
+        view |> element("a", "CSV") |> render_click()
+        assert_receive {S3Stub, :held, upload}, @export_timeout
+
+        render_patch(view, ~p"/products?search=tent")
+        assert has_element?(view, "#ash-quick-export-modal")
+
+        view |> element("a", "CSV") |> render_click()
+        refute_receive {S3Stub, :held, _second}, 300
+
+        S3Stub.release(upload)
+        render_async(view, @export_timeout)
+      end)
+
+      assert has_element?(view, "#ash-quick-export-modal", "Failed to export")
     end
 
     # A patch resets the list's assigns while the export's task runs on, and

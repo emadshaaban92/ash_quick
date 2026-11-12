@@ -7,6 +7,7 @@ defmodule AshQuick.LiveView.ListUtils do
   use Gettext, backend: AshQuick.Gettext
 
   alias Ash.Resource.Actions
+  alias Phoenix.LiveView.AsyncResult
   alias AshQuick.Labels
   alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.BulkActions
@@ -46,7 +47,7 @@ defmodule AshQuick.LiveView.ListUtils do
     socket
     |> assign(:params, params)
     |> assign(:selected_rows, %{})
-    |> assign(:export_data, nil)
+    |> assign(:export_data, running_export(socket))
     # Kept across patches: an export a patch interrupted still finishes, and
     # its modal comes back, so a failed one still needs its format to retry.
     |> assign_new(:export_format, fn -> nil end)
@@ -70,6 +71,15 @@ defmodule AshQuick.LiveView.ListUtils do
       [initial: page] ++ Liveness.list_options(options)
     )
   end
+
+  # A patch closes a finished export's modal and leaves a running one in
+  # place. The running one is also what refuses a second export, so dropping
+  # it here would let a patch between two requests run them side by side.
+  defp running_export(%{assigns: %{export_data: %AsyncResult{loading: loading} = export}})
+       when not is_nil(loading),
+       do: export
+
+  defp running_export(_socket), do: nil
 
   defp set_title(socket, %{resource: resource}) do
     title =
@@ -428,7 +438,9 @@ defmodule AshQuick.LiveView.ListUtils do
   defp maybe_apply_sort(query, nil), do: query
   defp maybe_apply_sort(query, sort_by), do: Ash.Query.sort(query, sort_by, prepend?: true)
 
-  defp build_export_query(resource, [], socket, options) do
+  # The page's own query either way: a selection narrows what the page lists,
+  # it does not step outside the base filter, the filters or the search.
+  defp build_export_query(resource, selection, socket, options) do
     params = socket.assigns.params
 
     resource
@@ -441,12 +453,35 @@ defmodule AshQuick.LiveView.ListUtils do
     |> maybe_apply_filters(options.filters, params.selected_filters)
     |> maybe_apply_custom_filter(params.custom_filter, socket.assigns.scope, options)
     |> apply_sort(params, options)
+    |> only_selected(selection)
   end
 
-  defp build_export_query(resource, ids, socket, _options) do
-    resource
-    |> Ash.Query.for_read(socket.assigns.ash_action.name, %{}, scope: socket.assigns.scope)
-    |> Ash.Query.filter(id in ^ids)
+  defp only_selected(query, :all), do: query
+  defp only_selected(query, ids) when is_list(ids), do: Ash.Query.filter(query, id in ^ids)
+
+  # Nothing ticked exports the whole list. Anything ticked exports the ticked
+  # rows the page is showing, as a bulk action runs over them: an id that is
+  # not among them came from somewhere other than this page's checkboxes.
+  defp export_selection(socket) do
+    case selected_ids(socket) do
+      [] -> :all
+      _ticked -> Enum.map(selected_records(socket), & &1.id)
+    end
+  end
+
+  defp run_export(query, actor, options, format, timezone) do
+    case AshQuick.LiveView.ExportUtils.generate_export_url(
+           query,
+           actor,
+           options,
+           String.to_existing_atom(format),
+           timezone
+         ) do
+      {:ok, url} -> {:ok, %{export_data: %{url: url}}}
+      # A refusal, not a failure: the modal words it and offers no Retry,
+      # since the same list would be refused again.
+      {:error, {:too_many_rows, _max}} = refused -> refused
+    end
   end
 
   defp maybe_load_active(query, resource) do
@@ -495,12 +530,19 @@ defmodule AshQuick.LiveView.ListUtils do
     {:halt, push_patch(socket, to: URLParams.full_path(socket.assigns.path, params))}
   end
 
+  # One export per page at a time. Each one streams a whole list, so a second
+  # asked for while the first runs is left unanswered rather than run beside it.
+  defp handle_list_events(
+         "export",
+         _params,
+         %{assigns: %{export_data: %AsyncResult{loading: loading}}} = socket,
+         _options
+       )
+       when not is_nil(loading),
+       do: {:halt, socket}
+
   defp handle_list_events("export", %{"format" => format}, socket, options) do
-    selected_ids =
-      socket.assigns.selected_rows
-      |> Map.drop(["all"])
-      |> Enum.filter(fn {_k, v} -> v == "on" end)
-      |> Enum.map(fn {k, _v} -> k end)
+    selection = export_selection(socket)
 
     # A column every row would export blank is left out, as it is on the page.
     options = %{
@@ -516,7 +558,7 @@ defmodule AshQuick.LiveView.ListUtils do
 
     export_query =
       options.resource
-      |> build_export_query(selected_ids, socket, options)
+      |> build_export_query(selection, socket, options)
       |> Utils.load_fields(options.export_fields, strict?: true)
 
     # The header and the dates are in the reader's language, and a task
@@ -534,16 +576,7 @@ defmodule AshQuick.LiveView.ListUtils do
           |> assign_async(:export_data, fn ->
             Gettext.put_locale(locale)
 
-            {:ok, url} =
-              AshQuick.LiveView.ExportUtils.generate_export_url(
-                export_query,
-                actor,
-                options,
-                format |> String.to_existing_atom(),
-                timezone
-              )
-
-            {:ok, %{export_data: %{url: url}}}
+            run_export(export_query, actor, options, format, timezone)
           end)
 
         _ ->

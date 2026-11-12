@@ -763,3 +763,13 @@ msgid "%{action} was not applied. The selected row was not changed and is still 
 msgid_plural "%{action} was not applied. The %{count} selected rows were not changed and are still selected: check them and try again."
 msgstr[0] ""
 msgstr[1] ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "An export holds up to %{max} rows. Search or filter the list, then export again."
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Too many rows to export"
+msgstr ""

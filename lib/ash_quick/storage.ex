@@ -331,7 +331,20 @@ defmodule AshQuick.Storage do
   @callback object_referenced(keys :: [key()], resource :: module(), resource_id :: term()) ::
               :ok | {:error, term()}
 
-  @optional_callbacks upload_target: 2,
+  @doc """
+  Deletes every object under `prefix` last written more than `max_age` seconds
+  ago, and answers how many went.
+
+  Optional. `AshQuick.Storage.Sweeper` calls it with `"exports"` to clear
+  exports past `AshQuick.Config.export_retention/0`; a storage without it
+  keeps its exports until the host removes them, which for a bucket is a
+  lifecycle rule on the `exports/` prefix.
+  """
+  @callback delete_expired(prefix :: key(), max_age :: pos_integer(), opts :: keyword()) ::
+              {:ok, non_neg_integer()} | {:error, term()}
+
+  @optional_callbacks delete_expired: 3,
+                      upload_target: 2,
                       object_arriving: 2,
                       object_states: 2,
                       object_states: 1,
@@ -492,6 +505,27 @@ defmodule AshQuick.Storage do
   @spec put_file(key(), Path.t(), keyword()) :: :ok | {:error, term()}
   def put_file(key, path, opts \\ []) when is_binary(key) and is_binary(path),
     do: impl().put_file(key, path, opts)
+
+  @exports_prefix "exports"
+
+  @doc """
+  Deletes the exports older than `AshQuick.Config.export_retention/0`, and
+  answers how many went.
+
+  Answers `{:ok, 0}` and touches nothing when retention is `nil` or the
+  configured storage does not implement `c:delete_expired/3`.
+  """
+  @spec sweep_exports(keyword()) :: {:ok, non_neg_integer()} | {:error, term()}
+  def sweep_exports(opts \\ []) do
+    impl = impl()
+
+    with retention when is_integer(retention) <- AshQuick.Config.export_retention(),
+         true <- Code.ensure_loaded?(impl) and function_exported?(impl, :delete_expired, 3) do
+      impl.delete_expired(@exports_prefix, retention, opts)
+    else
+      _nothing_to_sweep -> {:ok, 0}
+    end
+  end
 
   @doc "See `c:object_arriving/2`. The passthrough answer is `serving_key` itself."
   def object_arriving(serving_key, opts \\ []),

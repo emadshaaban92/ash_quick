@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+### Security
+
+- **A CSV export writes a cell that starts like a formula as text.** A text
+  cell starting with `=`, `+`, `-`, `@`, a tab or a carriage return is written
+  behind a `'`, so a record named `=HYPERLINK(...)` is not run by the
+  spreadsheet that opens the export. A cell that is wholly a number (`-5`) is
+  left alone, and so are the dates and amounts AshQuick formats itself. An
+  Excel export is unchanged: its text cells are inline strings, which are
+  never evaluated.
+
+- **An export has a row ceiling, and a page runs one at a time.** A list
+  holding more than `:export_max_rows` rows (100,000 by default, `:infinity`
+  to lift it) is refused before a row is read, and the modal asks for a
+  narrower list instead of offering Retry. An export asked for while the
+  page's last one is still running is ignored, across a patch too. See
+  Breaking changes.
+
+- **Exporting a selection stays inside the list.** The ticked rows are
+  exported through the page's own query (its `base_filter`, filters and
+  search) and only where the page is showing them, as a bulk action already
+  ran over them. Before, the ids of the selection were read on their own, so
+  an event naming other ids exported any row the read policy allowed.
+
+- **Exports are deleted after a day.** `AshQuick.Storage.Sweeper` runs under
+  `AshQuick` in the supervision tree and, once an hour, deletes what is under
+  `exports/` and older than `:export_retention` (seconds; `nil` keeps them).
+  It sweeps a storage that implements the new optional
+  `c:AshQuick.Storage.delete_expired/3`, which `AshQuick.Storage.Local` does.
+  `AshQuick.Storage.S3` and `AshQuick.Storage.S3.Proxy` do not: expire a
+  bucket's `exports/` prefix with a lifecycle rule. See Breaking changes.
+
 ### Features
 
 - **Reads can be audited, for the actions a resource lists.**
@@ -1132,6 +1163,14 @@
   default interpolation gets the same treatment.
 
 ### Breaking changes
+
+- **An export holding more than 100,000 rows is refused.** A host that
+  exports larger lists at once raises `config :ash_quick, :export_max_rows`,
+  or sets it to `:infinity` to lift the ceiling.
+
+- **Exports on `AshQuick.Storage.Local` are deleted after a day.** A host
+  that relied on them staying sets `config :ash_quick, :export_retention` to
+  the seconds it wants them kept, or to `nil` to keep them all.
 
 - **An update stamps `updated_by` only when it changes something.** The
   stamp AshQuick generates used to name the actor on every update, so a print,

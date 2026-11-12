@@ -25,6 +25,9 @@ defmodule AshQuick.Supervisor do
 
       {AshQuick, pubsub_server: MyApp.PubSub}
 
+  Beside it runs `AshQuick.Storage.Sweeper`, which deletes exports past
+  `:export_retention`.
+
   It is not an OTP application of its own, started by `mod:` before the
   host's: the host's PubSub server does not exist yet at that point.
 
@@ -43,7 +46,8 @@ defmodule AshQuick.Supervisor do
   @impl Supervisor
   def init(opts) do
     children = [
-      {AshQuick.BrowserSessionPresence, opts}
+      {AshQuick.BrowserSessionPresence, opts},
+      AshQuick.Storage.Sweeper
     ]
 
     Supervisor.init(children, strategy: :one_for_one)
