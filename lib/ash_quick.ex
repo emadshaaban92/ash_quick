@@ -351,7 +351,16 @@ defmodule AshQuick do
   record nobody loaded (a hand-built `%Post{id: id}`, or an identifier) still
   holds the counter's default and has no copy to be stale, so its write is
   bumped without the check. A hand-built record given a version of its own,
-  `%Post{id: id, version: params["version"]}`, is checked against it.
+  `%Post{id: id, version: String.to_integer(params["version"])}`, is checked
+  against it, unless that version is `1`. The lock cannot tell the counter's
+  default from a struct nobody filled in, so that write goes through
+  unchecked; load the record to have version `1` checked. On the in-memory
+  path the version has to be an integer: a string raises there.
+
+  An upsert is not locked. The lock covers updates and destroys; an upsert
+  that meets an existing row writes over it without checking or bumping the
+  counter, so a copy loaded before it can still save over what it wrote. What
+  it writes is the action's `upsert_fields`, which AshQuick leaves to you.
 
   A bulk write by query, or by `:atomic_batches`, that changes anything does
   not run atomically. Ash builds one changeset for it without the rows' data,

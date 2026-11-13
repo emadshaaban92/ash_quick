@@ -651,6 +651,16 @@ atomic path "no-op" is judged against the row being written, since that path
 writes every accepted input: a value the actor did not change, but someone
 else has since, is a change, and is locked.
 
+Two writes are not checked. A hand-built record,
+`%Post{id: id, version: String.to_integer(params["version"])}`, is checked
+against the version it carries unless that is `1`: the lock cannot tell the
+counter's default from a struct nobody filled in, so load the record to have
+version `1` checked. And an upsert is not locked at all. The lock covers
+updates and destroys; an upsert that meets an existing row writes over it
+without checking or bumping `version`, so a copy loaded before it can still
+save over what it wrote. What it writes is the action's `upsert_fields`, which
+AshQuick leaves to you.
+
 It is on rather than off because losing a concurrent write is silent and
 unrecoverable. Turn it off where there is nothing to lose — an append-only log,
 a row only one writer ever touches:
