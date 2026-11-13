@@ -30,6 +30,7 @@ for resource <- [
       Example.Test.ShelvedCrates.Item,
       Example.Test.ShelvedCrates.Shelf,
       Example.Test.SmallPages,
+      Example.Test.TwoFileRows,
       Example.Test.WideOffsetPages,
       Example.Test.WordedPolicy
     ] do
