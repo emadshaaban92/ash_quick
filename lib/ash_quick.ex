@@ -1239,6 +1239,46 @@ defmodule AshQuick do
   def form_stage(%{context: context}) when is_map(context), do: Map.get(context, @form_stage_key)
 
   @doc """
+  Whether `subject` was built by a `can?/4` probe, which asks whether the
+  actor may run an action and never runs it. `subject` is a changeset, a query
+  or an action input, or the context a change or a validation is handed.
+
+  Ash builds a probe's changeset to check the action's policies, and building
+  it runs the action's changes and validations, on every page that probes.
+  Some probes have no record: the bulk menu asks about each update and destroy
+  it derives with no row selected, and the list asks about `:create`. Ash then
+  builds the changeset over an empty struct, so `changeset.data`'s fields are
+  all `nil`. A probe checks policies alone, so what a validation answers does
+  not change what the page offers.
+
+  A validation that looks up something by the record's id therefore runs its
+  query for every probe, and over `nil` for a record-less one. Defer it to a
+  `before_action` hook, which a probe never reaches:
+
+      destroy :destroy do
+        require_atomic? false
+        validate MyApp.Catalog.Category.Validations.Unused, before_action?: true
+      end
+
+  or answer `:ok` for a probe:
+
+      def validate(changeset, _opts, _context) do
+        if AshQuick.probe?(changeset) do
+          :ok
+        else
+          check_unused(changeset.data.id)
+        end
+      end
+
+  A run is never a probe: a QuickView form submits under `form_source/0`, and
+  any other caller sets no surface source.
+  """
+  def probe?(%{source_context: context}) when is_map(context), do: probe_context?(context)
+  def probe?(%{context: context}) when is_map(context), do: probe_context?(context)
+
+  defp probe_context?(context), do: Map.get(context, :action_source) in @surface_sources
+
+  @doc """
   `Ash.can?/3` stamped with a QuickView surface's `action_source`.
 
   `source` is one of `surface_sources/0`. QuickView probes controls through

@@ -21,6 +21,7 @@ for resource <- [
       Example.Test.PickedRows,
       Example.Test.PickedRows.Bin,
       Example.Test.PickedRows.Row,
+      Example.Test.ProbedDestroys,
       Example.Test.RequiredAttachments,
       Example.Test.RequiredEntries,
       Example.Test.RequiredPicks,

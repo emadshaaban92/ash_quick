@@ -1180,6 +1180,31 @@ surfaces probe for actions they merely hope are there.
 Custom QuickView templates should call `AshQuick.can?/4` rather than a bare
 `Ash.can?/2`, so their controls participate in the same policies.
 
+A probe builds the action's changeset to check its policies, and building it
+runs the action's changes and validations, on every page that probes. The bulk
+menu probes each update and destroy it derives with no row selected, and the
+list probes `:create`, so Ash builds those changesets over an empty struct,
+where `changeset.data.id` is `nil`. A probe checks policies alone, so what a
+validation answers never changes what the page offers; but a validation that
+queries by the record's id still runs its query for every probe, over `nil`
+for a record-less one. Defer it to the run, which is the only caller that
+reaches a `before_action` hook:
+
+```elixir
+destroy :destroy do
+  require_atomic? false
+  validate MyApp.Catalog.Category.Validations.Unused, before_action?: true
+end
+```
+
+or answer `:ok` for a probe, which `AshQuick.probe?/1` tells apart from a run:
+
+```elixir
+def validate(changeset, _opts, _context) do
+  if AshQuick.probe?(changeset), do: :ok, else: check_unused(changeset.data.id)
+end
+```
+
 ## Sorting a list
 
 A visitor sorts a list by clicking a column's header: ascending, then
