@@ -140,6 +140,7 @@ defmodule ExampleWeb.Router do
         quick_view "/private_create", Example.Test.PrivateCreateLive.Quick
         quick_view "/related_filter", Example.Test.RelatedFilterLive.Quick
         quick_view "/related_filter_default", Example.Test.RelatedFilterDefaultLive.Quick
+        quick_view "/related_filter_defaults", Example.Test.RelatedFilterDefaultsLive.Quick
         quick_view "/required_attachments", Example.Test.RequiredAttachmentsLive.Quick
         quick_view "/required_entries", Example.Test.RequiredEntriesLive.Quick
         quick_view "/required_picks", Example.Test.RequiredPicksLive.Quick

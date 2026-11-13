@@ -19,8 +19,9 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   attr :filterable, :list,
     default: nil,
     doc:
-      "the fields offered, in order, as `filterable:` names them; `nil` for every field of " <>
-        "the resource's own a filter can take"
+      "the fields offered, in order, as `filterable:` names them, `:defaults` among them " <>
+        "standing for the fields offered unsaid; `nil` for every field of the resource's " <>
+        "own a filter can take"
 
   attr :scope, :map, required: true
   attr :close, :any, default: nil, doc: "a path or a `JS` command Cancel runs to close the modal"

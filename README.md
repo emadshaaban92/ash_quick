@@ -1320,6 +1320,22 @@ and a link's row on one it does not offer is dropped. Index the relationship's
 source attribute and the related field on a large table. To-many relationships
 and longer paths are refused when the QuickView compiles.
 
+To add a related field to the ones the form offers without `filterable:`, name
+`:defaults` among them:
+
+```elixir
+list: [
+  fields: [:sku, :name, [brand: :name]],
+  filterable: [:defaults, brand: :name]
+]
+```
+
+`:defaults` stands for those fields, in their order, read off the resource, so
+an attribute it gains later is offered too. It can go anywhere in the list, and
+a field named before it comes first and is not offered twice. `:defaults` is
+always the marker: a field named `defaults` is offered only through it, beside
+the other defaults.
+
 ## Testing a details page
 
 Each row on a QuickView details page carries a `data-field` attribute naming

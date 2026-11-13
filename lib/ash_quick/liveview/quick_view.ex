@@ -147,15 +147,21 @@ defmodule AshQuick.LiveView.QuickView do
       a link names it `customer.name`, and Ash applies the customer's read
       policies to the filter. The QuickView refuses any other entry, a
       to-many relationship or a longer path among them, when it compiles.
-      Not given, the form offers no related field. Field policies still
-      narrow it for each visitor, a related field's by its own resource's,
-      and a visitor they leave none of it sees no filter button. Filtering
-      by an unindexed column reads the whole table, so a large one names the
-      fields it has indexes for, or `[]` for none, which leaves the filter
-      button out. A link's filter row on any other field is dropped before
-      the read, with a flash saying the filter couldn't be applied. A custom
-      list template gets the option as `@filterable`, `nil` when it is not
-      given, a related field as `{relationship, field}`.
+      Not given, the form offers no related field; `:defaults` in the list
+      stands for the fields it offers then, in their order, read off the
+      resource as it changes, so `[:defaults, customer: :name]` adds one
+      related field to them, and a field named before the marker comes
+      first. `:defaults` is always the marker, so a field of that name is
+      offered only through it, beside the other defaults. Field policies
+      still narrow it for each visitor, a related field's by its own
+      resource's, and a visitor they leave none of it sees no filter
+      button. Filtering by an unindexed column reads the whole table, so a
+      large one names the fields it has indexes for, or `[]` for none, which
+      leaves the filter button out. A link's filter row on any other field is
+      dropped before the read, with a flash saying the filter couldn't be
+      applied. A custom list template gets the option as `@filterable`, `nil`
+      when it is not given, a related field as `{relationship, field}` and the
+      marker as `:defaults`.
 
   ### Details options (under `:details`)
 
