@@ -50,7 +50,9 @@ sensitive ones), routes it with one `quick_view/3` line named relative to the
 enclosing `scope` alias, adds `except: [:create]` when the resource has no
 create action, and grants the path in the application's `AshQuick.AccessControl`
 — the last of which is what keeps a new page from 403ing with nothing to say
-why.
+why. The file follows the layout of the QuickViews already routed, in a
+directory of its own (`--file` overrides it), and an access control that lists
+routes per role is granted with `--grant-to admin,editor`.
 
 `mix ash_quick.gen.resource` takes an existing resource onto the extension
 through `mix ash.extend`, and reports the columns that adds before you run the
