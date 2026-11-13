@@ -651,6 +651,19 @@ atomic path "no-op" is judged against the row being written, since that path
 writes every accepted input: a value the actor did not change, but someone
 else has since, is a change, and is locked.
 
+Two writes are not checked. A hand-built record,
+`%Post{id: id, version: String.to_integer(params["version"])}`, is checked
+against the version it carries unless that is `1`, the counter's default,
+which the lock cannot tell from a struct nobody filled in; load the record to
+have it checked. And an upsert that meets an existing row writes over it
+without bumping `version`, so a copy loaded before it can still save over it.
+Name the fields an upsert writes in `upsert_fields`. `:replace_all` writes
+every attribute: the row takes the insert's new primary key, `inserted_at`
+and inserted-by stamp, and the counter goes back to `1`.
+`{:replace_all_except, [...]}` writes everything it does not list, so its list
+has to name the primary key, `inserted_at`, any inserted-by attribute and the
+counter.
+
 It is on rather than off because losing a concurrent write is silent and
 unrecoverable. Turn it off where there is nothing to lose — an append-only log,
 a row only one writer ever touches:
