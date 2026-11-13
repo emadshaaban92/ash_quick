@@ -23,6 +23,32 @@ defmodule ExampleWeb.AttachmentArrayScenarioTest do
     {:ok, conn: log_in(conn, admin)}
   end
 
+  describe "a refused file in a batch" do
+    # The refused entry never finishes, so it must neither hold back the files
+    # picked with it nor take the save down as one still in progress.
+    test "does not hold back the rest of the batch, or the save", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/categories/create")
+      code = unique("C")
+
+      input =
+        file_input(view, "form[phx-submit=save]", @upload, [
+          %{name: "good.jpg", content: @jpeg, type: "image/jpeg", size: byte_size(@jpeg)},
+          %{name: "evil.html", content: "<p>", type: "image/jpeg", size: 3}
+        ])
+
+      render_upload(input, "evil.html")
+      render_upload(input, "good.jpg")
+
+      assert rows(view) == ["good.jpg"]
+      assert render(view) =~ "You have selected an unacceptable file type"
+
+      save(view, %{"code" => code, "name" => "Tents"})
+
+      category = Ash.get!(Category, [code: code], authorize?: false)
+      assert documents(category) == ["good.jpg"]
+    end
+  end
+
   describe "the lifecycle of a list" do
     test "uploads append, ✕ removes, and nothing else touches it", %{conn: conn} do
       # 1. Created with one file.

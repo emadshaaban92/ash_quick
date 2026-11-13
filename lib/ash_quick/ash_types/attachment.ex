@@ -59,10 +59,13 @@ defmodule AshQuick.AshTypes.Attachment do
       offers are listed in `AshQuick.LiveView.FormUtils`, and `:image`
       deliberately excludes HEIC: browsers don't render it uniformly
       and AshQuick does not transcode.
-    * Gating here is extension-based, which a rename defeats. Content
-      validation belongs to the host, behind
-      `AshQuick.Storage`'s lifecycle callbacks — AshQuick hands it the bytes' destined
-      key and serves only what it calls `:ready`.
+    * Gating here is extension-based: a picked file's name must end in one
+      of the field's extensions, checked on the server before the upload is
+      signed or stored, and the object is stored as the type that extension
+      stands for, whatever type the browser declared. A rename defeats it.
+      Content validation belongs to the host, behind `AshQuick.Storage`'s
+      lifecycle callbacks — AshQuick hands it the bytes' destined key and
+      serves only what it calls `:ready`.
   """
 
   use Ash.Type

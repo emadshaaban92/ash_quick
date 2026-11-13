@@ -28,6 +28,19 @@ defmodule ExampleWeb.UploadScenarioTest do
   @jpeg File.read!("priv/static/favicon.ico")
 
   describe "picking a file" do
+    # LiveView's own `accept:` passes an entry whose declared type alone
+    # matches, and the declared type is the browser's to say.
+    test "refuses a name the field does not take, whatever type it declares", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/categories/create")
+
+      pick(view, "evil.html")
+
+      assert render(view) =~ "You have selected an unacceptable file type"
+      assert uploaded_objects(admin) == []
+    end
+
     test "takes custody before anything is saved, and quarantines the bytes", ctx do
       %{conn: conn, admin: admin} = ctx
 

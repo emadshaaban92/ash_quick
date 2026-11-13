@@ -69,30 +69,63 @@ defmodule AshQuick.LiveView.FormUtilsTest do
       assert key == Quarantine.key("private/categories/xyz-789-evidence.mp4")
     end
 
-    test "the presigned URL signs the entry's size as a header, and its type as a param" do
-      entry = entry(uuid: "abc", client_name: "x.jpg", client_size: 4_242)
+    test "the presigned URL signs the entry's size and its extension's type as headers" do
+      # The browser's declared type is not what is signed: the name is what the
+      # key, and so every surface serving it, goes by.
+      entry =
+        entry(uuid: "abc", client_name: "x.png", client_type: "text/html", client_size: 4_242)
 
-      {:ok, %{url: url}, _socket} =
+      {:ok, %{url: url, content_type: "image/png"}, _socket} =
         FormUtils.presign_attachment_upload(entry, socket(), @image_field)
 
-      # `max_file_size` is a browser-side cap. The length is the server-side
-      # one, and only because it is a signed *header* — S3 ignores a query
-      # parameter it does not recognise, so a `Content-Length` in the query
-      # string would cap nothing.
-      assert signed_headers(url) == ["content-length", "host"]
-      assert signature(url) == signature_for_length(url, 4_242)
-      refute signature(url) == signature_for_length(url, 4_243)
+      # `max_file_size` is a browser-side cap. The length and the type are the
+      # server-side ones, and only because they are signed *headers* — S3
+      # ignores a query parameter it does not recognise, so either in the query
+      # string would bind nothing.
+      assert signed_headers(url) == ["content-length", "content-type", "host"]
+      refute Map.has_key?(query(url), "Content-Type")
 
-      # Signed, so the client cannot alter it — but unenforced, since S3 does
-      # not read it. It does not bind what the object is stored as.
-      assert query(url)["Content-Type"] == "image/jpeg"
+      assert signature(url) ==
+               signature_for(url, content_length: 4_242, content_type: "image/png")
+
+      refute signature(url) ==
+               signature_for(url, content_length: 4_243, content_type: "image/png")
+
+      refute signature(url) ==
+               signature_for(url, content_length: 4_242, content_type: "text/html")
+    end
+
+    # The form's upload `:validator` refuses these before any presign; a direct
+    # caller is refused too, rather than handed a URL with no type to bind.
+    test "a name the field does not accept is refused whatever type it declares",
+         %{admin: admin} do
+      for name <- ["evil.html", "evil.svg", "evil", "evil.jpg.html", "evil.pdf"] do
+        entry = entry(uuid: "evil-1", client_name: name, client_type: "image/jpeg")
+
+        assert {:error, %{error: "not_accepted"}, _socket} =
+                 FormUtils.presign_attachment_upload(entry, socket(), @image_field)
+      end
+
+      # Refused before the host was told anything was arriving.
+      assert {:ok, []} = FileObject.by_keys(["public/products/evil-1-evil.html"], actor: admin)
+    end
+
+    test "the extension is matched without regard to case" do
+      entry = entry(uuid: "abc", client_name: "SCAN.PDF", client_type: "")
+
+      {:ok, %{content_type: "application/pdf"}, _socket} =
+        FormUtils.presign_attachment_upload(
+          entry,
+          socket(),
+          Keyword.put(@image_field, :accepts, [:document])
+        )
     end
 
     test "a path-traversal client_name cannot escape the visibility prefix" do
       socket = socket(resource: Example.Catalog.Category)
 
       entry =
-        entry(uuid: "xyz-789", client_name: "../../public/evil.html", client_type: "text/html")
+        entry(uuid: "xyz-789", client_name: "../../public/evil.mp4", client_type: "video/mp4")
 
       {:ok, %{key: key}, _socket} =
         FormUtils.presign_attachment_upload(entry, socket, @evidence_field)
@@ -100,7 +133,7 @@ defmodule AshQuick.LiveView.FormUtilsTest do
       # `Path.basename` discards every directory component, so the object stays
       # under `private/` and never lands in the anonymously-readable `public/` —
       # nested under `quarantine/` until it is released.
-      assert key == "quarantine/private/categories/xyz-789-evil.html"
+      assert key == "quarantine/private/categories/xyz-789-evil.mp4"
       refute String.contains?(key, "..")
       assert String.starts_with?(key, "quarantine/private/categories/")
     end
@@ -151,7 +184,7 @@ defmodule AshQuick.LiveView.FormUtilsTest do
                  entry,
                  socket(),
                  Keyword.put(@image_field, :visibility, :public)
-                 |> Keyword.put(:accepts, [:nonsense])
+                 |> Keyword.put(:accepts, [:image, :nonsense])
                )
     end
   end
