@@ -1023,12 +1023,18 @@ $ mix ash_quick.gen.quick_view MyApp.Catalog.Product
 
 Writes the QuickView, with a starter field list taken from the resource's own
 public attributes — without the ones AshQuick generated, and without the
-sensitive ones. Routes it with one `quick_view/3` line, placed with the
+sensitive ones. The file goes where the QuickViews the router already serves
+are, laid out the way theirs are (`live/products/product_quick.ex` gives
+`live/categories/category_quick.ex`) and always in a directory of its own, since
+a custom `action_<name>.html.heex` applies to every QuickView in its directory;
+`--file` names another. Routes it with one `quick_view/3` line, placed with the
 QuickViews already there or in the live_session running
 `AshQuick.LiveView.Mount`, named relative to that scope's alias, and with
 `except: [:create]` when the resource has no create action. And grants the path
 in the application's `AshQuick.AccessControl`, without which the route exists
-and every navigation to it is refused.
+and every navigation to it is refused: in its `@routes` list, or, for an access
+control that lists routes per role, in the clause of each role
+`--grant-to admin,editor` names.
 
 A tile in the apps grid is a `group` in the nav — a decision about where the
 page belongs, which is left to you.
