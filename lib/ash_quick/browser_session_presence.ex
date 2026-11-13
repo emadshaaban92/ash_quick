@@ -22,7 +22,8 @@ defmodule AshQuick.BrowserSessionPresence do
   the tab has got to.
 
   `revoke/1` is what makes this a kill switch rather than a read-out: the only
-  way to cut an impersonation off from outside the tab. Only an impersonation —
+  way to cut an impersonation off from outside the tab, and one the tab cannot
+  decline. Only an impersonation —
   it refuses an id that names an ordinary session, because ending somebody's
   login is not an act this library performs.
 
@@ -51,6 +52,7 @@ defmodule AshQuick.BrowserSessionPresence do
 
   alias AshQuick.BrowserSession
   alias AshQuick.Config
+  alias AshQuick.Impersonation.Revocations
 
   require Logger
 
@@ -72,7 +74,9 @@ defmodule AshQuick.BrowserSessionPresence do
   @doc "Subscribes the caller to join/leave diffs on the register's topic."
   def subscribe, do: Phoenix.PubSub.subscribe(pubsub_server(), @topic)
 
-  defp pubsub_server do
+  @doc false
+  # Shared with `AshQuick.Impersonation.Revocations`, which rides the same server.
+  def pubsub_server do
     endpoint = Config.endpoint() || raise ArgumentError, no_endpoint()
     app = Application.get_application(endpoint)
 
@@ -126,6 +130,9 @@ defmodule AshQuick.BrowserSessionPresence do
       actor_label: label(session.actor),
       actor_hint: hint(session.actor),
       impersonating_since: session.impersonating_since,
+      # What `revoke/1` records, so the token stops resolving wherever it is
+      # replayed next.
+      impersonation_id: session.impersonation_id,
       started_at: session.started_at,
       ip: session.ip,
       path: path,
@@ -222,6 +229,7 @@ defmodule AshQuick.BrowserSessionPresence do
       actor_hint: Map.get(meta, :actor_hint),
       impersonating?: not is_nil(meta.actor_id),
       impersonating_since: meta.impersonating_since,
+      impersonation_id: Map.get(meta, :impersonation_id),
       started_at: meta.started_at,
       ip: meta.ip,
       path: meta.path,
@@ -237,18 +245,47 @@ defmodule AshQuick.BrowserSessionPresence do
   answer here, so a hand-pushed event cannot reach one. That is the boundary,
   not the button: this library ends impersonations and never ends a login.
 
-  The tab drops its token and reconnects, which remounts it as the real actor.
+  Ending it is the server's doing, not the tab's. The impersonation is recorded
+  in `AshQuick.Impersonation.Revocations` first, so its token stops resolving
+  on every node, and then every process replaying that token is told — the
+  session's own and any other tab holding a copy of it — which sends each tab
+  back to its page as its real actor. A client that ignores the
+  request to drop its token is refused at its next mount all the same.
   """
   def revoke(id) when is_binary(id) do
-    case Enum.find(sessions(), &(&1.id == id and &1.impersonating?)) do
-      %{pids: pids} ->
-        Enum.each(pids, &send(&1, :end_impersonation))
+    sessions = sessions()
+
+    case Enum.find(sessions, &(&1.id == id and &1.impersonating?)) do
+      %{} = session ->
+        revoke_token(session)
+        Enum.each(holders(sessions, session), &send(&1, :end_impersonation))
         :ok
 
       nil ->
         :error
     end
   end
+
+  # Every process replaying the same token, not only the row that was clicked:
+  # a duplicated tab, or one its sessionStorage was copied into, is a row of
+  # its own holding the same impersonation.
+  defp holders(sessions, %{impersonation_id: id, pids: pids}) when is_binary(id) do
+    sessions
+    |> Enum.filter(&(&1.impersonation_id == id))
+    |> Enum.flat_map(& &1.pids)
+    |> Enum.concat(pids)
+    |> Enum.uniq()
+  end
+
+  defp holders(_sessions, %{pids: pids}), do: pids
+
+  # A node still running a release from before the id was tracked reports a
+  # session without it. Its processes are still told, and still end.
+  defp revoke_token(%{impersonation_id: id, impersonating_since: %DateTime{} = since})
+       when is_binary(id),
+       do: Revocations.revoke(id, since)
+
+  defp revoke_token(_session), do: :ok
 
   # The label is the one identifier the resource has declared, so the register
   # names people the same way every other AshQuick surface does. A host wanting

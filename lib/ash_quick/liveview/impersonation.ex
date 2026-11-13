@@ -3,9 +3,11 @@ defmodule AshQuick.LiveView.Impersonation do
   The commands that end a tab's impersonation, for a host's own markup.
 
   Impersonation lives in the browser tab rather than on the actor's account, so
-  ending one is a client-side act: drop the token and reconnect. Both commands
-  below dispatch a DOM event that `attachAshQuick`
-  (`assets/js/browser_session.js`) is listening for.
+  a tab ending its own is a client-side act: drop the token and reconnect. Both
+  commands below dispatch a DOM event that `attachAshQuick`
+  (`assets/js/browser_session.js`) is listening for. Ending somebody else's,
+  from the live sessions, is the server's, and does not rely on the client:
+  see `AshQuick.BrowserSessionPresence.revoke/1`.
 
   They exist so that no host has to spell an event name this library owns. A
   misspelling renders a control that looks right and does nothing, and nothing

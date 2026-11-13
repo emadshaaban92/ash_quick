@@ -286,4 +286,12 @@ defmodule AshQuick.LiveView.MountTest do
       assert violation =~ "not a loadable module"
     end
   end
+
+  # The expiry timer is armed straight for the token's max age, which a host
+  # may set to months. Pinned here because this suite runs on every supported
+  # OTP: a refused delay would crash every impersonating mount.
+  test "a timer months away is accepted on this OTP" do
+    ref = Process.send_after(self(), :never, 100 * 24 * 60 * 60 * 1000)
+    assert is_integer(Process.cancel_timer(ref))
+  end
 end

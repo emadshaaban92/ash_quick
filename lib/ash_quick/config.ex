@@ -108,7 +108,8 @@ defmodule AshQuick.Config do
     from here refuses to compile.
 
   * `:impersonation_max_age` — How long a minted token stays resolvable, in
-    seconds. Defaults to twelve hours: long enough to drive a full flow without
+    seconds, and so how long an impersonation lasts: a tab still connected
+    when it runs out is ended there and then. Defaults to twelve hours: long enough to drive a full flow without
     re-picking the person, short enough that a forgotten tab does not stay
     somebody else indefinitely.
 

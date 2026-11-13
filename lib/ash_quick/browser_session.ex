@@ -18,12 +18,17 @@ defmodule AshQuick.BrowserSession do
   starts standing in for somebody is the same session in a new state, not a new
   session, so it keeps its id and its place in the register.
 
+  `:impersonation_id` is the impersonation's own id, minted with its token and
+  the same across every connection that replays it. It is what a revocation
+  records (`AshQuick.Impersonation.Revocations`), and it is not the tab's
+  `:id`: a tab can be ended as one person and later stand in for another.
+
   A tab that is nobody at all — signed out, or a disconnected render, which has
   no connect params to carry an id — has no session. The assign is `nil`, not a
   struct with empty fields.
   """
 
-  defstruct [:id, :real_actor, :started_at, :ip, :actor, :impersonating_since]
+  defstruct [:id, :real_actor, :started_at, :ip, :actor, :impersonating_since, :impersonation_id]
 
   @doc "Whether this tab is acting as somebody other than whoever signed in."
   def impersonating?(%__MODULE__{actor: nil}), do: false

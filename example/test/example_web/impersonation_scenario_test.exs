@@ -284,10 +284,59 @@ defmodule ExampleWeb.ImpersonationScenarioTest do
 
       console |> element("#{row} button", "End") |> render_click()
 
-      # The kill switch is a message to the tab's own process: the client drops
-      # the token and reconnects as whoever is really signed in. Nothing the
-      # server holds had to change, because the impersonation was never there.
-      assert_push_event(impersonating_view, "end-impersonation", %{})
+      # The kill switch is the server's doing. The tab is asked to drop its
+      # token, and sent back to its page whatever its client does about that.
+      assert_redirect(impersonating_view, "/products")
+    end
+
+    test "an ended impersonation stays ended for a client that keeps its token", ctx do
+      %{conn: conn, admin: admin, editor: editor} = ctx
+
+      token = impersonation_token(conn, admin, editor)
+      tab = new_tab()
+      tab_conn = conn |> log_in(admin) |> in_tab(tab) |> impersonating(token)
+
+      {:ok, view, html} = live(tab_conn, ~p"/products?search=tent")
+      assert html =~ "You&#39;re impersonating #{editor.name}"
+      editor_id = editor.id
+      assert {^editor_id, _session} = resolved(token, admin)
+
+      {:ok, console, _html} = live(log_in(conn, admin), ~p"/browser_sessions")
+      console |> element("#session-#{tab["id"]} button", "End") |> render_click()
+
+      # The page it was on, query and all, is where it lands.
+      assert_redirect(view, "/products?search=tent")
+
+      # The client replays the same token, as one that ignored the request to
+      # drop it would. The mount refuses it and tells the tab to stop.
+      {:ok, again, html} = live(tab_conn, ~p"/products")
+      refute html =~ "You&#39;re impersonating"
+      assert_push_event(again, "clear-impersonation", %{})
+      assert resolved(token, admin) == nil
+    end
+
+    test "every tab replaying the same token is ended, not only the row clicked", ctx do
+      %{conn: conn, admin: admin, editor: editor} = ctx
+
+      token = impersonation_token(conn, admin, editor)
+      tab_a = new_tab()
+      tab_b = new_tab()
+
+      {:ok, view_a, _html} =
+        live(conn |> log_in(admin) |> in_tab(tab_a) |> impersonating(token), ~p"/products")
+
+      # A duplicated tab, or one its sessionStorage was copied into: a row of
+      # its own, holding the same impersonation.
+      {:ok, view_b, html} =
+        live(conn |> log_in(admin) |> in_tab(tab_b) |> impersonating(token), ~p"/products")
+
+      assert html =~ "You&#39;re impersonating #{editor.name}"
+
+      {:ok, console, _html} = live(log_in(conn, admin), ~p"/browser_sessions")
+      console |> element("#session-#{tab_a["id"]} button", "End") |> render_click()
+
+      assert_redirect(view_a, "/products")
+      assert_redirect(view_b, "/products")
     end
 
     test "an ordinary session is not something this page ends", ctx do
@@ -439,6 +488,13 @@ defmodule ExampleWeb.ImpersonationScenarioTest do
 
     assert_push_event(console, "impersonate", %{token: token})
     token
+  end
+
+  defp resolved(token, real_actor) do
+    case AshQuick.Impersonation.Token.resolve(token, real_actor) do
+      {actor, session} -> {actor.id, session}
+      nil -> nil
+    end
   end
 
   defp impersonations_of(user_id) do

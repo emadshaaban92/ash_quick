@@ -52,7 +52,8 @@ defmodule AshQuick.LiveView.Mount do
   place in the register and gains whoever it is acting as.
 
   A token this mount refuses, because it expired, was minted by somebody else,
-  or was minted before its holder lost the privilege, is cleared from the tab
+  was ended from the console, or was minted before its holder lost the
+  privilege, is cleared from the tab
   so it stops being replayed. The tab is still itself and still registers as
   itself. The policy is re-run on every mount rather than trusted from the
   token, which is what makes a revoked privilege land on the next navigation.
@@ -63,12 +64,14 @@ defmodule AshQuick.LiveView.Mount do
       Every signed-in tab gets this one.
 
     * `handle_info` — the receiving end of
-      `AshQuick.BrowserSessionPresence.revoke/1`. Someone watching the live
-      sessions ends one from another browser, and this is what turns that into
-      the tab dropping its token and reconnecting as its real actor. Only a tab
-      standing in for somebody gets this one: there is nothing to revoke on a
-      tab that is only itself, and ending a login is not an act this library
-      performs.
+      `AshQuick.BrowserSessionPresence.revoke/1`, and of the token's own expiry.
+      Someone watching the live sessions ends one from another browser, or the
+      token reaches `:impersonation_max_age` while the tab is still connected,
+      and this sends the tab back to its page, whose mount no longer resolves
+      the token, so the tab is its real actor again whether or not its client
+      drops the token as asked. Only a tab standing in for somebody gets this
+      one: there is nothing to revoke on a tab that is only itself, and ending
+      a login is not an act this library performs.
 
   ## Why registering rides `handle_params`
 
@@ -144,6 +147,7 @@ defmodule AshQuick.LiveView.Mount do
 
   @session_assign :ash_quick_browser_session
   @ip_assign :ash_quick_connect_ip
+  @path_private :ash_quick_path
 
   @required_connect_info [:peer_data, :x_headers]
 
@@ -341,8 +345,13 @@ defmodule AshQuick.LiveView.Mount do
   # tab, same id, same place in the register, now acting as somebody else. Its
   # own start time comes from the signed token and is the one a kill-switch
   # decision rests on.
-  defp impersonating(%BrowserSession{} = session, {actor, %{started_at: started_at}}) do
-    %BrowserSession{session | actor: actor, impersonating_since: started_at}
+  defp impersonating(%BrowserSession{} = session, {actor, %{id: id, started_at: started_at}}) do
+    %BrowserSession{
+      session
+      | actor: actor,
+        impersonating_since: started_at,
+        impersonation_id: id
+    }
   end
 
   # The tab's claim about when it was opened. Shown, never trusted — opening a
@@ -370,19 +379,44 @@ defmodule AshQuick.LiveView.Mount do
   # as ending somebody's login, and this library does not do the second.
   defp attach_revoke_hook(socket, %BrowserSession{actor: nil}), do: socket
 
-  # A privileged actor watching the live sessions ends one from another browser.
-  # The tab drops its token and reconnects, remounting as its real actor — the
-  # same thing `AshQuick.LiveView.Impersonation.end_impersonation/1` does from
-  # the tab's own menu.
-  defp attach_revoke_hook(socket, %BrowserSession{}) do
+  # A privileged actor watching the live sessions ends one from another
+  # browser, or the token reaches its max age while the tab is still connected.
+  # Either way the server ends it: the tab is told to drop its token, and sent
+  # back to the page it is on, whose mount no longer resolves the token. The
+  # request to drop the token is a courtesy so the tab stops replaying it; a
+  # client that ignores it is refused at that mount all the same.
+  defp attach_revoke_hook(socket, %BrowserSession{impersonating_since: since}) do
+    schedule_expiry(since)
+
     LiveView.attach_hook(socket, :ash_quick_end_impersonation, :handle_info, fn
       :end_impersonation, socket ->
-        {:halt, LiveView.push_event(socket, "end-impersonation", %{})}
+        {:halt, end_impersonation(socket)}
 
       _message, socket ->
         {:cont, socket}
     end)
   end
+
+  defp end_impersonation(socket) do
+    socket = LiveView.push_event(socket, "end-impersonation", %{})
+
+    case socket.private[@path_private] do
+      path when is_binary(path) -> LiveView.redirect(socket, to: path)
+      # A LiveView not mounted at the router has no path to go back to. It is
+      # left to the client, which is the one case this does not enforce.
+      _path -> socket
+    end
+  end
+
+  # A second past the token's max age, so the remount it causes finds the
+  # token refused rather than racing its last valid moment.
+  defp schedule_expiry(%DateTime{} = since) do
+    expires_at = DateTime.add(since, Config.impersonation_max_age() + 1, :second)
+    delay = max(DateTime.diff(expires_at, DateTime.utc_now(), :millisecond), 0)
+    Process.send_after(self(), :end_impersonation, delay)
+  end
+
+  defp schedule_expiry(_since), do: :ok
 
   # Registering and reporting are one hook because they are one question asked
   # repeatedly: where is this tab now? The first answer registers it.
@@ -394,8 +428,10 @@ defmodule AshQuick.LiveView.Mount do
   defp attach_tracking_hook(socket, session) do
     LiveView.attach_hook(socket, :ash_quick_track_browser_session, :handle_params, fn
       _params, uri, socket ->
-        track(session, path(uri))
-        {:cont, socket}
+        path = path(uri)
+        track(session, path)
+        # Where an ended impersonation sends the tab back to.
+        {:cont, LiveView.put_private(socket, @path_private, path)}
     end)
   end
 

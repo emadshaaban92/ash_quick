@@ -1,6 +1,6 @@
 defmodule AshQuick.SupervisorTest do
   @moduledoc """
-  The one entry a host's tree names. Both processes register global names, so
+  The one entry a host's tree names. Every process registers a global name, so
   this runs alone.
   """
   use ExUnit.Case, async: false
@@ -10,7 +10,7 @@ defmodule AshQuick.SupervisorTest do
     :ok
   end
 
-  test "starts the register of signed-in tabs and the export sweeper under AshQuick's own supervisor" do
+  test "starts the register of signed-in tabs, the revocations and the export sweeper under AshQuick's own supervisor" do
     start_supervised!({AshQuick, pubsub_server: AshQuick.SupervisorTest.PubSub})
 
     children = Supervisor.which_children(AshQuick.Supervisor)
@@ -21,8 +21,12 @@ defmodule AshQuick.SupervisorTest do
     assert {AshQuick.Storage.Sweeper, sweeper, :worker, _modules} =
              List.keyfind(children, AshQuick.Storage.Sweeper, 0)
 
+    assert {AshQuick.Impersonation.Revocations, revocations, :worker, _modules} =
+             List.keyfind(children, AshQuick.Impersonation.Revocations, 0)
+
     assert is_pid(sweeper)
-    assert length(children) == 2
+    assert is_pid(revocations)
+    assert length(children) == 3
 
     assert AshQuick.BrowserSessionPresence.sessions() == []
   end
