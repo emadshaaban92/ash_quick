@@ -541,7 +541,7 @@ policy action(:approve) do
 end
 ```
 
-Two things to know:
+Three things to know:
 
 - An action the resource does not define answers `false` rather than raising.
   Surfaces probe for actions they merely hope are there — the list view asks
@@ -557,6 +557,15 @@ Two things to know:
   always errors. Where QuickView must never run an action (one only a page of
   your own can finish, like `:impersonate`), also
   `forbid_if context_equals(:action_source, :ash_quick_form)`.
+- A probe builds the action's changeset to check its policies, which runs its
+  changes and validations, on every page that probes. The bulk menu probes
+  each derived update and destroy with no row, and the list probes `:create`,
+  so Ash builds those over an empty struct: `changeset.data.id` is `nil`. A
+  probe checks policies alone, so a validation's answer never changes what is
+  offered, but one that queries by the record's id still runs that query.
+  Defer it to the run with `validate ..., before_action?: true`, which a probe
+  never reaches, or answer `:ok` when `AshQuick.probe?(changeset)` is true
+  (it is false for every run).
 
 ## Predefined filters
 
