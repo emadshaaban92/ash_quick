@@ -139,6 +139,25 @@ defmodule ExampleWeb.SocketUploadScenarioTest do
     assert SocketStore.read(fresh) == @jpeg
   end
 
+  # A root field's socket upload is consumed as it lands, which is where its
+  # key is made, and it is made for that field alone.
+  test "does not take a file picked for one field into another", ctx do
+    %{conn: conn, admin: admin} = ctx
+    category = category(actor: admin)
+
+    {:ok, view, _html} = live(log_in(conn, admin), ~p"/categories/#{category.id}/update")
+    pick(view, "report.pdf", "form[documents]_upload")
+
+    %{socket: socket} = :sys.get_state(view.pid)
+    [%{"key" => document}] = socket.assigns.form.raw_params["documents"]
+
+    submit(view, %{"image" => Jason.encode!(%{"key" => document, "file_type" => "image"})})
+
+    reloaded = Ash.reload!(category, authorize?: false)
+    assert reloaded.image == nil
+    assert Enum.map(reloaded.documents, & &1.key) == [document]
+  end
+
   # Removing a row renumbers the rows after it. A file picked on one of them
   # goes with its row, and the removed row's file goes nowhere.
   describe "removing a sub-form row" do

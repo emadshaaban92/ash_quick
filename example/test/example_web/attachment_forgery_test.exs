@@ -17,6 +17,7 @@ defmodule ExampleWeb.AttachmentForgeryTest do
   use ExampleWeb.FeatureCase, async: true
 
   alias Example.Catalog.Category
+  alias Example.Test.TwoFileRows
 
   @jpeg File.read!("priv/static/favicon.ico")
   @stolen_private %{"key" => "private/categories/someone-elses.jpg", "file_type" => "image"}
@@ -144,6 +145,118 @@ defmodule ExampleWeb.AttachmentForgeryTest do
       })
 
       assert Ash.get!(Category, [code: code], authorize?: false).image == nil
+    end
+  end
+
+  describe "a key this page minted" do
+    test "is not taken in a field other than the one it was uploaded for", ctx do
+      # `:documents` takes a PDF and `:image` does not. The key names the
+      # field's file only by its extension, and the posted value says what
+      # type it is, so a document's key moved into `:image` with
+      # `file_type: "image"` would pass the type's own checks.
+      %{conn: conn, admin: admin} = ctx
+      category = category_with_image(admin, "private/categories/mine.jpg")
+
+      {:ok, view, _html} = live(conn, ~p"/categories/#{category.id}/update")
+      pick(view, "report.pdf", "form[documents]_upload", "application/pdf")
+      [document] = held_keys(view, "documents")
+      assert document =~ "report.pdf"
+
+      moved = Jason.encode!(%{"key" => document, "file_type" => "image"})
+      refute change(view, %{"image" => moved}) =~ ~s("key":"#{document}")
+      submit(view, %{"image" => moved})
+
+      reloaded = Ash.reload!(category, authorize?: false)
+      assert reloaded.image.key == "private/categories/mine.jpg"
+      assert Enum.map(reloaded.documents, & &1.key) == [document]
+    end
+
+    # A key bound to `:rows`, or to no field at all, is refused in `:cover`: this
+    # pins the refusal, not the presign's binding, which only the "before the
+    # save" test below does.
+    test "uploaded on a sub-form row is not taken in a root field", %{conn: conn} do
+      record = Ash.create!(TwoFileRows, %{code: unique("F"), rows: [%{}]})
+
+      {:ok, view, _html} = live(conn, "/test/two_file_rows/#{record.id}/update")
+      pick(view, "report.pdf", "form[rows][0][scan]_upload", "application/pdf")
+      [document] = minted_keys(view)
+
+      submit(view, %{"cover" => Jason.encode!(%{"key" => document, "file_type" => "image"})})
+
+      assert %{cover: nil, rows: [%{scan: %{key: ^document}}]} = Ash.reload!(record)
+    end
+
+    # The same binding is what lets a post name the key in its own field before
+    # the save consumes the entry: the client is told the serving key at
+    # presign, and a host that consumes entries itself never mints it again.
+    test "uploaded on a sub-form row is taken on that row before the save", %{conn: conn} do
+      record = Ash.create!(TwoFileRows, %{code: unique("F"), rows: [%{}]})
+
+      {:ok, view, _html} = live(conn, "/test/two_file_rows/#{record.id}/update")
+      pick(view, "report.pdf", "form[rows][0][scan]_upload", "application/pdf")
+      [document] = minted_keys(view)
+
+      scan = Jason.encode!(%{"key" => document, "file_type" => "document"})
+      change(view, %{"rows" => %{"0" => %{"scan" => scan}}})
+
+      %{socket: socket} = :sys.get_state(view.pid)
+      assert get_in(socket.assigns.form.raw_params, ["rows", "0", "scan"]) == scan
+    end
+
+    test "uploaded for a root field is not taken on a sub-form row", %{conn: conn} do
+      record = Ash.create!(TwoFileRows, %{code: unique("F"), rows: [%{}]})
+
+      {:ok, view, _html} = live(conn, "/test/two_file_rows/#{record.id}/update")
+      pick(view, "cover.jpg", "form[cover]_upload")
+      [cover] = minted_keys(view)
+
+      moved = Jason.encode!(%{"key" => cover, "file_type" => "image"})
+      submit(view, %{"rows" => %{"0" => %{"photo" => moved}}})
+
+      assert %{cover: %{key: ^cover}, rows: [%{photo: nil}]} = Ash.reload!(record)
+    end
+
+    # After a removal the row left behind keeps the upload name it was allowed
+    # under, `form[rows][1][scan]_upload`, which still names `:rows`.
+    test "uploaded on a renumbered row is bound to the field the row sits under", ctx do
+      %{conn: conn} = ctx
+      record = Ash.create!(TwoFileRows, %{code: unique("F"), rows: [%{}, %{}]})
+
+      {:ok, view, _html} = live(conn, "/test/two_file_rows/#{record.id}/update")
+      render_click(view, "remove-form", %{"path" => "form[rows][0]"})
+      upload = scan_upload(view)
+      assert upload == "form[rows][1][scan]_upload"
+      pick(view, "report.pdf", upload, "application/pdf")
+      [document] = minted_keys(view)
+
+      # Taken on its own row, now `form[rows][0]`, before the save consumes it.
+      scan = Jason.encode!(%{"key" => document, "file_type" => "document"})
+      change(view, %{"rows" => %{"0" => %{"scan" => scan}}})
+      %{socket: socket} = :sys.get_state(view.pid)
+      assert get_in(socket.assigns.form.raw_params, ["rows", "0", "scan"]) == scan
+
+      submit(view, %{"cover" => Jason.encode!(%{"key" => document, "file_type" => "image"})})
+
+      assert %{cover: nil, rows: [%{scan: %{key: ^document}}]} = Ash.reload!(record)
+    end
+
+    # Known gap: a key is bound to the top-level field its upload sits under,
+    # here `:rows`, so it can still move between two attachment fields of one
+    # sub-form row. Telling them apart would mean checking keys per leaf field
+    # rather than per top-level field.
+    @tag :skip
+    test "is not taken in another field of the same sub-form row", ctx do
+      %{conn: conn} = ctx
+      record = Ash.create!(TwoFileRows, %{code: unique("F"), rows: [%{}]})
+
+      {:ok, view, _html} = live(conn, "/test/two_file_rows/#{record.id}/update")
+      pick(view, "report.pdf", "form[rows][0][scan]_upload", "application/pdf")
+      [document] = minted_keys(view)
+
+      moved = Jason.encode!(%{"key" => document, "file_type" => "image"})
+      submit(view, %{"rows" => %{"0" => %{"photo" => moved}}})
+
+      assert [%{photo: nil}] = Ash.reload!(record).rows
     end
   end
 
@@ -311,12 +424,34 @@ defmodule ExampleWeb.AttachmentForgeryTest do
     view |> element("[phx-click=add-form][phx-value-path='form[images]']") |> render_click()
   end
 
-  defp pick(view, filename, upload) do
+  defp pick(view, filename, upload, type \\ "image/jpeg") do
     view
     |> file_input("form[phx-submit=save]", upload, [
-      %{name: filename, content: @jpeg, type: "image/jpeg", size: byte_size(@jpeg)}
+      %{name: filename, content: @jpeg, type: type, size: byte_size(@jpeg)}
     ])
     |> render_upload(filename)
+  end
+
+  defp minted_keys(view) do
+    %{socket: socket} = :sys.get_state(view.pid)
+    Map.keys(socket.assigns.ash_quick_minted_attachment_keys)
+  end
+
+  # The upload behind the scan input the page draws on the first row.
+  defp scan_upload(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(~s(input[type="file"][name$="[scan]_upload"]))
+    |> LazyHTML.attribute("name")
+    |> hd()
+  end
+
+  # The keys an array field holds mid-edit: no input renders them, so only the
+  # form's own params know them.
+  defp held_keys(view, field) do
+    %{socket: socket} = :sys.get_state(view.pid)
+    socket.assigns.form.raw_params |> Map.fetch!(field) |> Enum.map(& &1["key"])
   end
 
   # Hand-sent: the values ride the event payload rather than the DOM's own
