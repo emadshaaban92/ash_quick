@@ -154,8 +154,9 @@ defmodule AshQuick.LiveView.ExportUtils do
     ctx.text.(value)
   end
 
-  defp field_export_value(value, _path, _ctx) when is_non_struct_map(value) do
-    Jason.encode!(value, pretty: true)
+  # One line, so a cell stays one row high however big the map is.
+  defp field_export_value(value, _path, ctx) when is_non_struct_map(value) do
+    value |> AshQuick.LiveView.StoredMap.json() |> ctx.text.()
   end
 
   defp field_export_value(%DateTime{} = value, _path, ctx) do

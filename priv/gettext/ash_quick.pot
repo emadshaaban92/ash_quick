@@ -566,12 +566,14 @@ msgstr ""
 
 #: lib/ash_quick/liveview/components/field_value.ex
 #: lib/ash_quick/liveview/components/filter_form.ex
+#: lib/ash_quick/liveview/components/map_value.ex
 #, elixir-autogen, elixir-format
 msgid "No"
 msgstr ""
 
 #: lib/ash_quick/liveview/components/field_value.ex
 #: lib/ash_quick/liveview/components/filter_form.ex
+#: lib/ash_quick/liveview/components/map_value.ex
 #, elixir-autogen, elixir-format
 msgid "Yes"
 msgstr ""
@@ -804,3 +806,83 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "This list has new records."
 msgstr ""
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "%{count} item"
+msgid_plural "%{count} items"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "%{count} key"
+msgid_plural "%{count} keys"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "%{count} more not shown; see Raw JSON"
+msgid_plural "%{count} more not shown; see Raw JSON"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "+%{count}"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "Copied"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "Copy"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "Empty"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "Raw JSON"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "Redacted"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "Show all"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "Show less"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "empty"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "[%{count} item]"
+msgid_plural "[%{count} items]"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "{%{count} key}"
+msgid_plural "{%{count} keys}"
+msgstr[0] ""
+msgstr[1] ""

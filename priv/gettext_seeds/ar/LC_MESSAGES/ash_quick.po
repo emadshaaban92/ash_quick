@@ -421,6 +421,7 @@ msgid "One file"
 msgstr "ملف واحد"
 
 #: lib/ash_quick/components.ex
+#: lib/ash_quick/liveview/components/form_view.ex
 #, elixir-autogen, elixir-format
 msgid "Remove"
 msgstr "إزالة"
@@ -581,12 +582,14 @@ msgstr "لقد اخترت عددًا كبيرًا جدًا من الملفات"
 
 #: lib/ash_quick/liveview/components/field_value.ex
 #: lib/ash_quick/liveview/components/filter_form.ex
+#: lib/ash_quick/liveview/components/map_value.ex
 #, elixir-autogen, elixir-format
 msgid "No"
 msgstr "لا"
 
 #: lib/ash_quick/liveview/components/field_value.ex
 #: lib/ash_quick/liveview/components/filter_form.ex
+#: lib/ash_quick/liveview/components/map_value.ex
 #, elixir-autogen, elixir-format
 msgid "Yes"
 msgstr "نعم"
@@ -821,7 +824,6 @@ msgstr "لا توجد نتائج في هذه الصفحة"
 msgid "Showing %{from}-%{to}"
 msgstr "عرض %{from}-%{to}"
 
-
 #: lib/ash_quick/liveview/components/list_view.ex
 #, elixir-autogen, elixir-format
 msgid "No longer available"
@@ -836,3 +838,103 @@ msgstr "إعادة التحميل"
 #, elixir-autogen, elixir-format
 msgid "This list has new records."
 msgstr "توجد سجلات جديدة في هذه القائمة."
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "%{count} item"
+msgid_plural "%{count} items"
+msgstr[0] "لا عناصر"
+msgstr[1] "عنصر واحد"
+msgstr[2] "عنصران"
+msgstr[3] "%{count} عناصر"
+msgstr[4] "%{count} عنصرًا"
+msgstr[5] "%{count} عنصر"
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "%{count} key"
+msgid_plural "%{count} keys"
+msgstr[0] "لا مفاتيح"
+msgstr[1] "مفتاح واحد"
+msgstr[2] "مفتاحان"
+msgstr[3] "%{count} مفاتيح"
+msgstr[4] "%{count} مفتاحًا"
+msgstr[5] "%{count} مفتاح"
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "%{count} more not shown; see Raw JSON"
+msgid_plural "%{count} more not shown; see Raw JSON"
+msgstr[0] "لم يُعرض شيء آخر؛ راجع JSON الخام"
+msgstr[1] "لم يُعرض عنصر آخر؛ راجع JSON الخام"
+msgstr[2] "لم يُعرض عنصران آخران؛ راجع JSON الخام"
+msgstr[3] "لم تُعرض %{count} عناصر أخرى؛ راجع JSON الخام"
+msgstr[4] "لم يُعرض %{count} عنصرًا آخر؛ راجع JSON الخام"
+msgstr[5] "لم يُعرض %{count} عنصر آخر؛ راجع JSON الخام"
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "+%{count}"
+msgstr "+%{count}"
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "Copied"
+msgstr "تم النسخ"
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "Copy"
+msgstr "نسخ"
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "Empty"
+msgstr "فارغ"
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "Raw JSON"
+msgstr "JSON الخام"
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "Redacted"
+msgstr "محجوب"
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "Show all"
+msgstr "عرض الكل"
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "Show less"
+msgstr "عرض أقل"
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "empty"
+msgstr "فارغ"
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "[%{count} item]"
+msgid_plural "[%{count} items]"
+msgstr[0] "[لا عناصر]"
+msgstr[1] "[عنصر واحد]"
+msgstr[2] "[عنصران]"
+msgstr[3] "[%{count} عناصر]"
+msgstr[4] "[%{count} عنصرًا]"
+msgstr[5] "[%{count} عنصر]"
+
+#: lib/ash_quick/liveview/components/map_value.ex
+#, elixir-autogen, elixir-format
+msgid "{%{count} key}"
+msgid_plural "{%{count} keys}"
+msgstr[0] "{لا مفاتيح}"
+msgstr[1] "{مفتاح واحد}"
+msgstr[2] "{مفتاحان}"
+msgstr[3] "{%{count} مفاتيح}"
+msgstr[4] "{%{count} مفتاحًا}"
+msgstr[5] "{%{count} مفتاح}"
