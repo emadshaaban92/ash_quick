@@ -51,17 +51,27 @@ defmodule AshQuick.PubSub.Transformer do
   # `[[:id, nil]]` publishes both `"product:<id>"` and the bare `"product"`: the
   # `nil` alternative drops the id segment. One publication feeds both a
   # row-scoped and a collection-wide subscriber.
+  #
+  # The update publication carries `AshQuick.PubSub.Filter`, so a quiet update
+  # that changes nothing publishes nothing; see there. Creates and destroys
+  # always change something, and the resource's own publications are not
+  # filtered.
   defp put_publications(dsl_state) do
     Enum.reduce(@types, dsl_state, fn type, dsl_state ->
       {:ok, publication} =
-        Transformer.build_entity(Ash.Notifier.PubSub, [:pub_sub], :publish_all,
-          type: type,
-          topic: [[:id, nil]]
+        Transformer.build_entity(
+          Ash.Notifier.PubSub,
+          [:pub_sub],
+          :publish_all,
+          [type: type, topic: [[:id, nil]]] ++ filter(type)
         )
 
       Transformer.add_entity(dsl_state, [:pub_sub], publication, type: :append)
     end)
   end
+
+  defp filter(:update), do: [filter: &AshQuick.PubSub.Filter.publish?/1]
+  defp filter(_type), do: []
 
   # `notifiers:` is an extension list, which a transformer cannot add to — but
   # `Ash.Resource.Info.notifiers/1` reads `:simple_notifiers` alongside it, and

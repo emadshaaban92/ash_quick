@@ -612,6 +612,15 @@ wires the resource's PubSub publications. See the `AshQuick` moduledoc for each
 section: `liveness`, `display`, `labels`, `forms`, `lookup`, `activation`,
 `versioning`, `bookkeeping`, `audit`, `read_only_fields`.
 
+Every update is published, even one that changes no attribute, since a hook
+may have changed what a page shows through other records. An update known to
+change nothing a page shows, a print or a file download say, is listed in
+`liveness do quiet [...] end`. A quiet update that changes nothing (on the same answer that leaves `version`,
+`updated_by` and `updated_at` alone, see below) is not published, so it does
+not make every open page on the record read it again. The atomic path cannot
+tell, and publishes for any accepted input. A publication in the resource's
+own `pub_sub` block is not affected.
+
 ### Versioning is on by default
 
 Read this before adopting, because it changes how every write behaves.

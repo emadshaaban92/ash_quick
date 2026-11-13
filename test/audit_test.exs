@@ -37,13 +37,13 @@ defmodule AshQuick.AuditTest do
   alias AshQuick.Test.Actor
   alias AshQuick.Test.AuditLog
   alias AshQuick.Test.Credential
-  alias AshQuick.Test.Dossier
-  alias AshQuick.Test.DossierFolder
+  alias AshQuick.Test.CaseFile
+  alias AshQuick.Test.CaseFolder
   alias AshQuick.Test.JsonAuditStore
   alias AshQuick.Test.LegacyAuditStore
   alias AshQuick.Test.LegacyCredential
   alias AshQuick.Test.NumberedCredential
-  alias AshQuick.Test.RefusedDossier
+  alias AshQuick.Test.RefusedCaseFile
   alias AshQuick.Test.Report
   alias AshQuick.Test.Scopes.FullScope
   alias AshQuick.Test.StampedTally
@@ -853,16 +853,16 @@ defmodule AshQuick.AuditTest do
   end
 
   describe "an audited read" do
-    # `Dossier` lists `:open` and `:browse` in `read_actions`; its primary
+    # `CaseFile` lists `:open` and `:browse` in `read_actions`; its primary
     # `:read` stands for every list and search, which records nothing. Its read
-    # policy shows an actor only their own dossiers.
+    # policy shows an actor only their own case files.
     setup %{actor: actor} do
       folder =
-        DossierFolder |> Ash.Changeset.for_create(:create, %{name: "Case"}) |> Ash.create!()
+        CaseFolder |> Ash.Changeset.for_create(:create, %{name: "Case"}) |> Ash.create!()
 
-      dossiers =
+      case_files =
         for title <- ["One", "Two", "Three"] do
-          Dossier
+          CaseFile
           |> Ash.Changeset.for_create(:create, %{
             title: title,
             owner_id: actor.id,
@@ -871,13 +871,13 @@ defmodule AshQuick.AuditTest do
           |> Ash.create!()
         end
 
-      %{dossiers: dossiers, folder: folder}
+      %{case_files: case_files, folder: folder}
     end
 
-    # Every row a dossier read wrote, oldest first. A dossier's create is
+    # Every row a case file read wrote, oldest first. A case file's create is
     # audited too, so the reads are picked out by their type.
-    defp reads(dossiers) do
-      ids = Enum.map(List.wrap(dossiers), & &1.id)
+    defp reads(case_files) do
+      ids = Enum.map(List.wrap(case_files), & &1.id)
 
       AuditLog
       |> Ash.Query.filter(resource_id in ^ids and action_type == :read)
@@ -886,25 +886,25 @@ defmodule AshQuick.AuditTest do
     end
 
     test "a get? read records the record it returned, with who, from where and why",
-         %{actor: actor, dossiers: [dossier | _]} do
+         %{actor: actor, case_files: [case_file | _]} do
       real = Actor |> Ash.Changeset.for_create(:create, %{name: "Support"}) |> Ash.create!()
       scope = %FullScope{user: actor, behind: real, pretending?: true, from: "10.0.0.9"}
 
       opened =
-        Dossier
-        |> Ash.Query.filter(id == ^dossier.id)
+        CaseFile
+        |> Ash.Query.filter(id == ^case_file.id)
         |> Ash.Query.for_read(
           :open,
           %{code: "pin-zq-code", badge: "badge-7", purpose: "review"},
           scope: scope,
-          context: %{action_source: "dossier_page", run: %{id: 42}}
+          context: %{action_source: "case_file_page", run: %{id: 42}}
         )
         |> Ash.read_one!()
 
-      assert opened.id == dossier.id
+      assert opened.id == case_file.id
 
-      assert [entry] = reads(dossier)
-      assert entry.resource_name == :dossier
+      assert [entry] = reads(case_file)
+      assert entry.resource_name == :case_file
       assert entry.action_type == :read
       assert entry.action_name == :open
       assert entry.actor_id == actor.id
@@ -916,37 +916,40 @@ defmodule AshQuick.AuditTest do
       assert entry.arguments[:code] == "**redacted**"
       # Named in `record_sensitive`, so kept, as on a write.
       assert entry.arguments[:badge] == "badge-7"
-      assert entry.context[:action_source] == "dossier_page"
+      assert entry.context[:action_source] == "case_file_page"
       refute Map.has_key?(entry.context, :run)
       refute inspect(entry) =~ "pin-zq-code"
     end
 
     test "Ash.get and a code interface record the same way",
-         %{actor: actor, dossiers: [dossier | _]} do
-      Ash.get!(Dossier, dossier.id, action: :open, actor: actor)
-      Dossier.open!(dossier.id, actor: actor)
+         %{actor: actor, case_files: [case_file | _]} do
+      Ash.get!(CaseFile, case_file.id, action: :open, actor: actor)
+      CaseFile.open!(case_file.id, actor: actor)
 
-      assert [first, second] = reads(dossier)
+      assert [first, second] = reads(case_file)
       assert first.action_name == :open
       assert second.action_name == :open
       assert first.real_actor_id == actor.id
     end
 
     test "a read returning several records records each of them",
-         %{actor: actor, dossiers: dossiers} do
-      assert length(Ash.read!(Dossier, action: :browse, actor: actor)) == 3
+         %{actor: actor, case_files: case_files} do
+      assert length(Ash.read!(CaseFile, action: :browse, actor: actor)) == 3
 
-      entries = reads(dossiers)
+      entries = reads(case_files)
       assert length(entries) == 3
 
       assert entries |> Enum.map(& &1.resource_id) |> Enum.sort() ==
-               dossiers |> Enum.map(& &1.id) |> Enum.sort()
+               case_files |> Enum.map(& &1.id) |> Enum.sort()
 
       assert Enum.all?(entries, &(&1.action_name == :browse))
     end
 
-    test "a page records the records on it, and no others", %{actor: actor, dossiers: dossiers} do
-      sorted = Ash.Query.sort(Dossier, title: :asc)
+    test "a page records the records on it, and no others", %{
+      actor: actor,
+      case_files: case_files
+    } do
+      sorted = Ash.Query.sort(CaseFile, title: :asc)
 
       # One, Three / Three, Two.
       for pagination <- [[limit: 2], [limit: 2, offset: 1]] do
@@ -960,35 +963,35 @@ defmodule AshQuick.AuditTest do
       assert [%{title: "One"}] = page.results
       assert page.more?
 
-      entries = reads(dossiers)
+      entries = reads(case_files)
 
-      assert Map.new(dossiers, fn dossier ->
-               {dossier.title, Enum.count(entries, &(&1.resource_id == dossier.id))}
+      assert Map.new(case_files, fn case_file ->
+               {case_file.title, Enum.count(entries, &(&1.resource_id == case_file.id))}
              end) == %{"One" => 2, "Three" => 2, "Two" => 1}
     end
 
-    test "a stream records every record it yields", %{actor: actor, dossiers: dossiers} do
+    test "a stream records every record it yields", %{actor: actor, case_files: case_files} do
       # `Ash.stream!/2` takes the action off the query.
       streamed =
-        Dossier
+        CaseFile
         |> Ash.Query.for_read(:browse, %{}, actor: actor)
         |> Ash.stream!(actor: actor, batch_size: 2)
         |> Enum.to_list()
 
       assert length(streamed) == 3
 
-      entries = reads(dossiers)
+      entries = reads(case_files)
 
       assert entries |> Enum.map(& &1.resource_id) |> Enum.sort() ==
-               dossiers |> Enum.map(& &1.id) |> Enum.sort()
+               case_files |> Enum.map(& &1.id) |> Enum.sort()
     end
 
     test "loading a relationship through a listed action records what it loaded",
-         %{actor: actor, dossiers: dossiers, folder: folder} do
-      loaded = Ash.load!(folder, :dossiers, actor: actor)
-      assert length(loaded.dossiers) == 3
+         %{actor: actor, case_files: case_files, folder: folder} do
+      loaded = Ash.load!(folder, :case_files, actor: actor)
+      assert length(loaded.case_files) == 3
 
-      entries = reads(dossiers)
+      entries = reads(case_files)
       assert length(entries) == 3
       assert Enum.all?(entries, &(&1.action_name == :browse))
       # The folder's own read is not listed.
@@ -996,40 +999,40 @@ defmodule AshQuick.AuditTest do
     end
 
     test "loading onto records already in hand records nothing",
-         %{actor: actor, dossiers: dossiers} do
-      loaded = Ash.load!(dossiers, :heading, action: :browse, actor: actor)
+         %{actor: actor, case_files: case_files} do
+      loaded = Ash.load!(case_files, :heading, action: :browse, actor: actor)
       assert Enum.map(loaded, & &1.heading) == ["One!", "Two!", "Three!"]
 
       # A field the records were read without is read again for them, through
       # the action, and that is still not a read of anything new.
       bare =
-        Dossier
+        CaseFile
         |> Ash.Query.select([:id, :owner_id])
         |> Ash.read!(actor: actor)
 
       reloaded = Ash.load!(bare, [:title, :heading], action: :browse, actor: actor)
       assert reloaded |> Enum.map(& &1.heading) |> Enum.sort() == ["One!", "Three!", "Two!"]
 
-      assert reads(dossiers) == []
+      assert reads(case_files) == []
     end
 
     test "a read that returns nothing records nothing",
-         %{actor: actor, dossiers: [dossier | _] = dossiers} do
+         %{actor: actor, case_files: [case_file | _] = case_files} do
       stranger = Actor |> Ash.Changeset.for_create(:create, %{name: "Stranger"}) |> Ash.create!()
 
       # Not found.
-      assert {:error, _} = Ash.get(Dossier, Ash.UUID.generate(), action: :open, actor: actor)
+      assert {:error, _} = Ash.get(CaseFile, Ash.UUID.generate(), action: :open, actor: actor)
       # There, but the read policy filters it out for this actor.
-      assert {:error, _} = Ash.get(Dossier, dossier.id, action: :open, actor: stranger)
-      assert [] = Ash.read!(Dossier, action: :browse, actor: stranger)
+      assert {:error, _} = Ash.get(CaseFile, case_file.id, action: :open, actor: stranger)
+      assert [] = Ash.read!(CaseFile, action: :browse, actor: stranger)
 
-      assert reads(dossiers) == []
+      assert reads(case_files) == []
     end
 
     test "a record another hook drops after the read is not recorded",
-         %{actor: actor, dossiers: dossiers, folder: folder} do
+         %{actor: actor, case_files: case_files, folder: folder} do
       hidden =
-        Dossier
+        CaseFile
         |> Ash.Changeset.for_create(:create, %{
           title: "Hidden",
           owner_id: actor.id,
@@ -1038,12 +1041,12 @@ defmodule AshQuick.AuditTest do
         })
         |> Ash.create!()
 
-      assert length(Ash.read!(Dossier, action: :browse, actor: actor)) == 3
-      assert {:error, _} = Ash.get(Dossier, hidden.id, action: :open, actor: actor)
-      assert length(Ash.load!(folder, :dossiers, actor: actor).dossiers) == 3
+      assert length(Ash.read!(CaseFile, action: :browse, actor: actor)) == 3
+      assert {:error, _} = Ash.get(CaseFile, hidden.id, action: :open, actor: actor)
+      assert length(Ash.load!(folder, :case_files, actor: actor).case_files) == 3
 
       streamed =
-        Dossier
+        CaseFile
         |> Ash.Query.for_read(:browse, %{}, actor: actor)
         |> Ash.stream!(actor: actor, batch_size: 2)
         |> Enum.to_list()
@@ -1051,43 +1054,43 @@ defmodule AshQuick.AuditTest do
       assert length(streamed) == 3
 
       assert reads(hidden) == []
-      assert length(reads(dossiers)) == 9
+      assert length(reads(case_files)) == 9
     end
 
     test "a read through an action that is not listed records nothing",
-         %{actor: actor, dossiers: dossiers} do
-      assert length(Ash.read!(Dossier, actor: actor)) == 3
-      assert Ash.get!(Dossier, hd(dossiers).id, actor: actor)
+         %{actor: actor, case_files: case_files} do
+      assert length(Ash.read!(CaseFile, actor: actor)) == 3
+      assert Ash.get!(CaseFile, hd(case_files).id, actor: actor)
 
-      assert reads(dossiers) == []
+      assert reads(case_files) == []
     end
 
     # Ash builds the read's query for a check, and with it the preparation, so
     # what is asserted is that nothing at all is written under the checks'
-    # context — not only nothing naming these dossiers.
+    # context — not only nothing naming these case files.
     test "a permission check on a listed action records nothing",
-         %{actor: actor, dossiers: [dossier | _] = dossiers} do
+         %{actor: actor, case_files: [case_file | _] = case_files} do
       probe = "can-#{System.unique_integer([:positive])}"
       opts = [context: %{probe: probe}]
 
-      assert Ash.can?({Dossier, :browse}, actor, opts)
-      assert Ash.can?({Dossier, :open, %{purpose: "check"}}, actor, opts)
-      assert Ash.can?({dossier, :open, %{code: "pin-zq-code"}}, actor, opts)
-      assert Ash.can?({dossier, :browse}, actor, opts)
-      assert AshQuick.can?({Dossier, :browse}, actor, :ash_quick_list, opts)
-      assert AshQuick.can?({dossier, :browse}, actor, :ash_quick_details, opts)
+      assert Ash.can?({CaseFile, :browse}, actor, opts)
+      assert Ash.can?({CaseFile, :open, %{purpose: "check"}}, actor, opts)
+      assert Ash.can?({case_file, :open, %{code: "pin-zq-code"}}, actor, opts)
+      assert Ash.can?({case_file, :browse}, actor, opts)
+      assert AshQuick.can?({CaseFile, :browse}, actor, :ash_quick_list, opts)
+      assert AshQuick.can?({case_file, :browse}, actor, :ash_quick_details, opts)
 
-      assert reads(dossiers) == []
+      assert reads(case_files) == []
       refute Enum.any?(Ash.read!(AuditLog), &(&1.context[:probe] == probe))
     end
 
     test "a read whose rows the store refuses fails, and returns nothing" do
       record =
-        RefusedDossier |> Ash.Changeset.for_create(:create, %{title: "Sealed"}) |> Ash.create!()
+        RefusedCaseFile |> Ash.Changeset.for_create(:create, %{title: "Sealed"}) |> Ash.create!()
 
       error =
         assert_raise Ash.Error.Unknown, fn ->
-          Ash.get!(RefusedDossier, record.id, action: :open)
+          Ash.get!(RefusedCaseFile, record.id, action: :open)
         end
 
       assert Exception.message(error) =~ "the audit entry could not be written"
@@ -1095,7 +1098,7 @@ defmodule AshQuick.AuditTest do
 
       # The same read through an unlisted action is not recorded, and so not
       # refused.
-      assert Ash.get!(RefusedDossier, record.id).id == record.id
+      assert Ash.get!(RefusedCaseFile, record.id).id == record.id
     end
   end
 
@@ -1174,13 +1177,13 @@ defmodule AshQuick.AuditTest do
         |> Ash.Changeset.for_create(:create, %{name: "Gateway"}, actor: actor, context: context)
         |> Ash.create!()
 
-      dossier =
-        Dossier
+      case_file =
+        CaseFile
         |> Ash.Changeset.for_create(:create, %{title: "One", owner_id: actor.id})
         |> Ash.create!()
 
-      Dossier
-      |> Ash.Query.filter(id == ^dossier.id)
+      CaseFile
+      |> Ash.Query.filter(id == ^case_file.id)
       |> Ash.Query.for_read(:open, %{}, actor: actor, context: context)
       |> Ash.read_one!()
 
@@ -1194,7 +1197,7 @@ defmodule AshQuick.AuditTest do
       assert [written] = entries(credential)
       assert written.context == context
 
-      assert [_created, read] = entries(dossier)
+      assert [_created, read] = entries(case_file)
       assert read.action_type == :read
       assert read.context == context
 

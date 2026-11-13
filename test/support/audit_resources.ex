@@ -902,7 +902,7 @@ defmodule AshQuick.Test.RequiredRealActorAuditStore do
   end
 end
 
-defmodule AshQuick.Test.Dossier do
+defmodule AshQuick.Test.CaseFile do
   @moduledoc """
   A confidential record whose opening is recorded.
 
@@ -913,7 +913,7 @@ defmodule AshQuick.Test.Dossier do
   in `record_sensitive`, so a read's arguments are redacted on the same rule as
   a write's.
 
-  Its read policy lets an actor see only their own dossiers, so a read the
+  Its read policy lets an actor see only their own case files, so a read the
   policies filter to nothing is a read that returns nothing.
   """
   use Ash.Resource,
@@ -935,7 +935,7 @@ defmodule AshQuick.Test.Dossier do
   end
 
   # A host's own hook that drops records after the data layer returned them,
-  # as a resource-wide preparation: the read does not return a hidden dossier,
+  # as a resource-wide preparation: the read does not return a hidden case file,
   # so it must not be recorded as read either.
   preparations do
     prepare fn query, _context ->
@@ -950,7 +950,7 @@ defmodule AshQuick.Test.Dossier do
   end
 
   relationships do
-    belongs_to :folder, AshQuick.Test.DossierFolder do
+    belongs_to :folder, AshQuick.Test.CaseFolder do
       define_attribute? false
       public? true
     end
@@ -1015,10 +1015,10 @@ defmodule AshQuick.Test.Dossier do
   end
 end
 
-defmodule AshQuick.Test.DossierFolder do
+defmodule AshQuick.Test.CaseFolder do
   @moduledoc """
-  Holds dossiers, and loads them through `AshQuick.Test.Dossier`'s listed
-  `:browse` — so loading the relationship is a read of each dossier it returns.
+  Holds case files, and loads them through `AshQuick.Test.CaseFile`'s listed
+  `:browse` — so loading the relationship is a read of each case file it returns.
   Its own reads are not listed, and record nothing.
   """
   use Ash.Resource,
@@ -1036,7 +1036,7 @@ defmodule AshQuick.Test.DossierFolder do
   end
 
   relationships do
-    has_many :dossiers, AshQuick.Test.Dossier do
+    has_many :case_files, AshQuick.Test.CaseFile do
       destination_attribute :folder_id
       read_action :browse
       public? true
@@ -1070,7 +1070,7 @@ defmodule AshQuick.Test.DossierFolder do
   end
 end
 
-defmodule AshQuick.Test.RefusedDossier do
+defmodule AshQuick.Test.RefusedCaseFile do
   @moduledoc """
   An opened record whose store refuses every row: `AshQuick.Test.RefusingStore`.
   Its create is excluded, so a record can exist for the read to fail on.

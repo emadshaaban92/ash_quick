@@ -11,6 +11,37 @@ defmodule AshQuick do
   subscribes to from the same functions, so a page cannot listen on a topic the
   resource does not publish.
 
+  An update is published even when it changes no attribute of its record,
+  because it may have done its work in a hook: created or updated records a
+  calculation or aggregate on this one reads. Those records' own broadcasts
+  do not reach a page on this record, which listens only on the records it
+  holds, so a page would go stale with no symptom.
+
+  An update known to change nothing a page shows is declared **quiet**. A
+  quiet update that changes nothing is not published, so a page open on the
+  record does not read it again because someone printed it or downloaded a
+  file from it. Only the resource can say an update is quiet: a print that
+  also numbers or records itself in a hook does change what a page shows.
+
+      ash_quick do
+        liveness do
+          quiet [:print_letter, :download_contract]
+        end
+      end
+
+  "Changes nothing" is the answer that also leaves `version`, `updated_by` and
+  `updated_at` alone: no attribute or relationship changed besides the
+  bookkeeping fields and the ones `:versioning_ignored_attributes` and
+  `:versioning_ignored_relationships` name, decided per record in a bulk run.
+  A quiet update that does change something is published as any other. On
+  the atomic path every accepted input is written, and only the data layer
+  compares it with the row, so a quiet update there that accepts any input
+  publishes even when the values equal the row's.
+
+  The tab that ran the action does not depend on its broadcast: it delivers
+  its own print or file and reads the page afresh when it returns from the
+  action.
+
   `enabled?` is therefore the whole switch: a QuickView is live exactly when its
   resource publishes, and the view declares nothing. `enabled? false` keeps the
   extension for its other features and leaves those pages static — the right
@@ -30,7 +61,8 @@ defmodule AshQuick do
 
   A resource may still write its own `pub_sub` block; AshQuick's publications
   are appended to it and nothing in it is removed. Only the prefix is AshQuick's
-  to set, since the subscribe side has no other way to know it.
+  to set, since the subscribe side has no other way to know it. A publication
+  written there is the resource's own, and fires for a quiet update too.
 
   To write that block, though, the resource also needs
   `notifiers: [Ash.Notifier.PubSub]` — `notifiers:` is a Spark *extension kind*,
@@ -808,6 +840,12 @@ defmodule AshQuick do
         type: :string,
         doc:
           "The PubSub topic for this resource. Defaults to the resource's `short_name`. Must be unique across resources."
+      ],
+      quiet: [
+        type: {:wrap_list, :atom},
+        default: [],
+        doc:
+          "Update actions not published when they change nothing: ones known to change nothing a page shows, such as a download. Every other update is published whether or not it changed this record, since a hook may have changed what a page shows through other records."
       ]
     ]
   }
@@ -1072,7 +1110,8 @@ defmodule AshQuick do
       AshQuick.Print.Verifier,
       AshQuick.Labels.Verifier,
       AshQuick.Forms.Verifier,
-      AshQuick.ReadOnlyFields.Verifier
+      AshQuick.ReadOnlyFields.Verifier,
+      AshQuick.PubSub.Verifier
     ]
 
   @doc """

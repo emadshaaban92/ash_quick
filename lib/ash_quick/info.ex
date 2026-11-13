@@ -245,6 +245,16 @@ defmodule AshQuick.Info do
   end
 
   @doc """
+  The update actions `resource` does not publish when they change nothing,
+  under `ash_quick do liveness do quiet [...] end end`.
+
+  Empty for a resource that declares none.
+  """
+  def quiet(resource) do
+    Spark.Dsl.Extension.get_opt(resource, [:ash_quick, :liveness], :quiet, [])
+  end
+
+  @doc """
   Whether `resource` declared `action_name` to open as a page of its own,
   under `ash_quick do forms do full_page [...] end end`, rather than in the
   action modal.

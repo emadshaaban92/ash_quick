@@ -584,6 +584,27 @@ ash_quick do
 end
 ```
 
+**Every update publishes, unless it is quiet and changes nothing.** An update
+that writes no attribute may still have changed what a page shows through a
+hook (records an aggregate reads), and those records' broadcasts never reach a
+page on this one, so silence is opt-in. List updates known to change nothing a
+page shows (a print, a download) in `quiet`; a print that also records itself
+in a hook is not one.
+A quiet update that changes nothing (the same answer that leaves `version`,
+`updated_by` and `updated_at` alone, decided per record in a bulk run) wakes
+no other page; the tab that ran it delivers its file and reads afresh on its
+own. A quiet update that changes something publishes, and so does a quiet
+atomic update that accepts any input, since only the data layer compared the
+values. A resource's own `pub_sub` publications are never filtered.
+
+```elixir
+ash_quick do
+  liveness do
+    quiet [:print_letter, :download_contract]   # not published when unchanged
+  end
+end
+```
+
 Topics are **never named** on either side — both come from `AshQuick.Topics`, so
 a view cannot subscribe to a topic a resource does not publish. `:extra_records`
 returns records or `{resource, id}` pairs rather than topics for the same reason:
