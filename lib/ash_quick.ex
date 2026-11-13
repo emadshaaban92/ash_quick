@@ -322,7 +322,7 @@ defmodule AshQuick do
       end
 
   Declared (or left at the default), the resource gains an integer counter
-  defaulting to `1` and not writable by any action, so only the lock moves it,
+  starting at `1` and not writable by any action, so only the lock moves it,
   and every `:update` and `:destroy` is filtered on the
   value the actor loaded and bumps it. A write against a record someone else
   has since changed matches no row and comes back as
@@ -348,10 +348,24 @@ defmodule AshQuick do
   version and the bump. That path writes every accepted input, so there a value
   the actor left alone but someone else has since changed counts as a change,
   and is locked. `Ash.update_many/4` over loaded records locks each one, and a
-  record nobody loaded (a hand-built `%Post{id: id}`, or an identifier) still
-  holds the counter's default and has no copy to be stale, so its write is
-  bumped without the check. A hand-built record given a version of its own,
-  `%Post{id: id, version: params["version"]}`, is checked against it.
+  record nobody loaded (a hand-built `%Post{id: id}`, or an identifier) holds
+  `version: nil` — the counter's default is a function, so the struct has none
+  — and has no copy to be stale, so its write is bumped without the check. A
+  hand-built record given a version of its own,
+  `%Post{id: id, version: params["version"]}`, is checked against it, `1`
+  included.
+
+  An upsert that meets an existing row is a write over it that nobody loaded,
+  and is treated as one: it bumps the counter when a value it writes differs
+  from the row's, so a copy loaded before it is stale, and keeps the row's
+  counter otherwise, rather than writing the insert default over it as
+  `upsert_fields :replace_all` would. `:replace_all` also writes a primary key
+  the insert generated, so it always counts as a change and always bumps. The
+  bump is part of the data layer's upsert, so a data layer that cannot write
+  atomics on an upsert gets no lock there. Where the data layer cannot run
+  `Ash.update_many/4` (AshPostgres before PostgreSQL 17, or managing the tenant
+  on update, or another data layer) the lock compares literal values, so a bulk
+  upsert is written one row at a time.
 
   A bulk write by query, or by `:atomic_batches`, that changes anything does
   not run atomically. Ash builds one changeset for it without the rows' data,
@@ -371,7 +385,16 @@ defmodule AshQuick do
   which is why `AshQuick.Versioning.Verifier` refuses to compile one whose
   column is not a lock counter — an extension that gives a resource a
   `:version` meaning the event's schema version is exactly that, and locking on
-  it would increment it on every write.
+  it would increment it on every write. A counter of the resource's own also
+  has to default to a function giving `1`, such as
+  `{AshQuick.Versioning.Declaration, :initial, []}`: a literal `1` would sit in
+  every hand-built struct, where the lock could not tell it from a version a
+  client sent; that MFA is supported API. On AshPostgres the column's own
+  default stays `1` through the resource's `migration_defaults`, which
+  AshQuick fills in unless the resource already names the counter there.
+  Another data layer's migration generator sees a function default and leaves
+  the column without `DEFAULT 1`. Writes through Ash still start at `1`; give
+  the column its default by hand if anything else inserts rows.
 
   ## Bookkeeping
 

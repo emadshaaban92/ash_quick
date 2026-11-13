@@ -285,12 +285,17 @@ defmodule AshQuick.BookkeepingVerifierTest do
 
       # A resource stamping `:inserted_by` inside a single action means that one
       # action. A global change added alongside would both double-stamp and
-      # widen the stamping to every create the resource has. Auditing is on by
-      # default, so the change a probe does carry is the audit one — anything
-      # else here is a stamp.
+      # widen the stamping to every create the resource has. Auditing and
+      # versioning are on by default, so the changes a probe does carry are the
+      # audit one and the lock, which takes a create only when it upserts —
+      # anything else here is a stamp.
       assert Enum.reject(
                Info.changes(module, :create),
-               &match?(%{change: {AshQuick.Audit.Change, _opts}}, &1)
+               &match?(
+                 %{change: {mod, _opts}}
+                 when mod in [AshQuick.Audit.Change, AshQuick.Versioning.Lock],
+                 &1
+               )
              ) == []
     end
 

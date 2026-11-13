@@ -19,7 +19,9 @@ defmodule Example.Test.AtomicBrand do
   lock decided in `atomic/3`, on PostgreSQL.
 
   Everything else is the extension's defaults, as on the real resource:
-  versioning, audit and the bookkeeping stamps, which the lock ignores. The
+  versioning, audit and the bookkeeping stamps, which the lock ignores. Its
+  upserts on `:code` are the real resource's identity, written over atomically
+  in PostgreSQL's `ON CONFLICT`. The
   `read_only_fields` block keeps `:code` an admin's on `:rename`, so a
   read-only field is driven on the atomic path too.
   """
@@ -57,6 +59,24 @@ defmodule Example.Test.AtomicBrand do
     end
 
     destroy :remove
+
+    # An import matching on the natural key: on a conflict the row is written
+    # over with `name`.
+    create :upsert do
+      accept [:code, :name]
+      upsert? true
+      upsert_identity :code
+      upsert_fields [:name]
+    end
+
+    # Ash's widest `upsert_fields`: every attribute the create sets, the
+    # counter's default included.
+    create :upsert_all do
+      accept [:code, :name]
+      upsert? true
+      upsert_identity :code
+      upsert_fields :replace_all
+    end
   end
 
   ash_quick do
@@ -77,6 +97,10 @@ defmodule Example.Test.AtomicBrand do
     uuid_v7_primary_key :id
     attribute :code, :string, allow_nil?: false, public?: true
     attribute :name, :string, allow_nil?: false, public?: true
+  end
+
+  identities do
+    identity :code, [:code]
   end
 end
 

@@ -30,6 +30,7 @@ defmodule AshQuick.Versioning.Transformer do
       {:ok,
        dsl_state
        |> add_attribute_if_not_exists(attribute)
+       |> keep_column_default(attribute)
        |> add_lock_change(attribute)}
     else
       {:ok, dsl_state}
@@ -40,14 +41,40 @@ defmodule AshQuick.Versioning.Transformer do
     # Appended after the resource's own global changes, which Ash runs after
     # the action's, so on the atomic path the lock sees every value written.
     # In memory it decides in a `before_action` appended last, after every
-    # other one has run. See `AshQuick.Versioning.Lock`.
+    # other one has run. On a create it only acts on an upsert that meets a
+    # row. See `AshQuick.Versioning.Lock`.
     {:ok, lock} =
       Transformer.build_entity(Dsl, [:changes], :change,
         change: {AshQuick.Versioning.Lock, [attribute: attribute]},
-        on: [:update, :destroy]
+        on: [:create, :update, :destroy]
       )
 
     Transformer.add_entity(dsl_state, [:changes], lock, type: :append)
+  end
+
+  # The counter's default is a function (see
+  # `AshQuick.Versioning.Declaration.initial/0`), which AshPostgres's
+  # migration generator cannot read, so it would drop the column's `DEFAULT 1`.
+  # Its `migration_defaults` says what the column holds instead, unless the
+  # resource already said. Named rather than depended on: a host without
+  # AshPostgres has no such section, and this does nothing.
+  @migration_sections %{AshPostgres.DataLayer => [:postgres]}
+
+  defp keep_column_default(dsl_state, name) do
+    case Map.fetch(@migration_sections, Transformer.get_persisted(dsl_state, :data_layer)) do
+      {:ok, section} ->
+        defaults = Transformer.get_option(dsl_state, section, :migration_defaults) || []
+
+        Transformer.set_option(
+          dsl_state,
+          section,
+          :migration_defaults,
+          Keyword.put_new(defaults, name, inspect(Declaration.initial()))
+        )
+
+      :error ->
+        dsl_state
+    end
   end
 
   defp add_attribute_if_not_exists(dsl_state, name) do

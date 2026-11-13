@@ -113,7 +113,7 @@ defmodule AshQuick.VersioningTest do
       record = ledger()
       {:ok, _} = update(record, :rename, %{name: "Moved on"})
 
-      assert {:ok, _} = update(%Ledger{id: record.id}, :rename, %{name: "By id"})
+      assert {:ok, %{version: 3}} = update(%Ledger{id: record.id}, :rename, %{name: "By id"})
       assert %{name: "By id", version: 3} = current(record)
     end
 
@@ -131,6 +131,18 @@ defmodule AshQuick.VersioningTest do
       assert {:ok, %{version: 4}} =
                update(%Ledger{id: record.id, version: 3}, :rename, %{name: "From version 3"})
     end
+
+    test "a built record given the first version is checked too" do
+      record = ledger()
+      {:ok, _} = update(record, :rename, %{name: "Moved on"})
+
+      # The client loaded the row at version 1, before the write above.
+      assert {:error, error} =
+               update(%Ledger{id: record.id, version: 1}, :rename, %{name: "From version 1"})
+
+      assert stale?(error)
+      assert %{name: "Moved on", version: 2} = current(record)
+    end
   end
 
   describe "the in-memory path beside it" do
@@ -146,7 +158,9 @@ defmodule AshQuick.VersioningTest do
       record = ledger()
       {:ok, _} = update(record, :rename_in_memory, %{name: "Moved on"})
 
-      assert {:ok, _} = update(%Ledger{id: record.id}, :rename_in_memory, %{name: "By id"})
+      assert {:ok, %{version: 3}} =
+               update(%Ledger{id: record.id}, :rename_in_memory, %{name: "By id"})
+
       assert %{name: "By id", version: 3} = current(record)
     end
 
@@ -157,6 +171,16 @@ defmodule AshQuick.VersioningTest do
 
       assert {:error, error} =
                update(%Ledger{id: record.id, version: 2}, :rename_in_memory, %{name: "Stale"})
+
+      assert stale?(error)
+    end
+
+    test "a built record given the first version is checked too" do
+      record = ledger()
+      {:ok, _} = update(record, :rename, %{name: "Moved on"})
+
+      assert {:error, error} =
+               update(%Ledger{id: record.id, version: 1}, :rename_in_memory, %{name: "Stale"})
 
       assert stale?(error)
     end
@@ -256,6 +280,94 @@ defmodule AshQuick.VersioningTest do
       assert {:error, error} = Ash.destroy(%Ledger{id: record.id, version: 2}, action: :remove)
       assert stale?(error)
       assert %{version: 3} = current(record)
+    end
+
+    test "of a built record given the first version is refused once the row moved on" do
+      record = ledger()
+      {:ok, _} = update(record, :rename, %{name: "Moved on"})
+
+      assert {:error, error} = Ash.destroy(%Ledger{id: record.id, version: 1}, action: :remove)
+      assert stale?(error)
+      assert %{version: 2} = current(record)
+    end
+  end
+
+  describe "an upsert" do
+    alias AshQuick.Test.ImportedLedger
+
+    defp upsert(action \\ :upsert, input) do
+      ImportedLedger
+      |> Ash.Changeset.for_create(action, input)
+      |> Ash.create()
+    end
+
+    defp imported(record), do: Ash.get!(ImportedLedger, record.id)
+
+    test "that inserts starts the counter" do
+      assert {:ok, %{version: 1}} = upsert(%{code: "A-1", name: "First"})
+    end
+
+    test "that writes over a row bumps its version, so a copy loaded before it is stale" do
+      {:ok, record} = upsert(%{code: "A-2", name: "First"})
+
+      assert {:ok, %{id: id, name: "Imported", version: 2}} =
+               upsert(%{code: "A-2", name: "Imported"})
+
+      assert id == record.id
+
+      assert {:error, error} = update(record, :rename, %{name: "From the old copy"})
+      assert stale?(error)
+      assert %{name: "Imported", version: 2} = imported(record)
+    end
+
+    test "that writes what the row already holds leaves the version alone" do
+      {:ok, record} = upsert(%{code: "A-3", name: "Same"})
+
+      assert {:ok, %{version: 1}} = upsert(%{code: "A-3", name: "Same"})
+      assert {:ok, %{version: 2}} = update(record, :rename, %{name: "Still current"})
+    end
+
+    test "that leaves out a listed field wipes it, and that counts as a change" do
+      {:ok, record} = upsert(%{code: "A-5", name: "Same", note: "kept?"})
+
+      # `upsert_fields [:name, :note]`: on ETS a field the create does not set
+      # is written as `nil`.
+      assert {:ok, %{note: nil, version: 2}} = upsert(%{code: "A-5", name: "Same"})
+
+      assert {:error, error} = update(record, :rename, %{note: "From the old copy"})
+      assert stale?(error)
+    end
+
+    test "that replaces every field bumps the version rather than resetting it" do
+      {:ok, record} = upsert(:upsert_all, %{code: "A-4", name: "First"})
+      {:ok, record} = update(record, :rename, %{name: "Second"})
+      {:ok, _} = update(record, :rename, %{name: "Third"})
+
+      assert {:ok, %{name: "Imported", version: 4} = upserted} =
+               upsert(:upsert_all, %{code: "A-4", name: "Imported"})
+
+      # A copy from before any of it must not come back to life. `:replace_all`
+      # writes the key too, so the row now carries the upsert's id.
+      assert {:error, error} =
+               update(%ImportedLedger{id: upserted.id, version: 1}, :rename, %{name: "Old"})
+
+      assert stale?(error)
+    end
+
+    test "in bulk bumps each row it writes over" do
+      {:ok, one} = upsert(%{code: "B-1", name: "One"})
+      {:ok, two} = upsert(%{code: "B-2", name: "Two"})
+
+      assert %Ash.BulkResult{status: :success} =
+               Ash.bulk_create(
+                 [%{code: "B-1", name: "One again"}, %{code: "B-2", name: "Two"}],
+                 ImportedLedger,
+                 :upsert,
+                 return_errors?: true
+               )
+
+      assert %{name: "One again", version: 2} = imported(one)
+      assert %{version: 1} = imported(two)
     end
   end
 end

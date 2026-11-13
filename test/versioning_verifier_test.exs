@@ -90,7 +90,7 @@ defmodule AshQuick.VersioningVerifierTest do
       """)
 
     assert message =~ "already defines `version`"
-    assert message =~ "default is nil, expected 1"
+    assert message =~ "default is nil, expected {AshQuick.Versioning.Declaration, :initial, []}"
     assert message =~ "allow_nil? is true, expected false"
     assert message =~ "always_select? is false, expected true"
     assert message =~ "writable? is true, expected false"
@@ -118,13 +118,48 @@ defmodule AshQuick.VersioningVerifierTest do
              uuid_primary_key :id
 
              attribute :version, :integer,
-               default: 1,
+               default: {AshQuick.Versioning.Declaration, :initial, []},
                allow_nil?: false,
                public?: true,
                always_select?: true,
                writable?: false
            end
            """) == []
+  end
+
+  test "a counter defaulting to a literal 1 refuses to compile, and says why" do
+    message =
+      message("""
+      attributes do
+        uuid_primary_key :id
+
+        attribute :version, :integer,
+          default: 1,
+          allow_nil?: false,
+          public?: true,
+          always_select?: true,
+          writable?: false
+      end
+      """)
+
+    assert message =~ "default is 1"
+    assert message =~ "A literal default leaves it in every hand-built struct"
+  end
+
+  test "the counter AshQuick adds holds nil in a hand-built struct and 1 once created" do
+    module =
+      compile("""
+      attributes do
+        uuid_primary_key :id
+      end
+
+      actions do
+        defaults [:read, :create]
+      end
+      """)
+
+    assert struct(module).version == nil
+    assert Ash.create!(module, %{}).version == 1
   end
 
   test "the counter AshQuick adds is not writable, so accept :* leaves it out" do
@@ -157,7 +192,7 @@ defmodule AshQuick.VersioningVerifierTest do
         uuid_primary_key :id
 
         attribute :version, :integer,
-          default: 1,
+          default: {AshQuick.Versioning.Declaration, :initial, []},
           allow_nil?: false,
           public?: true,
           always_select?: true

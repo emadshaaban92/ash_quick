@@ -651,6 +651,15 @@ atomic path "no-op" is judged against the row being written, since that path
 writes every accepted input: a value the actor did not change, but someone
 else has since, is a change, and is locked.
 
+An upsert that meets an existing row is a write over it that nobody loaded. It
+bumps `version` when it changes something the lock counts, so a copy loaded
+before it is stale, and it never writes the counter's default over the row,
+`upsert_fields :replace_all` included. A record nobody loaded, a hand-built
+`%Post{id: id}` or an identifier given to `Ash.update_many/4`, holds
+`version: nil` and is bumped without the check. One given the version a client
+last saw, `%Post{id: id, version: params["version"]}`, is checked against it,
+`1` included.
+
 It is on rather than off because losing a concurrent write is silent and
 unrecoverable. Turn it off where there is nothing to lose — an append-only log,
 a row only one writer ever touches:

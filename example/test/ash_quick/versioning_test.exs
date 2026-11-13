@@ -336,5 +336,81 @@ defmodule AshQuick.VersioningTest do
       assert stale?(error)
       assert %{version: 3} = row(brand)
     end
+
+    test "a built record given the first version is checked too", %{brand: brand, admin: admin} do
+      {:ok, _} = rename(brand, %{name: unique("Moved on ")}, admin)
+
+      # The client loaded the row at version 1, before the write above.
+      held = %AtomicBrand{id: brand.id, version: 1}
+
+      assert {:error, error} = rename(held, %{name: unique("From version 1 ")}, admin)
+      assert stale?(error)
+
+      assert {:error, error} = Ash.destroy(held, action: :remove, actor: admin)
+      assert stale?(error)
+      assert %{version: 2} = row(brand)
+    end
+
+    defp upsert(action \\ :upsert, input, actor) do
+      AtomicBrand
+      |> Ash.Changeset.for_create(action, input, actor: actor)
+      |> Ash.create()
+    end
+
+    test "an upsert that writes over a row bumps its version", %{brand: brand, admin: admin} do
+      name = unique("Imported ")
+
+      assert {:ok, %{name: ^name, version: 2}} =
+               upsert(%{code: brand.code, name: name}, admin)
+
+      assert {:error, error} = rename(brand, %{name: unique("From the old copy ")}, admin)
+      assert stale?(error)
+      assert %{name: ^name, version: 2} = row(brand)
+    end
+
+    test "an upsert that writes what the row holds leaves the version alone", %{
+      brand: brand,
+      admin: admin
+    } do
+      assert {:ok, %{version: 1}} = upsert(%{code: brand.code, name: brand.name}, admin)
+      assert {:ok, %{version: 2}} = rename(brand, %{name: unique("Still current ")}, admin)
+    end
+
+    test "an upsert that replaces every field bumps the version rather than resetting it", %{
+      brand: brand,
+      admin: admin
+    } do
+      {:ok, moved} = rename(brand, %{name: unique("Second ")}, admin)
+      {:ok, _} = rename(moved, %{name: unique("Third ")}, admin)
+
+      assert {:ok, %{version: 4} = upserted} =
+               upsert(:upsert_all, %{code: brand.code, name: unique("Imported ")}, admin)
+
+      # A copy from before any of it must not come back to life. `:replace_all`
+      # writes the key too, so the row now carries the upsert's id.
+      old_copy = %AtomicBrand{id: upserted.id, version: 1}
+      assert {:error, error} = rename(old_copy, %{name: unique("Old ")}, admin)
+      assert stale?(error)
+    end
+
+    test "a bulk upsert bumps each row it writes over, and only those", %{
+      brand: one,
+      admin: admin
+    } do
+      two = Ash.get!(AtomicBrand, brand(actor: admin).id)
+      name = unique("Again ")
+
+      assert %Ash.BulkResult{status: :success} =
+               Ash.bulk_create(
+                 [%{code: one.code, name: name}, %{code: two.code, name: two.name}],
+                 AtomicBrand,
+                 :upsert,
+                 actor: admin,
+                 return_errors?: true
+               )
+
+      assert %{name: ^name, version: 2} = row(one)
+      assert %{version: 1} = row(two)
+    end
   end
 end

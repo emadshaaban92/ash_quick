@@ -37,18 +37,46 @@ defmodule AshQuick.Versioning.Verifier do
   # `{option, actual, expected}` for every way the column differs, so the message
   # does not have to look the attribute up again to say what it found.
   defp mismatches(attribute) do
-    Enum.flat_map(expected(), fn {option, expected} ->
-      case Map.get(attribute, option) do
-        ^expected -> []
-        actual -> [{option, actual, expected}]
-      end
+    expected()
+    |> Enum.map(fn {option, expected} -> {option, Map.get(attribute, option), expected} end)
+    |> Enum.reject(fn {option, actual, expected} ->
+      actual == expected or same?(option, actual)
     end)
   end
+
+  # A default of the resource's own passes when it is a function giving the
+  # same first version: what matters is that the struct holds `nil` for a
+  # record nobody loaded, which a literal `1` would not.
+  defp same?(:default, default) when is_function(default, 0),
+    do: default.() == Declaration.initial()
+
+  defp same?(:default, {module, function, args}) when is_atom(module) and is_list(args),
+    do: apply(module, function, args) == Declaration.initial()
+
+  defp same?(_option, _actual), do: false
 
   # The shape the transformer builds, with `:type` resolved the way a compiled
   # attribute carries it — `:integer` on the way in, `Ash.Type.Integer` back out.
   defp expected do
     Keyword.update!(Declaration.counter(), :type, &Ash.Type.get_type/1)
+  end
+
+  # A counter that is otherwise right but defaults to a literal `1` is the
+  # likeliest mismatch, from before the default became a function, so it gets
+  # its own way out.
+  defp default_hint(mismatches) do
+    if Enum.any?(mismatches, &match?({:default, actual, _} when is_integer(actual), &1)) do
+      """
+
+
+      A literal default leaves it in every hand-built struct, where the lock \
+      cannot tell `%Post{id: id}` from a client's own version 1. Drop the \
+      attribute and let AshQuick add it, or default it with \
+      `default: {AshQuick.Versioning.Declaration, :initial, []}`.\
+      """
+    else
+      ""
+    end
   end
 
   defp error(dsl_state, name, mismatches) do
@@ -63,7 +91,7 @@ defmodule AshQuick.Versioning.Verifier do
       #{Enum.map_join(mismatches, "\n", fn {option, actual, expected} -> "  #{option} is #{inspect(actual)}, expected #{inspect(expected)}" end)}
 
       Versioning would filter writes on that column and increment it, which is \
-      almost certainly not what it means here.
+      almost certainly not what it means here.#{default_hint(mismatches)}
 
       Lock on a different column:
 

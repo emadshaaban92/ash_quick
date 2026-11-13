@@ -58,13 +58,12 @@ defmodule AshQuick.Versioning.Lock do
   # for both, which is what Ash's own `OptimisticLock` does.
   #
   # A record nobody loaded — a hand-built `%Post{id: id}`, or an identifier
-  # given to `Ash.update_many/4`, which Ash turns into one — carries the
-  # counter's default rather than a version anybody saw. There is no copy to be
-  # stale, so its write is bumped without the check, on both paths. Ecto's
-  # metadata is what tells it apart (`:built` until a data layer returns it),
-  # together with the counter still holding its default: a built record given
-  # a version of its own, `%Post{id: id, version: params["version"]}`, is a
-  # copy held somewhere else, and is checked like a loaded one.
+  # given to `Ash.update_many/4`, which Ash turns into one — holds no version:
+  # the counter's default is a function, so its struct field is `nil`. There
+  # is no copy to be stale, so its write is bumped without the check, on both
+  # paths. A built record given a version of its own,
+  # `%Post{id: id, version: params["version"]}`, is a copy held somewhere else,
+  # and is checked like a loaded one — `1` included.
   #
   # The locked attribute arrives in `opts` — the transformer resolved it from the
   # resource's declaration, so nothing here has to look it up per changeset.
@@ -75,6 +74,19 @@ defmodule AshQuick.Versioning.Lock do
   alias AshQuick.Bookkeeping.Meaningful
 
   @impl true
+  def change(%{action_type: :create} = changeset, opts, _context) do
+    attribute = Keyword.fetch!(opts, :attribute)
+
+    # The resolved `upsert_fields` reach the changeset's context only once the
+    # action runs, after the changes, so the lock is a hook here too. Its
+    # `upsert?` flag there is no promise the create upserts: a single create
+    # (Ash 3.37) sets it on every run, so a plain insert carries the atomic as
+    # well. That is safe because a data layer writes `atomics` on a create
+    # only in an upsert's update, never in the insert — the counter of a new
+    # row is its default. A bulk create's flag is the caller's.
+    Ash.Changeset.before_action(changeset, &lock_upsert(&1, attribute), prepend?: false)
+  end
+
   def change(changeset, opts, _context) do
     attribute = Keyword.fetch!(opts, :attribute)
 
@@ -124,8 +136,14 @@ defmodule AshQuick.Versioning.Lock do
   defp apply_lock(changeset, attribute) do
     case loaded_version(changeset.data, attribute) do
       nil ->
-        Ash.Changeset.atomic_update(
-          changeset,
+        # Ash requires an attribute that cannot be `nil` to hold a value when
+        # an update sets it, and in memory it reads that value off the data,
+        # not the atomic. The record nobody loaded holds `nil` there, so the
+        # bump would be refused as a missing version; `0` stands in, and
+        # nothing reads it: the row's own counter is what the atomic adds to,
+        # and a built record's values are not taken for the row's.
+        %{changeset | data: Map.put(changeset.data, attribute, 0)}
+        |> Ash.Changeset.atomic_update(
           attribute,
           {:atomic, Ash.Expr.expr(^Ash.Expr.ref(attribute) + 1)}
         )
@@ -137,14 +155,8 @@ defmodule AshQuick.Versioning.Lock do
     end
   end
 
-  defp loaded_version(%{__meta__: %{state: :built}} = data, attribute) do
-    version = Map.get(data, attribute)
-
-    if version == Ash.Resource.Info.attribute(data.__struct__, attribute).default,
-      do: nil,
-      else: version
-  end
-
+  # `nil` only on a record nobody loaded: the counter's struct default — see
+  # `AshQuick.Versioning.Declaration.initial/0`.
   defp loaded_version(data, attribute), do: Map.get(data, attribute)
 
   # The counter moves only when something meaningful does: the row's own value
@@ -188,6 +200,83 @@ defmodule AshQuick.Versioning.Lock do
     Ash.Changeset.filter(
       changeset,
       Ash.Expr.expr(not (^condition) or ^Ash.Expr.ref(attribute) == ^current)
+    )
+  end
+
+  # An upsert that meets a row is an update of it nobody loaded, so it is
+  # treated like one: nothing to check, but the write bumps the counter, or a
+  # copy loaded before it would save over what it wrote. Its update is the
+  # data layer's `ON CONFLICT` clause, where the create's `atomics` are written
+  # and a bare reference reads the row already there, so the lock is an atomic
+  # like the one on the atomic update path: bump when a value the upsert
+  # writes differs from the row's, keep the row's counter otherwise. Keeping it
+  # is a write of its own, because `upsert_fields :replace_all` would otherwise
+  # write the counter's insert default over it and bring every old copy back.
+  #
+  # A fresh insert ignores `atomics`, so the counter starts at its default as on
+  # any create. A data layer that cannot write atomics on an upsert gets no
+  # lock: Ash would refuse the create outright.
+  defp lock_upsert(changeset, attribute) do
+    if changeset.context[:private][:upsert?] &&
+         Ash.DataLayer.data_layer_can?(changeset.resource, {:atomic, :upsert}) do
+      written =
+        changeset
+        |> upsert_written()
+        |> List.delete(attribute)
+        |> written_values(changeset)
+
+      condition = Meaningful.condition(%{changeset | attributes: written}, [attribute])
+
+      Ash.Changeset.atomic_update(changeset, attribute, {:atomic, bump_if(attribute, condition)})
+    else
+      changeset
+    end
+  end
+
+  # What Ash writes over the row: `upsert_fields` once resolved, or with none
+  # given, every attribute the create set other than to its default.
+  defp upsert_written(changeset) do
+    case changeset.context[:private][:upsert_fields] do
+      fields when is_list(fields) -> fields
+      _ -> Map.keys(changeset.attributes) -- Map.get(changeset, :defaults, [])
+    end
+  end
+
+  # What the upsert writes over each field, to compare with the row's.
+  #
+  # A data layer that runs `Ash.update_many/4` renders `upsert_conflict/1`,
+  # the incoming row (`EXCLUDED` in PostgreSQL): Ash's own `update_many` relies
+  # on the same, though no capability names it. It keeps the lock one
+  # expression for every row of a bulk upsert, which Ash writes in one
+  # statement only while their atomics agree. AshPostgres leaves out of the
+  # upsert a field no changeset sets, so only those set are compared.
+  #
+  # Elsewhere the literal is compared, and the data layer writes what
+  # `Ash.Changeset.set_on_upsert/2` hands it: every listed field, `nil` for one
+  # the create left alone, which wipes the row's value — so every listed field
+  # is compared, with the value it reads. Those literals differ from row to
+  # row, so there a bulk upsert is written one row at a time.
+  defp written_values(keys, changeset) do
+    if Ash.DataLayer.data_layer_can?(changeset.resource, :update_many) do
+      for key <- keys,
+          Map.has_key?(changeset.attributes, key),
+          into: %{},
+          do: {key, %Ash.Query.UpsertConflict{attribute: key, resource: changeset.resource}}
+    else
+      for key <- keys, into: %{}, do: {key, Ash.Changeset.get_attribute(changeset, key)}
+    end
+  end
+
+  defp bump_if(attribute, nil), do: Ash.Expr.expr(^Ash.Expr.ref(attribute))
+  defp bump_if(attribute, true), do: Ash.Expr.expr(^Ash.Expr.ref(attribute) + 1)
+
+  defp bump_if(attribute, condition) do
+    Ash.Expr.expr(
+      if ^condition do
+        ^Ash.Expr.ref(attribute) + 1
+      else
+        ^Ash.Expr.ref(attribute)
+      end
     )
   end
 

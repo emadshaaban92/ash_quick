@@ -24,11 +24,27 @@ defmodule AshQuick.Versioning.Declaration do
   # The lock writes it with `force_change_attribute/3`, which ignores the flag.
   @counter [
     type: :integer,
-    default: 1,
+    default: {__MODULE__, :initial, []},
     allow_nil?: false,
     always_select?: true,
     writable?: false
   ]
+
+  # A function rather than `1`, for what it leaves in the struct: Ash gives a
+  # struct field an attribute's literal default but `nil` for a function's, so
+  # a hand-built `%Post{id: id}` holds `nil` — nobody's version — where a
+  # literal would hold `1`, indistinguishable from a client that sent the
+  # version it loaded. The lock reads the two apart from this. Creates still
+  # start the counter at `1`, and the column's own default stays `1` — see
+  # `AshQuick.Versioning.Transformer`.
+  @doc """
+  The counter's first version, `1`.
+
+  Public, as `{AshQuick.Versioning.Declaration, :initial, []}`, for a
+  resource that defines its counter itself: its `default` has to give `1`
+  through a function, or `AshQuick.Versioning.Verifier` refuses it.
+  """
+  def initial, do: 1
 
   def default_enabled?, do: @enabled?
   def default_attribute, do: @attribute

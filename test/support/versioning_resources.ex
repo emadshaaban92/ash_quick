@@ -83,3 +83,80 @@ defmodule AshQuick.Test.Ledger do
     end
   end
 end
+
+defmodule AshQuick.Test.ImportedLedger do
+  @moduledoc """
+  A versioned resource written by upserts on a natural key, the way an import
+  is.
+
+  A resource of its own because on ETS an identity is checked in a
+  `before_action`, which would keep `AshQuick.Test.Ledger`'s updates off the
+  atomic path. `:rename` here runs in memory for the same reason.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.VersioningDomain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshQuick]
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :code, :string, public?: true, allow_nil?: false
+    attribute :name, :string, public?: true
+    attribute :note, :string, public?: true
+  end
+
+  identities do
+    identity :unique_code, [:code], pre_check_with: AshQuick.Test.VersioningDomain
+  end
+
+  actions do
+    defaults [:read]
+
+    update :rename do
+      accept [:name, :note]
+      require_atomic? false
+    end
+
+    # On a conflict the row is written over with `name` and `note`.
+    create :upsert do
+      primary? true
+      accept [:code, :name, :note]
+      upsert? true
+      upsert_identity :unique_code
+      upsert_fields [:name, :note]
+    end
+
+    # Ash's widest `upsert_fields`: every attribute the create sets, the
+    # counter's default included.
+    create :upsert_all do
+      accept [:code, :name, :note]
+      upsert? true
+      upsert_identity :unique_code
+      upsert_fields :replace_all
+    end
+  end
+
+  ash_quick do
+    display do
+      label :name
+    end
+
+    liveness do
+      enabled? false
+    end
+
+    audit do
+      enabled? false
+    end
+
+    bookkeeping do
+      inserted_at false
+      inserted_by false
+      updated_by false
+    end
+  end
+end

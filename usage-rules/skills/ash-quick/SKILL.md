@@ -861,6 +861,15 @@ and what to write.
   each row in memory — a real changeset, notification and audit row per
   record. Correct, and not free: size batches accordingly.
 
+  An upsert that meets a row bumps its `version` when it changes something, so a
+  copy loaded before it is stale, and never writes the counter's default over
+  the row, `upsert_fields :replace_all` included. A record nobody loaded (a
+  hand-built `%Post{id: id}`, an `update_many` identifier) holds `version: nil`
+  and is bumped without a check; `%Post{id: id, version: params["version"]}` is
+  checked against the version given, `1` included. A resource defining its own
+  counter defaults it with `{AshQuick.Versioning.Declaration, :initial, []}`,
+  not a literal `1`, or it does not compile.
+
   Bookkeeping-only changes (timestamps, audit relationships) do not count as changes
   and do not bump — see `AshQuick.Config.versioning_ignored_attributes/1`.
   `attribute` names a different counter when `:version` is taken. A resource that
