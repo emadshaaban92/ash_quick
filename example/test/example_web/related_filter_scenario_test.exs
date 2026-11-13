@@ -76,6 +76,14 @@ defmodule ExampleWeb.RelatedFilterScenarioTest do
       assert texts(view, "select[name^='field_name-'] option") == ["Id", "Code"]
     end
 
+    test "offers the item's own fields, then an owner's, where `:defaults` leads",
+         %{conn: conn, admin: admin} do
+      {:ok, view, _html} =
+        live(log_in(conn, admin), "/test/related_filter_defaults?show_custom_filter=true")
+
+      assert texts(view, "select[name^='field_name-'] option") == ["Id", "Code", "Owner › Name"]
+    end
+
     test "picks an owner's level from its set, as the owner labels it",
          %{conn: conn, admin: admin} do
       {:ok, view, _html} =
@@ -420,6 +428,37 @@ defmodule ExampleWeb.RelatedFilterScenarioTest do
       assert chips(view) == []
     end
 
+    test "is kept where `:defaults` sits beside the field it names", %{conn: conn, admin: admin} do
+      name = unique("Ada")
+      kept = item(owner: owner(name: name))
+      dropped = item(owner: owner())
+
+      filter =
+        encode_filter([%{"field_name" => "owner.name", "operator" => "equals", "value" => name}])
+
+      {:ok, view, html} =
+        live(log_in(conn, admin), "/test/related_filter_defaults?custom_filter=#{filter}")
+
+      refute html =~ @refused
+      assert kept.code in texts(view, "td")
+      refute dropped.code in texts(view, "td")
+    end
+
+    test "is dropped where `:defaults` sits beside another field, saying so",
+         %{conn: conn, admin: admin} do
+      row = item(owner: owner(name: unique("Ada")))
+
+      filter =
+        encode_filter([%{"field_name" => "owner.note", "operator" => "equals", "value" => "x"}])
+
+      {:ok, view, html} =
+        live(log_in(conn, admin), "/test/related_filter_defaults?custom_filter=#{filter}")
+
+      assert html =~ @refused
+      assert row.code in texts(view, "td")
+      assert chips(view) == []
+    end
+
     test "is dropped on a field a field policy hides, saying so", %{conn: conn, editor: editor} do
       pin = "pin-#{unique("zq")}"
       row = item(owner: owner(pin: pin))
@@ -518,6 +557,14 @@ defmodule ExampleWeb.RelatedFilterScenarioTest do
     test "takes an owner's field as a keyword or as a path list" do
       assert %Options{list_filterable: [{:owner, :name}, :code, {:owner, :tier}]} =
                options(filterable: [[owner: :name], :code, owner: :tier, owner: :name])
+    end
+
+    test "takes `:defaults` for the fields offered unsaid, beside an owner's field" do
+      assert %Options{list_filterable: [:defaults, {:owner, :name}]} =
+               options(filterable: [:defaults, owner: :name])
+
+      assert %Options{list_filterable: [{:owner, :name}, :defaults]} =
+               options(filterable: [[owner: :name], :defaults, :defaults])
     end
 
     test "refuses what no row can filter by, when the QuickView compiles" do

@@ -229,9 +229,12 @@ defmodule AshQuick.LiveView.CustomFilter do
   With `names`, a list's `filterable:`, those it names, in its order: each a
   field of `resource`, or `{relationship, field}`, a field reached through a
   public belongs_to relationship that has a read to read its destination
-  with, one the filter offers on that destination. Any other name is left
-  out, so a caller that refuses one checks it with `filterable_field?/2`.
-  Unsaid, only `resource`'s own fields are offered.
+  with, one the filter offers on that destination, or `:defaults`, which
+  stands for the fields offered unsaid, in their order, always: a field
+  named `defaults` is offered only through it. A field is offered
+  once, where it is first named. Any other name is left out, so a caller
+  that refuses one checks it with `filterable_field?/2`. Unsaid, only
+  `resource`'s own fields are offered.
   """
   def filterable_fields(resource, names \\ nil)
 
@@ -239,10 +242,19 @@ defmodule AshQuick.LiveView.CustomFilter do
     do: resource |> own_fields() |> Enum.map(&FilterField.own(resource, &1))
 
   def filterable_fields(resource, names) do
-    by_name = resource |> own_fields() |> Map.new(&{&1.name, &1})
+    own = own_fields(resource)
+    by_name = Map.new(own, &{&1.name, &1})
+
+    names = names |> Enum.flat_map(&expand_defaults(&1, own)) |> Enum.uniq()
 
     for name <- names, field = filterable_field(resource, name, by_name), do: field
   end
+
+  # `:defaults` stands for the fields offered unsaid, in their order, read
+  # off the resource as it is now, so a field it gains is offered too. A field
+  # named before the marker keeps its place and is not offered again.
+  defp expand_defaults(:defaults, own), do: Enum.map(own, & &1.name)
+  defp expand_defaults(name, _own), do: [name]
 
   defp filterable_field(resource, name, by_name) when is_atom(name) do
     if field = by_name[name], do: FilterField.own(resource, field)

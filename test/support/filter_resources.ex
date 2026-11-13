@@ -84,3 +84,27 @@ defmodule AshQuick.Test.Filter.Posting do
     defaults [:read]
   end
 end
+
+defmodule AshQuick.Test.Filter.Preset do
+  @moduledoc """
+  A resource with a field named `defaults`, which `filterable:` reads as the
+  marker for the fields the filter offers unsaid.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.Filter.Domain,
+    data_layer: Ash.DataLayer.Ets
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true
+    attribute :defaults, :string, public?: true
+  end
+
+  actions do
+    defaults [:read]
+  end
+end

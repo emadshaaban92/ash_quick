@@ -332,6 +332,21 @@ defmodule Example.Test.RelatedFilterDefaultLive.Quick do
     details: [fields: [:code]]
 end
 
+defmodule Example.Test.RelatedFilterDefaultsLive.Quick do
+  @moduledoc """
+  The page over `Example.Test.RelatedFilter.Item` whose filter offers the
+  fields it would offer unsaid, the item's own, and its owner's name after
+  them. Routed only in the test build.
+  """
+  use AshQuick.LiveView.QuickView,
+    resource: Example.Test.RelatedFilter.Item,
+    list: [
+      fields: [:code, {[owner: :name], label: "Owner"}],
+      filterable: [:defaults, owner: :name]
+    ],
+    details: [fields: [:code]]
+end
+
 defmodule Example.Test.VaultFilterLive.Quick do
   @moduledoc """
   The page over `Example.Test.RelatedFilter.Item` whose filter offers the

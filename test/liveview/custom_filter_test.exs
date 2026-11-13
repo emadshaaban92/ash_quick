@@ -80,6 +80,33 @@ defmodule AshQuick.LiveView.CustomFilterTest do
     test "keep an expression calculation and the plain fields" do
       assert offered(Ledger) == [:id, :name, :whispered]
     end
+
+    # `:defaults` stands for the fields offered unsaid, in their order, so a
+    # list adds a related field without copying them out.
+    test "offer the fields offered unsaid where `:defaults` is named" do
+      alias AshQuick.Test.Filter.Posting
+
+      assert offered(Posting, [:defaults, ledger: :name]) == [:id, :memo, {:ledger, :name}]
+      assert offered(Posting, [{:ledger, :name}, :defaults]) == [{:ledger, :name}, :id, :memo]
+      assert offered(Ledger, [:defaults]) == offered(Ledger)
+    end
+
+    # The marker is always the marker: a field named `defaults` is offered
+    # through it, beside the other defaults, and cannot be named alone.
+    test "read `:defaults` as the marker on a resource with a field of that name" do
+      alias AshQuick.Test.Filter.Preset
+
+      assert offered(Preset) == [:id, :name, :defaults]
+      assert offered(Preset, [:defaults]) == [:id, :name, :defaults]
+      assert offered(Preset, [:name, :defaults]) == [:name, :id, :defaults]
+    end
+
+    test "offer a field named beside `:defaults` once, where it is named first" do
+      alias AshQuick.Test.Filter.Posting
+
+      assert offered(Posting, [:memo, :defaults, :id]) == [:memo, :id]
+      assert offered(Posting, [:defaults, :defaults]) == [:id, :memo]
+    end
   end
 
   describe "reject_fields/2" do

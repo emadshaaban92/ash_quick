@@ -404,8 +404,10 @@ defmodule AshQuick.LiveView.QuickView.Options do
   # The fields the filter form offers, as `filterable:` names them, in its
   # order: a field's name, or `{relationship, field}` for one reached through a
   # belongs_to, which `[brand: :name]` writes as a keyword and a list as
-  # `sortable:` takes one. Unsaid, it stays `nil`: the form offers every field
-  # of the resource's own it can take, and a link's rows are left to the read.
+  # `sortable:` takes one, or `:defaults`, kept as it is, for the fields the
+  # form offers unsaid, which `CustomFilter.filterable_fields/2` reads off the
+  # resource. Unsaid, it stays `nil`: the form offers every field of the
+  # resource's own it can take, and a link's rows are left to the read.
   defp put_list_filterable(%__MODULE__{} = options, nil), do: options
 
   defp put_list_filterable(%__MODULE__{resource: resource} = options, filterable) do
@@ -425,12 +427,15 @@ defmodule AshQuick.LiveView.QuickView.Options do
       fixed set of values, and no belongs_to relationship's source attribute \
       or `sensitive?` field. A field of a related resource is named through a \
       public belongs_to relationship, one hop away, as `[brand: :name]`, one \
-      with a read of its destination to ask.
+      with a read of its destination to ask. `:defaults` stands for the \
+      fields the form offers when the option is not given.
       """
     end
 
     %{options | list_filterable: for({_name, {:ok, spec}} <- checked, uniq: true, do: spec)}
   end
+
+  defp check_filterable(_resource, :defaults), do: {:ok, :defaults}
 
   defp check_filterable(resource, name) do
     with {:ok, spec} <- filterable_name(name) do
