@@ -1106,6 +1106,7 @@ defmodule AshQuick do
 
   @surface_sources [:ash_quick_details, :ash_quick_list, :ash_quick_list_bulk]
   @form_source :ash_quick_form
+  @browser_sessions_source :ash_quick_browser_sessions
   @form_stage_key :ash_quick_form_stage
 
   @doc """
@@ -1129,6 +1130,24 @@ defmodule AshQuick do
   not a `Forbidden` — the button-hiding happened at the row-action probe.
   """
   def form_source, do: @form_source
+
+  @doc """
+  The `action_source` on the read `AshQuick.LiveView.BrowserSessionsLive`
+  runs to decide whose tabs a viewer sees: it reads the actor resource, under
+  the viewer's scope and tenant, for the people at the registered tabs, and
+  lists a tab only when the viewer may read both whoever is at it and whoever
+  it is acting as.
+
+  The resource's own read policies already govern that read. A policy scoped
+  to this source narrows the register further without narrowing every other
+  read of the actor resource, which the name in every details header goes
+  through:
+
+      policy [action_type(:read), context_equals(:action_source, :ash_quick_browser_sessions)] do
+        authorize_if expr(org_id == ^actor(:org_id))
+      end
+  """
+  def browser_sessions_source, do: @browser_sessions_source
 
   @doc """
   The context key under which a QuickView form says what it is doing with an

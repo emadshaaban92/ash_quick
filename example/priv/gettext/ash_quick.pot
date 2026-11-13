@@ -94,7 +94,7 @@ msgid "End session"
 msgstr ""
 
 #, elixir-format
-msgid "Everyone signed in right now, the tabs they have open, and the page each one is on. A tab drops off this list when it is closed, signs out, or loses its connection."
+msgid "The people you may see who are signed in right now, the tabs they have open, and the page each one is on. A tab drops off this list when it is closed, signs out, or loses its connection."
 msgstr ""
 
 #, elixir-format

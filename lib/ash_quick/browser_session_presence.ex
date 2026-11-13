@@ -197,7 +197,8 @@ defmodule AshQuick.BrowserSessionPresence do
 
   One entry per session, with the processes currently holding it in `:pids` —
   more than one only for the moment a reconnecting tab's old process takes to
-  go away.
+  go away. `:path` always starts with exactly one slash, so it names a page on
+  this site however the tab spelled it.
   """
   def sessions do
     @topic
@@ -232,10 +233,20 @@ defmodule AshQuick.BrowserSessionPresence do
       impersonation_id: Map.get(meta, :impersonation_id),
       started_at: meta.started_at,
       ip: meta.ip,
-      path: meta.path,
+      path: local_path(meta.path),
       pids: Enum.map(connections, & &1.pid)
     }
   end
+
+  # The path came from the tab, and the register renders it as a link and hands
+  # it to "Open as them", which navigates there. A router happily serves
+  # `//host/...` when its first segment is dynamic, and a browser reads that as
+  # another origin, as it does a leading backslash or one hidden behind a tab or
+  # newline it strips. So whatever leads the path collapses to the one slash
+  # that keeps it on this site. Done on the way out rather than in, so a node
+  # still running a release that tracked the raw path is answered the same.
+  defp local_path(nil), do: nil
+  defp local_path(path) when is_binary(path), do: Regex.replace(~r{\A[/\\\s]*}u, path, "/")
 
   @doc """
   Ends the impersonation on session `id`.

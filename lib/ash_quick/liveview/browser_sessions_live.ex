@@ -1,7 +1,8 @@
 defmodule AshQuick.LiveView.BrowserSessionsLive do
   @moduledoc """
-  The page a privileged actor finds somebody on: every browser tab signed in
-  right now, whose it is, and what page it is looking at.
+  The page a privileged actor finds somebody on: the browser tabs signed in
+  right now that they may see, whose each one is, and what page it is looking
+  at.
 
   A browser session is stored nowhere (see `AshQuick.BrowserSession`), so this
   reads `AshQuick.BrowserSessionPresence` rather than the database, and
@@ -27,26 +28,52 @@ defmodule AshQuick.LiveView.BrowserSessionsLive do
 
   ## Who sees what, and who may do what
 
-  Two different questions, and conflating them is what would make this page
-  useless. **Everyone who may reach it sees every signed-in tab.** A register
-  that hid rows would be a register nobody could trust to be complete, and there
-  is nothing in "somebody is signed in and looking at this page" that a reader
-  holding the privilege to stand in for people is not already entitled to know.
-  Reading the page at all is the one gate on seeing it: may this actor stand in
-  for anybody at all?
+  Three questions, asked in order.
 
-  What the host's `:impersonate` policy governs is the **controls**, asked per
-  row against whoever the tab is *acting as* — on an ordinary tab that is
-  whoever is at it, on one standing in for somebody it is the person being stood
-  in for, which is the same question ending an impersonation has always asked.
-  A row nobody may act on still shows; it simply offers nothing. Your own tabs
-  are the ordinary case of that: they are here, and no host policy lets somebody
-  stand in for themselves, so they carry no button.
+  **May this actor reach the page at all?** Only one who may stand in for
+  anybody: the `:impersonate` policy asked with nobody named. Everyone else is
+  refused the page.
+
+  **Whose tabs do they see?** Only those of people they may read. A row names
+  whoever is at the tab, where they signed in from, and the full path they are
+  on, which carries their searches and the ids of what they opened, so it is
+  shown to a viewer who could read that person anyway, and to nobody else. The
+  page reads the actor resource for the people at the registered tabs under the
+  viewer's own scope, tenant included, stamped with
+  `AshQuick.browser_sessions_source/0`, and lists a tab only when that read
+  returns both whoever is at it and whoever it is acting as. So a tenant's
+  admin sees their own tenant's tabs and not another's, a host whose read
+  policies hide people from someone hides their tabs from them too, and a host
+  that wants the register narrower than its other reads scopes a policy to
+  that source. A row the viewer may not see is not there to act on either:
+  every handler resolves an id against the same narrowed list, so an id
+  outside it is answered as a session that has ended.
+
+  The tenant narrows on a `global?` actor resource too: a viewer whose scope
+  carries a tenant sees only that tenant's people, even where their read
+  policies would show them more, and sees everyone again once the tenant is
+  cleared. On an actor resource with `multitenancy` that is not `global?`, a
+  viewer whose scope carries no tenant cannot read it at all, and so sees no
+  tabs. A read that fails for any reason lists nothing and logs a warning
+  naming the error.
+
+  That read runs on every presence diff, and a diff is any navigation of any
+  tab, so each open copy of this page reads the actor resource once per click
+  anywhere in the cluster: one query by primary key, filtered to the people
+  currently signed in.
+
+  **What may they do on each row?** That is the host's `:impersonate` policy,
+  asked per row against whoever the tab is *acting as* — on an ordinary tab
+  that is whoever is at it, on one standing in for somebody it is the person
+  being stood in for, which is the same question ending an impersonation has
+  always asked. A row nobody may act on still shows; it simply offers nothing.
+  Your own tabs are the ordinary case of that: they are here, and no host
+  policy lets somebody stand in for themselves, so they carry no button.
 
   The route gate is not the boundary it looks like: a host may deliberately wave
   users through to a page so its layout can render them a notice instead, and a
   privilege lost since the page was opened only lands on the next navigation. So
-  the view settles both questions for itself rather than trusting the layout a
+  the view settles all three for itself rather than trusting the layout a
   host wraps it in to have swapped its output away.
 
   Every handler asks the id-independent half first — may this actor stand in for
@@ -68,6 +95,8 @@ defmodule AshQuick.LiveView.BrowserSessionsLive do
   alias AshQuick.Impersonation
   alias AshQuick.LiveView.ActionErrors
   alias Phoenix.Socket.Broadcast
+
+  require Logger
 
   @impl true
   def mount(_params, _session, socket) do
@@ -176,13 +205,11 @@ defmodule AshQuick.LiveView.BrowserSessionsLive do
   defp target_id(%{actor_id: nil, real_actor_id: real_actor_id}), do: real_actor_id
   defp target_id(%{actor_id: actor_id}), do: actor_id
 
-  # The record is fetched unauthorized and untenanted on purpose: what matters is
-  # the right to stand in for them, neither the right to read them nor which
-  # tenant the watcher happens to be in. A host whose read policy hides a user
-  # from an admin who may still cut their session off, or whose admin has pinned
-  # themselves to one tenant while the session runs in another, would otherwise
-  # lose the kill switch. A record that has since been deleted is nobody's to
-  # stand in for either.
+  # The record is fetched unauthorized and untenanted on purpose: whether the
+  # viewer may read them is already settled, since only a row the viewer may
+  # read is listed or resolved, so what is left to ask of the record is the
+  # right to stand in for them, which is the `:impersonate` policy's alone. A
+  # record that has since been deleted is nobody's to stand in for either.
   defp authorize!(actor_id, scope, session_id) do
     case fetch_actor(actor_id, scope) do
       %{} = actor ->
@@ -230,12 +257,17 @@ defmodule AshQuick.LiveView.BrowserSessionsLive do
       actor: AshQuick.Scope.actor(scope)
   end
 
-  # The register is read whole by an actor who could stand in for somebody. An
-  # actor who may stand in for nobody is shown nothing, which is the same answer
-  # they would get if nobody were signed in.
+  # The register is read by an actor who could stand in for somebody, and
+  # narrowed to the people they may read. An actor who may stand in for nobody
+  # is shown nothing, which is the same answer they would get if nobody were
+  # signed in.
+  #
+  # A diff is every navigation of every tab, so the register is narrowed once
+  # per render and the same list both resolves the actors and becomes the rows.
   defp assign_sessions(socket) do
-    socket = resolve_actors(socket, tracked(socket))
-    sessions = current_sessions(socket)
+    tracked = tracked(socket)
+    socket = resolve_actors(socket, tracked)
+    sessions = current_sessions(socket, tracked)
 
     socket
     |> assign(:sessions, sessions)
@@ -243,19 +275,72 @@ defmodule AshQuick.LiveView.BrowserSessionsLive do
   end
 
   defp tracked(socket) do
-    if may_impersonate_anybody?(socket.assigns.scope),
-      do: BrowserSessionPresence.sessions(),
+    scope = socket.assigns.scope
+
+    if may_impersonate_anybody?(scope),
+      do: visible(BrowserSessionPresence.sessions(), Impersonation.resource!(), scope),
       else: []
+  end
+
+  @doc false
+  # Public only so the library's tests can pin it over an actor resource of
+  # their own, since driving this view needs an endpoint and a register.
+  #
+  # A tab shows only when the viewer may read both people on it: whoever is at
+  # it, whose row it is, and whoever it is acting as. Hiding the one and not the
+  # other would still tell the viewer where somebody they may not see is
+  # standing in, or who is standing in for them.
+  def visible([], _resource, _scope), do: []
+
+  def visible(sessions, resource, scope) do
+    ids = Enum.flat_map(sessions, &[&1.real_actor_id, &1.actor_id])
+    readable = readable_ids(ids, resource, scope)
+
+    Enum.filter(sessions, fn session ->
+      MapSet.member?(readable, session.real_actor_id) and
+        MapSet.member?(readable, target_id(session))
+    end)
+  end
+
+  # One read for the whole register, under the viewer's own scope and tenant,
+  # so the host's read policies and its tenancy are what decide. A read that
+  # fails, such as one a tenant-required resource refuses for a viewer with no
+  # tenant, leaves the register empty rather than whole.
+  defp readable_ids(ids, resource, scope) do
+    [key] = Ash.Resource.Info.primary_key(resource)
+    ids = ids |> Enum.reject(&is_nil/1) |> Enum.uniq()
+
+    query =
+      resource
+      |> Ash.Query.do_filter([{key, [in: ids]}])
+      |> Ash.Query.select([key])
+      |> Ash.Query.set_context(%{action_source: AshQuick.browser_sessions_source()})
+
+    case Ash.read(query, scope: scope, page: false) do
+      {:ok, records} ->
+        MapSet.new(records, &Map.fetch!(&1, key))
+
+      # Said out loud, because an empty register is otherwise indistinguishable
+      # from nobody being signed in, and a host whose primary read refuses this
+      # call (a required argument, required pagination) has no other clue.
+      {:error, error} ->
+        Logger.warning("""
+        the Live Users page could not read #{inspect(resource)} under the viewer's \
+        scope, so it lists no tabs: #{Exception.message(Ash.Error.to_error_class(error))}
+        """)
+
+        MapSet.new()
+    end
   end
 
   # Read fresh rather than off the assign: a handler resolving an id is asking
   # what is tracked now, not what was drawn.
-  defp current_sessions(socket) do
+  defp current_sessions(socket), do: current_sessions(socket, tracked(socket))
+
+  defp current_sessions(socket, tracked) do
     %{scope: scope, actors: actors} = socket.assigns
 
-    socket
-    |> tracked()
-    |> Enum.map(&Map.put(&1, :openable?, allowed?(actors[target_id(&1)], scope)))
+    Enum.map(tracked, &Map.put(&1, :openable?, allowed?(actors[target_id(&1)], scope)))
   end
 
   # Whether this row offers anything, which is the only thing the per-record
@@ -341,7 +426,7 @@ defmodule AshQuick.LiveView.BrowserSessionsLive do
               )}
               <:subtitle>
                 {gettext(
-                  "Everyone signed in right now, the tabs they have open, and the page each one is on. A tab drops off this list when it is closed, signs out, or loses its connection."
+                  "The people you may see who are signed in right now, the tabs they have open, and the page each one is on. A tab drops off this list when it is closed, signs out, or loses its connection."
                 )}
               </:subtitle>
             </.header>
