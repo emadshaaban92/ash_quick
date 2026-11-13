@@ -588,7 +588,8 @@ returns records or `{resource, id}` pairs rather than topics for the same reason
 `AshQuick.Topics` stays the only thing that spells a topic out.
 
 By default the subscription is derived by walking the **fetched data** and
-taking one topic per record reachable from it, the view's own rows included. A
+taking one topic per record reachable from it, the view's own rows included
+(a list takes its own resource's bare topic instead; see below). A
 page rendering related values goes live on them with nothing declared: an
 order's details page watches the order, its lines, their products, the
 customer and the address — a dozen-odd topics for a three-line order, and
@@ -616,9 +617,34 @@ computation happened rather than from the walk:
   (a `current_state` the child's creation writes back) means the create
   publishes the parent too.
 
-Note that a create never adds a *row* to a list either, whatever the
-subscription: `keep_live` runs with `results: :keep` and its refetch maps over
-the records already on screen.
+**A live list never moves a row under its reader.** It listens on its own
+resource's bare topic (`"product"`), plus one topic per related record its rows
+show, and:
+
+- A write to a row on screen re-reads the rows on screen, by id, through the
+  list's search, filters and the reader's scope, and puts each back in its slot
+  — a write that would re-sort a row leaves it where it is.
+- A row that does not come back keeps its slot as a placeholder with no data,
+  link or checkbox (`tr[data-gone]`) that reads **No longer available**,
+  whether the record was destroyed, edited out of the filter or is no longer
+  readable: why it left is not the reader's to know. Its tick is dropped.
+- A create or update of a record not on screen (or shown as No longer
+  available) asks the reader's own read of the page they are on, ids only,
+  whether it now belongs there; if so a bar over the table says "This list has
+  new records." with a **Reload** (`#list-news`), which reads the list afresh
+  from its URL. A record the reader may not read never raises it, nor does an
+  update that only moved a record up behind a placeholder.
+- The reader's own actions close the list up: a row action returns through
+  its modal (or full page) to a fresh read, and a bulk run reads the list
+  afresh, so a queue the reader works through empties. Every arrival (a link,
+  a search, Reload, closing a modal) reads afresh.
+- The bare topic is not tenant-scoped: on a multitenant resource every
+  tenant's writes wake every open list (one ids-only page read per
+  `refetch_window` at most). Each write's full notification reaches every open
+  list, so a bulk write of thousands of rows queues that many messages in each
+  one's mailbox before they coalesce into one refetch.
+- A custom list template passes `row_order`, `gone_rows` and `list_news` to
+  `ListView.list_view/1` to keep this.
 
 A related resource that publishes nothing is **skipped silently** — the page
 just is not live on its changes, and nobody is forced to publish. Since the

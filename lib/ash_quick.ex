@@ -14,8 +14,8 @@ defmodule AshQuick do
   `enabled?` is therefore the whole switch: a QuickView is live exactly when its
   resource publishes, and the view declares nothing. `enabled? false` keeps the
   extension for its other features and leaves those pages static — the right
-  answer for an append-only resource, whose new rows a refetch could not show
-  anyway.
+  answer for a resource whose write volume makes every open list's "new
+  records" check a bad trade.
 
       ash_quick do
         liveness do

@@ -213,6 +213,9 @@ defmodule AshQuick.LiveView.ExposureTest do
         row_actions: nil,
         export_data: nil,
         export_format: nil,
+        row_order: [record.id],
+        gone_rows: MapSet.new(),
+        list_news: false,
         data: %{results: [record], count: 1, limit: 20, offset: 0}
       }
 

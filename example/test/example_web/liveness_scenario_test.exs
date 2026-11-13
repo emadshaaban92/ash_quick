@@ -1,12 +1,14 @@
 defmodule ExampleWeb.LivenessScenarioTest do
   @moduledoc """
-  A QuickView refetches for the records it is showing, not for the resource.
+  A QuickView refetches for the records it is showing, and a list announces the
+  ones it is not.
 
   Ash publishes both `"product:<id>"` and the bare `"product"` for every write.
-  A page listens on the per-record topics it derives from the rows it is
-  actually holding, so a change to anything else never reaches it — which is the
-  difference between a list that stays current and one that re-reads the table
-  every time anybody anywhere saves something.
+  A details page listens on the per-record topics it derives from what it holds.
+  A list listens on the bare topic of its own resource, since it must hear about
+  records it is not showing, but re-reads its rows only for a write to one of
+  them (or to a record one of them shows); any other write only asks whether
+  the "new records" bar should go up.
 
   Both directions are asserted on the same page every time. Neither half means
   anything alone: a page that is simply broken passes every `refute`, and a page
@@ -26,7 +28,7 @@ defmodule ExampleWeb.LivenessScenarioTest do
   import ExUnit.CaptureLog
 
   alias Example.Accounts.AuditLog
-  alias Example.Catalog.{Brand, PriceChange, Product}
+  alias Example.Catalog.{Brand, Category, PriceChange, Product}
   alias Phoenix.Socket.Broadcast
 
   # The bulk menu shares its labels with the row menu, so a bulk action is
@@ -65,8 +67,9 @@ defmodule ExampleWeb.LivenessScenarioTest do
 
       renamed = rename_behind_the_view(on_screen)
 
-      # A real write to a record this page is not holding. It publishes, and the
-      # page is not listening.
+      # A real write to a record this page is not holding. The page hears it on
+      # the resource's topic, but only asks whether it belongs on the page — it
+      # does not re-read the rows it holds.
       Ash.update!(off_screen, action: :deactivate, actor: admin)
 
       session
@@ -80,8 +83,102 @@ defmodule ExampleWeb.LivenessScenarioTest do
       |> assert_has("td", text: renamed.name)
       |> assert_has("tr[id='#{on_screen.id}'].opacity-50")
     end
+  end
 
-    test "is live on its rows and not on the collection, so a new record waits", ctx do
+  describe "a list's refetch" do
+    test "keeps a row deleted elsewhere in its place, as No longer available", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      first = product(name: "A first", actor: admin)
+      second = product(name: "B second", actor: admin)
+      third = product(name: "C third", actor: admin)
+
+      # Two rows a page, so a refetch that closed the gap would pull the third
+      # one up from the next page.
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products?limit=2")
+        |> assert_has("td", text: first.name, exact: true)
+
+      Ash.destroy!(first, actor: admin)
+
+      session
+      |> assert_has("tr[id='#{first.id}'][data-gone] td", text: "No longer available")
+      |> refute_has("td", text: first.name, exact: true)
+      |> refute_has("#select_row_#{first.id}")
+      |> assert_has("tr[id='#{second.id}'] td", text: second.name, exact: true)
+      |> refute_has("td", text: third.name, exact: true)
+      |> refute_has("#list-news")
+    end
+
+    test "drops a ticked row deleted elsewhere from the selection", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      kept = product(name: "Kept", actor: admin)
+      gone = product(name: "Deleted elsewhere", actor: admin)
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products")
+        |> tick_rows([gone.id])
+        |> assert_has("#bulk-actions-menu")
+
+      Ash.destroy!(gone, actor: admin)
+
+      # The only ticked row, so nothing is selected any more and the bulk menu,
+      # which would act on nothing, goes with it.
+      session
+      |> assert_has("tr[id='#{gone.id}'][data-gone]")
+      |> assert_has("td", text: kept.name, exact: true)
+      |> refute_has("#bulk-actions-menu")
+    end
+
+    test "keeps a row edited out of the search in its place, as No longer available", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      matching = product(name: "Findable one", actor: admin)
+      leaving = product(name: "Findable two", actor: admin)
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products?search=Findable")
+        |> assert_has("td", text: leaving.name, exact: true)
+
+      Ash.update!(leaving, %{name: "Renamed away"}, action: :update, actor: admin)
+
+      # Edited out of the search and unreadable look the same from here, so the
+      # placeholder claims neither.
+      session
+      |> assert_has("tr[id='#{leaving.id}'][data-gone] td",
+        text: "No longer available"
+      )
+      |> refute_has("td", text: "Renamed away", exact: true)
+      |> assert_has("td", text: matching.name, exact: true)
+    end
+
+    test "keeps the order it drew, even when a write would re-sort it", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      first = product(name: "A first", actor: admin)
+      second = product(name: "B second", actor: admin)
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products")
+
+      # Sorted by name, "Z" would move below the second row on a fresh read.
+      Ash.update!(first, %{name: "Z first"}, action: :update, actor: admin)
+
+      session
+      |> assert_has("tbody tr:first-child td", text: "Z first", exact: true)
+      |> assert_has("tbody tr:nth-child(2) td", text: second.name, exact: true)
+    end
+
+    test "announces a record created elsewhere, and shows it on Reload", ctx do
       %{conn: conn, admin: admin} = ctx
 
       shown = product(name: "Already listed", actor: admin)
@@ -90,29 +187,297 @@ defmodule ExampleWeb.LivenessScenarioTest do
         conn
         |> log_in(admin)
         |> visit(~p"/products")
-        |> assert_has("td", text: shown.name)
+        |> assert_has("td", text: shown.name, exact: true)
+        |> refute_has("#list-news")
 
       later = product(name: "Created afterwards", actor: admin)
 
-      # A page subscribes to the records it is holding, one topic each. Nothing
-      # could have subscribed to a row that did not exist when it rendered, and
-      # the bare `"product"` topic — which is published — is deliberately not
-      # listened to: a page that refetched for every create in the table would
-      # be re-reading it on every write anybody makes.
-      #
-      # This is the same fact `Example.Accounts.AuditLog` cites for turning
-      # liveness off outright: a refetch refreshes rows already on screen, so an
-      # append-only resource could never surface a new one anyway.
+      # Announced, not inserted: a row appearing under the pointer is a click
+      # on the wrong record.
       session
-      |> refute_has("td", text: later.name)
-      |> assert_has("td", text: shown.name)
+      |> assert_has("#list-news", text: "This list has new records.")
+      |> refute_has("td", text: later.name, exact: true)
+      |> click_button("#list-news button", "Reload")
+      |> refute_has("#list-news")
+      |> assert_has("td", text: later.name, exact: true)
+      |> assert_has("td", text: shown.name, exact: true)
+    end
 
-      # It is there for the next reader, so the refutal is about what this page
-      # was told rather than about the create not landing.
+    test "comes alive when it was empty", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products")
+        |> refute_has("#list-news")
+
+      product(name: "The first one", actor: admin)
+
+      assert_has(session, "#list-news")
+    end
+
+    test "announces nothing for a record outside its search", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      shown = product(name: "Findable", actor: admin)
+
+      # By sku, so the rename below keeps the row in the search.
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products?search=#{shown.sku}")
+        |> assert_has("td", text: shown.name, exact: true)
+
+      product(name: "Something else", actor: admin)
+
+      # The create reached the page; the reader's own first-page read is what
+      # says it does not belong on it. Renaming the shown row proves the page
+      # has refetched since.
+      renamed = rename_behind_the_view(shown)
+      Ash.update!(shown, action: :deactivate, actor: admin)
+
+      session
+      |> assert_has("td", text: renamed.name)
+      |> refute_has("#list-news")
+    end
+  end
+
+  describe "a list's related records" do
+    # A row can show a record of the list's own resource: a category's
+    # parent. The bare topic alone would make it a record off screen, so the
+    # list also holds that record's own topic.
+    test "a row showing a same-resource parent follows the parent's rename", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      parent = category(name: "Parent original", actor: admin)
+      child = category(name: "Child row", parent: parent, actor: admin)
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit("/categories?search=#{child.code}")
+        |> assert_has("td", text: "Parent original", exact: true)
+        |> refute_has("td", text: parent.code, exact: true)
+
+      Category.update!(parent, %{name: "Parent renamed"}, actor: admin)
+
+      assert_has(session, "td", text: "Parent renamed", exact: true)
+    end
+  end
+
+  describe "a list's bar" do
+    test "stays down when a row only moved up behind a placeholder", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      first = product(name: "A first", actor: admin)
+      product(name: "B second", actor: admin)
+      third = product(name: "C third", actor: admin)
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products?limit=2")
+        |> assert_has("td", text: first.name, exact: true)
+
+      Ash.destroy!(first, actor: admin)
+      session = assert_has(session, "tr[id='#{first.id}'][data-gone]")
+
+      # The third row has moved up onto this page on a fresh read, but only
+      # because the first left: an edit to it is no news.
+      Ash.update!(third, %{name: "C third edited"}, action: :update, actor: admin)
+
+      refute_has(session, "#list-news")
+    end
+
+    test "goes up for a create even where a row moved up", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      first = product(name: "A first", actor: admin)
+      product(name: "B second", actor: admin)
+      product(name: "D fourth", actor: admin)
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products?limit=2")
+
+      Ash.destroy!(first, actor: admin)
+      session = assert_has(session, "tr[id='#{first.id}'][data-gone]")
+
+      product(name: "C third", actor: admin)
+
+      assert_has(session, "#list-news")
+    end
+
+    test "stays down on a later page when a row before it left", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      first = product(name: "A first", actor: admin)
+      product(name: "B second", actor: admin)
+      third = product(name: "C third", actor: admin)
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products?limit=1&page=2")
+        |> assert_has("td", text: "B second", exact: true)
+
+      Ash.destroy!(first, actor: admin)
+      Ash.update!(third, %{name: "C third edited"}, action: :update, actor: admin)
+
+      session
+      |> assert_has("td", text: "B second", exact: true)
+      |> refute_has("#list-news")
+    end
+
+    test "goes up for a row edited back into the search", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      leaving = product(name: "Findable two", actor: admin)
+      product(name: "Findable one", actor: admin)
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products?search=Findable")
+        |> assert_has("td", text: leaving.name, exact: true)
+
+      leaving = Ash.update!(leaving, %{name: "Renamed away"}, action: :update, actor: admin)
+      session = assert_has(session, "tr[id='#{leaving.id}'][data-gone]")
+
+      Ash.update!(leaving, %{name: "Findable back"}, action: :update, actor: admin)
+
+      session
+      |> assert_has("#list-news")
+      |> click_button("#list-news button", "Reload")
+      |> assert_has("td", text: "Findable back", exact: true)
+    end
+
+    test "stays down for a record its reader may not read", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      shown = Ash.create!(Example.Test.LiveRows, %{name: "Shown"}, authorize?: false)
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/test/live_rows")
+        |> assert_has("td", text: shown.name, exact: true)
+
+      Ash.create!(Example.Test.LiveRows, %{name: "A hidden one", hidden: true}, authorize?: false)
+
+      refute_has(session, "#list-news")
+
+      # The same page does hear a create it may read, so the refutal above is
+      # about the policy rather than a deaf page.
+      Ash.create!(Example.Test.LiveRows, %{name: "A visible one"}, authorize?: false)
+
+      assert_has(session, "#list-news")
+    end
+  end
+
+  describe "a list after its reader's own action" do
+    # The reader asked for the change, so nothing moves behind their back: the
+    # list closes up, and a queue they work through empties.
+    test "closes up after a row delete", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      first = product(name: "A first", actor: admin)
+      second = product(name: "B second", actor: admin)
+      third = product(name: "C third", actor: admin)
+
+      conn
+      |> log_in(admin)
+      |> visit(~p"/products?limit=2")
+      |> force_row_action(first.id, :destroy)
+      |> click_button("#{@modal} button", "Confirm")
+      |> assert_has("#flash-info", text: "Record deleted successfully")
+      |> refute_has("tr[id='#{first.id}']")
+      |> assert_has("td", text: second.name, exact: true)
+      |> assert_has("td", text: third.name, exact: true)
+    end
+
+    test "re-sorts after an update", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      first = product(name: "A first", actor: admin)
+      second = product(name: "B second", actor: admin)
+
       conn
       |> log_in(admin)
       |> visit(~p"/products")
-      |> assert_has("td", text: later.name)
+      |> force_row_action(first.id, :update)
+      |> fill_in("#{@modal} input", "Name", with: "Z first")
+      |> click_button("#{@modal} button", "Save")
+      |> assert_has("tbody tr:first-child td", text: second.name, exact: true)
+      |> assert_has("tbody tr:nth-child(2) td", text: "Z first", exact: true)
+    end
+
+    test "closes up after a bulk delete", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      first = product(name: "A first", actor: admin)
+      second = product(name: "B second", actor: admin)
+      third = product(name: "C third", actor: admin)
+
+      conn
+      |> log_in(admin)
+      |> visit(~p"/products?limit=2")
+      |> tick_rows([first.id])
+      |> click_link(@bulk, "Delete")
+      |> click_button("#{@modal} button", "Confirm")
+      |> refute_has("tr[id='#{first.id}']")
+      |> assert_has("td", text: second.name, exact: true)
+      |> assert_has("td", text: third.name, exact: true)
+    end
+
+    test "reads afresh when a modal is cancelled, dropping placeholders", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      first = product(name: "A first", actor: admin)
+      product(name: "B second", actor: admin)
+      third = product(name: "C third", actor: admin)
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products?limit=2")
+
+      # Deleted elsewhere: a placeholder, until the reader's own next step.
+      Ash.destroy!(first, actor: admin)
+      session = assert_has(session, "tr[id='#{first.id}'][data-gone]")
+
+      session
+      |> click_button("Add Product")
+      |> click_button("#{@modal} button", "Cancel")
+      |> refute_has(@modal)
+      |> refute_has("tr[id='#{first.id}']")
+      |> assert_has("td", text: third.name, exact: true)
+    end
+
+    test "reads afresh when an update modal is cancelled, dropping placeholders", ctx do
+      %{conn: conn, admin: admin} = ctx
+
+      first = product(name: "A first", actor: admin)
+      second = product(name: "B second", actor: admin)
+      third = product(name: "C third", actor: admin)
+
+      session =
+        conn
+        |> log_in(admin)
+        |> visit(~p"/products?limit=2")
+
+      Ash.destroy!(first, actor: admin)
+      session = assert_has(session, "tr[id='#{first.id}'][data-gone]")
+
+      session
+      |> force_row_action(second.id, :update)
+      |> click_button("#{@modal} button", "Cancel")
+      |> refute_has(@modal)
+      |> refute_has("tr[id='#{first.id}']")
+      |> assert_has("td", text: second.name, exact: true)
+      |> assert_has("td", text: third.name, exact: true)
     end
 
     # A notification inside `:refetch_window` is not dropped but deferred: the
@@ -138,7 +503,7 @@ defmodule ExampleWeb.LivenessScenarioTest do
       assert html =~ "ash-quick-action-modal"
 
       # Nor does it re-read the list under the modal, which would also listen
-      # again on the rows `Liveness.unsubscribe_all/2` let go of. Closing the
+      # again on the topics `Liveness.unsubscribe_all/2` let go of. Closing the
       # modal reads the list afresh. The list drawn behind the modal is a
       # snapshot, so the page's own `:data` is what shows whether it was read.
       %{ash_live_config: config, data: data} = :sys.get_state(view.pid).socket.assigns
@@ -405,10 +770,9 @@ defmodule ExampleWeb.LivenessScenarioTest do
 
   describe "a resource that publishes nothing" do
     test "leaves its pages inert, however much is written to it", %{conn: conn, admin: admin} do
-      # `Example.Accounts.AuditLog` declares `liveness enabled? false` — it is
-      # append-only, and a refetch only refreshes rows already on screen, so a
-      # new entry could never appear and publishing would be traffic nothing can
-      # act on.
+      # `Example.Accounts.AuditLog` declares `liveness enabled? false`: every
+      # write in the app appends to it, so a live list would offer its readers
+      # "new records" all the time.
       refute AshQuick.Topics.enabled?(AuditLog)
       refute AshQuick.Topics.enabled?(PriceChange)
       assert AshQuick.Topics.enabled?(Product)

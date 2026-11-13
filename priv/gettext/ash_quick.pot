@@ -789,3 +789,18 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Showing %{from}-%{to}"
 msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "No longer available"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Reload"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "This list has new records."
+msgstr ""

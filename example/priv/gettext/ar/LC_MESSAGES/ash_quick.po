@@ -665,6 +665,18 @@ msgstr "لا توجد نتائج في هذه الصفحة"
 msgid "Showing %{from}-%{to}"
 msgstr "عرض %{from}-%{to}"
 
+#, elixir-format
+msgid "No longer available"
+msgstr "لم يعد متاحًا"
+
+#, elixir-format
+msgid "Reload"
+msgstr "إعادة التحميل"
+
+#, elixir-format
+msgid "This list has new records."
+msgstr "توجد سجلات جديدة في هذه القائمة."
+
 msgid "Accepts"
 msgstr ""
 

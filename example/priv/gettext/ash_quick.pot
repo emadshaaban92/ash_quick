@@ -633,6 +633,18 @@ msgstr ""
 msgid "Showing %{from}-%{to}"
 msgstr ""
 
+#, elixir-format
+msgid "No longer available"
+msgstr ""
+
+#, elixir-format
+msgid "Reload"
+msgstr ""
+
+#, elixir-format
+msgid "This list has new records."
+msgstr ""
+
 msgid "Accepts"
 msgstr ""
 

@@ -82,6 +82,8 @@ defmodule AshQuick.LiveView.Components.WidgetPathTest do
     options = options()
     action = Ash.Resource.Info.action(PointsAtOtherName, options.list_default_action)
 
+    row = record(nil)
+
     assigns = %{
       __changed__: %{},
       resource: PointsAtOtherName,
@@ -96,7 +98,10 @@ defmodule AshQuick.LiveView.Components.WidgetPathTest do
       row_actions: nil,
       export_data: nil,
       export_format: nil,
-      data: %{results: [record(nil)], count: 1, limit: 20, offset: 0}
+      row_order: [row.id],
+      gone_rows: MapSet.new(),
+      list_news: false,
+      data: %{results: [row], count: 1, limit: 20, offset: 0}
     }
 
     socket =

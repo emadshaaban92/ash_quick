@@ -14,7 +14,7 @@ defmodule AshQuick.LiveView.Liveness do
   Empty for a resource that publishes nothing — the page is simply not live.
   """
   def list_options(%Options{} = options) do
-    build(options, &record_ids/1)
+    build(options, :collection)
   end
 
   @doc """
@@ -95,6 +95,33 @@ defmodule AshQuick.LiveView.Liveness do
     Enum.uniq(own ++ extra_record_topics(result, extra_records))
   end
 
+  # A list listens on the resource's bare topic instead of one per row: it has
+  # to hear about records it is not showing (a create, a row edited into its
+  # filter) to know when to offer a Reload, and that topic carries every row
+  # it is showing too. What its rows show is still watched record by record,
+  # a related record of the list's own resource (a category's parent) among
+  # it: on the bare topic alone it would read as a record off screen, and the
+  # row showing it would never follow its rename.
+  defp own_topics(result, recursive?, resource, :collection) do
+    rows = MapSet.new(rows(result), & &1.id)
+
+    related =
+      case recursive? do
+        false ->
+          []
+
+        true ->
+          for {res, id} <- elem(Graph.walk(result), 0),
+              res != resource or not MapSet.member?(rows, id),
+              do: {res, id}
+      end
+
+    [
+      AshQuick.Topics.collection(resource)
+      | for({res, id} <- related, do: AshQuick.Topics.record(res, id))
+    ]
+  end
+
   defp own_topics(result, false, resource, ids_fun),
     do: for(id <- ids_fun.(result), do: AshQuick.Topics.record(resource, id))
 
@@ -107,6 +134,10 @@ defmodule AshQuick.LiveView.Liveness do
       {watchable, _skipped} -> for {res, id} <- watchable, do: AshQuick.Topics.record(res, id)
     end
   end
+
+  defp rows(%{results: results}), do: results
+  defp rows(results) when is_list(results), do: results
+  defp rows(_result), do: []
 
   # The hook hands back records or `{resource, id}` pairs, never topics, so the
   # one function that spells a topic out stays `AshQuick.Topics`.

@@ -820,3 +820,19 @@ msgstr "لا توجد نتائج في هذه الصفحة"
 #, elixir-autogen, elixir-format
 msgid "Showing %{from}-%{to}"
 msgstr "عرض %{from}-%{to}"
+
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "No longer available"
+msgstr "لم يعد متاحًا"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Reload"
+msgstr "إعادة التحميل"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "This list has new records."
+msgstr "توجد سجلات جديدة في هذه القائمة."
