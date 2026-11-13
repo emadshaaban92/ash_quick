@@ -246,7 +246,11 @@ defmodule AshQuick.Storage do
   answered. The target has to bind what AshQuick was told about the file, so
   a browser cannot store something else under the key:
 
-    * `:content_type` — the type the browser declared.
+    * `:content_type` — the type the file's extension stands for, one the
+      field accepts; never the type the browser declared. The store must
+      refuse a body sent as any other type. `AshQuick.Storage.S3` signs it
+      as a header, which makes a `PUT` with another `Content-Type` fail
+      signature validation.
     * `:content_length` — the size the browser declared, in bytes.
       `max_file_size` on `allow_upload/3` only bounds what the browser
       offers, so this is the server-side size cap: the store must refuse a
@@ -273,7 +277,9 @@ defmodule AshQuick.Storage do
 
     * `:accepts` — the field's allowed media classes (`[:image, :video, :document]`)
     * `:max_bytes` — the field's size cap, in bytes
-    * `:content_type`, `:byte_size` — as the client declared them
+    * `:content_type` — the type the file's extension stands for, one the
+      field accepts (not the type the client declared)
+    * `:byte_size` — as the client declared it
     * `:filename` — the original filename
     * `:source` — which surface this is, e.g. `:upload_form`
     * `:resource` — the resource module the field belongs to
@@ -595,8 +601,8 @@ defmodule AshQuick.Storage do
 
     That `PUT` is cross-origin, so the browser sends a CORS preflight first,
     and the bucket's CORS rules must allow `PUT` from the application's
-    origin, and the `Content-Type` header the uploader sets for a file with a
-    type. Without them uploads fail before any byte is sent. On S3:
+    origin, and the `Content-Type` header the uploader sets (the one the URL
+    was signed for). Without them uploads fail before any byte is sent. On S3:
 
         [
           {
@@ -668,26 +674,30 @@ defmodule AshQuick.Storage do
     @doc """
     A presigned `PUT` for the `S3` client uploader.
 
-    `:content_type` travels as a signed query parameter, which keeps the value
-    tamper-proof but binds nothing: S3 ignores query parameters it does not
-    recognise, so the stored type is the `Content-Type` header the uploader
-    sends. `:content_length` is signed as a **header**, so it appears in
-    `X-Amz-SignedHeaders` and the value is part of the canonical request. A
-    `PUT` whose body is a different length sends a different `Content-Length`
-    and fails signature validation, which is what makes the size cap a
-    server-side one. Signing it as a query parameter instead would bind
-    nothing, for the reason above.
+    `:content_type` and `:content_length` are signed as **headers**, so they
+    appear in `X-Amz-SignedHeaders` and their values are part of the
+    canonical request. A `PUT` that sends another `Content-Type`, or a body of
+    another length, fails signature validation, which is what makes the
+    stored type and the size cap server-side ones. Signed as query parameters
+    instead they would bind nothing: S3 ignores query parameters it does not
+    recognise, and stores whatever `Content-Type` header the request carries.
+
+    The meta carries the `:content_type` too, so the uploader sends the header
+    the URL was signed for.
     """
     @impl true
     def upload_target(key, opts) do
-      url =
-        presigned_url(bucket(opts), :put, key,
-          expires_in: ttl(opts),
-          query_params: maybe_param([], "Content-Type", Keyword.get(opts, :content_type)),
-          headers: maybe_param([], "content-length", Keyword.get(opts, :content_length))
-        )
+      content_type = Keyword.get(opts, :content_type)
 
-      {:external, "S3", %{url: url}}
+      headers =
+        []
+        |> maybe_param("content-length", Keyword.get(opts, :content_length))
+        |> maybe_param("content-type", content_type)
+
+      url = presigned_url(bucket(opts), :put, key, expires_in: ttl(opts), headers: headers)
+
+      meta = if content_type, do: %{url: url, content_type: content_type}, else: %{url: url}
+      {:external, "S3", meta}
     end
 
     @doc """

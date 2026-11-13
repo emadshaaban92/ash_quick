@@ -56,6 +56,25 @@ defmodule ExampleWeb.SocketUploadScenarioTest do
            |> Enum.any?()
   end
 
+  # Refused on its name before any of its bytes are sent, with the same
+  # message the external path gives.
+  test "refuses a name the field does not take, whatever type it declares", ctx do
+    %{conn: conn, admin: admin} = ctx
+    code = unique("C")
+    stored_before = stored_files()
+
+    {:ok, view, _html} = live(log_in(conn, admin), ~p"/categories/create")
+
+    assert pick(view, "evil.html") =~ "You have selected an unacceptable file type"
+
+    view
+    |> form("#category-create", %{"form" => %{"code" => code, "name" => "Tents"}})
+    |> render_submit()
+
+    assert Ash.get!(Category, [code: code], authorize?: false).image == nil
+    assert stored_files() == stored_before
+  end
+
   # The refusal is the only trace the pick leaves, so typing elsewhere in the
   # form must not take it down before it is read. Acting on the upload does.
   test "keeps the refusal up while the form is edited, until a file is picked again", ctx do
@@ -220,6 +239,12 @@ defmodule ExampleWeb.SocketUploadScenarioTest do
       category = Ash.get!(Category, [code: code], authorize?: false)
       assert category.image.key =~ ~r{^private/categories/.+-tent\.jpg$}
     end
+  end
+
+  # Compared before and after rather than matched by name: the store's root
+  # outlives a run, so a file an earlier run left there must not count.
+  defp stored_files do
+    SocketStore.root() |> Path.join("**/*") |> Path.wildcard() |> Enum.sort()
   end
 
   defp pick(view, filename, upload \\ @upload) do

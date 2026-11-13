@@ -59,3 +59,39 @@ defmodule Example.Test.PathMetaStore do
     {:external, uploader, Map.put(meta, :path, "bucket/" <> key)}
   end
 end
+
+defmodule Example.Test.RefusingArrivalStore do
+  @moduledoc """
+  The example's external-upload store, except that the host refuses custody
+  of any key holding `refuse`, so the presign fails for that entry alone.
+  """
+  @behaviour AshQuick.Storage
+
+  alias Example.Uploads.ObjectStore
+
+  @impl true
+  def url(key, opts), do: ObjectStore.url(key, opts)
+
+  @impl true
+  def download_url(key, opts), do: ObjectStore.download_url(key, opts)
+
+  @impl true
+  def put_file(key, path, opts), do: ObjectStore.put_file(key, path, opts)
+
+  @impl true
+  def upload_target(key, opts), do: ObjectStore.upload_target(key, opts)
+
+  @impl true
+  def object_arriving(key, opts) do
+    if key =~ "refuse", do: {:error, :refused}, else: ObjectStore.object_arriving(key, opts)
+  end
+
+  @impl true
+  def object_states(keys, opts), do: ObjectStore.object_states(keys, opts)
+
+  @impl true
+  def object_referenced(keys, resource, resource_id, opts),
+    do: ObjectStore.object_referenced(keys, resource, resource_id, opts)
+
+  def release!(key), do: ObjectStore.release!(key)
+end

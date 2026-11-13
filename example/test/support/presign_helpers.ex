@@ -1,14 +1,15 @@
 defmodule Example.Test.PresignHelpers do
   @moduledoc """
   Reads the parts of a presigned `PUT` URL that decide whether its size cap
-  binds.
+  and its type bind.
 
-  A signed value is not readable from the URL — `Content-Length` lives in the
-  signature, not in the query string — so pinning it takes a re-sign:
-  `signature_for_length/2` rebuilds the same request with a length of the
-  caller's choosing and hands back the signature it produces. Equal signatures
-  mean the URL was signed for that length; a different length must produce a
-  different signature, which is what makes such an assertion able to fail.
+  A signed header is not readable from the URL — `Content-Length` and
+  `Content-Type` live in the signature, not in the query string — so pinning
+  one takes a re-sign: `signature_for/2` rebuilds the same request with
+  header values of the caller's choosing and hands back the signature it
+  produces. Equal signatures mean the URL was signed for those values; other
+  values must produce a different signature, which is what makes such an
+  assertion able to fail.
   """
 
   @doc "The `X-Amz-SignedHeaders` list, in canonical order."
@@ -23,11 +24,11 @@ defmodule Example.Test.PresignHelpers do
 
   @doc """
   The signature the same `PUT` would carry had it been signed for
-  `content_length` bytes. Every other input — key, expiry, instant, and the
-  non-`X-Amz-` query parameters — is taken from `url`, so the length is the
-  only thing that differs.
+  `content_length` bytes of `content_type`. Every other input — key, expiry,
+  instant, and the non-`X-Amz-` query parameters — is taken from `url`, so
+  those headers are the only thing that differs.
   """
-  def signature_for_length(url, content_length) do
+  def signature_for(url, content_length: content_length, content_type: content_type) do
     params = query(url)
 
     key =
@@ -47,7 +48,7 @@ defmodule Example.Test.PresignHelpers do
         expires_in: String.to_integer(params["X-Amz-Expires"]),
         start_datetime: amz_datetime(params["X-Amz-Date"]),
         query_params: Enum.reject(params, fn {name, _value} -> amz_param?(name) end),
-        headers: [{"content-length", to_string(content_length)}]
+        headers: [{"content-type", content_type}, {"content-length", to_string(content_length)}]
       )
 
     signature(resigned)

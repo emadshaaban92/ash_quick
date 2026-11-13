@@ -552,6 +552,7 @@ defmodule AshQuick.LiveView.FormUtils do
             max_entries: if(field.type == AshQuick.AshTypes.Attachment, do: 1, else: 10),
             max_file_size: attachment_max_bytes(constraints),
             auto_upload: true,
+            validator: &validate_attachment_entry(&1, constraints),
             progress: upload_progress_handler(upload_name, field, constraints, root?)
           ] ++ upload_transport(constraints)
         )
@@ -752,7 +753,7 @@ defmodule AshQuick.LiveView.FormUtils do
   end
 
   defp consume_completed_upload(socket, upload_name, field, constraints) do
-    entries = socket.assigns.uploads[upload_name].entries
+    entries = valid_entries(socket, upload_name)
 
     if entries != [] and Enum.all?(entries, & &1.done?) do
       {values, failed} = consume_attachment_entries(socket, upload_name, constraints)
@@ -853,13 +854,48 @@ defmodule AshQuick.LiveView.FormUtils do
   defp attachment_max_bytes(constraints),
     do: Keyword.get(constraints, :max_size_mb, @default_max_size_mb) * 1024 * 1024
 
+  # The extensions each media class takes, with the type every surface stores
+  # and serves the object as. The type comes from here, not from the browser:
+  # what an entry declares is whatever the picker was told, and a name ending
+  # `.html` declared `image/jpeg` is still an HTML page to anything that serves
+  # it by its key.
+  @attachment_media_types %{
+    image: [
+      {".jpg", "image/jpeg"},
+      {".jpeg", "image/jpeg"},
+      {".png", "image/png"},
+      {".webp", "image/webp"}
+    ],
+    video: [{".mp4", "video/mp4"}, {".mov", "video/quicktime"}, {".webm", "video/webm"}],
+    document: [{".pdf", "application/pdf"}]
+  }
+
+  defp attachment_media_types(accepts) do
+    Enum.flat_map(accepts, &Map.get(@attachment_media_types, &1, []))
+  end
+
   defp attachment_accept_extensions(accepts) do
-    accepts
-    |> Enum.flat_map(fn
-      :image -> ~w(.jpg .jpeg .png .webp)
-      :video -> ~w(.mp4 .mov .webm)
-      :document -> ~w(.pdf)
-    end)
+    accepts |> attachment_media_types() |> Enum.map(&elem(&1, 0))
+  end
+
+  # `allow_upload/3`'s `accept:` is not enough on its own: LiveView passes an
+  # entry when its declared type *or* its name matches, and both are the
+  # browser's to say. The name is what the key is built from, so the name is
+  # what is checked. LiveView runs this on the server for every entry, before
+  # it is presigned and before any of its bytes are sent over the socket.
+  defp validate_attachment_entry(entry, constraints) do
+    if accepted_media_type(entry, constraints), do: :ok, else: {:error, :not_accepted}
+  end
+
+  # The media type for an entry whose name the field accepts, or `nil`.
+  defp accepted_media_type(entry, constraints) do
+    ext = entry.client_name |> safe_filename() |> Path.extname()
+
+    constraints
+    |> Keyword.get(:accepts, [])
+    |> attachment_media_types()
+    |> List.keyfind(ext, 0, {ext, nil})
+    |> elem(1)
   end
 
   @events ~w(cancel-upload add-form remove-form remove-attachment validate save)
@@ -1528,19 +1564,35 @@ defmodule AshQuick.LiveView.FormUtils do
   be recovered later — a key alone does not say which Ash type constraint
   produced it.
 
-  The target is told the entry's declared type and size
-  (`:content_type`, `:content_length`): `max_file_size` on `allow_upload/3`
-  only bounds what the browser offers at preflight, so a target that does
-  not bind the length lets anyone holding it store an object of any size.
+  An entry whose name does not end in one of the field's extensions never
+  gets here from a form: the upload's `:validator` refuses it first. Called
+  with one anyway, it is refused before any key is opened or signed.
+
+  The target is told the type the name's extension stands for and the
+  entry's declared size (`:content_type`, `:content_length`), never the
+  browser's declared type. `max_file_size` on `allow_upload/3` only bounds
+  what the browser offers at preflight, so a target that does not bind the
+  length lets anyone holding it store an object of any size, and one that
+  does not bind the type lets them store it as any type.
   """
   def presign_attachment_upload(entry, socket, constraints) do
+    case accepted_media_type(entry, constraints) do
+      nil -> {:error, %{error: "not_accepted"}, socket}
+      media_type -> presign_accepted_upload(entry, socket, constraints, media_type)
+    end
+  end
+
+  defp presign_accepted_upload(entry, socket, constraints, media_type) do
     serving_key = build_attachment_key(entry, socket, Keyword.fetch!(constraints, :visibility))
 
-    case Storage.object_arriving(serving_key, arriving_opts(entry, socket, constraints)) do
+    case Storage.object_arriving(
+           serving_key,
+           arriving_opts(entry, socket, constraints, media_type)
+         ) do
       {:ok, write_key} ->
         {:external, uploader, meta} =
           Storage.upload_target(write_key,
-            content_type: entry.client_type,
+            content_type: media_type,
             content_length: entry.client_size
           )
 
@@ -1591,12 +1643,12 @@ defmodule AshQuick.LiveView.FormUtils do
   def upload_error_message(error) when is_atom(error), do: Utils.humanize(error)
   def upload_error_message(_error), do: gettext("This file could not be uploaded")
 
-  defp arriving_opts(entry, socket, constraints) do
+  defp arriving_opts(entry, socket, constraints, media_type) do
     [
       source: :upload_form,
       accepts: Keyword.get(constraints, :accepts),
       max_bytes: attachment_max_bytes(constraints),
-      content_type: entry.client_type,
+      content_type: media_type,
       byte_size: entry.client_size,
       filename: entry.client_name,
       resource: socket.assigns.resource,
@@ -1662,12 +1714,11 @@ defmodule AshQuick.LiveView.FormUtils do
   defp slug_extension(_), do: ""
 
   defp infer_attachment_file_type(filename) when is_binary(filename) do
-    case filename |> Path.extname() |> String.downcase() do
-      ext when ext in ~w(.jpg .jpeg .png .heic .webp) -> :image
-      ext when ext in ~w(.mp4 .mov .webm .mkv) -> :video
-      ".pdf" -> :document
-      _ -> nil
-    end
+    ext = filename |> safe_filename() |> Path.extname()
+
+    Enum.find_value(@attachment_media_types, fn {class, types} ->
+      if List.keymember?(types, ext, 0), do: class
+    end)
   end
 
   defp infer_attachment_file_type(_), do: nil
@@ -1785,29 +1836,45 @@ defmodule AshQuick.LiveView.FormUtils do
     end
   end
 
-  # The attachment params for every finished entry, in the order the files were
-  # picked in: `Phoenix.LiveView.Upload.uploaded_entries/2` builds its done-list
-  # by prepending, and every entry is done by the time consuming is allowed — so
-  # what comes back is the selection order backwards. That order is the order
-  # the images are stored in, and the first of them is the featured one.
+  # The attachment params for every entry the upload took, in the order the
+  # files were picked in, which is the order the images are stored in: the
+  # first of them is the featured one.
+  #
+  # An entry the upload refused (its `:validator`, or a presign that failed)
+  # never finishes, so it is passed over rather than consumed: left in place,
+  # it keeps its error on the page until it is picked again or removed, and
+  # `consume_uploaded_entry/3` would raise on it as one still in progress.
   #
   # Returns the params with how many entries could not be stored. Only a socket
   # upload can fail here: an external one is in the store already.
   defp consume_attachment_entries(socket, upload_name, constraints) do
-    visibility = Keyword.fetch!(constraints, :visibility)
-
     socket
-    |> consume_uploaded_entries(upload_name, fn meta, entry ->
-      key = build_attachment_key(entry, socket, visibility)
-
-      case store_socket_upload(meta, key, entry, socket, constraints) do
-        :ok -> {:ok, attachment_params(key, entry)}
-        :error -> {:ok, :not_stored}
-      end
+    |> valid_entries(upload_name)
+    |> Enum.map(fn entry ->
+      consume_uploaded_entry(
+        socket,
+        entry,
+        &consume_attachment_entry(&1, entry, socket, constraints)
+      )
     end)
-    |> Enum.reverse()
     |> Enum.split_with(&(&1 != :not_stored))
     |> then(fn {values, failed} -> {values, length(failed)} end)
+  end
+
+  defp consume_attachment_entry(meta, entry, socket, constraints) do
+    key = build_attachment_key(entry, socket, Keyword.fetch!(constraints, :visibility))
+
+    case store_socket_upload(meta, key, entry, socket, constraints) do
+      :ok -> {:ok, attachment_params(key, entry)}
+      :error -> {:ok, :not_stored}
+    end
+  end
+
+  # A presign that failed leaves its entry `valid?`, but with an upload error.
+  defp valid_entries(socket, upload_name) do
+    conf = socket.assigns.uploads[upload_name]
+
+    Enum.filter(conf.entries, &(&1.valid? and Phoenix.Component.upload_errors(conf, &1) == []))
   end
 
   defp attachment_params(key, entry) do
@@ -1832,9 +1899,16 @@ defmodule AshQuick.LiveView.FormUtils do
   # an external upload takes at presign) and the bytes go to the key it names.
   # `put_file/3` runs in the LiveView process, so the page waits on the store.
   defp store_socket_upload(%{path: path}, serving_key, entry, socket, constraints) do
+    # The upload's `:validator` let the entry through, so its name is one the
+    # field accepts.
+    media_type = accepted_media_type(entry, constraints)
+
     with {:ok, write_key} <-
-           Storage.object_arriving(serving_key, arriving_opts(entry, socket, constraints)),
-         :ok <- Storage.put_file(write_key, path, content_type: entry.client_type) do
+           Storage.object_arriving(
+             serving_key,
+             arriving_opts(entry, socket, constraints, media_type)
+           ),
+         :ok <- Storage.put_file(write_key, path, content_type: media_type) do
       :ok
     else
       {:error, reason} ->

@@ -520,10 +520,10 @@ defmodule AshQuick.LiveView.Components.FormView do
               if (percent < 100) entry.progress(percent)
             })
 
-            // The browser sets Content-Length from the body, which is what the
-            // signed header is checked against.
+            // The browser sets Content-Length from the body, and the type is the
+            // one the server signed: both are checked against the signature.
             xhr.open("PUT", entry.meta.url, true)
-            if (entry.file.type) xhr.setRequestHeader("Content-Type", entry.file.type)
+            if (entry.meta.content_type) xhr.setRequestHeader("Content-Type", entry.meta.content_type)
             xhr.send(entry.file)
           })
         }
