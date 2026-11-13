@@ -66,6 +66,10 @@ defmodule AshQuick.LiveView.Liveness do
   # — a topic spelled out by hand can disagree with the one published, and
   # nothing at runtime would say so.
   #
+  # A quiet update that changes nothing is not published (see
+  # `AshQuick.PubSub.Filter`), so nothing here refetches for one. The page that
+  # ran it reads afresh on its own when it returns from the action.
+  #
   # `recursive?` is how far the derivation reaches: `false` stops at the records
   # in the assign, `true` follows every relationship they materialized. Both
   # topics are published — Ash expands `publish_all [[:id, nil]]` into both

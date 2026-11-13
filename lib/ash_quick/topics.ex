@@ -28,9 +28,10 @@ defmodule AshQuick.Topics do
   @doc """
   The resource-wide topic: `"product"`.
 
-  Published for every create, update and destroy, so a subscriber hears about
-  the whole collection — including records it has never seen. A list listens
-  here, which is how it knows to offer a Reload.
+  Published for every create, update and destroy, except a quiet update that
+  changes nothing, so a subscriber hears about the whole collection —
+  including records it has never seen. A list listens here, which is how it
+  knows to offer a Reload.
   """
   def collection(resource) do
     Spark.Dsl.Extension.get_opt(resource, [:ash_quick, :liveness], :prefix, nil) ||

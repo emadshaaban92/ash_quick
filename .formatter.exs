@@ -23,6 +23,7 @@ spark_locals_without_parens = [
   on: 1,
   path: 1,
   prefix: 1,
+  quiet: 1,
   read_actions: 1,
   read_only: 1,
   read_only: 2,

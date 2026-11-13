@@ -141,6 +141,11 @@ defmodule AshQuick.Config do
     resource from its `bookkeeping` declaration by
     `versioning_ignored_attributes/1` and `versioning_ignored_relationships/1`.
     Both default to `[]`.
+
+    An update the resource lists as `liveness quiet` that changes only these
+    is not published either, so a page showing one (a `:last_synced_at`,
+    say) is not refetched for it. Leave an action that writes such a column
+    out of `quiet` if a page shows it.
   """
 
   @otp_app :ash_quick
@@ -553,6 +558,11 @@ defmodule AshQuick.Config do
 
   The config key remains as an **addition** for a host with bookkeeping of its
   own (a `:last_synced_at`, say) — it no longer carries the four AshQuick owns.
+
+  The same list decides what a quiet update publishes: one the resource lists
+  in `liveness quiet` that touches only these is not broadcast, so a page
+  showing such a column is not refetched when only it changes. Leave an
+  action that writes one out of `quiet` if a page shows it.
   """
   def versioning_ignored_attributes(resource) do
     AshQuick.Info.timestamp_fields(resource) ++
