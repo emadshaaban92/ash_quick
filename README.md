@@ -767,6 +767,28 @@ end
   `read_actions`, and neither does a name that is not one of the resource's
   read actions.
 
+### What an audit row keeps from the context
+
+A row's `context` holds two things: `action_source`, which every QuickView
+stamps and a background job should set (`context: %{action_source:
+"nightly_sync"}`), and the top-level context keys the resource lists. The same
+rule covers writes and audited reads:
+
+```elixir
+ash_quick do
+  audit do
+    record_context [:import_batch]
+  end
+end
+```
+
+A listed key is kept only when its value is an atom or a string; a map, a list
+or a struct under it is dropped. Every other key is dropped whatever its value.
+An action's context also holds Ash's own keys and whatever the action carries
+between its hooks, such as the bytes of a file it is about to hand back, and
+none of that belongs in a table that is never rotated. A resource that writes
+no row does not compile with `record_context`.
+
 ### What a resource must satisfy
 
 Three things, each checked while the resource compiles.

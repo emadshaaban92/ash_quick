@@ -480,4 +480,42 @@ defmodule AshQuick.AuditVerifierTest do
       assert Exception.message(error) =~ "it is an embedded resource"
     end
   end
+
+  describe "record_context" do
+    defp keeps(audit) do
+      """
+      ash_quick do
+        audit do
+          #{audit}
+        end
+      end
+
+      attributes do
+        uuid_primary_key :id
+      end
+      """
+    end
+
+    test "an audited resource listing keys compiles" do
+      assert verifier_errors(keeps("record_context [:ticket]")) == []
+    end
+
+    test "a resource whose auditing is off refuses to compile, saying so" do
+      message = message(keeps("enabled? false\n      record_context [:ticket]"))
+
+      assert message =~ "lists `record_context`, but it records nothing"
+      assert message =~ "its auditing is turned off (`enabled? false`)"
+    end
+
+    test "a resource auditing by hand, with the section off, compiles with keys listed" do
+      body =
+        String.replace(
+          @hand_attached,
+          "enabled? false",
+          "enabled? false\n      record_context [:ticket]"
+        )
+
+      assert verifier_errors(body) == []
+    end
+  end
 end

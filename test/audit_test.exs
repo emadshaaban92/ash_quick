@@ -39,10 +39,12 @@ defmodule AshQuick.AuditTest do
   alias AshQuick.Test.Credential
   alias AshQuick.Test.Dossier
   alias AshQuick.Test.DossierFolder
+  alias AshQuick.Test.JsonAuditStore
   alias AshQuick.Test.LegacyAuditStore
   alias AshQuick.Test.LegacyCredential
   alias AshQuick.Test.NumberedCredential
   alias AshQuick.Test.RefusedDossier
+  alias AshQuick.Test.Report
   alias AshQuick.Test.Scopes.FullScope
   alias AshQuick.Test.StampedTally
   alias AshQuick.Test.Tally
@@ -200,7 +202,8 @@ defmodule AshQuick.AuditTest do
 
       assert entry.actor_id == nil
       assert entry.context[:action_source] == "nightly_sync"
-      # `action_source` is the key to use, not the only one kept.
+      # `action_source` is the key to use, not the only one kept: `Credential`
+      # lists `:queue` in `record_context`.
       assert entry.context[:queue] == :scheduled
       # Flat values only — a nested one is not kept.
       refute Map.has_key?(entry.context, :run)
@@ -1093,6 +1096,214 @@ defmodule AshQuick.AuditTest do
       # The same read through an unlisted action is not recorded, and so not
       # refused.
       assert Ash.get!(RefusedDossier, record.id).id == record.id
+    end
+  end
+
+  # The row's `context` holds `action_source` and the keys the resource lists
+  # in `record_context`, and nothing else: a context holds whatever any part of
+  # the pipeline put there, and an unlisted key cannot reach the store.
+  describe "the row's context" do
+    setup %{actor: actor} do
+      report =
+        Report
+        |> Ash.Changeset.for_create(:create, %{title: "Quarterly"}, actor: actor)
+        |> Ash.create!()
+
+      %{report: report}
+    end
+
+    defp report_entries(report) do
+      JsonAuditStore
+      |> Ash.Query.filter(resource_id == ^report.id)
+      |> Ash.Query.sort(id: :asc)
+      |> Ash.read!()
+    end
+
+    defp export(report, actor, args \\ %{}, opts \\ []) do
+      report
+      |> Ash.Changeset.for_update(:export, args, [actor: actor] ++ opts)
+      |> Ash.update()
+    end
+
+    test "keeps nothing an action carried between its own hooks",
+         %{actor: actor, report: report} do
+      assert {:ok, exported} = export(report, actor)
+      assert exported.__metadata__.ash_quick_download.data == "zq-report-body"
+
+      assert [_created, entry] = report_entries(report)
+      assert entry.action_name == :export
+      refute Map.has_key?(entry.context, :copy)
+      refute inspect(entry) =~ "zq-report-body"
+    end
+
+    test "keeps the write whose carried bytes are not valid UTF-8",
+         %{actor: actor, report: report} do
+      assert {:ok, exported} = export(report, actor, %{format: "bin"})
+      refute String.valid?(exported.__metadata__.ash_quick_download.data)
+
+      assert [_created, entry] = report_entries(report)
+      assert entry.action_name == :export
+      assert entry.arguments[:filename] == "report.bin"
+      refute Map.has_key?(entry.context, :copy)
+      refute inspect(entry) =~ "zq-report-body"
+    end
+
+    test "keeps `action_source` with nothing listed, on a write and on a read",
+         %{actor: actor, report: report} do
+      assert AshQuick.Audit.Declaration.record_context(Report) == []
+
+      {:ok, _exported} = export(report, actor, %{}, context: %{action_source: :ash_quick_form})
+
+      Report
+      |> Ash.Query.filter(id == ^report.id)
+      |> Ash.Query.for_read(:open, %{}, actor: actor, context: %{action_source: "report_page"})
+      |> Ash.read_one!()
+
+      assert [_created, written, read] = report_entries(report)
+      assert written.context == %{action_source: :ash_quick_form}
+      assert read.action_type == :read
+      assert read.context == %{action_source: "report_page"}
+    end
+
+    test "keeps a listed key on a write and on a read, and drops it where unlisted",
+         %{actor: actor, report: report} do
+      context = %{action_source: "support", ticket: "T-1042"}
+
+      credential =
+        Credential
+        |> Ash.Changeset.for_create(:create, %{name: "Gateway"}, actor: actor, context: context)
+        |> Ash.create!()
+
+      dossier =
+        Dossier
+        |> Ash.Changeset.for_create(:create, %{title: "One", owner_id: actor.id})
+        |> Ash.create!()
+
+      Dossier
+      |> Ash.Query.filter(id == ^dossier.id)
+      |> Ash.Query.for_read(:open, %{}, actor: actor, context: context)
+      |> Ash.read_one!()
+
+      {:ok, _exported} = export(report, actor, %{}, context: context)
+
+      Report
+      |> Ash.Query.filter(id == ^report.id)
+      |> Ash.Query.for_read(:open, %{}, actor: actor, context: context)
+      |> Ash.read_one!()
+
+      assert [written] = entries(credential)
+      assert written.context == context
+
+      assert [_created, read] = entries(dossier)
+      assert read.action_type == :read
+      assert read.context == context
+
+      # `Report` does not list `:ticket`, so the same context keeps only
+      # `action_source` there.
+      assert [_created, report_written, report_read] = report_entries(report)
+      assert report_written.context == %{action_source: "support"}
+      assert report_read.context == %{action_source: "support"}
+    end
+
+    for {kind, value} <- [
+          map: Macro.escape(%{id: "T-1042"}),
+          list: ["T-1042"],
+          struct: Macro.escape(URI.parse("https://tickets.test/T-1042"))
+        ] do
+      test "drops a listed key holding a #{kind}", %{actor: actor} do
+        record =
+          Credential
+          |> Ash.Changeset.for_create(:create, %{name: "Gateway"},
+            actor: actor,
+            context: %{action_source: "support", ticket: unquote(value)}
+          )
+          |> Ash.create!()
+
+        assert [entry] = entries(record)
+        assert entry.context == %{action_source: "support"}
+        refute inspect(entry) =~ "T-1042"
+      end
+    end
+
+    test "keeps none of Ash's own keys", %{actor: actor} do
+      record =
+        Credential
+        |> Ash.Changeset.for_create(:create, %{name: "Gateway"}, actor: actor)
+        |> Ash.create!()
+
+      record
+      |> Ash.Changeset.for_update(:update, %{name: "Renamed"}, actor: actor)
+      |> Ash.update!()
+
+      for entry <- entries(record) do
+        refute Map.has_key?(entry.context, :changed?)
+        assert entry.context == %{}
+      end
+    end
+  end
+
+  # A file-producing action that only records that it happened, on a resource
+  # with auditing, bookkeeping stamps, versioning and an update policy all on:
+  # the row names the actor and holds the argument the hook set, the lock, the
+  # stamp and the timestamp stay where they were, and the mark reaches the
+  # caller. Removing the stamp's, the lock's or the audit's handling of a write
+  # that changes nothing fails it.
+  describe "a download that changes nothing" do
+    setup %{actor: creator} do
+      reader = Actor |> Ash.Changeset.for_create(:create, %{name: "Reader"}) |> Ash.create!()
+
+      report =
+        Report
+        |> Ash.Changeset.for_create(:create, %{title: "Quarterly", reader_ids: [reader.id]},
+          actor: creator
+        )
+        |> Ash.create!()
+
+      %{creator: creator, reader: reader, report: report}
+    end
+
+    test "is audited, leaves bookkeeping alone and is marked",
+         %{creator: creator, reader: reader, report: report} do
+      assert {:ok, exported} = export(report, reader)
+
+      assert exported.__metadata__.ash_quick_download == %{
+               data: "zq-report-body",
+               filename: "report.csv",
+               content_type: "application/octet-stream"
+             }
+
+      for result <- [exported, Ash.get!(Report, report.id)] do
+        assert result.version == report.version
+        assert result.updated_by_id == creator.id
+        assert result.updated_at == report.updated_at
+      end
+
+      assert [_created, entry] = report_entries(report)
+      assert entry.action_name == :export
+      assert entry.actor_id == reader.id
+      assert entry.arguments[:filename] == "report.csv"
+    end
+
+    test "refused by the policy, errors with no mark and no row", %{report: report} do
+      outsider = Actor |> Ash.Changeset.for_create(:create, %{name: "Outsider"}) |> Ash.create!()
+
+      assert {:error, %Ash.Error.Forbidden{}} = export(report, outsider)
+      assert [created] = report_entries(report)
+      assert created.action_name == :create
+    end
+
+    test "still succeeds from a copy someone else has since edited",
+         %{creator: creator, reader: reader, report: report} do
+      edited =
+        report
+        |> Ash.Changeset.for_update(:update, %{title: "Quarterly, revised"}, actor: creator)
+        |> Ash.update!()
+
+      assert edited.version != report.version
+
+      assert {:ok, exported} = export(report, reader)
+      assert exported.__metadata__.ash_quick_download.filename == "report.csv"
+      assert Ash.get!(Report, report.id).version == edited.version
     end
   end
 end

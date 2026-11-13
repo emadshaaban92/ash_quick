@@ -37,7 +37,8 @@ defmodule AshQuick.Audit.Verifier do
 
   @impl true
   def verify(dsl_state) do
-    with :ok <- check_read_actions(dsl_state, Declaration.read_actions(dsl_state)) do
+    with :ok <- check_read_actions(dsl_state, Declaration.read_actions(dsl_state)),
+         :ok <- check_record_context(dsl_state, Declaration.record_context(dsl_state)) do
       if audits?(dsl_state) do
         dsl_state |> Declaration.store() |> check(dsl_state)
       else
@@ -64,27 +65,57 @@ defmodule AshQuick.Audit.Verifier do
     end
   end
 
+  # `record_context` names context keys a row keeps, so on a resource that
+  # writes no row it keeps nothing, and the resource believes otherwise. Keyed on
+  # the attached change, as the store check is: a resource that turns auditing
+  # off and attaches the change to some actions by hand writes rows for those,
+  # and they read the same list.
+  defp check_record_context(_dsl_state, []), do: :ok
+
+  defp check_record_context(dsl_state, _keys) do
+    if audits?(dsl_state) do
+      :ok
+    else
+      module = Verifier.get_persisted(dsl_state, :module)
+
+      {:error,
+       Spark.Error.DslError.exception(
+         module: module,
+         path: [:ash_quick, :audit, :record_context],
+         message: """
+         #{inspect(module)} lists `record_context`, but it records nothing: \
+         #{unaudited_reason(dsl_state)}.
+
+         No row would keep the keys it lists, and nothing would say so. Remove \
+         `record_context`, or audit the resource.
+         """
+       )}
+    end
+  end
+
   defp read_action?(dsl_state, name) do
     match?(%{type: :read}, Ash.Resource.Info.action(dsl_state, name))
+  end
+
+  defp unaudited_reason(dsl_state) do
+    cond do
+      Ash.Resource.Info.embedded?(dsl_state) ->
+        "it is an embedded resource, which has no row of its own for an entry to name"
+
+      not Declaration.enabled?(dsl_state) ->
+        "its auditing is turned off (`enabled? false`)"
+
+      true ->
+        "it is the audit store, whose own rows are the entries"
+    end
   end
 
   defp unaudited_reads(dsl_state) do
     module = Verifier.get_persisted(dsl_state, :module)
 
-    reason =
-      cond do
-        Ash.Resource.Info.embedded?(dsl_state) ->
-          "it is an embedded resource, which has no row of its own for an entry to name"
-
-        not Declaration.enabled?(dsl_state) ->
-          "its auditing is turned off (`enabled? false`)"
-
-        true ->
-          "it is the audit store, whose own rows are the entries"
-      end
-
     """
-    #{inspect(module)} lists `read_actions`, but it records nothing: #{reason}.
+    #{inspect(module)} lists `read_actions`, but it records nothing: \
+    #{unaudited_reason(dsl_state)}.
 
     Its reads would not be recorded, and nothing would say so. Remove \
     `read_actions`, or audit the resource.
