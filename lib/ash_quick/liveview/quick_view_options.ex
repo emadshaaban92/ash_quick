@@ -115,6 +115,7 @@ defmodule AshQuick.LiveView.QuickView.Options do
     |> put_details_options(details_opts, default_attrs)
     |> put_form_options(opts[:form] || [])
     |> validate_lookups!()
+    |> validate_sort_by!()
     |> put_list_sortable(list_opts[:sortable])
     |> put_list_filterable(list_opts[:filterable])
     |> validate_list_inputs!()
@@ -339,11 +340,12 @@ defmodule AshQuick.LiveView.QuickView.Options do
   #
   # Unsaid, it is every list column Ash can sort in the data layer — a public
   # attribute, an expression calculation or an aggregate, of the resource or
-  # reached through public to-one relationships — by the same check a named
-  # list is held to. Each of those has `sortable?` for a resource to opt one
-  # out with. Anything Ash computes in Elixir is left out, since no data layer
-  # can order by it. Most resources are small enough for that to be free; a
-  # large one names the columns it has indexes for, or `[]` for none.
+  # reached through public to-one relationships, and not `sensitive?` — by the
+  # same check a named list is held to. Each of those has `sortable?` for a
+  # resource to opt one out with. Anything Ash computes in Elixir is left out,
+  # since no data layer can order by it. Most resources are small enough for
+  # that to be free; a large one names the columns it has indexes for, or `[]`
+  # for none.
   defp put_list_sortable(%__MODULE__{} = options, nil) do
     sortable =
       for %QuickField{path: path} = field <- options.list_fields,
@@ -357,6 +359,8 @@ defmodule AshQuick.LiveView.QuickView.Options do
   @unsortable "is not a field Ash can sort by in the data layer, through public, " <>
                 "sortable to-one relationships"
 
+  @sensitive_sort "is `sensitive?`; the order of the rows would give it away"
+
   defp put_list_sortable(%__MODULE__{resource: resource} = options, sortable) do
     columns = MapSet.new(options.list_fields, &QuickField.data_field/1)
 
@@ -368,6 +372,9 @@ defmodule AshQuick.LiveView.QuickView.Options do
 
           not MapSet.member?(columns, QuickField.data_field(path)) ->
             [{path, "is not one of the list's fields"}]
+
+          sensitive_path?(resource, path) ->
+            [{path, @sensitive_sort}]
 
           not sortable_path?(resource, path) ->
             [{path, @unsortable}]
@@ -386,7 +393,8 @@ defmodule AshQuick.LiveView.QuickView.Options do
 
       `list: [sortable: ...]` names list columns: a public attribute, aggregate \
       or expression calculation of #{inspect(resource)}, or one reached through \
-      public to-one relationships, such as `[owner: :name]`.
+      public to-one relationships, such as `[owner: :name]`, and none \
+      `sensitive?`.
       """
     end
 
@@ -414,10 +422,10 @@ defmodule AshQuick.LiveView.QuickView.Options do
       `list: [filterable: ...]` names fields of #{inspect(resource)} the filter \
       offers: public, `filterable?` attributes, aggregates and calculations of \
       a type it has a row for, such as a string, number, date, boolean or a \
-      fixed set of values, and no belongs_to relationship's source attribute. \
-      A field of a related resource is named through a public belongs_to \
-      relationship, one hop away, as `[brand: :name]`, one with a read of its \
-      destination to ask.
+      fixed set of values, and no belongs_to relationship's source attribute \
+      or `sensitive?` field. A field of a related resource is named through a \
+      public belongs_to relationship, one hop away, as `[brand: :name]`, one \
+      with a read of its destination to ask.
       """
     end
 
@@ -465,8 +473,13 @@ defmodule AshQuick.LiveView.QuickView.Options do
   # only kind a QuickView reads. Through a relationship, every hop has to be
   # public and to-one: sorting through a to-many one has no single value to
   # order a row by.
+  #
+  # A `sensitive?` field is never sortable: it shows as a mask, and the order
+  # of the rows would give its value away beside the other columns.
   defp sortable_path?(resource, field) when is_atom(field),
-    do: Ash.Resource.Info.sortable?(resource, field, include_private?: false)
+    do:
+      Ash.Resource.Info.sortable?(resource, field, include_private?: false) and
+        not AshQuick.Info.sensitive?(resource, field)
 
   defp sortable_path?(resource, [{relationship, nested}]) do
     case Ash.Resource.Info.public_relationship(resource, relationship) do
@@ -479,6 +492,41 @@ defmodule AshQuick.LiveView.QuickView.Options do
   end
 
   defp sortable_path?(_resource, _path), do: false
+
+  # Whether `path` ends at a `sensitive?` field, of `resource` or through its
+  # public to-one relationships.
+  defp sensitive_path?(resource, field) when is_atom(field),
+    do: AshQuick.Info.sensitive?(resource, field)
+
+  defp sensitive_path?(resource, [{relationship, nested}]) do
+    case Ash.Resource.Info.public_relationship(resource, relationship) do
+      %{cardinality: :one, destination: destination} -> sensitive_path?(destination, nested)
+      _ -> false
+    end
+  end
+
+  defp sensitive_path?(_resource, _path), do: false
+
+  # The QuickView's own `sort_by` orders every read of its list, and breaks
+  # the ties of any column a visitor sorts by, so a `sensitive?` field in it
+  # would give the masked value away as surely as a column sort would.
+  defp validate_sort_by!(%__MODULE__{sort_by: sort_by, resource: resource} = options)
+       when is_list(sort_by) do
+    refused = for {field, _direction} <- sort_by, sensitive_path?(resource, field), do: field
+
+    if refused != [] do
+      raise ArgumentError, """
+      #{inspect(options.module)} sorts its list by `sensitive?` fields of \
+      #{inspect(resource)}: #{Enum.map_join(refused, ", ", &inspect/1)}. The order of \
+      the rows would give their masked values away; `sort_by:` names fields \
+      that are not `sensitive?`.
+      """
+    end
+
+    options
+  end
+
+  defp validate_sort_by!(options), do: options
 
   defp put_details_options(options, details_opts, default_attrs) do
     %{

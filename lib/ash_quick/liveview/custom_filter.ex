@@ -223,8 +223,8 @@ defmodule AshQuick.LiveView.CustomFilter do
   The fields of `resource` the filter form offers, before field policies narrow
   them, as `FilterField`s: public, `filterable?` attributes, aggregates and
   calculations of a type it has a row for, but no belongs_to relationship's
-  source attribute, no field filterable by simple equality only, and no
-  calculation without an expression.
+  source attribute, no `sensitive?` field, no field filterable by simple
+  equality only, and no calculation without an expression.
 
   With `names`, a list's `filterable:`, those it names, in its order: each a
   field of `resource`, or `{relationship, field}`, a field reached through a
@@ -284,7 +284,12 @@ defmodule AshQuick.LiveView.CustomFilter do
 
     resource
     |> Ash.Resource.Info.fields([:attributes, :aggregates, :calculations])
-    |> Enum.reject(&(&1.name in belongs_to_source_attributes))
+    # A `sensitive?` field shows as a mask on every page, and a filter on it
+    # would give the value back: rows that start with "4", then "43", and so
+    # on, a character at a time, with only the list to read the answer off.
+    |> Enum.reject(
+      &(&1.name in belongs_to_source_attributes or AshQuick.Info.sensitive?(resource, &1.name))
+    )
     |> Enum.filter(&(&1.public? and filterable?(&1) and offered_type?(&1)))
   end
 

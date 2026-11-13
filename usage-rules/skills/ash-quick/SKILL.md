@@ -137,7 +137,8 @@ The URL is not an option here — it is declared in the router with
 
 ### Optional (top-level)
 - `:sort_by` — Default sort (e.g. `[name: :asc]`); a column the visitor sorts
-  by goes ahead of it, and it breaks that column's ties
+  by goes ahead of it, and it breaks that column's ties. A `sensitive?` field
+  is refused at compile time
 - `:load` — Extra fields/relationships to load on every query
 - `:base_filter` — Ash expression always applied to list queries
 - `:sidebar` — Navigation sidebar, defaults to `true`. Set `false` for full width.
@@ -167,30 +168,31 @@ The URL is not an option here — it is declared in the router with
   `[:name, [owner: :name]]`; `[]` for none. Not given, every list column Ash
   sorts in the data layer (public attributes, aggregates, expression
   calculations, also through public to-one relationships; no Elixir
-  calculations; `sortable? false` opts a field or relationship out). Name the
-  indexed ones on a large table. Each entry must be a
-  list field Ash can sort, checked at compile time. The sort is one column, in
-  the URL as `?sort=name` / `?sort=-name`; an unoffered one is dropped
+  calculations; never a `sensitive?` field; `sortable? false` opts a field
+  or relationship out). Name the indexed ones on a large table. Each entry
+  must be a list field Ash can sort, checked at compile time. The sort is one
+  column, in the URL as `?sort=name` / `?sort=-name`; an unoffered one is
+  dropped
 - `:filterable` — the fields the filter form offers, in that order, e.g.
   `[:number, :placed_at, :status]`; `[]` leaves the filter button out, as does
   a visitor whom field policies leave none of them. Not given, every public,
   `filterable?` attribute, aggregate and calculation of a type the form has a
   row for, a list of fixed-set values among them (filtered by Has Any Of),
   and a composite AshMoney `:money` (its amount compared within its currency:
-  `EUR 10`; a bare `10` in the default currency, held as `USD 10`); no belongs_to source attribute, no
-  `filterable? :simple_equality` field, no calculation without
-  `expression/2`. Each one the form offers, checked at compile
-  time; need not be list columns. A field of a related resource is reached one
-  hop through a public belongs_to, `[:sku, brand: :name]` (or `[brand: :name]`
-  as one entry): shown as "Brand › Name", carried in the URL as `brand.name`,
-  read through the brand's read and field policies, asked as a read through
-  the relationship (`accessing_from` holds; a brand the reader may not read
-  at all offers none of its fields); no to-many or longer
-  paths, and none offered unless named. Name the indexed ones on a large
-  table. A link's filter row on any other field is dropped, with a flash,
-  and so is one by an operator the form does not offer, or holding a JSON
-  object as its value; unset, the fields offered are the only ones a link
-  can filter by too.
+  `EUR 10`; a bare `10` in the default currency, held as `USD 10`); no
+  belongs_to source attribute, no `sensitive?` field, no `filterable?
+  :simple_equality` field, no calculation without `expression/2`. Each one
+  the form offers, checked at compile time; need not be list columns. A field
+  of a related resource is reached one hop through a public belongs_to,
+  `[:sku, brand: :name]` (or `[brand: :name]` as one entry): shown as "Brand ›
+  Name", carried in the URL as `brand.name`, read through the brand's read
+  and field policies, asked as a read through the relationship
+  (`accessing_from` holds; a brand the reader may not read at all offers none
+  of its fields); no to-many or longer paths, and none offered unless named.
+  Name the indexed ones on a large table. A link's filter row on any other
+  field is dropped, with a flash, and so is one by an operator the form does
+  not offer, or holding a JSON object as its value; unset, the fields offered
+  are the only ones a link can filter by too.
 
 ### Details options (`:details`)
 - `:fields` — Fields in the detail view
@@ -796,9 +798,11 @@ and what to write.
   access control grants the page (a route grant, not the record's read policy).
 - **A `sensitive?` field is never shown** — AshQuick redacts it everywhere:
   lists, details pages, exports, labels and hints (so titles, dropdowns,
-  links and the register), and print filenames. Its form input is a password
-  field with no stored value; on an update a blank one keeps it. Don't mark a
-  field `sensitive?` that people need to read on a page.
+  links and the register), and print filenames. Nor can a list be filtered or
+  sorted by it, which would give the value back; naming one in `filterable:`,
+  `sortable:` or `sort_by:` is refused at compile time. Its form input is a
+  password field with no stored value; on an update a blank one keeps it.
+  Don't mark a field `sensitive?` that people need to read on a page.
 - **No list a form cannot save** — A field with a fixed set of values (an
   `Ash.Type.Enum`, or an atom with `one_of`) is picked from a select, and a
   scalar is typed in. A list of scalars with no fixed set (`{:array, :atom}`,

@@ -1155,10 +1155,11 @@ by the export.
 Every list column Ash can sort in the data layer is sortable unless the
 QuickView says otherwise: public attributes, aggregates and expression
 calculations, of the resource or reached through public to-one relationships.
-Calculations Ash computes in Elixir are not, and a field or relationship with
-`sortable? false` opts out. Sorting by an unindexed column reads the whole
-table, which is nothing on a small one; for a large one, name the columns it
-has indexes for:
+Calculations Ash computes in Elixir are not, nor is a `sensitive?` field, whose
+masked value the order of the rows would give away (`sort_by` may not name one
+either); a field or relationship with `sortable? false` opts out. Sorting by an
+unindexed column reads the whole table, which is nothing on a small one; for a
+large one, name the columns it has indexes for:
 
 ```elixir
 use AshQuick.LiveView.QuickView,
@@ -1178,19 +1179,19 @@ do to a filter.
 
 ## Filtering a list
 
-A list's filter button opens a form that builds a filter row by row: a field,
-an operator and a value, in groups joined by AND or OR. The applied filter is
+A list's filter button opens a form that builds a filter row by row: a field, an
+operator and a value, in groups joined by AND or OR. The applied filter is
 carried in the URL, shown above the list as chips, and followed by the export.
-The form offers every public, `filterable?` attribute, aggregate and
-calculation of a type it has a row for: strings, numbers, dates, timestamps,
-booleans, UUIDs, atoms, amounts of money, fields with a fixed set of values,
-and lists of such values (`{:array, :atom}` with `one_of` on its items, or a
-list of an `Ash.Type.Enum`). The form leaves out a belongs_to relationship's
-source attribute, a field Ash filters by simple equality only (`filterable?
-:simple_equality`), a calculation with no `expression/2`, which a filter
-cannot ask in SQL, and any field a field policy hides from the visitor on
-every record. A visitor left with no field to filter by sees no filter
-button.
+The form offers every public, `filterable?` attribute, aggregate and calculation
+of a type it has a row for: strings, numbers, dates, timestamps, booleans,
+UUIDs, atoms, amounts of money, fields with a fixed set of values, and lists of
+such values (`{:array, :atom}` with `one_of` on its items, or a list of an
+`Ash.Type.Enum`). The form leaves out a `sensitive?` field, which a filter would
+give back a character at a time ("starts with 4", then "43"), a belongs_to
+relationship's source attribute, a field Ash filters by simple equality only
+(`filterable? :simple_equality`), a calculation with no `expression/2`, which a
+filter cannot ask in SQL, and any field a field policy hides from the visitor on
+every record. A visitor left with no field to filter by sees no filter button.
 
 An AshMoney `:money` field, stored as its default `money_with_currency`, is
 compared by its amount, with one in the same currency: `EUR 10` is in

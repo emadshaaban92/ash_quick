@@ -14,12 +14,13 @@ defmodule Example.Test.SortedRows.Owner do
     data_layer: Ash.DataLayer.Ets
 
   actions do
-    defaults [:read, create: [:name]]
+    defaults [:read, create: [:name, :badge]]
   end
 
   attributes do
     uuid_v7_primary_key :id
     attribute :name, :string, allow_nil?: false, public?: true
+    attribute :badge, :string, public?: true, sensitive?: true
   end
 end
 
@@ -38,7 +39,8 @@ defmodule Example.Test.SortedRows do
   @moduledoc """
   A resource whose list columns are every kind a sort meets — attributes, a
   list, an expression and an Elixir calculation, a relationship path and one
-  through a relationship marked `sortable? false` — and two pages over it: one
+  through a relationship marked `sortable? false`, and a `sensitive?` field of
+  its own and one through a relationship — and two pages over it: one
   that leaves its sortable columns unsaid, one that names them and sets a
   `sort_by`.
 
@@ -58,7 +60,7 @@ defmodule Example.Test.SortedRows do
     # would need the extension on `Owner` too.
     create :seed do
       public? false
-      accept [:code, :rank, :tags, :owner_id]
+      accept [:code, :rank, :tags, :serial, :owner_id]
     end
 
     read :index do
@@ -102,6 +104,7 @@ defmodule Example.Test.SortedRows do
     attribute :code, :string, allow_nil?: false, public?: true
     attribute :rank, :integer, public?: true
     attribute :tags, {:array, :string}, public?: true, default: []
+    attribute :serial, :string, public?: true, sensitive?: true
   end
 
   relationships do
@@ -123,7 +126,17 @@ defmodule Example.Test.SortedRowsLive.Quick do
   use AshQuick.LiveView.QuickView,
     resource: Example.Test.SortedRows,
     list: [
-      fields: [:code, :rank, :tags, :negated, :shouted, [owner: :name], [keeper: :name]]
+      fields: [
+        :code,
+        :rank,
+        :tags,
+        :serial,
+        :negated,
+        :shouted,
+        [owner: :name],
+        [owner: :badge],
+        [keeper: :name]
+      ]
     ],
     details: [fields: [:code]]
 end

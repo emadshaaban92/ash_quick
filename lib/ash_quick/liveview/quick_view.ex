@@ -47,7 +47,9 @@ defmodule AshQuick.LiveView.QuickView do
 
     * `:sort_by` — Default sort for list queries (e.g. `[name: :asc]`). A
       column the visitor sorts by (see `:sortable` under `:list`) goes ahead
-      of it, and it orders the rows that column ties on.
+      of it, and it orders the rows that column ties on. A `sensitive?`
+      field is refused when the QuickView compiles, since the order of the
+      rows would give its masked value away.
     * `:load` — Extra fields or relationships to load on every query.
     * `:base_filter` — An Ash expression that is always applied to list queries.
     * `:sidebar` — Controls the navigation sidebar. Defaults to `true`.
@@ -124,7 +126,8 @@ defmodule AshQuick.LiveView.QuickView do
       relationships; the QuickView refuses any other when it compiles. Not
       given, every list column that passes the same check is sortable, a
       relationship path included; a field or relationship with
-      `sortable? false` opts out.
+      `sortable? false` opts out. A `sensitive?` field is never sortable,
+      given or not: the order of the rows would give its masked value away.
       Sorting by an unindexed column reads the whole table, so a large one
       names the columns it has indexes for, or `[]` for none. The sort is
       one column at a time, carried in the URL as `?sort=name` or
@@ -134,8 +137,10 @@ defmodule AshQuick.LiveView.QuickView do
       order: `[:number, :placed_at, :status]`. Each is a field the form
       offers when it is not given — a public, `filterable?` attribute,
       aggregate or calculation of a type it has a row for, and no belongs_to
-      relationship's source attribute, field filterable by simple equality
-      only, or calculation without `expression/2` — though not necessarily
+      relationship's source attribute, `sensitive?` field, field filterable
+      by simple equality only, or calculation without `expression/2` (a
+      filter on a masked value would give it back a character at a time,
+      "starts with 4", then "43") — though not necessarily
       a list column, or such a field of a related resource, reached one hop
       through a public belongs_to: `[:number, customer: :name]`, or `[customer:
       :name]` as one entry. The form lists that one as "Customer › Name",
