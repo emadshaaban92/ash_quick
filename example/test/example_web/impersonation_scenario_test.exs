@@ -104,6 +104,35 @@ defmodule ExampleWeb.ImpersonationScenarioTest do
     end
   end
 
+  describe "a path the browser would read as another site" do
+    test "is listed and followed as a page on this one", ctx do
+      %{conn: conn, admin: admin, editor: editor} = ctx
+
+      # The router serves `//products` as `/products`, and the tab reports the
+      # path as it was typed. A browser reads `//products` as a host, so the
+      # console's link and "Open as them" would both have left the site.
+      editor_tab = new_tab()
+
+      {:ok, _editor_view, _html} =
+        live(
+          conn |> log_in(editor) |> in_tab(editor_tab),
+          "http://www.example.com//products?search=tent"
+        )
+
+      {:ok, console, _html} = live(log_in(conn, admin), ~p"/browser_sessions")
+      row = "#session-#{editor_tab["id"]}"
+
+      assert has_element?(console, ~s(#{row} a[href="/products?search=tent"]))
+      refute has_element?(console, ~s(#{row} a[href^="//"]))
+
+      console
+      |> element("#{row} button", "Open as them")
+      |> render_click()
+
+      assert_push_event(console, "impersonate", %{to: "/products?search=tent"})
+    end
+  end
+
   describe "two people sharing a name" do
     test "are told apart by their hint in the register, its search, and the banner", ctx do
       %{conn: conn, admin: admin} = ctx

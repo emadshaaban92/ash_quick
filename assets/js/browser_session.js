@@ -37,6 +37,17 @@ export function browserSessionParams() {
 //     <.link phx-click={JS.dispatch("ash_quick:end-impersonation")}>End Impersonation</.link>
 //     <a href={~p"/sign-out"} phx-click={JS.dispatch("ash_quick:clear-impersonation")}>Sign out</a>
 //
+// Whether `to` names a page on this site once the browser has read it, which is
+// the only reading that counts: a leading `//` or `\`, or either hidden behind
+// a tab or newline the browser strips, names another host.
+function sameOrigin(to) {
+  try {
+    return new URL(to, window.location.href).origin === window.location.origin
+  } catch {
+    return false
+  }
+}
+
 // The token belongs to the whole tab, so every socket in it reconnects on a
 // change. The listeners are registered once per page, and each attached socket
 // reconnects once: a second set of listeners would reconnect them all twice.
@@ -56,12 +67,16 @@ export function listenForImpersonation(liveSocket) {
   // A destination means somebody started this from the register, to go and look
   // at the page the other person is on. Navigating first and reconnecting on
   // arrival is what makes the tab land there already being them, rather than
-  // arriving as itself and swapping under the reader.
+  // arriving as itself and swapping under the reader. Only a page on this site
+  // is followed: the path is the other tab's to choose, and one the browser
+  // would read as another origin is dropped, so the tab stays put and
+  // reconnects as them instead.
   window.addEventListener("phx:impersonate", event => {
     sessionStorage.setItem(IMPERSONATION_KEY, event.detail.token)
+    const to = event.detail.to
 
-    if (event.detail.to) {
-      window.location.assign(event.detail.to)
+    if (to && sameOrigin(to)) {
+      window.location.assign(to)
     } else {
       reconnectSocket()
     }

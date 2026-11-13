@@ -105,6 +105,17 @@ defmodule Example.Accounts.User do
     policy action_type(:read) do
       authorize_if actor_present()
     end
+
+    # The Live Users register is narrower than that. It shows where each person
+    # is and what they searched for, so a store's admin sees their own store's
+    # people there, while platform staff, who belong to no store, see everyone.
+    policy [
+      action_type(:read),
+      context_equals(:action_source, :ash_quick_browser_sessions)
+    ] do
+      authorize_if expr(is_nil(^actor(:store_id)))
+      authorize_if expr(store_id == ^actor(:store_id))
+    end
   end
 
   ash_quick do

@@ -203,6 +203,94 @@ defmodule ExampleWeb.TenancyScenarioTest do
     end
   end
 
+  describe "the Live Users register" do
+    test "shows a store's admin their own store's tabs and nobody else's", ctx do
+      %{conn: conn, admin: admin, north: north} = ctx
+
+      north_admin = user(:admin, name: "Nadia North", store: north)
+      north_tab = open_tab(conn, ctx.north_keeper)
+      south_tab = open_tab(conn, ctx.south_keeper)
+      staff_tab = open_tab(conn, admin)
+
+      {:ok, console, _html} = live(log_in(conn, north_admin), ~p"/browser_sessions")
+
+      # The admin may stand in for anybody their policy names, but the register
+      # shows where people are and what they searched for, so another store's
+      # tabs and the platform staff's stay off their page.
+      assert has_element?(console, "#session-#{north_tab}")
+      refute has_element?(console, "#session-#{south_tab}")
+      refute has_element?(console, "#session-#{staff_tab}")
+      refute render(console) =~ ctx.south_keeper.name
+
+      # Staff, who belong to no store, still see every store's tabs.
+      {:ok, staff_console, _html} = live(log_in(conn, admin), ~p"/browser_sessions")
+
+      assert has_element?(staff_console, "#session-#{north_tab}")
+      assert has_element?(staff_console, "#session-#{south_tab}")
+    end
+
+    test "gives a hidden tab's id no answer but the one an ended tab gets", ctx do
+      %{conn: conn, north: north} = ctx
+
+      north_admin = user(:admin, store: north)
+      south_tab = open_tab(conn, ctx.south_keeper)
+
+      {:ok, console, _html} = live(log_in(conn, north_admin), ~p"/browser_sessions")
+
+      # The button was never drawn; the event is pushed by hand.
+      render_click(console, "impersonate", %{"id" => south_tab})
+
+      assert render(console) =~ "That session has already ended."
+      refute_push_event(console, "impersonate", _payload)
+    end
+
+    test "leaves a hidden impersonation running when its id is revoked by hand", ctx do
+      %{conn: conn, admin: admin, north: north, south_keeper: keeper} = ctx
+
+      north_admin = user(:admin, store: north)
+      token = impersonation_token(conn, admin, keeper)
+      tab = new_tab()
+
+      {:ok, view, html} =
+        live(conn |> log_in(admin) |> impersonating(token) |> in_tab(tab), ~p"/products")
+
+      assert html =~ "You&#39;re impersonating #{keeper.name}"
+
+      # The kill switch goes through the same narrowed list as every other
+      # handler, so another store's admin cannot end somebody's impersonation
+      # by naming a tab they were never shown.
+      {:ok, console, _html} = live(log_in(conn, north_admin), ~p"/browser_sessions")
+      refute has_element?(console, "#session-#{tab["id"]}")
+
+      render_click(console, "revoke", %{"id" => tab["id"]})
+
+      assert render(console) =~ "That session has already ended."
+      assert render(view) =~ "You&#39;re impersonating #{keeper.name}"
+
+      {:ok, staff_console, _html} = live(log_in(conn, admin), ~p"/browser_sessions")
+      assert staff_console |> element("#session-#{tab["id"]}") |> render() =~ "Impersonating"
+    end
+
+    test "hides an impersonating tab whose real actor the viewer may not read", ctx do
+      %{conn: conn, admin: admin, north: north, north_keeper: keeper} = ctx
+
+      north_admin = user(:admin, store: north)
+      token = impersonation_token(conn, admin, keeper)
+      tab = new_tab()
+
+      {:ok, _view, _html} =
+        live(conn |> log_in(admin) |> impersonating(token) |> in_tab(tab), ~p"/products")
+
+      # The tab is acting as one of their own people, but whoever is at it is
+      # platform staff, whom this admin may not see.
+      {:ok, console, _html} = live(log_in(conn, north_admin), ~p"/browser_sessions")
+      refute has_element?(console, "#session-#{tab["id"]}")
+
+      {:ok, staff_console, _html} = live(log_in(conn, admin), ~p"/browser_sessions")
+      assert has_element?(staff_console, "#session-#{tab["id"]}")
+    end
+  end
+
   describe "the tenant a write happened under" do
     test "is on the audit row, without the action recording it", ctx do
       %{conn: conn, north_keeper: keeper, north: north, north_tent: tent} = ctx
@@ -264,6 +352,12 @@ defmodule ExampleWeb.TenancyScenarioTest do
     Product
     |> Ash.Query.filter(sku == ^sku)
     |> Ash.read_one!(authorize?: false, tenant: nil)
+  end
+
+  defp open_tab(conn, user) do
+    %{"id" => id} = tab = new_tab()
+    {:ok, _view, _html} = live(conn |> log_in(user) |> in_tab(tab), ~p"/products")
+    id
   end
 
   defp impersonation_token(conn, real_actor, target) do
