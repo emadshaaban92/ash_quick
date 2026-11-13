@@ -1187,6 +1187,14 @@ covers wiring them up.
   the `"ash_quick:pdf"` push event. A template that writes nothing
   prints from an update with
   `manual fn changeset, _context -> {:ok, changeset.data} end`.
+  A template's HTML is rendered by Chrome on the server, so escape every record
+  value it interpolates (`Phoenix.HTML.html_escape/1` after `to_string/1`, or
+  HEEx): unescaped, a record's `<img>` or `<iframe>` makes the server fetch
+  internal URLs or `file://` paths into the PDF. Never put a URL from a record
+  into `src`, a `<link>` `href` or CSS `url()`; Chrome fetches it escaped or
+  not, so inline the bytes as a `data:` URI. ChromicPDF's `offline: true`
+  blocks only http frame navigations (images, CSS and `file://` still load),
+  so it is a backstop, not the fix; see the `AshQuick.PrintTemplate` docs.
 - A file an action makes itself (no template, no renderer) reaches the tab that
   ran it when the action marks the record it returns:
   `Ash.Resource.put_metadata(record, :ash_quick_download, %{data: bytes,
