@@ -26,6 +26,7 @@ spark_locals_without_parens = [
   read_actions: 1,
   read_only: 1,
   read_only: 2,
+  record_context: 1,
   record_sensitive: 1,
   search_argument: 1,
   store: 1,

@@ -864,9 +864,13 @@ and what to write.
   reach the log actor-less. Say what made a write under `action_source` in
   the action's context — `context: %{action_source: "nightly_sync"}` — on any
   write a person did not make through a form, with an actor or without. It is a
-  convention, not enforced; other top-level string or atom values are kept too,
-  nested ones are not. To keep a write out of the log, use `exclude_actions` or
-  turn audit off — passing no actor does not.
+  convention, not enforced. No other context key reaches the row unless the
+  resource lists it in `record_context [:import_batch]` (writes and audited
+  reads alike), and a listed key is kept only when its value is an atom or a
+  string. Carrying a file or any other value between an action's own hooks
+  through its context therefore keeps it out of the log; listing it would not.
+  To keep a write out of the log, use `exclude_actions` or turn audit off —
+  passing no actor does not.
 
   ```elixir
   ash_quick do

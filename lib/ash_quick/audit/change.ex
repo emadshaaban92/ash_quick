@@ -24,8 +24,22 @@ defmodule AshQuick.Audit.Change do
   row's `context`. That is a convention rather than a requirement: nothing
   refuses a write without one. It is worth setting on any write a person did not
   make through a form, with an actor or without, because one key across a host
-  is one filter across its log. Any other top-level string or atom value in the
-  context is kept too; a nested value is not.
+  is one filter across its log.
+
+  Nothing else in the context is kept unless the resource asks for it. A
+  context holds whatever any part of the pipeline put there, Ash's own keys and
+  whatever an action carries between its hooks, so a row keeps `action_source`
+  and the top-level keys listed in `record_context`, and drops every other key
+  whatever its value:
+
+      audit do
+        record_context [:import_batch]
+      end
+
+  A listed key is kept only when its value is an atom or a string; a map, a
+  list or a struct under it is dropped, not flattened. `sensitive?` does not
+  apply to context, so a value that must stay out of the log stays out by not
+  being listed.
 
   There are two ways to keep a write out of the log: name its action in
   `exclude_actions`, or turn auditing off for the resource. Passing no actor is

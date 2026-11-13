@@ -63,6 +63,9 @@ defmodule AshQuick.Test.Credential do
     audit do
       record_sensitive [:masked_card_number]
       exclude_actions [:touch]
+      # Context keys a host chose to keep: the queue a job ran from, and the
+      # support ticket a write was made under.
+      record_context [:queue, :ticket]
     end
 
     display do
@@ -904,10 +907,11 @@ defmodule AshQuick.Test.Dossier do
   A confidential record whose opening is recorded.
 
   `:open` and `:browse` are listed in `read_actions`, so every record they
-  return gets an audit row; `:read`, the primary action, is not, and stands for
-  the lists and searches that must record nothing. `:open` takes a `sensitive?`
-  argument and one named in `record_sensitive`, so a read's arguments are
-  redacted on the same rule as a write's.
+  return gets an audit row, which keeps the `:ticket` it was opened under;
+  `:read`, the primary action, is not, and stands for the lists and searches
+  that must record nothing. `:open` takes a `sensitive?` argument and one named
+  in `record_sensitive`, so a read's arguments are redacted on the same rule as
+  a write's.
 
   Its read policy lets an actor see only their own dossiers, so a read the
   policies filter to nothing is a read that returns nothing.
@@ -987,6 +991,7 @@ defmodule AshQuick.Test.Dossier do
     audit do
       read_actions [:open, :browse]
       record_sensitive [:badge]
+      record_context [:ticket]
     end
 
     display do
@@ -1119,4 +1124,151 @@ defmodule AshQuick.Test.RefusedDossier do
       updated_by false
     end
   end
+end
+
+defmodule AshQuick.Test.JsonAuditStore do
+  @moduledoc """
+  An audit store that holds its rows as JSON, as a host's `jsonb` columns do.
+
+  ETS keeps any term, so `AshQuick.Test.AuditLog` takes a row that no database
+  column could. This store refuses one the way a `jsonb` column does — a value
+  `Jason` cannot encode, such as bytes that are not valid UTF-8, fails the
+  insert — so a row only reaches it if a real store would have taken it.
+  """
+  use Ash.Resource, domain: AshQuick.Test.AuditDomain, data_layer: Ash.DataLayer.Ets
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_v7_primary_key :id
+    attribute :resource_name, :atom, public?: true
+    attribute :resource_id, :uuid, public?: true
+    attribute :action_type, :atom, public?: true
+    attribute :action_name, :atom, public?: true
+    attribute :attributes, :map, public?: true
+    attribute :arguments, :map, public?: true
+    attribute :context, :map, public?: true
+    attribute :changes, :map, public?: true
+    attribute :actor_id, :uuid, public?: true
+    attribute :real_actor_id, :uuid, public?: true
+    attribute :ip, :string, public?: true
+    attribute :tenant, :uuid, public?: true
+  end
+
+  actions do
+    default_accept :*
+    defaults [:read]
+
+    create :create do
+      validate fn changeset, _context ->
+        Enum.reduce_while([:attributes, :arguments, :context, :changes], :ok, fn field, :ok ->
+          case Jason.encode(Ash.Changeset.get_attribute(changeset, field)) do
+            {:ok, _json} -> {:cont, :ok}
+            {:error, error} -> {:halt, {:error, field: field, message: Exception.message(error)}}
+          end
+        end)
+      end
+    end
+  end
+end
+
+defmodule AshQuick.Test.Report do
+  @moduledoc """
+  A record a file is made from, with auditing, bookkeeping stamps and
+  versioning all on.
+
+  `:export` is a download that only records that it happened: it accepts
+  nothing and writes no attribute. Its `before_transaction` hook makes the file
+  and carries it to the `after_action` hook through the changeset context,
+  under a key the resource does not list in `record_context`, and sets the
+  `:filename` argument; the `after_action` hook marks the record with
+  `:ash_quick_download`. The bytes are text, or not valid UTF-8 when `format`
+  is `"bin"`. `:open` is an audited read, and the resource lists no context
+  keys, so its rows keep `action_source` only.
+
+  Its update policy is a filter on the record: whoever created the report may
+  update it, and so may the actors it names in `reader_ids`.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.AuditDomain,
+    data_layer: Ash.DataLayer.Ets,
+    authorizers: [Ash.Policy.Authorizer],
+    extensions: [AshQuick]
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :title, :string, public?: true
+    attribute :reader_ids, {:array, :uuid}, public?: true, default: []
+  end
+
+  actions do
+    defaults [:read, create: [:title, :reader_ids], update: [:title]]
+
+    read :open do
+      get? true
+    end
+
+    update :export do
+      accept []
+      require_atomic? false
+
+      argument :format, :string, default: "csv"
+      # Set by the hook, never by the caller.
+      argument :filename, :string
+
+      change fn changeset, _context ->
+        changeset
+        |> Ash.Changeset.before_transaction(fn changeset ->
+          format = Ash.Changeset.get_argument(changeset, :format)
+
+          changeset
+          |> Ash.Changeset.force_set_argument(:filename, "report.#{format}")
+          |> Ash.Changeset.set_context(%{copy: AshQuick.Test.Report.bytes(format)})
+        end)
+        |> Ash.Changeset.after_action(fn changeset, record ->
+          {:ok,
+           Ash.Resource.put_metadata(record, :ash_quick_download, %{
+             data: changeset.context.copy,
+             filename: Ash.Changeset.get_argument(changeset, :filename),
+             content_type: "application/octet-stream"
+           })}
+        end)
+      end
+    end
+  end
+
+  policies do
+    policy action_type([:read, :create]) do
+      authorize_if always()
+    end
+
+    policy action_type(:update) do
+      authorize_if expr(inserted_by_id == ^actor(:id) or ^actor(:id) in reader_ids)
+    end
+  end
+
+  ash_quick do
+    audit do
+      store AshQuick.Test.JsonAuditStore
+      read_actions [:open]
+    end
+
+    display do
+      label :title
+    end
+
+    liveness do
+      enabled? false
+    end
+  end
+
+  @doc false
+  def bytes("bin"), do: <<0xFF, 0xFE, 0x00>> <> "zq-report-body"
+  def bytes(_format), do: "zq-report-body"
 end

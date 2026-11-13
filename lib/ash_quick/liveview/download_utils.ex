@@ -19,6 +19,12 @@ defmodule AshQuick.LiveView.DownloadUtils do
       string.
     * `:content_type` — the file's media type, a non-empty string.
 
+  An action that makes the file in one hook and marks the record in another
+  can carry it between them through the changeset context
+  (`Ash.Changeset.set_context(changeset, %{copy: bytes})`): the audit row keeps
+  only the context keys the resource lists in `record_context`, so the file
+  never reaches the log.
+
   AshQuick never sets the mark. Only a QuickView reads it: run from a row or
   bulk action, the details page or an action form, a marked record's file is
   pushed after the action has committed. An action called from anywhere else

@@ -53,7 +53,7 @@ defmodule AshQuick.Audit.Row do
       action_name: subject.action.name,
       attributes: storable(attributes(subject)),
       arguments: storable(subject.arguments),
-      context: simple_context(subject.context),
+      context: context(subject),
       actor_id: actor_id,
       # Never `nil` while there is an actor: the two are simply equal unless
       # someone was impersonating. An action with no actor and no scope behind
@@ -403,14 +403,21 @@ defmodule AshQuick.Audit.Row do
 
   defp storable(value), do: value
 
-  # A context holds whatever any part of the pipeline put there, including
-  # structs and pids that no column could take. The flat scalars are the part
-  # worth keeping — `action_source` above all, which says which surface wrote.
-  defp simple_context(%{} = context) do
-    context
-    |> Enum.filter(fn {_k, v} -> is_atom(v) or is_binary(v) end)
-    |> Enum.into(%{})
+  # Only the keys that were asked for. A context holds whatever any part of the
+  # pipeline put there — Ash's own bookkeeping, and anything an action carries
+  # between its own hooks, such as the bytes of a file it is about to hand back
+  # — and none of that was meant for a table that is never rotated. So nothing
+  # is kept because of what it is: `action_source`, which every QuickView
+  # stamps and which says which surface wrote, and the keys the resource lists
+  # in `record_context`. A listed key holding anything but an atom or a string
+  # is dropped rather than flattened, since no one listed what is inside it.
+  defp context(%{resource: resource, context: %{} = context}) do
+    for key <- Enum.uniq([:action_source | Declaration.record_context(resource)]),
+        {:ok, value} <- [Map.fetch(context, key)],
+        is_atom(value) or is_binary(value),
+        into: %{},
+        do: {key, value}
   end
 
-  defp simple_context(_context), do: %{}
+  defp context(_subject), do: %{}
 end

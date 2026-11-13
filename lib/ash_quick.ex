@@ -611,6 +611,19 @@ defmodule AshQuick do
   cannot list `read_actions`, and neither can a name that is not one of its
   read actions: `AshQuick.Audit.Verifier` refuses both.
 
+  A row's `context` keeps `action_source`, which every QuickView stamps, and
+  the top-level context keys the resource lists, on a write and on an audited
+  read alike:
+
+      audit do
+        record_context [:import_batch]
+      end
+
+  A listed key is kept only when its value is an atom or a string. Every other
+  key is dropped, whatever its value: an action's context also holds Ash's own
+  keys and whatever its hooks carry between them, such as a file it is about to
+  hand back. A resource that writes no row cannot list `record_context`.
+
   ## Impersonation
 
   A privileged actor browsing the application as somebody else. There is
@@ -972,6 +985,12 @@ defmodule AshQuick do
         default: AshQuick.Audit.Declaration.default_record_sensitive(),
         doc:
           "Attributes and arguments recorded in full despite carrying `sensitive?`. Every other sensitive value is replaced with `\"**redacted**\"` before any logger sees it."
+      ],
+      record_context: [
+        type: {:list, :atom},
+        default: AshQuick.Audit.Declaration.default_record_context(),
+        doc:
+          "Top-level keys of the action's context kept in the row's `context`, beside `action_source`, which is always kept. A listed key is kept only when its value is an atom or a string; every other key is dropped."
       ]
     ]
   }

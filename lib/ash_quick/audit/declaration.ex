@@ -14,6 +14,7 @@ defmodule AshQuick.Audit.Declaration do
   @record_sensitive []
   @exclude_actions []
   @read_actions []
+  @record_context []
 
   def default_enabled?, do: @enabled?
 
@@ -76,5 +77,15 @@ defmodule AshQuick.Audit.Declaration do
   # not audit its reads either.
   def read_actions(dsl_or_resource) do
     Spark.Dsl.Extension.get_opt(dsl_or_resource, @path, :read_actions, @read_actions)
+  end
+
+  def default_record_context, do: @record_context
+
+  # The top-level context keys an audit row keeps besides `action_source`, which
+  # `AshQuick.Audit.Row` keeps on every resource. Read for every row, a write's
+  # or an audited read's, including one on a resource that attaches the change
+  # by hand without entering the section at all — hence the default.
+  def record_context(dsl_or_resource) do
+    Spark.Dsl.Extension.get_opt(dsl_or_resource, @path, :record_context, @record_context)
   end
 end
