@@ -763,6 +763,38 @@ msgstr[3] "{%{count} مفاتيح}"
 msgstr[4] "{%{count} مفتاحًا}"
 msgstr[5] "{%{count} مفتاح}"
 
+#, elixir-format
+msgid "%{field} › any key"
+msgstr "%{field} › أي مفتاح"
+
+#, elixir-format
+msgid "Any key"
+msgstr "أي مفتاح"
+
+#, elixir-format
+msgid "Key"
+msgstr "المفتاح"
+
+#, elixir-format
+msgid "Key Exists"
+msgstr "المفتاح موجود"
+
+#, elixir-format
+msgid "Key Missing"
+msgstr "المفتاح غير موجود"
+
+#, elixir-format
+msgid "exists"
+msgstr "موجود"
+
+#, elixir-format
+msgid "is missing"
+msgstr "غير موجود"
+
+#, elixir-format
+msgid "type the key to look for"
+msgstr "اكتب المفتاح المطلوب البحث عنه"
+
 msgid "Accepts"
 msgstr ""
 
@@ -914,9 +946,6 @@ msgid "Inserted By"
 msgstr ""
 
 msgid "Ip"
-msgstr ""
-
-msgid "Key"
 msgstr ""
 
 msgid "Locale"

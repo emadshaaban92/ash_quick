@@ -46,6 +46,8 @@ defmodule AshQuick.Test.Filter.Ledger do
     attribute :note, :string, public?: true, filterable?: false
     # Shown masked, so a filter on it would give it back.
     attribute :pin, :string, public?: true, sensitive?: true
+    # A map is asked at a key path in SQL, which only AshPostgres has.
+    attribute :extra, :map, public?: true
   end
 
   actions do
