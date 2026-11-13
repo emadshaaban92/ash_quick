@@ -65,6 +65,18 @@ defmodule AshQuick.LiveView.CustomFilterTest do
       refute CustomFilter.filterable_field?(Ledger, :shouted)
     end
 
+    # Shown masked, and a filter would give it back: rows that start with
+    # "4", then "43", and so on.
+    test "leave out a sensitive field, of the resource or through a relationship" do
+      alias AshQuick.Test.Filter.Posting
+
+      refute :pin in offered(Ledger)
+      refute :pin in offered(Ledger, [:name, :pin])
+      refute CustomFilter.filterable_field?(Ledger, :pin)
+      refute CustomFilter.filterable_field?(Posting, {:ledger, :pin})
+      assert offered(Posting, ledger: :name, ledger: :pin) == [{:ledger, :name}]
+    end
+
     test "keep an expression calculation and the plain fields" do
       assert offered(Ledger) == [:id, :name, :whispered]
     end

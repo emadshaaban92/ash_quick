@@ -1,7 +1,7 @@
 defmodule AshQuick.Test.Filter.Domain do
   @moduledoc """
-  Holds `AshQuick.Test.Filter.Ledger`, the fixture for which fields the filter
-  form offers.
+  Holds `AshQuick.Test.Filter.Ledger` and `AshQuick.Test.Filter.Posting`, the
+  fixtures for which fields the filter form offers.
   """
   use Ash.Domain, validate_config_inclusion?: false
 
@@ -44,14 +44,43 @@ defmodule AshQuick.Test.Filter.Ledger do
     # Ash takes it only in a filter's one top-level `==`.
     attribute :reference, :string, public?: true, filterable?: :simple_equality
     attribute :note, :string, public?: true, filterable?: false
+    # Shown masked, so a filter on it would give it back.
+    attribute :pin, :string, public?: true, sensitive?: true
   end
 
   actions do
-    defaults [:read, create: [:name, :reference, :note]]
+    defaults [:read, create: [:name, :reference, :note, :pin]]
   end
 
   calculations do
     calculate :shouted, :string, AshQuick.Test.Filter.Shouted, public?: true
     calculate :whispered, :string, expr(string_downcase(name)), public?: true
+  end
+end
+
+defmodule AshQuick.Test.Filter.Posting do
+  @moduledoc """
+  A row of an `AshQuick.Test.Filter.Ledger`, so the ledger's fields are one
+  hop away through a belongs_to.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.Filter.Domain,
+    data_layer: Ash.DataLayer.Ets
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :memo, :string, public?: true
+  end
+
+  relationships do
+    belongs_to :ledger, AshQuick.Test.Filter.Ledger, public?: true
+  end
+
+  actions do
+    defaults [:read]
   end
 end

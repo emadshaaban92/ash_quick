@@ -21,16 +21,27 @@ defmodule ExampleWeb.SortScenarioTest do
   @export_timeout to_timeout(second: 5)
 
   setup_all do
-    owners = Map.new(["Zed", "Amy", "Kim"], &{&1, Ash.create!(Owner, %{name: &1})})
+    # The sensitive badges and serials order the rows otherwise than the
+    # list does, so a sort by one would show.
+    owners =
+      Map.new(
+        [{"Zed", "b1"}, {"Amy", "b3"}, {"Kim", "b2"}],
+        fn {name, badge} -> {name, Ash.create!(Owner, %{name: name, badge: badge})} end
+      )
 
-    for {code, rank, owner} <- [
-          {"Alpha", 3, "Zed"},
-          {"Bravo", 1, "Amy"},
-          {"Charlie", 2, "Kim"},
-          {"Delta", 4, "Amy"}
+    for {code, rank, serial, owner} <- [
+          {"Alpha", 3, "s1", "Zed"},
+          {"Bravo", 1, "s2", "Amy"},
+          {"Charlie", 2, "s3", "Kim"},
+          {"Delta", 4, "s4", "Amy"}
         ] do
       SortedRows
-      |> Ash.Changeset.for_create(:seed, %{code: code, rank: rank, owner_id: owners[owner].id})
+      |> Ash.Changeset.for_create(:seed, %{
+        code: code,
+        rank: rank,
+        serial: serial,
+        owner_id: owners[owner].id
+      })
       |> Ash.create!(authorize?: false)
     end
 
@@ -45,8 +56,9 @@ defmodule ExampleWeb.SortScenarioTest do
     test "unsaid, are the columns Ash sorts, through relationships too", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/test/sorted_rows")
 
-      # Not the list, the Elixir calculation, nor the path through a
-      # relationship marked `sortable? false`.
+      # Not the list, the Elixir calculation, a sensitive field, of its own
+      # or through a relationship, nor the path through a relationship marked
+      # `sortable? false`.
       assert sort_links(view) == ["code", "rank", "negated", "owner.name"]
     end
 
@@ -61,7 +73,16 @@ defmodule ExampleWeb.SortScenarioTest do
         Exception.message(
           assert_raise(ArgumentError, fn ->
             options(
-              sortable: [:shouted, :tags, :owner, :inserted, [keeper: :name], [owner: :name]]
+              sortable: [
+                :shouted,
+                :tags,
+                :owner,
+                :inserted,
+                :serial,
+                [owner: :badge],
+                [keeper: :name],
+                [owner: :name]
+              ]
             )
           end)
         )
@@ -72,7 +93,27 @@ defmodule ExampleWeb.SortScenarioTest do
       assert message =~ "* :owner is not a field Ash can sort by"
       assert message =~ "* :inserted is not one of the list's fields"
       assert message =~ "* [keeper: :name] is not a field Ash can sort by"
+      assert message =~ "* :serial is `sensitive?`; the order of the rows would give it away"
+
+      assert message =~
+               "* [owner: :badge] is `sensitive?`; the order of the rows would give it away"
+
       refute message =~ "* [owner: :name]"
+    end
+
+    # It orders every read of the list, and breaks the ties of a column the
+    # visitor sorts by, so it would give the masked value away as well.
+    test "leave no sensitive field to `sort_by` either" do
+      message =
+        Exception.message(
+          assert_raise(ArgumentError, fn -> options([], sort_by: [code: :asc, serial: :desc]) end)
+        )
+
+      assert message =~ "sorts its list by `sensitive?` fields"
+      assert message =~ ":serial"
+      refute message =~ ":code"
+
+      assert %Options{sort_by: [code: :asc]} = options([], sort_by: [code: :asc])
     end
 
     test "can be none" do
@@ -179,7 +220,16 @@ defmodule ExampleWeb.SortScenarioTest do
   end
 
   describe "a sort the list does not offer" do
-    for column <- ["shouted", "tags", "keeper.name", "id", "nonexistent", ""] do
+    for column <- [
+          "shouted",
+          "tags",
+          "serial",
+          "owner.badge",
+          "keeper.name",
+          "id",
+          "nonexistent",
+          ""
+        ] do
       test "?sort=#{column} is dropped", %{conn: conn} do
         {:ok, view, _html} = live(conn, "/test/sorted_rows?sort=-#{unquote(column)}")
 
@@ -197,11 +247,27 @@ defmodule ExampleWeb.SortScenarioTest do
     end
   end
 
-  defp options(list_opts) do
-    Options.new(__MODULE__.SomeQuickView, SortedRows,
-      resource: SortedRows,
-      list:
-        [fields: [:code, :tags, :shouted, :owner, [owner: :name], [keeper: :name]]] ++ list_opts
+  defp options(list_opts, opts \\ []) do
+    Options.new(
+      __MODULE__.SomeQuickView,
+      SortedRows,
+      opts ++
+        [
+          resource: SortedRows,
+          list:
+            [
+              fields: [
+                :code,
+                :tags,
+                :shouted,
+                :owner,
+                :serial,
+                [owner: :name],
+                [owner: :badge],
+                [keeper: :name]
+              ]
+            ] ++ list_opts
+        ]
     )
   end
 
