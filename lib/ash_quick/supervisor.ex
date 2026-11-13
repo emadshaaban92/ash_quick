@@ -25,7 +25,9 @@ defmodule AshQuick.Supervisor do
 
       {AshQuick, pubsub_server: MyApp.PubSub}
 
-  Beside it runs `AshQuick.Storage.Sweeper`, which deletes exports past
+  Beside it runs `AshQuick.Impersonation.Revocations`, which remembers the
+  impersonations ended from the console so their tokens stop resolving, on the
+  same PubSub server, and `AshQuick.Storage.Sweeper`, which deletes exports past
   `:export_retention`.
 
   It is not an OTP application of its own, started by `mod:` before the
@@ -47,6 +49,7 @@ defmodule AshQuick.Supervisor do
   def init(opts) do
     children = [
       {AshQuick.BrowserSessionPresence, opts},
+      {AshQuick.Impersonation.Revocations, opts},
       AshQuick.Storage.Sweeper
     ]
 

@@ -22,6 +22,13 @@ defmodule AshQuick.Impersonation.Token do
   it grants no more than the session that minted it already had, it is no more
   sensitive than the session cookie itself.
 
+  Being stateless, a token cannot be taken back by forgetting it, so ending an
+  impersonation from outside the tab does not ask the client to drop it: the
+  impersonation's id is recorded in `AshQuick.Impersonation.Revocations`, and
+  `resolve/2` refuses a token naming a recorded one. A tab that is still
+  connected when its token reaches `:impersonation_max_age` is ended then, by
+  `AshQuick.LiveView.Mount`, rather than at its next mount.
+
   ## What a host wires
 
   Not the action the two ends authorize against: AshQuick generates that on the
@@ -55,6 +62,7 @@ defmodule AshQuick.Impersonation.Token do
 
   alias AshQuick.Config
   alias AshQuick.Impersonation
+  alias AshQuick.Impersonation.Revocations
 
   # Namespaced independently of the token's payload so a host rotating its
   # endpoint secret is the only thing that invalidates outstanding tokens.
@@ -87,8 +95,9 @@ defmodule AshQuick.Impersonation.Token do
   to the same session rather than looking like a new one.
 
   `nil` covers every way this can legitimately come up empty — no token, a tab
-  that outlived it, a token minted for somebody else, a target that has since
-  been deleted or become unimpersonatable — because all of them mean the same
+  that outlived it, a token minted for somebody else, an impersonation ended
+  from the console (`AshQuick.Impersonation.Revocations`), a target that has
+  since been deleted or become unimpersonatable — because all of them mean the same
   thing to the caller: this tab is nobody but `real_actor`.
 
   The policy is re-run here rather than trusted from the token, so a privilege
@@ -103,6 +112,7 @@ defmodule AshQuick.Impersonation.Token do
     with {:ok, %{real_actor_id: ^real_actor_id} = claims} <-
            Phoenix.Token.verify(endpoint!(), @salt, token, max_age: max_age()),
          %{actor_id: actor_id, session_id: session_id, started_at: started_at} <- claims,
+         false <- Revocations.revoked?(session_id),
          {:ok, target} <- Ash.get(resource, actor_id, actor: real_actor),
          true <- Ash.can?({target, Impersonation.action()}, real_actor) do
       {target, %{id: session_id, started_at: started_at}}
