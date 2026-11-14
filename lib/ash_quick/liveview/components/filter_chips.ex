@@ -8,6 +8,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
   alias AshQuick.LiveView.Components.FieldValue
   alias AshQuick.LiveView.Components.FilterForm
   alias AshQuick.LiveView.CustomFilter
+  alias AshQuick.LiveView.MapFilter
   alias AshQuick.LiveView.QuickField
   alias AshQuick.LiveView.URLParams
 
@@ -203,10 +204,16 @@ defmodule AshQuick.LiveView.Components.FilterChips do
 
   # "Price >", "Code starts with", "Brand › Name contains": the field as its
   # column names it, or as the form does when the list shows no column for it
-  # or reaches it through a relationship, and its operator.
-  defp leaf_label(%CustomFilter{field_name: name, operator: operator}, labels, resource),
+  # or reaches it through a relationship, and its operator. A map row names
+  # its key path too: "Changes › price › to >", "Changes › any key contains".
+  defp leaf_label(%CustomFilter{field_name: name, operator: operator} = leaf, labels, resource),
     do:
-      "#{FilterForm.field_label(name, labels, resource)} #{FilterForm.operator_phrase(operator)}"
+      "#{field_label(leaf, FilterForm.field_label(name, labels, resource))} #{FilterForm.operator_phrase(operator)}"
+
+  defp field_label(%CustomFilter{path: path}, label) when is_list(path),
+    do: MapFilter.path_label(label, path)
+
+  defp field_label(_leaf, label), do: label
 
   # The value reads as `FieldValue` renders one of its field, as a column with
   # no widget of its own shows it, labelled by the resource holding the
@@ -220,11 +227,19 @@ defmodule AshQuick.LiveView.Components.FilterChips do
   attr :resource, :atom, default: nil
   attr :scope, :any, default: nil
 
-  # Is Empty and Is Not Empty compare with nothing, so their phrase is the
-  # whole chip.
+  # Is Empty and Is Not Empty compare with nothing, and so do a map row's Key
+  # Exists and Key Missing, so their phrase is the whole chip.
   defp chip_value(%{leaf: %{operator: operator}} = assigns)
-       when operator in ~w(is_nil is_not_nil) do
+       when operator in ~w(is_nil is_not_nil has_key missing_key) do
     ~H""
+  end
+
+  # A map row's value is compared with whatever the map holds, of any type,
+  # so it reads as typed.
+  defp chip_value(%{leaf: %{path: path}} = assigns) when is_list(path) do
+    ~H"""
+    <span class="font-semibold" dir="auto">{CustomFilter.as_written(@leaf.value)}</span>
+    """
   end
 
   # Any Of and Has Any Of read their values one after another, each as its

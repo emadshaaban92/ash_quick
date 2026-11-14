@@ -427,7 +427,8 @@ defmodule AshQuick.LiveView.ListUtils do
   # And so is a row comparing by an operator the form does not offer, or with
   # a value its operator cannot take, `CustomFilter.readable?/1`: Ash's filter
   # input reads any name where an operator goes, and a list where one value
-  # goes as something else again.
+  # goes as something else again. And one holding a key path on a field that
+  # is no map, or none on a map, which the form never writes either.
   #
   # A root left with no rows, as one a hand-written link wrote as a single
   # row is, leaves no filter at all.
@@ -486,14 +487,25 @@ defmodule AshQuick.LiveView.ListUtils do
 
   # Whether `row` is refused by its operator: one the form does not offer, or
   # with a value it cannot take, Is Empty on a field hidden on some rows, On
-  # Day on no day, and Has Any Of on a field holding no list.
+  # Day on no day, and Has Any Of on a field holding no list. Or by its key
+  # path: one on a field that is no map, or none on one that is.
   defp refused_row?(row, partly_hidden, by_name, scope) do
-    case CustomFilter.readable?(row) and CustomFilter.value_shape(row.operator) do
+    case CustomFilter.readable?(row) and fits?(row, by_name) and
+           CustomFilter.value_shape(row.operator) do
       false -> true
       :none -> row.field_name in partly_hidden
       :day -> unreadable_day?(row, scope)
       :list -> row.operator == "has_any" and not list_row?(row, by_name)
       _ -> false
+    end
+  end
+
+  # Whether a row holds a key path exactly when its field is a map. A name the
+  # list does not offer is refused with its field.
+  defp fits?(%CustomFilter{field_name: name} = row, by_name) do
+    case by_name[name] do
+      nil -> true
+      field -> CustomFilter.fits?(row, field)
     end
   end
 

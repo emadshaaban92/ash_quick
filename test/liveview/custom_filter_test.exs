@@ -77,6 +77,12 @@ defmodule AshQuick.LiveView.CustomFilterTest do
       assert offered(Posting, ledger: :name, ledger: :pin) == [{:ledger, :name}]
     end
 
+    # Asked at a key path as SQL/JSON, which only Postgres reads.
+    test "leave out a map outside AshPostgres" do
+      refute :extra in offered(Ledger)
+      refute CustomFilter.filterable_field?(Ledger, :extra)
+    end
+
     test "keep an expression calculation and the plain fields" do
       assert offered(Ledger) == [:id, :name, :whispered]
     end
@@ -296,9 +302,13 @@ defmodule AshQuick.LiveView.CustomFilterTest do
     # is one a link reaches and the form cannot show. A `Money` is offered
     # equality and comparisons, as a number is; the package has no AshMoney
     # to build one with.
+    #
+    # A map, offered on Postgres only, is asked at a key path, so its rows are
+    # read holding one.
     test "reads every operator the form offers, and only those" do
       enum = %{type: Ash.Type.Atom, constraints: [one_of: [:a, :b]]}
       enums = %{type: {:array, Ash.Type.Atom}, constraints: [items: [one_of: [:a, :b]]]}
+      map = %{type: Ash.Type.Map, constraints: []}
 
       fields =
         [enum, enums] ++
@@ -310,6 +320,17 @@ defmodule AshQuick.LiveView.CustomFilterTest do
         value = if CustomFilter.value_shape(operator) == :list, do: ["x"], else: "x"
         assert CustomFilter.readable?(%CustomFilter{row("f") | operator: operator, value: value})
       end
+
+      for operator <- FilterForm.offered_operators(map) do
+        assert CustomFilter.readable?(%CustomFilter{
+                 row("f")
+                 | operator: operator,
+                   value: "x",
+                   path: ["k"]
+               })
+      end
+
+      offered = Enum.uniq(offered ++ FilterForm.offered_operators(map))
 
       assert Enum.sort(offered) == Enum.sort(CustomFilter.operators())
     end
@@ -430,5 +451,50 @@ defmodule AshQuick.LiveView.CustomFilterTest do
     filter = group([%CustomFilter{row("stage") | operator: "in", value: ["a", 2]}])
 
     assert CustomFilter.values(filter) == ["a", "2"]
+  end
+
+  describe "a row on a map" do
+    alias AshQuick.LiveView.MapFilter
+
+    defp map_row(path, operator, value \\ "x"),
+      do: %CustomFilter{row("changes") | path: path, operator: operator, value: value}
+
+    test "keeps its key path through the URL" do
+      filter = group([map_row(["price", "to"], "gt", "10")])
+
+      assert [%CustomFilter{path: ["price", "to"], operator: "gt", value: "10"}] =
+               filter
+               |> CustomFilter.to_string!()
+               |> CustomFilter.from_string()
+               |> Map.get(:children)
+    end
+
+    test "is read only with keys for a path and an operator a map row offers" do
+      assert CustomFilter.readable?(map_row([], "contains"))
+      assert CustomFilter.readable?(map_row(["k"], "has_key", nil))
+      refute CustomFilter.readable?(map_row([], "has_key", nil))
+      refute CustomFilter.readable?(map_row(["k"], "in", ["x"]))
+      refute CustomFilter.readable?(map_row(["k"], "is_nil", nil))
+      refute CustomFilter.readable?(map_row(["k"], "equals", ["x"]))
+      # A key the form, typing keys with dots and trimming them, could not
+      # write back as it is.
+      refute CustomFilter.readable?(map_row(["a.b"], "equals"))
+      refute CustomFilter.readable?(map_row([" a"], "equals"))
+      refute CustomFilter.readable?(map_row([""], "equals"))
+      # And a row on any other field never asks whether a key is there.
+      refute CustomFilter.readable?(%CustomFilter{row("code") | operator: "has_key"})
+    end
+
+    test "reads a key path typed with dots" do
+      assert MapFilter.parse_path(" price . to ") == ["price", "to"]
+      assert MapFilter.parse_path("price..to.") == ["price", "to"]
+      assert MapFilter.parse_path("") == []
+      assert MapFilter.path_text(["price", "to"]) == "price.to"
+    end
+
+    test "builds no filter from a row with nothing to compare" do
+      assert MapFilter.build(:changes, ["k"], "equals", "  ") == nil
+      assert MapFilter.build(:changes, [], "has_key", nil) == nil
+    end
   end
 end
