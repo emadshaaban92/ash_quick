@@ -6,7 +6,7 @@ defmodule Example.Catalog.ProductImage do
   directly because there is per-image metadata to keep. That is the convention
   `AshQuick.AshTypes.Attachment` documents — a field with nothing beyond
   storage is typed `:attachment`, one with more is an embed around it — and
-  `AshQuick.LiveView.FormUtils` wires the upload through the embed's nested
+  `AshQuick.LiveView.FormUploads` wires the upload through the embed's nested
   form either way.
   """
   use Ash.Resource, data_layer: :embedded

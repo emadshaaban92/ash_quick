@@ -39,7 +39,7 @@ defmodule AshQuick.AshTypes.Attachment do
         end
       end
 
-  `AshQuick.LiveView.FormUtils` handles two wiring shapes:
+  `AshQuick.LiveView.FormUploads` handles two wiring shapes:
 
     1. A field typed `:attachment` directly (or `{:array, :attachment}`)
        — constraints are read from the field itself
@@ -56,7 +56,7 @@ defmodule AshQuick.AshTypes.Attachment do
   ## Notes
 
     * `:accepts` is a media class, not a format. The extensions a class
-      offers are listed in `AshQuick.LiveView.FormUtils`, and `:image`
+      offers are listed in `AshQuick.LiveView.AttachmentUpload`, and `:image`
       deliberately excludes HEIC: browsers don't render it uniformly
       and AshQuick does not transcode.
     * Gating here is extension-based: a picked file's name must end in one

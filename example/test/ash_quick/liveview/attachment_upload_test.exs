@@ -1,4 +1,4 @@
-defmodule AshQuick.LiveView.FormUtilsTest do
+defmodule AshQuick.LiveView.AttachmentUploadTest do
   @moduledoc """
   What a presign produces: the serving key the record will hold, the write key
   the browser is sent to, and the custody row the host opened for it.
@@ -15,6 +15,7 @@ defmodule AshQuick.LiveView.FormUtilsTest do
 
   import Example.Test.PresignHelpers
 
+  alias AshQuick.LiveView.AttachmentUpload
   alias AshQuick.LiveView.FormUtils
   alias Example.Uploads.FileObject
   alias Example.Uploads.Quarantine
@@ -28,7 +29,7 @@ defmodule AshQuick.LiveView.FormUtilsTest do
       entry = entry(uuid: "abc-123", client_name: "photo.jpg")
 
       {:ok, %{key: key, url: url, uploader: "S3"}, _socket} =
-        FormUtils.presign_attachment_upload(entry, socket(), @image_field)
+        AttachmentUpload.presign_attachment_upload(entry, socket(), @image_field)
 
       # The bytes go to quarantine; the record stores the serving key, and the
       # row the host opened is keyed by that one.
@@ -45,7 +46,7 @@ defmodule AshQuick.LiveView.FormUtilsTest do
       entry = entry(uuid: "abc-123", client_name: "My Vacation Photo (1).JPG")
 
       {:ok, %{key: key}, _socket} =
-        FormUtils.presign_attachment_upload(entry, socket(), @image_field)
+        AttachmentUpload.presign_attachment_upload(entry, socket(), @image_field)
 
       assert key == Quarantine.key("public/products/abc-123-my-vacation-photo-1.jpg")
     end
@@ -54,7 +55,7 @@ defmodule AshQuick.LiveView.FormUtilsTest do
       entry = entry(uuid: "abc-123", client_name: "الصورة.png", client_type: "image/png")
 
       {:ok, %{key: key}, _socket} =
-        FormUtils.presign_attachment_upload(entry, socket(), @image_field)
+        AttachmentUpload.presign_attachment_upload(entry, socket(), @image_field)
 
       assert key == Quarantine.key("public/products/abc-123-file.png")
     end
@@ -64,7 +65,7 @@ defmodule AshQuick.LiveView.FormUtilsTest do
       entry = entry(uuid: "xyz-789", client_name: "evidence.mp4", client_type: "video/mp4")
 
       {:ok, %{key: key}, _socket} =
-        FormUtils.presign_attachment_upload(entry, socket, @evidence_field)
+        AttachmentUpload.presign_attachment_upload(entry, socket, @evidence_field)
 
       assert key == Quarantine.key("private/categories/xyz-789-evidence.mp4")
     end
@@ -76,7 +77,7 @@ defmodule AshQuick.LiveView.FormUtilsTest do
         entry(uuid: "abc", client_name: "x.png", client_type: "text/html", client_size: 4_242)
 
       {:ok, %{url: url, content_type: "image/png"}, _socket} =
-        FormUtils.presign_attachment_upload(entry, socket(), @image_field)
+        AttachmentUpload.presign_attachment_upload(entry, socket(), @image_field)
 
       # `max_file_size` is a browser-side cap. The length and the type are the
       # server-side ones, and only because they are signed *headers* — S3
@@ -103,7 +104,7 @@ defmodule AshQuick.LiveView.FormUtilsTest do
         entry = entry(uuid: "evil-1", client_name: name, client_type: "image/jpeg")
 
         assert {:error, %{error: "not_accepted"}, _socket} =
-                 FormUtils.presign_attachment_upload(entry, socket(), @image_field)
+                 AttachmentUpload.presign_attachment_upload(entry, socket(), @image_field)
       end
 
       # Refused before the host was told anything was arriving.
@@ -114,7 +115,7 @@ defmodule AshQuick.LiveView.FormUtilsTest do
       entry = entry(uuid: "abc", client_name: "SCAN.PDF", client_type: "")
 
       {:ok, %{content_type: "application/pdf"}, _socket} =
-        FormUtils.presign_attachment_upload(
+        AttachmentUpload.presign_attachment_upload(
           entry,
           socket(),
           Keyword.put(@image_field, :accepts, [:document])
@@ -128,7 +129,7 @@ defmodule AshQuick.LiveView.FormUtilsTest do
         entry(uuid: "xyz-789", client_name: "../../public/evil.mp4", client_type: "video/mp4")
 
       {:ok, %{key: key}, _socket} =
-        FormUtils.presign_attachment_upload(entry, socket, @evidence_field)
+        AttachmentUpload.presign_attachment_upload(entry, socket, @evidence_field)
 
       # `Path.basename` discards every directory component, so the object stays
       # under `private/` and never lands in the anonymously-readable `public/` —
@@ -145,7 +146,8 @@ defmodule AshQuick.LiveView.FormUtilsTest do
       socket = socket(record: product, scope: Example.Scope.new(actor: admin))
       entry = entry(uuid: "cap-1", client_name: "hoodie.jpg")
 
-      {:ok, _meta, _socket} = FormUtils.presign_attachment_upload(entry, socket, @image_field)
+      {:ok, _meta, _socket} =
+        AttachmentUpload.presign_attachment_upload(entry, socket, @image_field)
 
       assert {:ok, [file_object]} =
                FileObject.by_keys(["public/products/cap-1-hoodie.jpg"], actor: admin)
@@ -164,7 +166,8 @@ defmodule AshQuick.LiveView.FormUtilsTest do
     test "a create form has no record to point at yet", %{admin: admin} do
       entry = entry(uuid: "new-1", client_name: "hoodie.jpg")
 
-      {:ok, _meta, _socket} = FormUtils.presign_attachment_upload(entry, socket(), @image_field)
+      {:ok, _meta, _socket} =
+        AttachmentUpload.presign_attachment_upload(entry, socket(), @image_field)
 
       assert {:ok, [file_object]} =
                FileObject.by_keys(["public/products/new-1-hoodie.jpg"], actor: admin)
@@ -180,7 +183,7 @@ defmodule AshQuick.LiveView.FormUtilsTest do
       entry = entry(uuid: "refused-1", client_name: "photo.jpg")
 
       assert {:error, %{error: "upload_refused"}, _socket} =
-               FormUtils.presign_attachment_upload(
+               AttachmentUpload.presign_attachment_upload(
                  entry,
                  socket(),
                  Keyword.put(@image_field, :visibility, :public)
@@ -193,18 +196,35 @@ defmodule AshQuick.LiveView.FormUtilsTest do
     test "strips directory components and `..` segments" do
       # `Path.basename` keeps only the final segment, so directory components
       # (including any `..`) never survive into the key.
-      assert FormUtils.safe_filename("../../public/evil.html") == "evil.html"
-      assert FormUtils.safe_filename("/etc/passwd") == "passwd"
-      assert FormUtils.safe_filename("a/b/c.png") == "c.png"
+      assert AttachmentUpload.safe_filename("../../public/evil.html") == "evil.html"
+      assert AttachmentUpload.safe_filename("/etc/passwd") == "passwd"
+      assert AttachmentUpload.safe_filename("a/b/c.png") == "c.png"
     end
 
     test "slugifies unsafe characters and lowercases" do
-      assert FormUtils.safe_filename("My Vacation Photo (1).JPG") == "my-vacation-photo-1.jpg"
+      assert AttachmentUpload.safe_filename("My Vacation Photo (1).JPG") ==
+               "my-vacation-photo-1.jpg"
     end
 
     test "falls back to a generic name for empty/non-binary input" do
-      assert FormUtils.safe_filename("الصورة.png") == "file.png"
-      assert FormUtils.safe_filename(nil) == "file"
+      assert AttachmentUpload.safe_filename("الصورة.png") == "file.png"
+      assert AttachmentUpload.safe_filename(nil) == "file"
+    end
+  end
+
+  # Hosts that called these on `FormUtils` before they moved still can.
+  describe "the FormUtils delegates" do
+    test "reach the same functions" do
+      entry = entry(uuid: "abc-123", client_name: "photo.jpg")
+
+      assert {:ok, %{serving_key: key}, _socket} =
+               FormUtils.presign_attachment_upload(entry, socket(), @image_field)
+
+      assert key == "public/products/abc-123-photo.jpg"
+      assert FormUtils.safe_filename("a/b/c.png") == AttachmentUpload.safe_filename("a/b/c.png")
+
+      assert FormUtils.upload_error_message(:too_large) ==
+               AttachmentUpload.upload_error_message(:too_large)
     end
   end
 
