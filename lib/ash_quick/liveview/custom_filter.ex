@@ -2,11 +2,12 @@ defmodule AshQuick.LiveView.CustomFilter do
   @moduledoc false
   @derive {JSON.Encoder, except: [:uuid]}
   @enforce_keys [:uuid, :operator]
-  defstruct [:uuid, :operator, :field_name, :value, :children]
+  defstruct [:uuid, :operator, :field_name, :value, :children, :path]
 
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.FilterField
   alias AshQuick.LiveView.LocalDatetime
+  alias AshQuick.LiveView.MapFilter
   alias AshQuick.LiveView.Utils
 
   require Ash.Expr
@@ -20,6 +21,10 @@ defmodule AshQuick.LiveView.CustomFilter do
   # operator, a field, or a relationship to filter through.
   @operators ~w(equals not_equals gt gte lt lte contains not_contains starts_with ends_with
                 in has_any on) ++ @valueless
+
+  # The operators a row on a map asks whether its key is there by, which
+  # compare with no value either. Read only on such a row.
+  @key_operators MapFilter.key_operators()
 
   # And the ones a group joins its rows by.
   @group_operators ~w(and or)
@@ -90,9 +95,18 @@ defmodule AshQuick.LiveView.CustomFilter do
     filter
   end
 
-  @doc "A row comparing `leaf`'s field by its operator, with no value yet."
-  def new_leaf(%{field_name: field_name, operator: operator}) do
-    %__MODULE__{uuid: Ash.UUID.generate(), field_name: field_name, operator: operator, value: ""}
+  @doc """
+  A row comparing `leaf`'s field by its operator, with no value yet: one on
+  a map, whose `leaf` holds a `:path`, starts with no key.
+  """
+  def new_leaf(%{field_name: field_name, operator: operator} = leaf) do
+    %__MODULE__{
+      uuid: Ash.UUID.generate(),
+      field_name: field_name,
+      operator: operator,
+      value: "",
+      path: Map.get(leaf, :path)
+    }
   end
 
   @doc "The node `uuid` names anywhere in `filter`'s tree, or `nil`."
@@ -174,18 +188,20 @@ defmodule AshQuick.LiveView.CustomFilter do
   def applied?(%__MODULE__{field_name: field_name, operator: operator, value: value}),
     do:
       is_binary(field_name) and is_binary(operator) and
-        (operator in @valueless or has_value?(value))
+        (value_shape(operator) == :none or has_value?(value))
 
   defp has_value?(value) when is_list(value), do: Enum.any?(value, &has_value?/1)
   defp has_value?(value), do: value not in [nil, ""]
 
   @doc """
   What a row's value is, by its operator: `:none` for Is Empty and Is Not
-  Empty, which compare with nothing; `:list` for Any Of and Has Any Of;
+  Empty, and a map row's Key Exists and Key Missing, which compare with
+  nothing; `:list` for Any Of and Has Any Of;
   `:day` for On Day, a date naming a whole day of a timestamp; and `:scalar`
   for the rest.
   """
   def value_shape(operator) when operator in @valueless, do: :none
+  def value_shape(operator) when operator in @key_operators, do: :none
   def value_shape(operator) when operator in ~w(in has_any), do: :list
   def value_shape("on"), do: :day
   def value_shape(_operator), do: :scalar
@@ -302,7 +318,7 @@ defmodule AshQuick.LiveView.CustomFilter do
     |> Enum.reject(
       &(&1.name in belongs_to_source_attributes or AshQuick.Info.sensitive?(resource, &1.name))
     )
-    |> Enum.filter(&(&1.public? and filterable?(&1) and offered_type?(&1)))
+    |> Enum.filter(&(&1.public? and filterable?(&1) and offered_type?(resource, &1)))
   end
 
   # `filterable? :simple_equality` lets Ash compare a field only once in a
@@ -424,11 +440,21 @@ defmodule AshQuick.LiveView.CustomFilter do
   # A field with a fixed set of values is offered whatever its type: an
   # `Ash.Type.Enum` is a module of its own, so no list of types could name it.
   # So is a list of such values, which Has Any Of asks about. An atom without
-  # `one_of` is offered too, and typed in.
-  defp offered_type?(field),
+  # `one_of` is offered too, and typed in. So is a map on Postgres, whose rows
+  # name a key path inside it (`MapFilter`).
+  defp offered_type?(resource, field),
     do:
       EnumOptions.kind(field) in [:single, :array] or field.type in @offered_types or
-        money?(field)
+        money?(field) or MapFilter.offered?(resource, field)
+
+  @doc """
+  Whether `field`, a `FilterField`, is a map a row names a key path inside,
+  as `MapFilter` reads it.
+  """
+  def map_field?(%FilterField{resource: resource, field: field}),
+    do: MapFilter.offered?(resource, field)
+
+  def map_field?(_field), do: false
 
   @doc """
   Whether `field` holds a `Money`, as AshMoney's type stores it by default: as
@@ -504,7 +530,17 @@ defmodule AshQuick.LiveView.CustomFilter do
   which a zone the time zone database cannot load has none of. The row says
   so, rather than the read refusing the whole filter.
   """
-  def cast_row_value(field, operator, value, timezone \\ AshQuick.Config.timezone()) do
+  def cast_row_value(field, operator, value, timezone \\ AshQuick.Config.timezone())
+
+  # A map row's value is compared with whatever the map holds at its key, of
+  # any type, so it is kept as typed.
+  def cast_row_value(%{type: type} = field, operator, value, timezone) do
+    if MapFilter.map_type?(type),
+      do: {:ok, if(value_shape(operator) != :none, do: value)},
+      else: cast_typed(field, operator, value, timezone)
+  end
+
+  defp cast_typed(field, operator, value, timezone) do
     case value_shape(operator) do
       :none ->
         {:ok, nil}
@@ -622,13 +658,25 @@ defmodule AshQuick.LiveView.CustomFilter do
   end
 
   defp readable_row?(%__MODULE__{field_name: name} = row, fields),
-    do: is_binary(name) and readable?(row) and (fields == :any or Map.has_key?(fields, name))
+    do:
+      is_binary(name) and readable?(row) and
+        (fields == :any or (Map.has_key?(fields, name) and fits?(row, fields[name])))
+
+  @doc """
+  Whether `row` names a key path exactly when `field`, the `FilterField` it
+  names, is a map: a row on a map always holds one, `[]` for any key, and a
+  row on any other field none. A link can pair either with the other.
+  """
+  def fits?(%__MODULE__{path: path}, field), do: is_list(path) == map_field?(field)
 
   @doc """
   Whether `row` compares by an operator `FilterForm` offers, with a value
   that operator can take: none, one value, or for Any Of and Has Any Of a
-  list of them. `build_ash_filter/2` reads no other row.
+  list of them. A row on a map holds a key path, and is read by
+  `MapFilter.readable?/1`. `build_ash_filter/2` reads no other row.
   """
+  def readable?(%__MODULE__{path: path} = row) when not is_nil(path), do: MapFilter.readable?(row)
+
   def readable?(%__MODULE__{operator: operator, value: value}) when operator in @operators do
     case value_shape(operator) do
       :none -> true
@@ -642,7 +690,7 @@ defmodule AshQuick.LiveView.CustomFilter do
   @doc false
   # The operators a row is read by, and the types a field is offered by, for
   # the test holding them to what `FilterForm` offers.
-  def operators, do: @operators
+  def operators, do: @operators ++ @key_operators
   def offered_types, do: @offered_types
 
   # One value as JSON writes one, a list of them, or none. A link's list can
@@ -653,6 +701,24 @@ defmodule AshQuick.LiveView.CustomFilter do
   defp one_value?(value), do: is_nil(value) or scalar?(value)
 
   defp scalar?(value), do: is_binary(value) or is_number(value) or is_boolean(value)
+
+  # A row on a map, which holds a key path, is asked as `MapFilter` writes it,
+  # through a relationship inside an `exists` as any other row is.
+  defp build_row(
+         %__MODULE__{field_name: field_name, path: path, operator: operator, value: value},
+         _timezone,
+         _fields
+       )
+       when is_binary(field_name) and is_list(path) do
+    case String.split(field_name, ".", parts: 2) do
+      [name] ->
+        MapFilter.build(FilterField.known_atom(name), path, operator, value)
+
+      [relationship, name] ->
+        if rows = MapFilter.build(FilterField.known_atom(name), path, operator, value),
+          do: Ash.Query.Exists.new([FilterField.known_atom(relationship)], rows)
+    end
+  end
 
   # Is Empty on a field through a relationship asks that no related record
   # holds a value: a row with no owner has an empty owner's name, as one
@@ -949,7 +1015,8 @@ defmodule AshQuick.LiveView.CustomFilter do
 
   # Each slot holds what the form writes there, and nothing else reaches the
   # form or the read: text for the operator and field name, one value or a
-  # list of them for the value, and a list for the children. Every slot is
+  # list of them for the value, a list for the children, and a list of keys
+  # for a map row's path. Every slot is
   # JSON, so an object or a list could stand anywhere, and the form reads the
   # operator and field name as text.
   defp from_map(%{} = filter_map) do
@@ -964,7 +1031,9 @@ defmodule AshQuick.LiveView.CustomFilter do
   defp well_formed?(filter_map) do
     text?(filter_map["operator"]) and text?(filter_map["field_name"]) and
       value?(filter_map["value"]) and
-      (is_nil(filter_map["children"]) or is_list(filter_map["children"]))
+      (is_nil(filter_map["children"]) or is_list(filter_map["children"])) and
+      (is_nil(filter_map["path"]) or
+         (is_list(filter_map["path"]) and Enum.all?(filter_map["path"], &is_binary/1)))
   end
 
   defp text?(value), do: is_nil(value) or is_binary(value)

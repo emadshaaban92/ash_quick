@@ -886,3 +886,43 @@ msgid "{%{count} key}"
 msgid_plural "{%{count} keys}"
 msgstr[0] ""
 msgstr[1] ""
+
+#: lib/ash_quick/liveview/map_filter.ex
+#, elixir-autogen, elixir-format
+msgid "%{field} › any key"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Any key"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Key"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Key Exists"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Key Missing"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "exists"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "is missing"
+msgstr ""
+
+#: lib/ash_quick/liveview/map_filter.ex
+#, elixir-autogen, elixir-format
+msgid "type the key to look for"
+msgstr ""

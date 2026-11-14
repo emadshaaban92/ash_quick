@@ -938,3 +938,43 @@ msgstr[2] "{مفتاحان}"
 msgstr[3] "{%{count} مفاتيح}"
 msgstr[4] "{%{count} مفتاحًا}"
 msgstr[5] "{%{count} مفتاح}"
+
+#: lib/ash_quick/liveview/map_filter.ex
+#, elixir-autogen, elixir-format
+msgid "%{field} › any key"
+msgstr "%{field} › أي مفتاح"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Any key"
+msgstr "أي مفتاح"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Key"
+msgstr "المفتاح"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Key Exists"
+msgstr "المفتاح موجود"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Key Missing"
+msgstr "المفتاح غير موجود"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "exists"
+msgstr "موجود"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "is missing"
+msgstr "غير موجود"
+
+#: lib/ash_quick/liveview/map_filter.ex
+#, elixir-autogen, elixir-format
+msgid "type the key to look for"
+msgstr "اكتب المفتاح المطلوب البحث عنه"

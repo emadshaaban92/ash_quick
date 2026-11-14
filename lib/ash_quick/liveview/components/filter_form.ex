@@ -10,6 +10,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.FilterField
   alias AshQuick.LiveView.LocalDatetime
+  alias AshQuick.LiveView.MapFilter
 
   @datetime_types [Ash.Type.DateTime, Ash.Type.UtcDatetimeUsec, Ash.Type.UtcDatetime]
 
@@ -155,7 +156,9 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # One row: its field, operator and value, and the error under it when its
   # value was refused. `field` is the offered `FilterField` it names, or `nil`.
   # Its value is drawn by the field it reaches, and labelled by the resource
-  # holding it, which a field through a relationship is not the list's.
+  # holding it, which a field through a relationship is not the list's. A row
+  # on a map names a key path inside it too, typed with dots, `price.to`, or
+  # left blank to look at every value.
   defp filter_row(assigns) do
     ~H"""
     <div class="flex flex-col sm:flex-row sm:items-center gap-1">
@@ -168,6 +171,19 @@ defmodule AshQuick.LiveView.Components.FilterForm do
           @filter.field_name
         )}
       </select>
+      <input
+        :if={is_list(@filter.path)}
+        type="text"
+        name={"path-#{@filter.uuid}"}
+        value={MapFilter.path_text(@filter.path)}
+        placeholder={gettext("Any key")}
+        aria-label={gettext("Key")}
+        dir="auto"
+        autocomplete="off"
+        spellcheck="false"
+        class="input input-sm sm:w-40"
+        data-filter-key
+      />
       <div class="flex items-center gap-1">
         <select
           name={"operator-#{@filter.uuid}"}
@@ -210,10 +226,11 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     assigns |> assign(:choice, EnumOptions.kind(field)) |> filter_value()
   end
 
-  # Is Empty and Is Not Empty compare with nothing. The space keeps the row's
+  # Is Empty and Is Not Empty compare with nothing, and so do a map row's Key
+  # Exists and Key Missing. The space keeps the row's
   # ✕ where the other rows have theirs.
   defp filter_value(%{filter: %{operator: operator}} = assigns)
-       when operator in ~w(is_nil is_not_nil) do
+       when operator in ~w(is_nil is_not_nil has_key missing_key) do
     ~H"""
     <span class="flex-1"></span>
     """
@@ -596,7 +613,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       nil ->
         {:noreply, socket}
 
-      %FilterField{field: field} ->
+      %FilterField{field: field} = offered ->
         custom_filter =
           socket.assigns.custom_filter
           |> CustomFilter.update_filter(uuid, :field_name, field_name)
@@ -606,6 +623,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
             first_operator(field)
           )
           |> CustomFilter.update_filter(uuid, :value, "")
+          |> CustomFilter.update_filter(uuid, :path, start_path(offered))
 
         {:noreply, socket |> assign(:custom_filter, custom_filter) |> forget_error(uuid)}
     end
@@ -617,6 +635,27 @@ defmodule AshQuick.LiveView.Components.FilterForm do
         socket
       ) do
     {:noreply, put_value(socket, uuid, params["value-" <> uuid])}
+  end
+
+  # A map row's key path, typed with dots. Only a row holding one has the
+  # input, so any other is a stale page, and is ignored.
+  def handle_event(
+        "update_filter",
+        %{"_target" => ["path-" <> uuid]} = params,
+        socket
+      ) do
+    case CustomFilter.find(socket.assigns.custom_filter, uuid) do
+      %CustomFilter{path: path} when is_list(path) ->
+        path = MapFilter.parse_path(params["path-" <> uuid])
+
+        custom_filter =
+          CustomFilter.update_filter(socket.assigns.custom_filter, uuid, :path, path)
+
+        {:noreply, socket |> assign(:custom_filter, custom_filter) |> forget_error(uuid)}
+
+      _ ->
+        {:noreply, socket}
+    end
   end
 
   # A row's LiveSelect posts its picks as `value-<uuid>[values][]`, and once
@@ -696,11 +735,14 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # A row with no value is left out of the filter, so it is not checked. Nor
   # is one on a field the form does not offer, which only a link carries: the
   # read decides that one, and drops the filter with a flash if it fails.
+  #
+  # A map row asking whether a key is there without naming one is refused
+  # too: it would ask nothing.
   defp value_errors(filter, fields, timezone) do
-    for %CustomFilter{uuid: uuid, field_name: name, operator: operator, value: value} <-
+    for %CustomFilter{uuid: uuid, field_name: name, operator: operator, value: value} = row <-
           CustomFilter.applied_leaves(filter),
         %FilterField{field: field} <- [field_for(fields, name)],
-        message = cast_error(field, operator, value, timezone),
+        message = MapFilter.row_error(row) || cast_error(field, operator, value, timezone),
         not is_nil(message),
         into: %{},
         do: {uuid, message}
@@ -845,10 +887,14 @@ defmodule AshQuick.LiveView.Components.FilterForm do
 
   # A new row starts on the first field offered: no one field is one every
   # resource has, or one every actor may see.
-  defp first_leaf([%FilterField{name: name, field: field} | _]),
-    do: %{field_name: name, operator: first_operator(field)}
+  defp first_leaf([%FilterField{name: name, field: field} = first | _]),
+    do: %{field_name: name, operator: first_operator(field), path: start_path(first)}
 
   defp first_leaf([]), do: nil
+
+  # The key path a row on `field` starts with: none named, on a map, and no
+  # path at all on any other field.
+  defp start_path(field), do: if(CustomFilter.map_field?(field), do: [])
 
   # Is Empty is never first: a row starts comparing its field with a value.
   defp first_operator(field), do: field |> base_operators() |> List.first()
@@ -872,6 +918,8 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   def operator_label("on"), do: gettext("On Day")
   def operator_label("is_nil"), do: gettext("Is Empty")
   def operator_label("is_not_nil"), do: gettext("Is Not Empty")
+  def operator_label("has_key"), do: gettext("Key Exists")
+  def operator_label("missing_key"), do: gettext("Key Missing")
   def operator_label(operator), do: operator
 
   @doc """
@@ -887,6 +935,8 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   def operator_phrase("on"), do: pgettext("filter chip", "on")
   def operator_phrase("is_nil"), do: gettext("is empty")
   def operator_phrase("is_not_nil"), do: gettext("is not empty")
+  def operator_phrase("has_key"), do: gettext("exists")
+  def operator_phrase("missing_key"), do: gettext("is missing")
   def operator_phrase(operator), do: operator_label(operator)
 
   @equality ~w(equals not_equals)
@@ -915,8 +965,13 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     operators = base_operators(field)
 
     if operators != [] and name in emptiable,
-      do: operators ++ @emptiness,
+      do: operators ++ emptiness(field),
       else: operators
+  end
+
+  # A map is asked whether a key is there rather than whether it is empty.
+  defp emptiness(field) do
+    if MapFilter.map_type?(field.type), do: MapFilter.key_operators(), else: @emptiness
   end
 
   # A field with a fixed set of values compares by value, whatever its type,
@@ -938,14 +993,17 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   def offered_operators(field) do
     case base_operators(field) do
       [] -> []
-      operators -> operators ++ @emptiness
+      operators -> operators ++ emptiness(field)
     end
   end
 
   # A field reached through a belongs_to that may be unset is empty on a row
-  # that has no related record, whether or not the related field can be.
+  # that has no related record, whether or not the related field can be. A
+  # map can lack any key, whether or not the column can be `nil`.
   defp emptiable?(%FilterField{relationship: %{allow_nil?: true}}), do: true
-  defp emptiable?(%FilterField{field: field}), do: nullable?(field)
+
+  defp emptiable?(%FilterField{field: field}),
+    do: MapFilter.map_type?(field.type) or nullable?(field)
 
   # A count, or whether any row exists, is never `nil`, nor is an aggregate
   # with a `default`. Another aggregate is when it finds nothing, and names no
@@ -971,9 +1029,14 @@ defmodule AshQuick.LiveView.Components.FilterForm do
 
   defp type_operators(%{type: Ash.Type.Float}), do: @comparisons
 
-  # A `Money` by its amount, against one in the same currency.
+  # A `Money` by its amount, against one in the same currency, and a map by
+  # what it holds at a key path.
   defp type_operators(field) do
-    if CustomFilter.money?(field), do: @equality ++ @comparisons, else: []
+    cond do
+      CustomFilter.money?(field) -> @equality ++ @comparisons
+      MapFilter.map_type?(field.type) -> MapFilter.operators()
+      true -> []
+    end
   end
 
   defp notify_parent(msg), do: send(self(), {__MODULE__, msg})
