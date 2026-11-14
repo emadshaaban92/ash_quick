@@ -658,8 +658,8 @@ counter's default from a struct nobody filled in, so load the record to have
 version `1` checked. And an upsert is not locked at all. The lock covers
 updates and destroys; an upsert that meets an existing row writes over it
 without checking or bumping `version`, so a copy loaded before it can still
-save over what it wrote. What it writes is the action's `upsert_fields`, which
-AshQuick leaves to you.
+save over what it wrote. Which fields it writes is up to Ash and the action's
+`upsert_fields`; AshQuick does not choose them.
 
 It is on rather than off because losing a concurrent write is silent and
 unrecoverable. Turn it off where there is nothing to lose — an append-only log,

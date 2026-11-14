@@ -878,7 +878,8 @@ and what to write.
   memory `v` must be an integer (cast a param first). And an upsert is not
   locked: the lock covers updates and destroys, so an upsert that meets a row
   neither checks nor bumps `version`, and a copy loaded before it can save over
-  it. What it writes is its `upsert_fields`, which AshQuick leaves to you.
+  it. Which fields it writes is up to Ash and the action's `upsert_fields`;
+  AshQuick does not choose them.
 
   Bookkeeping-only changes (timestamps, audit relationships) do not count as changes
   and do not bump — see `AshQuick.Config.versioning_ignored_attributes/1`.

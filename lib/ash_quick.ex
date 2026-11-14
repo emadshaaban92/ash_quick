@@ -359,8 +359,9 @@ defmodule AshQuick do
 
   An upsert is not locked. The lock covers updates and destroys; an upsert
   that meets an existing row writes over it without checking or bumping the
-  counter, so a copy loaded before it can still save over what it wrote. What
-  it writes is the action's `upsert_fields`, which AshQuick leaves to you.
+  counter, so a copy loaded before it can still save over what it wrote.
+  Which fields it writes is up to Ash and the action's `upsert_fields`;
+  AshQuick does not choose them.
 
   A bulk write by query, or by `:atomic_batches`, that changes anything does
   not run atomically. Ash builds one changeset for it without the rows' data,
