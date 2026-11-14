@@ -1346,6 +1346,30 @@ a field named before it comes first and is not offered twice. `:defaults` is
 always the marker: a field named `defaults` is offered only through it, beside
 the other defaults.
 
+### Filtering by a cell
+
+A cell whose column shows a field the filter offers its reader has a small
+menu of its own, behind a funnel button that shows while the pointer is over
+the cell, or once the cell is tapped or focused. It filters the list by the
+cell's value, or filters that value out, beside the filter already applied:
+under an And root the row is added, and an Or root goes into a group beside
+it, so the list only narrows. The row names exactly the field the column
+shows, `brand.name` for a `[brand: :name]` column, so a related column offers
+it only when `filterable:` names that field.
+
+What a cell offers depends on what it holds: Equals and Not Equals a value,
+Is Empty and Is Not Empty on an empty cell, Has Any Of each item of a list of
+fixed-set values, On Day of a timestamp in the reader's zone, and on a stored
+map, Equals at each of its first keys, and at the keys of a small map one
+level down. A float, a `sensitive?` field and one field policies hide offer
+nothing, and on a field a field policy hides on some of the reader's rows, an
+empty cell offers nothing either, as the list refuses Is Empty there.
+
+Filtering a value out also leaves out the rows where the field is empty: Not
+Equals compares with the value, and an empty field holds none to compare, as
+SQL's `!=` never matches `NULL`. To keep them too, put the row in an Any of
+group beside Is Empty.
+
 ## Testing a details page
 
 Each row on a QuickView details page carries a `data-field` attribute naming

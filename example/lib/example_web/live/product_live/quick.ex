@@ -50,6 +50,10 @@ defmodule ExampleWeb.ProductLive.Quick do
         :store,
         :active
       ],
+      # Every field the filter offers by itself, and the brand's and the
+      # category's names, which the Brand and Category columns show: a cell
+      # of either then offers to filter the list by its name too.
+      filterable: [:defaults, {:brand, :name}, {:category, :name}],
       new_action_label: "Add Product"
     ],
     details: [

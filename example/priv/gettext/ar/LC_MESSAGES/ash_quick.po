@@ -795,6 +795,38 @@ msgstr "غير موجود"
 msgid "type the key to look for"
 msgstr "اكتب المفتاح المطلوب البحث عنه"
 
+#, elixir-format
+msgid "%{key} is"
+msgstr "%{key} يساوي"
+
+#, elixir-format
+msgid "Filter by empty"
+msgstr "الفارغ فقط"
+
+#, elixir-format
+msgid "Filter by this cell"
+msgstr "تصفية بهذه القيمة"
+
+#, elixir-format
+msgid "Filter by this day"
+msgstr "هذا اليوم فقط"
+
+#, elixir-format
+msgid "Filter by this value"
+msgstr "هذه القيمة فقط"
+
+#, elixir-format
+msgid "Filter out empty"
+msgstr "استبعاد الفارغ"
+
+#, elixir-format
+msgid "Filter out this value"
+msgstr "استبعاد هذه القيمة"
+
+#, elixir-format
+msgid "Has"
+msgstr "يحتوي على"
+
 msgid "Accepts"
 msgstr ""
 

@@ -743,6 +743,38 @@ msgstr ""
 msgid "type the key to look for"
 msgstr ""
 
+#, elixir-format
+msgid "%{key} is"
+msgstr ""
+
+#, elixir-format
+msgid "Filter by empty"
+msgstr ""
+
+#, elixir-format
+msgid "Filter by this cell"
+msgstr ""
+
+#, elixir-format
+msgid "Filter by this day"
+msgstr ""
+
+#, elixir-format
+msgid "Filter by this value"
+msgstr ""
+
+#, elixir-format
+msgid "Filter out empty"
+msgstr ""
+
+#, elixir-format
+msgid "Filter out this value"
+msgstr ""
+
+#, elixir-format
+msgid "Has"
+msgstr ""
+
 msgid "Accepts"
 msgstr ""
 

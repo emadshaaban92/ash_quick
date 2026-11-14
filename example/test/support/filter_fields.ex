@@ -176,6 +176,18 @@ defmodule Example.Test.FilterFieldsLive.Quick do
     details: [fields: [:code, :stamped_at]]
 end
 
+defmodule Example.Test.FilterFieldsCellsLive.Quick do
+  @moduledoc """
+  The page over `Example.Test.FilterFields` whose cells offer to filter by a
+  code, a memo a field policy hides on some rows, and a salary only an admin
+  may see. Routed only in the test build.
+  """
+  use AshQuick.LiveView.QuickView,
+    resource: Example.Test.FilterFields,
+    list: [fields: [:code, :memo, :salary, :active], filterable: [:code, :memo, :salary]],
+    details: [fields: [:code]]
+end
+
 defmodule Example.Test.FilterFieldsNamedLive.Quick do
   @moduledoc """
   The page over `Example.Test.FilterFields` whose filter offers three fields,

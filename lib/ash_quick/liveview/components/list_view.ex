@@ -13,6 +13,7 @@ defmodule AshQuick.LiveView.Components.ListView do
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.Components.ActionModal
   alias AshQuick.LiveView.Components.FilterChips
+  alias AshQuick.LiveView.CellFilter
   alias AshQuick.LiveView.CustomFilter
 
   attr(:id, :string, required: true)
@@ -70,6 +71,18 @@ defmodule AshQuick.LiveView.Components.ListView do
   attr(:list_news, :boolean,
     default: false,
     doc: "whether records not on screen now belong on the page, which shows the Reload bar"
+  )
+
+  attr(:cell_menu, :map,
+    default: nil,
+    doc:
+      "`%{id: record_id, column: data_field, choices: [choice]}` for the cell whose filter menu was last opened"
+  )
+
+  attr(:cell_filters, :map,
+    default: %{},
+    doc:
+      "each column whose cells offer to filter the list by their value, by `QuickField.data_field/1`, as `CellFilter.columns/4` gives it"
   )
 
   attr(:row_actions, :map,
@@ -146,7 +159,11 @@ defmodule AshQuick.LiveView.Components.ListView do
           </div>
           <.form for={%{}} id="table-form" phx-change="table-form-change">
             <div class="overflow-x-auto min-h-[20rem] lg:min-h-[30rem]">
-              <table class="table table-sm text-base-content">
+              <table
+                id={"#{@id}-table"}
+                class="table table-sm text-base-content"
+                phx-hook={@cell_filters != %{} && ".CellFilters"}
+              >
                 <thead>
                   <tr>
                     <th :if={@selected_rows} class="w-4">
@@ -210,12 +227,27 @@ defmodule AshQuick.LiveView.Components.ListView do
                           class="checkbox checkbox-sm bg-base-300 text-base-content"
                         />
                       </td>
-                      <td :for={field <- @fields}>
+                      <td
+                        :for={{field, column} <- Enum.with_index(@fields)}
+                        class={
+                          @cell_filters[QuickField.data_field(field)] && "group/cell relative pe-7"
+                        }
+                        tabindex={@cell_filters[QuickField.data_field(field)] && "-1"}
+                      >
                         <.render_field
                           field={field}
                           record={row}
                           scope={@scope}
                           linker={@linker}
+                        />
+                        <.cell_filter_menu
+                          :if={@cell_filters[QuickField.data_field(field)]}
+                          record={row}
+                          field={field}
+                          column_filter={@cell_filters[QuickField.data_field(field)]}
+                          cell_menu={@cell_menu}
+                          toward_start={column >= div(length(@fields), 2)}
+                          scope={@scope}
                         />
                       </td>
                       <td>
@@ -261,6 +293,21 @@ defmodule AshQuick.LiveView.Components.ListView do
         export_data={@export_data}
         export_format={@export_format}
       />
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".CellFilters">
+        // A cell's filter menu is a CSS dropdown, open while focus is inside
+        // it, and an entry picked keeps the focus: the row it filtered by
+        // stays on the page, and so would the menu, open over it. So focus
+        // leaves the menu once an entry is picked.
+        export default {
+          mounted() {
+            this.el.addEventListener("click", (event) => {
+              if (event.target.closest("[data-cell-filter-choice]")) {
+                document.activeElement?.blur()
+              }
+            })
+          }
+        }
+      </script>
     </section>
     """
   end
@@ -282,6 +329,127 @@ defmodule AshQuick.LiveView.Components.ListView do
           ),
         do: slot
   end
+
+  # A cell's own menu, offering to filter the list by what the cell holds:
+  # see `AshQuick.LiveView.CellFilter`. Its button shows while the pointer
+  # is over the cell, or once the cell is tapped or focused, so a list reads
+  # as it did until a reader reaches for one; it sits over the cell's end
+  # rather than beside it, so no column widens for it.
+  #
+  # Its entries are drawn only for the cell whose menu was last opened, as a
+  # row's actions are (`record_actions/1`): a page of cells each holding a
+  # menu would be several times the page, and every cell's text would read
+  # its menu's words. Each entry sends only the record, the column and which
+  # entry it is: the value is read back on the server, off the record the
+  # page holds.
+  attr(:record, :map, required: true)
+  attr(:field, QuickField, required: true)
+  attr(:column_filter, :map, required: true, doc: "the column's entry of `@cell_filters`")
+  attr(:cell_menu, :map, default: nil)
+  attr(:toward_start, :boolean, default: false)
+  attr(:scope, :any, default: nil)
+
+  defp cell_filter_menu(assigns) do
+    %{filter_field: filter_field, emptiness?: emptiness?} = assigns.column_filter
+
+    assigns =
+      assign(assigns,
+        id: to_string(assigns.record.id),
+        column: QuickField.data_field(assigns.field),
+        filter_field: filter_field,
+        # Asked as the menu's events ask it (`ListUtils`), so a cell offers a
+        # menu only where opening it has an entry.
+        offered?:
+          CellFilter.choices(
+            filter_field,
+            QuickField.resolve_value(assigns.record, assigns.field.path),
+            AshQuick.Scope.timezone(assigns.scope),
+            emptiness?: emptiness?
+          ) != []
+      )
+
+    ~H"""
+    <div
+      :if={@offered?}
+      class="absolute inset-y-0 end-0 flex items-center pe-1"
+      data-cell-filter={@column}
+    >
+      <%!-- Opened from a column of the table's first half toward the line's
+      end, and from one of its second half toward its start, so it stays
+      inside the table, which cuts off what passes its edge. --%>
+      <div class={["dropdown", @toward_start && "dropdown-end"]}>
+        <div
+          tabindex="0"
+          role="button"
+          class="btn btn-xs btn-square bg-base-100 shadow-sm opacity-0 group-hover/cell:opacity-100 group-focus-within/cell:opacity-100 focus:opacity-100"
+          aria-label={gettext("Filter by this cell")}
+          title={gettext("Filter by this cell")}
+          phx-focus={JS.push("cell_filter_open", value: %{id: @id, column: @column})}
+          phx-click={JS.push("cell_filter_open", value: %{id: @id, column: @column})}
+        >
+          <.icon name="hero-funnel-mini" class="w-3.5 h-3.5" />
+        </div>
+        <ul
+          tabindex="0"
+          class="dropdown-content menu menu-sm bg-base-300 rounded-box z-10 w-max max-w-72 p-2 shadow-[0_2px_15px_rgba(0,0,0,0.3)] border border-base-content/10"
+        >
+          <%= case @cell_menu do %>
+            <% %{id: id, column: column, choices: choices} when id == @id and column == @column -> %>
+              <li :for={{choice, i} <- Enum.with_index(choices)}>
+                <button
+                  type="button"
+                  class="whitespace-nowrap"
+                  data-cell-filter-choice={choice.operator}
+                  phx-click={JS.push("cell_filter", value: %{id: @id, column: @column, choice: i})}
+                >
+                  <.icon name={choice_icon(choice)} class="w-4 h-4 shrink-0 opacity-70" />
+                  <span class="min-w-0 truncate">
+                    {CellFilter.label(choice)}
+                    <.choice_value choice={choice} filter_field={@filter_field} scope={@scope} />
+                  </span>
+                </button>
+              </li>
+            <% _ -> %>
+              <li class="menu-disabled">
+                <span
+                  class="loading loading-spinner loading-xs"
+                  role="status"
+                  aria-label={gettext("Loading…")}
+                ></span>
+              </li>
+          <% end %>
+        </ul>
+      </div>
+    </div>
+    """
+  end
+
+  defp choice_icon(%CellFilter.Choice{kind: :out}), do: "hero-minus-circle"
+  defp choice_icon(%CellFilter.Choice{}), do: "hero-plus-circle"
+
+  # An item reads as its column shows one, a map's value as written; the
+  # other entries name the cell's own value, which the reader is looking at.
+  defp choice_value(%{choice: %CellFilter.Choice{kind: :item}} = assigns) do
+    ~H"""
+    <span class="font-semibold">
+      <.field_value
+        value={@choice.shown}
+        path={[]}
+        ash_field={@filter_field.field}
+        resource={@filter_field.resource}
+        scope={@scope}
+      />
+    </span>
+    """
+  end
+
+  defp choice_value(%{choice: %CellFilter.Choice{kind: :pair}} = assigns) do
+    ~H"""
+    <span class="font-semibold" dir="auto">{CellFilter.shown_text(@choice.shown)}</span>
+    """
+  end
+
+  defp choice_value(assigns), do: ~H""
 
   # The header's link leads to the next sort `URLParams.cycle_sort/2` gives the
   # column; its arrow says which way the list is sorted by it now, if at all.

@@ -978,3 +978,43 @@ msgstr "غير موجود"
 #, elixir-autogen, elixir-format
 msgid "type the key to look for"
 msgstr "اكتب المفتاح المطلوب البحث عنه"
+
+#: lib/ash_quick/liveview/cell_filter.ex
+#, elixir-autogen, elixir-format
+msgid "%{key} is"
+msgstr "%{key} يساوي"
+
+#: lib/ash_quick/liveview/cell_filter.ex
+#, elixir-autogen, elixir-format
+msgid "Filter by empty"
+msgstr "الفارغ فقط"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Filter by this cell"
+msgstr "تصفية بهذه القيمة"
+
+#: lib/ash_quick/liveview/cell_filter.ex
+#, elixir-autogen, elixir-format
+msgid "Filter by this day"
+msgstr "هذا اليوم فقط"
+
+#: lib/ash_quick/liveview/cell_filter.ex
+#, elixir-autogen, elixir-format
+msgid "Filter by this value"
+msgstr "هذه القيمة فقط"
+
+#: lib/ash_quick/liveview/cell_filter.ex
+#, elixir-autogen, elixir-format
+msgid "Filter out empty"
+msgstr "استبعاد الفارغ"
+
+#: lib/ash_quick/liveview/cell_filter.ex
+#, elixir-autogen, elixir-format
+msgid "Filter out this value"
+msgstr "استبعاد هذه القيمة"
+
+#: lib/ash_quick/liveview/cell_filter.ex
+#, elixir-autogen, elixir-format
+msgid "Has"
+msgstr "يحتوي على"
