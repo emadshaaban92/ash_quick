@@ -1340,7 +1340,8 @@ config :ash_quick,
 - `deps/ash_quick/lib/ash_quick/liveview/quick_view.ex` — Main macro and moduledoc
 - `deps/ash_quick/lib/ash_quick/liveview/list_utils.ex` — List view logic
 - `deps/ash_quick/lib/ash_quick/liveview/details_utils.ex` — Detail view logic
-- `deps/ash_quick/lib/ash_quick/liveview/form_utils.ex` — Form logic
+- `deps/ash_quick/lib/ash_quick/liveview/form_utils.ex` — Form lifecycle, events and save; `form_params.ex`, `form_save_errors.ex`, `form_uploads.ex`, `form_attachments.ex`, `attachment_keys.ex` beside it
+- `deps/ash_quick/lib/ash_quick/liveview/attachment_upload.ex` — signing, naming and checking an upload, for custom upload widgets
 - `deps/ash_quick/lib/ash_quick/liveview/bulk_actions.ex`, `bulk_form.ex` — the bulk menu and the record-less bulk form
 - `deps/ash_quick/lib/ash_quick/print.ex`, `print_template.ex`, `liveview/print_utils.ex` — printing
 - `deps/ash_quick/lib/ash_quick/liveview/download_utils.ex` — files actions mark for download

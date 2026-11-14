@@ -534,12 +534,12 @@ defmodule AshQuick.Components do
           </button>
         </div>
         <p :for={err <- upload_errors(@upload, entry)} class="text-error text-sm mt-1">
-          {AshQuick.LiveView.FormUtils.upload_error_message(err)}
+          {AshQuick.LiveView.AttachmentUpload.upload_error_message(err)}
         </p>
       </div>
 
       <p :for={err <- upload_errors(@upload)} class="text-error text-sm mt-1">
-        {AshQuick.LiveView.FormUtils.upload_error_message(err)}
+        {AshQuick.LiveView.AttachmentUpload.upload_error_message(err)}
       </p>
     </div>
     """

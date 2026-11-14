@@ -13,7 +13,7 @@ defmodule AshQuick.LiveView.ListUtils do
   alias AshQuick.LiveView.BulkActions
   alias AshQuick.LiveView.BulkForm
   alias AshQuick.LiveView.FieldErrors
-  alias AshQuick.LiveView.FormUtils
+  alias AshQuick.LiveView.FormParams
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.CellFilter
   alias AshQuick.LiveView.CustomFilter
@@ -1062,8 +1062,8 @@ defmodule AshQuick.LiveView.ListUtils do
         params =
           params
           |> FieldErrors.mark_used(target)
-          |> FormUtils.put_emptied_selections()
-          |> FormUtils.maybe_put_has_many(form)
+          |> FormParams.put_emptied_selections()
+          |> FormParams.maybe_put_has_many(form)
 
         assign(socket, :ash_quick_bulk, %{bulk | form: BulkForm.validate(form, params, action)})
 

@@ -472,7 +472,7 @@ msgid_plural "%{action} applied to %{applied} of %{count} selected rows."
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/ash_quick/liveview/form_utils.ex
+#: lib/ash_quick/liveview/attachment_upload.ex
 #, elixir-autogen, elixir-format
 msgid "External Client Failure"
 msgstr ""
@@ -524,12 +524,12 @@ msgid_plural "The other %{count} rows were not changed and are still selected: c
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/ash_quick/liveview/form_utils.ex
+#: lib/ash_quick/liveview/attachment_upload.ex
 #, elixir-autogen, elixir-format
 msgid "This file could not be uploaded"
 msgstr ""
 
-#: lib/ash_quick/liveview/form_utils.ex
+#: lib/ash_quick/liveview/attachment_upload.ex
 #, elixir-autogen, elixir-format
 msgid "This file was refused and has not been uploaded"
 msgstr ""
@@ -539,7 +539,7 @@ msgstr ""
 msgid "This record changed since you opened it — reload to see the latest, then try again."
 msgstr ""
 
-#: lib/ash_quick/liveview/form_utils.ex
+#: lib/ash_quick/liveview/attachment_upload.ex
 #, elixir-autogen, elixir-format
 msgid "Too large"
 msgstr ""
@@ -554,12 +554,12 @@ msgstr ""
 msgid "You don't have permission to do that."
 msgstr ""
 
-#: lib/ash_quick/liveview/form_utils.ex
+#: lib/ash_quick/liveview/attachment_upload.ex
 #, elixir-autogen, elixir-format
 msgid "You have selected an unacceptable file type"
 msgstr ""
 
-#: lib/ash_quick/liveview/form_utils.ex
+#: lib/ash_quick/liveview/attachment_upload.ex
 #, elixir-autogen, elixir-format
 msgid "You have selected too many files"
 msgstr ""

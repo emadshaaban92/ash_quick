@@ -484,7 +484,7 @@ msgstr[3] "تم تطبيق «%{action}» على %{applied} من أصل %{count} 
 msgstr[4] "تم تطبيق «%{action}» على %{applied} من أصل %{count} صفًا محددًا."
 msgstr[5] "تم تطبيق «%{action}» على %{applied} من أصل %{count} صف محدد."
 
-#: lib/ash_quick/liveview/form_utils.ex
+#: lib/ash_quick/liveview/attachment_upload.ex
 #, elixir-autogen, elixir-format
 msgid "External Client Failure"
 msgstr "تعذّر الرفع إلى خدمة التخزين"
@@ -540,12 +540,12 @@ msgstr[3] "لم تتغير %{count} صفوف أخرى وما زالت محددة
 msgstr[4] "لم يتغير %{count} صفًا آخر وما زالت محددة: راجعها وحاول مرة أخرى."
 msgstr[5] "لم يتغير %{count} صف آخر وما زالت محددة: راجعها وحاول مرة أخرى."
 
-#: lib/ash_quick/liveview/form_utils.ex
+#: lib/ash_quick/liveview/attachment_upload.ex
 #, elixir-autogen, elixir-format
 msgid "This file could not be uploaded"
 msgstr "تعذّر رفع هذا الملف"
 
-#: lib/ash_quick/liveview/form_utils.ex
+#: lib/ash_quick/liveview/attachment_upload.ex
 #, elixir-autogen, elixir-format
 msgid "This file was refused and has not been uploaded"
 msgstr "تم رفض هذا الملف ولم يُرفع"
@@ -555,7 +555,7 @@ msgstr "تم رفض هذا الملف ولم يُرفع"
 msgid "This record changed since you opened it — reload to see the latest, then try again."
 msgstr "تغيّر هذا السجل منذ أن فتحته — أعد تحميل الصفحة لرؤية آخر نسخة، ثم حاول مرة أخرى."
 
-#: lib/ash_quick/liveview/form_utils.ex
+#: lib/ash_quick/liveview/attachment_upload.ex
 #, elixir-autogen, elixir-format
 msgid "Too large"
 msgstr "الملف كبير جدًا"
@@ -570,12 +570,12 @@ msgstr "تعذّر تحديد المستخدم الحالي للتصدير"
 msgid "You don't have permission to do that."
 msgstr "ليس لديك صلاحية للقيام بذلك."
 
-#: lib/ash_quick/liveview/form_utils.ex
+#: lib/ash_quick/liveview/attachment_upload.ex
 #, elixir-autogen, elixir-format
 msgid "You have selected an unacceptable file type"
 msgstr "نوع الملف الذي اخترته غير مقبول"
 
-#: lib/ash_quick/liveview/form_utils.ex
+#: lib/ash_quick/liveview/attachment_upload.ex
 #, elixir-autogen, elixir-format
 msgid "You have selected too many files"
 msgstr "لقد اخترت عددًا كبيرًا جدًا من الملفات"

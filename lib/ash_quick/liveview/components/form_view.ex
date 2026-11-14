@@ -13,7 +13,7 @@ defmodule AshQuick.LiveView.Components.FormView do
   alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.FieldErrors
-  alias AshQuick.LiveView.FormUtils
+  alias AshQuick.LiveView.AttachmentUpload
   alias AshQuick.LiveView.Utils
   alias AshQuick.LiveView.URLParams
 
@@ -292,7 +292,7 @@ defmodule AshQuick.LiveView.Components.FormView do
 
   # A `sensitive?` input never carries the stored value: the page would hold
   # it in plain sight. It shows only what was typed into this form, and on an
-  # update a blank one keeps the value — `FormUtils` drops it from the params.
+  # update a blank one keeps the value — `FormParams` drops it from the params.
   defp field_input(%{field: %{sensitive?: true}} = assigns) do
     assigns =
       assigns
@@ -376,7 +376,7 @@ defmodule AshQuick.LiveView.Components.FormView do
 
   # An array of attachments: a row per stored file, each with a ✕, over a drop
   # zone for more. Nothing here posts the list — the form holds it on the server
-  # (`FormUtils.carry_uploaded_attachments/2`), an upload appends to it, and the
+  # (`FormAttachments.carry_uploaded_attachments/2`), an upload appends to it, and the
   # ✕ names a position. Stored rows stay up while a pick uploads, so the pick
   # reads as an addition rather than a replacement.
   defp field_input(%{field: %{type: {:array, AshQuick.AshTypes.Attachment}}} = assigns) do
@@ -558,7 +558,7 @@ defmodule AshQuick.LiveView.Components.FormView do
         </button>
 
         <p :for={err <- upload_errors(@uploads[@upload_name], entry)} class="text-error text-sm mt-1">
-          {FormUtils.upload_error_message(err)}
+          {AttachmentUpload.upload_error_message(err)}
         </p>
       <% end %>
     </section>

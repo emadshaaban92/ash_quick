@@ -133,7 +133,7 @@ defmodule AshQuick.LiveView.BulkActions do
     """
   end
 
-  # The fields `FormUtils` serves with `allow_upload`, at any depth an embed
+  # The fields `FormUploads` serves with `allow_upload`, at any depth an embed
   # puts them.
   defp upload_field(resource, %{name: name}) do
     resource

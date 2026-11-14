@@ -14,7 +14,7 @@ defmodule ExampleWeb.UploadScenarioTest do
   is the only signal that anything ever came back for it, which is what makes an
   abandoned upload distinguishable from a live one rather than invisible.
 
-  `AshQuick.LiveView.FormUtilsTest` pins what is not visible on a page — the key
+  `AshQuick.LiveView.AttachmentUploadTest` pins what is not visible on a page — the key
   derivation, the signed `Content-Length`, and a host refusing an object outright
   (which fails the entry rather than signing a URL for it). This is the rest:
   what a person does, and what it leaves behind.
