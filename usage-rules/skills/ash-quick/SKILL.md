@@ -872,6 +872,15 @@ and what to write.
   each row in memory — a real changeset, notification and audit row per
   record. Correct, and not free: size batches accordingly.
 
+  Two writes are not checked. A hand-built `%Post{id: id, version: v}` is
+  checked against `v` unless `v` is `1`, the counter's default, which reads as
+  "nobody loaded this"; load the record when version 1 must be checked. In
+  memory `v` must be an integer (cast a param first). And an upsert is not
+  locked: the lock covers updates and destroys, so an upsert that meets a row
+  neither checks nor bumps `version`, and a copy loaded before it can save over
+  it. Which fields it writes is up to Ash and the action's `upsert_fields`;
+  AshQuick does not choose them.
+
   Bookkeeping-only changes (timestamps, audit relationships) do not count as changes
   and do not bump — see `AshQuick.Config.versioning_ignored_attributes/1`.
   `attribute` names a different counter when `:version` is taken. A resource that
