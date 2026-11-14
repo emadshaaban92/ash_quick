@@ -214,7 +214,8 @@ defmodule AshQuick.LiveView.QuickView do
       are dropped while the modal is open. They are `"search"`, `"page_size"`,
       `"new_click"`, `"export"`, `"close-export-modal"`, `"bulk_action"`,
       `"bulk_validate"`, `"bulk_save"`, `"bulk_close"`, `"row_actions_open"`,
-      `"row_action_click"`, `"toggle-filter"` and `"table-form-change"`. A widget
+      `"row_action_click"`, `"toggle-filter"`, `"table-form-change"`,
+      `"cell_filter_open"` and `"cell_filter"`. A widget
       pushing one of them does nothing, so give its events names of their own.
 
   ## Action routing convention
@@ -1091,9 +1092,13 @@ defmodule AshQuick.LiveView.QuickView do
        ) do
     %{path: path, params: params} = socket.assigns
 
+    fields = visible_fields(socket, options.list_fields, action, options)
+
     socket
     |> assign(:id, "#{Ash.Resource.Info.trace_name(options.resource)}-list")
-    |> assign(:fields, visible_fields(socket, options.list_fields, action, options))
+    |> assign(:fields, fields)
+    # The columns whose cells offer to filter the list by their value.
+    |> assign(:cell_filters, ListUtils.cell_filters(socket, fields, action, options))
     |> assign(:sortable, options.list_sortable)
     |> assign(:filterable, options.list_filterable)
     |> assign(:new_action_label, options.new_action_label)

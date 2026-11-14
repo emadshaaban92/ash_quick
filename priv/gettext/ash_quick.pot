@@ -926,3 +926,43 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "type the key to look for"
 msgstr ""
+
+#: lib/ash_quick/liveview/cell_filter.ex
+#, elixir-autogen, elixir-format
+msgid "%{key} is"
+msgstr ""
+
+#: lib/ash_quick/liveview/cell_filter.ex
+#, elixir-autogen, elixir-format
+msgid "Filter by empty"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Filter by this cell"
+msgstr ""
+
+#: lib/ash_quick/liveview/cell_filter.ex
+#, elixir-autogen, elixir-format
+msgid "Filter by this day"
+msgstr ""
+
+#: lib/ash_quick/liveview/cell_filter.ex
+#, elixir-autogen, elixir-format
+msgid "Filter by this value"
+msgstr ""
+
+#: lib/ash_quick/liveview/cell_filter.ex
+#, elixir-autogen, elixir-format
+msgid "Filter out empty"
+msgstr ""
+
+#: lib/ash_quick/liveview/cell_filter.ex
+#, elixir-autogen, elixir-format
+msgid "Filter out this value"
+msgstr ""
+
+#: lib/ash_quick/liveview/cell_filter.ex
+#, elixir-autogen, elixir-format
+msgid "Has"
+msgstr ""

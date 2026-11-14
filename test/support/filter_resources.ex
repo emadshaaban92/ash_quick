@@ -110,3 +110,43 @@ defmodule AshQuick.Test.Filter.Preset do
     defaults [:read]
   end
 end
+
+defmodule AshQuick.Test.Filter.Cell do
+  @moduledoc """
+  A field of each kind a list cell can offer to filter by, and one it never
+  does, for `AshQuick.LiveView.CellFilter`.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.Filter.Domain,
+    data_layer: Ash.DataLayer.Ets
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true
+    attribute :count, :integer, public?: true
+    attribute :price, :decimal, public?: true
+    attribute :ratio, :float, public?: true
+    attribute :active, :boolean, public?: true
+    attribute :due, :date, public?: true
+    attribute :at, :utc_datetime, public?: true
+    attribute :stage, :atom, public?: true, constraints: [one_of: [:draft, :live]]
+
+    attribute :tags, {:array, :atom},
+      public?: true,
+      constraints: [items: [one_of: [:new, :sale]]]
+
+    attribute :pin, :string, public?: true, sensitive?: true
+  end
+
+  relationships do
+    belongs_to :ledger, AshQuick.Test.Filter.Ledger, public?: true
+  end
+
+  actions do
+    defaults [:read]
+  end
+end

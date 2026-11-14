@@ -195,6 +195,13 @@ The URL is not an option here — it is declared in the router with
   field is dropped, with a flash, and so is one by an operator the form does
   not offer, or holding a JSON object as its value; unset, the fields offered
   are the only ones a link can filter by too.
+  A list cell whose column shows an offered field (exactly that field, e.g.
+  `brand.name`) gets a funnel menu: filter by its value or filter it out,
+  Is Empty on an empty cell, Has Any Of a list item, On Day of a timestamp,
+  Equals at a stored map's key. The row is ANDed beside the filter applied
+  (an Or root becomes a group). Filtering a value out (Not Equals) also
+  drops the rows where the field is empty, as SQL `!=` never matches `NULL`.
+  Its events, `cell_filter_open` and `cell_filter`, are reserved names.
 
 ### Details options (`:details`)
 - `:fields` — Fields in the detail view

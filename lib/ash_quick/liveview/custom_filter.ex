@@ -95,6 +95,42 @@ defmodule AshQuick.LiveView.CustomFilter do
   end
 
   @doc """
+  `filter` narrowed by `row` too: what it filtered by, and `row` beside it.
+
+  An And root takes `row` as one more of its rows, unless it holds the same
+  row already. Any other root, an Or among them, becomes a group of its own
+  under a new And root beside `row`: added under an Or, the row would widen
+  the list rather than narrow it. With no filter, or one that filters by
+  nothing, `row` is the whole filter.
+  """
+  def and_also(filter, %__MODULE__{} = row) do
+    case filter do
+      %__MODULE__{} = filter ->
+        if applied?(filter), do: narrow(filter, row), else: only(row)
+
+      nil ->
+        only(row)
+    end
+  end
+
+  defp narrow(%__MODULE__{operator: "and", children: [_ | _] = children} = root, row) do
+    if Enum.any?(children, &same_row?(&1, row)),
+      do: root,
+      else: %__MODULE__{root | children: children ++ [row]}
+  end
+
+  defp narrow(%__MODULE__{} = root, row),
+    do: %__MODULE__{uuid: Ash.UUID.generate(), operator: "and", children: [root, row]}
+
+  defp only(row), do: %__MODULE__{uuid: Ash.UUID.generate(), operator: "and", children: [row]}
+
+  defp same_row?(%__MODULE__{} = node, row) do
+    not group?(node) and
+      Map.take(node, [:field_name, :operator, :value, :path]) ==
+        Map.take(row, [:field_name, :operator, :value, :path])
+  end
+
+  @doc """
   A row comparing `leaf`'s field by its operator, with no value yet: one on
   a map, whose `leaf` holds a `:path`, starts with no key.
   """

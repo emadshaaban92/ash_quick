@@ -118,6 +118,7 @@ defmodule ExampleWeb.Router do
         quick_view "/enum_picks", Example.Test.EnumPicksLive.Quick
         quick_view "/field_rows", Example.Test.FieldRowsLive.Quick
         quick_view "/filter_fields", Example.Test.FilterFieldsLive.Quick
+        quick_view "/filter_fields_cells", Example.Test.FilterFieldsCellsLive.Quick
         quick_view "/filter_fields_named", Example.Test.FilterFieldsNamedLive.Quick
         quick_view "/filter_fields_none", Example.Test.FilterFieldsNoneLive.Quick
         quick_view "/filter_fields_salary", Example.Test.FilterFieldsSalaryLive.Quick
