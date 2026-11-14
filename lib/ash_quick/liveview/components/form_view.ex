@@ -385,7 +385,8 @@ defmodule AshQuick.LiveView.Components.FormView do
     # Positions are counted before anything is filtered out, so a ✕ names the
     # same position in the list the form holds.
     rows =
-      assigns.phx_field.value
+      assigns.field
+      |> attachment_value(assigns.phx_field)
       |> List.wrap()
       |> Enum.with_index()
       |> Enum.filter(&match?({%AshQuick.AshTypes.Attachment.Value{}, _}, &1))
@@ -447,7 +448,8 @@ defmodule AshQuick.LiveView.Components.FormView do
     # param that failed to cast stays a raw string — neither is previewable, and
     # both reach here before the field has an error to render instead.
     saved_values =
-      assigns.phx_field.value
+      assigns.field
+      |> attachment_value(assigns.phx_field)
       |> List.wrap()
       |> Enum.filter(&match?(%AshQuick.AshTypes.Attachment.Value{}, &1))
 
@@ -533,7 +535,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       <input
         type="hidden"
         name={@phx_field.name}
-        value={attachment_input_value(@phx_field.value)}
+        value={attachment_input_value(attachment_value(@field, @phx_field))}
       />
       <.error :for={msg <- @errors}>{msg}</.error>
 
@@ -672,6 +674,39 @@ defmodule AshQuick.LiveView.Components.FormView do
     />
     """
   end
+
+  # What an attachment field holds. An attribute reads as the form reads it,
+  # falling back to the record's value, and so does a single argument standing
+  # for that attribute (`Utils.mirrors_attachment_attribute?/2`). Any other
+  # argument holds only what the action was given: `AshPhoenix.Form.value/2`
+  # would also fall back to whatever the record holds under the same name,
+  # which is not the argument's to show or to post back.
+  defp attachment_value(%Ash.Resource.Attribute{}, phx_field), do: phx_field.value
+
+  defp attachment_value(field, %{form: %{source: %AshPhoenix.Form{} = form}} = phx_field) do
+    if Utils.mirrors_attachment_attribute?(form.resource, field),
+      do: phx_field.value,
+      else: argument_value(form.source, field.name)
+  end
+
+  defp attachment_value(_field, phx_field), do: phx_field.value
+
+  defp argument_value(source, name) do
+    with :error <- fetch_argument(source, name),
+         :error <- Map.fetch(source.params || %{}, to_string(name)) do
+      nil
+    else
+      {:ok, value} -> value
+    end
+  end
+
+  defp fetch_argument(%Ash.Changeset{} = changeset, name),
+    do: Ash.Changeset.fetch_argument(changeset, name)
+
+  defp fetch_argument(%Ash.ActionInput{} = input, name),
+    do: Ash.ActionInput.fetch_argument(input, name)
+
+  defp fetch_argument(_source, _name), do: :error
 
   defp attachment_input_value(nil), do: nil
   defp attachment_input_value(%AshQuick.AshTypes.Attachment.Value{} = v), do: Jason.encode!(v)

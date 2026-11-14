@@ -73,6 +73,36 @@ defmodule ExampleWeb.PickedRowsScenarioTest do
              Enum.sort([{nil, nil}, {:large, bin_b.id}])
   end
 
+  # Removing a row moves every row after it up a place, so the dropdowns drawn
+  # at a position now hold another row's value.
+  test "removing a row above another keeps the other row's picks labelled", %{
+    conn: conn,
+    bins: [bin_a, bin_b]
+  } do
+    {:ok, view, _html} = live(conn, "/test/picked_rows/create")
+    add_row(view)
+    add_row(view)
+
+    pick(view, "form_rows_0_kind", "Small")
+    pick(view, "form_rows_0_bin", bin_a.name)
+    pick(view, "form_rows_1_kind", "Large")
+    pick(view, "form_rows_1_bin", bin_b.name)
+
+    view
+    |> form("form[phx-submit=save]", %{"form" => %{"code" => unique("R")}})
+    |> render_change()
+
+    html =
+      view
+      |> element("button[phx-click=remove-form][phx-value-path='form[rows][0]']")
+      |> render_click()
+
+    assert hidden_value(html, "form[rows][0][kind]") == "large"
+    assert hidden_value(html, "form[rows][0][bin_id]") == bin_b.id
+    assert shown_text(html, "form_rows_0_kind") == "Large"
+    assert shown_text(html, "form_rows_0_bin") == bin_b.name
+  end
+
   defp add_row(view) do
     view
     |> element("button[phx-click=add-form][phx-value-path='form[rows]']")
@@ -103,6 +133,16 @@ defmodule ExampleWeb.PickedRowsScenarioTest do
     html
     |> LazyHTML.from_fragment()
     |> LazyHTML.query(~s(input[type="hidden"][name="#{name}"]))
+    |> Enum.flat_map(&LazyHTML.attribute(&1, "value"))
+    |> List.first()
+  end
+
+  # What the dropdown over the form field whose id is `field_id` shows in its
+  # text input.
+  defp shown_text(html, field_id) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("div[phx-hook='LiveSelect'] > div > input[type='text'][id^='#{field_id}_']")
     |> Enum.flat_map(&LazyHTML.attribute(&1, "value"))
     |> List.first()
   end

@@ -28,6 +28,7 @@ for resource <- [
       Example.Test.RequiredPicks,
       Example.Test.SecondLists,
       Example.Test.Secrets,
+      Example.Test.ShadowedArguments,
       Example.Test.ShelvedCrates,
       Example.Test.ShelvedCrates.Item,
       Example.Test.ShelvedCrates.Shelf,

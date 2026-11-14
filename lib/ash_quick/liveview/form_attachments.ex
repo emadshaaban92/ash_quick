@@ -288,8 +288,7 @@ defmodule AshQuick.LiveView.FormAttachments do
           params
 
         {_, [], data} ->
-          params
-          |> Map.put_new(field.name |> to_string(), kept_attachment(field, data, socket, form))
+          put_stored_attachment(params, field, data, socket, form)
 
         {AshQuick.AshTypes.Attachment, [value], _} ->
           params |> Map.put(field.name |> to_string(), value)
@@ -314,6 +313,33 @@ defmodule AshQuick.LiveView.FormAttachments do
   end
 
   defp maybe_upload_image(_field, params, _socket, _form), do: {params, @no_uploads}
+
+  # A save with no new upload keeps what the record holds, but only for the
+  # record's own attachment attribute, or a single attachment argument standing
+  # for it (`Utils.mirrors_attachment_attribute?/2`). Any other argument is the
+  # action's: it takes its own default, never whatever the record holds under
+  # the same name — a calculation, an aggregate or a relationship, unloaded or
+  # of another type.
+  defp put_stored_attachment(params, %Ash.Resource.Attribute{} = field, data, socket, form) do
+    case kept_attachment(field, data, socket, form) do
+      %Ash.NotLoaded{} -> params
+      %Ash.ForbiddenField{} -> params
+      kept -> Map.put_new(params, field.name |> to_string(), kept)
+    end
+  end
+
+  defp put_stored_attachment(params, argument, data, socket, form) do
+    if Utils.mirrors_attachment_attribute?(form.resource, argument),
+      do:
+        put_stored_attachment(
+          params,
+          Ash.Resource.Info.attribute(form.resource, argument.name),
+          data,
+          socket,
+          form
+        ),
+      else: params
+  end
 
   # What a save's unconsumed entries land after. For an array attribute that is
   # the list the params hold — carried from the server by
