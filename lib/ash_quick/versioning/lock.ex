@@ -63,8 +63,9 @@ defmodule AshQuick.Versioning.Lock do
   # stale, so its write is bumped without the check, on both paths. Ecto's
   # metadata is what tells it apart (`:built` until a data layer returns it),
   # together with the counter still holding its default: a built record given
-  # a version of its own, `%Post{id: id, version: params["version"]}`, is a
-  # copy held somewhere else, and is checked like a loaded one.
+  # a version of its own, `%Post{id: id, version: 3}`, is a copy held somewhere
+  # else, and is checked like a loaded one. One given `version: 1` cannot be
+  # told from one nobody filled in, so it goes unchecked.
   #
   # The locked attribute arrives in `opts` — the transformer resolved it from the
   # resource's declaration, so nothing here has to look it up per changeset.
