@@ -195,9 +195,17 @@ defmodule AshQuick.LiveView.ExportUtils do
   # plain map has gone to JSON above, so a struct is all that reaches here.
   defp field_export_value(%resource{} = value, field_name, ctx) when is_atom(field_name) do
     case {AshQuick.Info.sensitive?(resource, field_name), Map.get(value, field_name)} do
-      {true, nil} -> ""
-      {true, field_value} -> AshQuick.Info.mask(field_value)
-      {false, field_value} -> field_export_value(field_value, [], ctx)
+      {true, nil} ->
+        ""
+
+      {true, field_value} ->
+        AshQuick.Info.mask(field_value)
+
+      {false, field_value} when is_list(field_value) ->
+        list_export_value(resource, field_name, field_value, ctx)
+
+      {false, field_value} ->
+        field_export_value(field_value, [], ctx)
     end
   end
 
@@ -212,5 +220,14 @@ defmodule AshQuick.LiveView.ExportUtils do
     else
       ""
     end
+  end
+
+  # A list of stored maps is written as the JSON list it is, `[{"a":1}]`,
+  # rather than as its items joined: the one list whose cell can be valid
+  # JSON. Any other list reads as the page reads it.
+  defp list_export_value(resource, field_name, value, ctx) do
+    if AshQuick.LiveView.StoredMap.field?(Ash.Resource.Info.field(resource, field_name)),
+      do: value |> AshQuick.LiveView.StoredMap.json() |> ctx.text.(),
+      else: field_export_value(value, [], ctx)
   end
 end

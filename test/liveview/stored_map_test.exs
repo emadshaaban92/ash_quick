@@ -129,6 +129,31 @@ defmodule AshQuick.LiveView.StoredMapTest do
     test "falls back to Elixir's own spelling for a value JSON cannot hold" do
       assert StoredMap.json(%{a: {1, 2}}) == "%{a: {1, 2}}"
     end
+
+    # Jason raises, rather than answers an error, for a key that is no text;
+    # only a map built in memory, a calculation's, can hold one.
+    test "falls back to Elixir's own spelling for a key JSON cannot hold" do
+      assert StoredMap.json(%{{1, 2} => 1}) == "%{{1, 2} => 1}"
+      assert StoredMap.json(%{"a" => %{{1, 2} => 1}}, pretty: true) =~ "{1, 2} => 1"
+    end
+  end
+
+  describe "deeper?/2" do
+    test "is whether a value nests more levels than asked, itself the first" do
+      assert StoredMap.deeper?(%{"a" => 1}, 0)
+      refute StoredMap.deeper?(%{"a" => 1}, 1)
+      assert StoredMap.deeper?(%{"a" => [%{"b" => 1}]}, 2)
+      refute StoredMap.deeper?(%{"a" => [%{"b" => 1}]}, 3)
+      refute StoredMap.deeper?(%{"a" => %{}}, 1)
+      refute StoredMap.deeper?(%{"a" => ~D[2026-11-14]}, 1)
+    end
+
+    test "reads past the tree's own depth by default" do
+      chain = fn levels -> Enum.reduce(2..levels//1, %{"leaf" => 1}, &%{"n#{&1}" => &2}) end
+
+      refute StoredMap.deeper?(chain.(32))
+      assert StoredMap.deeper?(chain.(33))
+    end
   end
 
   describe "a list cell" do
@@ -226,6 +251,62 @@ defmodule AshQuick.LiveView.StoredMapTest do
       html = details(Map.new(1..600, &{"key#{String.pad_leading("#{&1}", 3, "0")}", &1}))
 
       assert html =~ "100 more not shown; see Raw JSON"
+    end
+
+    # Indented, the Raw JSON of a chain 2,000 levels deep is some 8 MB, all
+    # of it sent with the page.
+    test "writes the Raw JSON of a value deeper than the tree on one line" do
+      chain = Enum.reduce(1..2000, %{"leaf" => "bottom"}, &%{"n#{&1}" => &2})
+
+      [raw] =
+        chain
+        |> details()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("pre")
+        |> Enum.map(&LazyHTML.text/1)
+
+      assert raw == StoredMap.json(chain)
+      assert byte_size(raw) < 20_000
+      # Its one line wraps, rather than scrolling under the Copy button.
+      assert details(chain) =~ "whitespace-pre-wrap break-all"
+      refute details(%{"a" => 1}) =~ "break-all"
+
+      shallow = Enum.reduce(1..31, %{"leaf" => "bottom"}, &%{"n#{&1}" => &2})
+
+      [raw] =
+        shallow
+        |> details()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("pre")
+        |> Enum.map(&LazyHTML.text/1)
+
+      assert raw == StoredMap.json(shallow, pretty: true)
+    end
+
+    test "draws a list of maps as a tree of its items, its Raw JSON a list" do
+      html =
+        details([%{"sku" => "A-1"}, %{"sku" => "B-2", "qty" => 2}],
+          ash_field: %{type: {:array, Ash.Type.Map}},
+          dom_id: "order-field-2"
+        )
+
+      doc = LazyHTML.from_fragment(html)
+
+      assert [first, second] =
+               doc |> LazyHTML.query(~s(ul > li[data-key] > details)) |> Enum.to_list()
+
+      assert LazyHTML.text(first) =~ "1."
+      assert LazyHTML.text(first) =~ "A-1"
+      assert LazyHTML.text(second) =~ "2."
+      assert LazyHTML.text(second) =~ "qty"
+
+      assert [raw] = doc |> LazyHTML.query("pre#order-field-2-raw") |> Enum.map(&LazyHTML.text/1)
+      assert JSON.decode!(raw) == [%{"sku" => "A-1"}, %{"qty" => 2, "sku" => "B-2"}]
+      assert String.starts_with?(raw, "[")
+
+      assert doc
+             |> LazyHTML.query(~s(button#order-field-2-copy[data-copy-from="order-field-2-raw"]))
+             |> Enum.count() == 1
     end
 
     test "draws a deep chain only to its depth" do

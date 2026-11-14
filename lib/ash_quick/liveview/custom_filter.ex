@@ -1,6 +1,5 @@
 defmodule AshQuick.LiveView.CustomFilter do
   @moduledoc false
-  @derive {JSON.Encoder, except: [:uuid]}
   @enforce_keys [:uuid, :operator]
   defstruct [:uuid, :operator, :field_name, :value, :children, :path]
 
@@ -963,8 +962,25 @@ defmodule AshQuick.LiveView.CustomFilter do
 
   def leaves(%__MODULE__{} = leaf), do: [leaf]
 
+  @doc """
+  `filter` as the text a link carries it as: JSON, then base64.
+  """
   def to_string!(%__MODULE__{} = filter),
     do: filter |> JSON.encode!() |> :base64.encode()
+
+  # A node as a link writes it: without its `uuid`, which only the form
+  # needs, and without `children` or `path` when it holds none, so a row on
+  # a field that is no map adds nothing to the link for them. `from_string/1`
+  # reads a slot left out as `nil`.
+  defimpl JSON.Encoder do
+    def encode(filter, encoder) do
+      filter
+      |> Map.from_struct()
+      |> Map.delete(:uuid)
+      |> Map.reject(fn {key, value} -> key in [:children, :path] and is_nil(value) end)
+      |> encoder.(encoder)
+    end
+  end
 
   @doc """
   Decodes what `to_string!/1` wrote, or `nil` for anything else.

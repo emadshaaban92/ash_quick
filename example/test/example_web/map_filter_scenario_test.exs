@@ -252,6 +252,35 @@ defmodule ExampleWeb.MapFilterScenarioTest do
 
       refute hidden.resource_id in read(HiddenChanges, [key], "missing_key", nil, %{role: :admin})
     end
+
+    # Through a belongs_to, the row is asked inside an `exists`, and the map
+    # is the destination's: its field policy still decides first.
+    test "keeps no row whose related map the reader may not see", %{key: key} do
+      alias Example.Test.HiddenChangesNote
+
+      assert [field] = CustomFilter.filterable_fields(HiddenChangesNote, subject: :changes)
+      assert CustomFilter.map_field?(field)
+
+      shown = note(audit(%{key => "secret"}, ip: "shown"))
+      hidden = note(audit(%{key => "secret"}, ip: "hidden"))
+
+      for {operator, value} <- [
+            {"equals", "secret"},
+            {"contains", "sec"},
+            {"starts_with", "s"},
+            {"not_equals", "other"},
+            {"not_contains", "other"},
+            {"has_key", nil}
+          ] do
+        ids = read(HiddenChangesNote, "subject.changes", [key], operator, value, %{role: :viewer})
+        assert shown.id in ids, operator
+        refute hidden.id in ids, operator
+
+        ids = read(HiddenChangesNote, "subject.changes", [key], operator, value, %{role: :admin})
+        assert shown.id in ids, operator
+        assert hidden.id in ids, operator
+      end
+    end
   end
 
   describe "a link" do
@@ -314,7 +343,7 @@ defmodule ExampleWeb.MapFilterScenarioTest do
       AuditLog,
       %{
         resource_name: :map_filter,
-        resource_id: Ash.UUID.generate(),
+        resource_id: attrs[:resource_id] || Ash.UUID.generate(),
         action_type: :update,
         action_name: :update,
         attributes: %{},
@@ -327,9 +356,29 @@ defmodule ExampleWeb.MapFilterScenarioTest do
     )
   end
 
+  # An audit row whose `resource_id` names `subject`, the row it is a note on
+  # when read as `Example.Test.HiddenChangesNote`.
+  defp note(subject), do: audit(%{}, resource_id: subject.id)
+
   # The `resource_id`s of `resource`'s rows a map row on `changes` keeps, read
   # as `actor`.
   defp read(resource, path, operator, value, actor) do
+    resource
+    |> read_query("changes", path, operator, value)
+    |> Ash.read!(actor: actor)
+    |> Enum.map(& &1.resource_id)
+  end
+
+  # The ids of `resource`'s rows a map row on `field_name` keeps, read as
+  # `actor`.
+  defp read(resource, field_name, path, operator, value, actor) do
+    resource
+    |> read_query(field_name, path, operator, value)
+    |> Ash.read!(actor: actor)
+    |> Enum.map(& &1.id)
+  end
+
+  defp read_query(resource, field_name, path, operator, value) do
     filter =
       CustomFilter.build_ash_filter(%CustomFilter{
         uuid: "root",
@@ -337,7 +386,7 @@ defmodule ExampleWeb.MapFilterScenarioTest do
         children: [
           %CustomFilter{
             uuid: "row",
-            field_name: "changes",
+            field_name: field_name,
             path: path,
             operator: operator,
             value: value
@@ -345,10 +394,7 @@ defmodule ExampleWeb.MapFilterScenarioTest do
         ]
       })
 
-    resource
-    |> Ash.Query.filter_input(filter)
-    |> Ash.read!(actor: actor)
-    |> Enum.map(& &1.resource_id)
+    Ash.Query.filter_input(resource, filter)
   end
 
   # Opens the filter on the audit trail, sets its one row on `changes` at
