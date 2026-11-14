@@ -53,3 +53,43 @@ defmodule Example.Test.HiddenChanges do
     attribute :ip, :string, public?: true
   end
 end
+
+defmodule Example.Test.HiddenChangesNote do
+  @moduledoc """
+  `Example.Accounts.AuditLog`'s table again, each row read as a note on the
+  row its `resource_id` names, through a belongs_to on
+  `Example.Test.HiddenChanges`: a map a field policy hides on some rows, on
+  the far side of a relationship, which a map filter through it must not
+  read back either.
+  """
+  use Ash.Resource,
+    domain: Example.Test.HiddenChanges.Domain,
+    data_layer: AshPostgres.DataLayer,
+    authorizers: [Ash.Policy.Authorizer]
+
+  postgres do
+    table "audit_logs"
+    repo Example.Repo
+    migrate? false
+  end
+
+  actions do
+    defaults [:read]
+  end
+
+  policies do
+    policy always() do
+      authorize_if always()
+    end
+  end
+
+  attributes do
+    uuid_v7_primary_key :id
+  end
+
+  relationships do
+    belongs_to :subject, Example.Test.HiddenChanges,
+      source_attribute: :resource_id,
+      public?: true
+  end
+end

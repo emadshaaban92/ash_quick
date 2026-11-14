@@ -14,7 +14,10 @@ defmodule AshQuick.LiveView.StoredMap do
       maps and lists as branches, cut off after a number of entries so a
       huge value does not hang the page.
     * `json/2` is the value as JSON, pretty for a details page's Raw JSON
-      and compact for an export cell.
+      and compact for an export cell. A value nested deeper than the tree
+      draws (`deeper?/2`) shows compact on the details page too: indented
+      JSON repeats its indentation on every line, so its size grows with the
+      square of the depth.
 
   Keys read in sorted order, so a value reads the same however it was
   stored. Writing such a value is the host's own business: no form is
@@ -36,6 +39,10 @@ defmodule AshQuick.LiveView.StoredMap do
   @inline_keys 4
   @inline_value_length 24
   @key_length 24
+
+  # How deep `tree/2` builds by default, and so how deep a value can nest
+  # before its Raw JSON shows compact.
+  @tree_depth 32
 
   @typedoc """
   A branch or leaf of `tree/2`. `key` is the map key it was stored under, or
@@ -123,14 +130,14 @@ defmodule AshQuick.LiveView.StoredMap do
   left out. Nodes are counted depth first, each key or item one, and none is
   built past `:limit` (default 500): a branch reached after that holds no
   children, and says how many it left out. Nor is one built deeper than
-  `:depth` (default 32) branches: a chain of nested maps would otherwise
+  `:depth` (default #{@tree_depth}) branches: a chain of nested maps would otherwise
   spend the whole limit on one path, and a page nested that deep is more than
   a browser will draw.
   """
   @spec tree(map | list, keyword) :: {[tree_node], non_neg_integer}
   def tree(value, opts \\ []) do
     limit = Keyword.get(opts, :limit, 500)
-    depth = Keyword.get(opts, :depth, 32)
+    depth = Keyword.get(opts, :depth, @tree_depth)
     {nodes, omitted, _budget} = children(value, limit, depth)
     {nodes, omitted}
   end
@@ -167,17 +174,50 @@ defmodule AshQuick.LiveView.StoredMap do
   defp count(value), do: map_size(value)
 
   @doc """
+  Whether `value` nests maps or lists more than `depth` levels deep
+  (default #{@tree_depth}, `tree/2`'s own), the value itself the first: a
+  value `tree/2` would cut short at that depth. Stops at the first branch
+  found past it.
+  """
+  @spec deeper?(term, non_neg_integer) :: boolean
+  def deeper?(value, depth \\ @tree_depth)
+
+  def deeper?(value, 0) when is_list(value) or is_non_struct_map(value),
+    do: value != [] and value != %{}
+
+  def deeper?(value, depth) when is_list(value),
+    do: Enum.any?(value, &deeper?(&1, depth - 1))
+
+  def deeper?(value, depth) when is_non_struct_map(value),
+    do: Enum.any?(value, fn {_key, v} -> deeper?(v, depth - 1) end)
+
+  def deeper?(_value, _depth), do: false
+
+  @doc """
   `value` as JSON: compact by default, indented with `pretty: true`. A value
-  JSON cannot hold (a tuple, a pid) reads as Elixir writes it instead.
+  JSON cannot hold (a tuple, a pid, a key that is no text) reads as Elixir
+  writes it instead.
   """
   @spec json(term, keyword) :: String.t()
   def json(value, opts \\ []) do
     pretty? = Keyword.get(opts, :pretty, false)
 
-    case Jason.encode(value, pretty: pretty?) do
+    case encode(value, pretty?) do
       {:ok, json} -> json
-      {:error, _} -> inspect(value, pretty: pretty?, limit: :infinity, printable_limit: :infinity)
+      :error -> inspect(value, pretty: pretty?, limit: :infinity, printable_limit: :infinity)
     end
+  end
+
+  # Jason answers an error for a value it has no encoder for, but raises for
+  # a map key with no `String.Chars`, such as a tuple, which only a map built
+  # in memory can hold: a `jsonb` key is always text.
+  defp encode(value, pretty?) do
+    case Jason.encode(value, pretty: pretty?) do
+      {:ok, json} -> {:ok, json}
+      {:error, _error} -> :error
+    end
+  rescue
+    Protocol.UndefinedError -> :error
   end
 
   @doc """

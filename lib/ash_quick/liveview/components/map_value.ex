@@ -90,11 +90,18 @@ defmodule AshQuick.LiveView.Components.MapValue do
   def details(assigns) do
     {nodes, omitted} = StoredMap.tree(assigns.value)
 
+    # Raw JSON is indented, unless the value nests deeper than the tree
+    # draws: indented JSON grows with the square of the depth, and all of it
+    # is sent with the page, closed `<details>` or not. Compact, its one line
+    # wraps rather than scrolls under the Copy button.
+    compact? = StoredMap.deeper?(assigns.value)
+
     assigns =
       assigns
       |> assign(:nodes, nodes)
       |> assign(:omitted, omitted)
-      |> assign(:raw, StoredMap.json(assigns.value, pretty: true))
+      |> assign(:compact?, compact?)
+      |> assign(:raw, StoredMap.json(assigns.value, pretty: not compact?))
 
     ~H"""
     <div class="w-full min-w-0 space-y-2 text-sm" data-stored-map="details">
@@ -110,7 +117,10 @@ defmodule AshQuick.LiveView.Components.MapValue do
           <pre
             id={@id && "#{@id}-raw"}
             dir="ltr"
-            class="max-h-80 overflow-auto rounded-box bg-base-200 p-3 pe-16 text-start text-xs"
+            class={[
+              "max-h-80 overflow-auto rounded-box bg-base-200 p-3 pe-16 text-start text-xs",
+              @compact? && "whitespace-pre-wrap break-all"
+            ]}
           >{@raw}</pre>
           <button
             :if={@id}

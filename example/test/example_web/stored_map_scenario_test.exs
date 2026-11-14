@@ -83,6 +83,17 @@ defmodule ExampleWeb.StoredMapScenarioTest do
     refute tree |> LazyHTML.query("ul") |> LazyHTML.text() =~ "**redacted**"
     assert LazyHTML.text(tree) =~ "Show all"
     assert LazyHTML.text(tree) =~ "Raw JSON"
+
+    # Named for the resource and the field's place among the details, so the
+    # Copy button finds its own Raw JSON. `:changes` is the fifth field.
+    assert [raw] = doc |> LazyHTML.query("pre#audit_log-field-4-raw") |> Enum.to_list()
+    assert raw |> LazyHTML.text() |> JSON.decode!() == entry.changes
+
+    assert doc
+           |> LazyHTML.query(
+             ~s(button#audit_log-field-4-copy[data-copy-from="audit_log-field-4-raw"])
+           )
+           |> Enum.count() == 1
   end
 
   test "the export holds the whole map on one line", %{conn: conn, admin: admin, entry: entry} do
@@ -98,6 +109,60 @@ defmodule ExampleWeb.StoredMapScenarioTest do
       |> Enum.filter(&String.contains?(&1, entry.resource_id))
 
     assert row =~ ~s("{""description"":{""from"":null,)
+  end
+
+  describe "a list of maps" do
+    alias Example.Test.StoredMapLists
+
+    setup do
+      # Seeded: no form writes a stored map, so no action takes one.
+      record =
+        Ash.Seed.seed!(StoredMapLists, %{
+          code: "Order #{System.unique_integer([:positive])}",
+          entries: [%{"sku" => "A-1", "qty" => 1}, %{"sku" => "B-2", "qty" => 2}]
+        })
+
+      %{record: record}
+    end
+
+    test "a details page draws each item, its Raw JSON the list", ctx do
+      %{conn: conn, admin: admin, record: record} = ctx
+
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/test/stored_map_lists/#{record.id}")
+      doc = view |> render() |> LazyHTML.from_fragment()
+
+      [tree] = doc |> LazyHTML.query(~s([data-stored-map="details"])) |> Enum.to_list()
+
+      assert [first, second] =
+               tree |> LazyHTML.query(~s(ul > li[data-key] > details)) |> Enum.to_list()
+
+      assert LazyHTML.text(first) =~ "A-1"
+      assert LazyHTML.text(second) =~ "B-2"
+
+      # `:entries` is the second field.
+      assert [raw] = doc |> LazyHTML.query("pre#stored_map_lists-field-1-raw") |> Enum.to_list()
+      assert raw |> LazyHTML.text() |> JSON.decode!() == record.entries
+
+      assert doc |> LazyHTML.query("button#stored_map_lists-field-1-copy") |> Enum.count() == 1
+    end
+
+    test "the export holds the list as one JSON list", ctx do
+      %{conn: conn, admin: admin, record: record} = ctx
+
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/test/stored_map_lists")
+
+      view |> element("a", "CSV") |> render_click()
+      render_async(view, @export_timeout)
+
+      [row] =
+        admin
+        |> exported_csv()
+        |> String.split("\r\n", trim: true)
+        |> Enum.filter(&String.contains?(&1, record.code))
+
+      assert row ==
+               ~s(#{record.code},"[{""qty"":1,""sku"":""A-1""},{""qty"":2,""sku"":""B-2""}]")
+    end
   end
 
   # The cells of the column headed "Changes", in the entry's row.

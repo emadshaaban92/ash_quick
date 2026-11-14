@@ -469,6 +469,27 @@ defmodule AshQuick.LiveView.CustomFilterTest do
                |> Map.get(:children)
     end
 
+    # A link writes no `path` or `children` a node does not hold, so a row on
+    # any other field is as short as it can be; reading it back, each is
+    # `nil` again.
+    test "writes no empty path or children into the URL" do
+      filter = group([%CustomFilter{row("code") | operator: "equals", value: "x"}])
+
+      json = filter |> CustomFilter.to_string!() |> Base.decode64!()
+
+      assert JSON.decode!(json) == %{
+               "operator" => "and",
+               "field_name" => nil,
+               "value" => nil,
+               "children" => [%{"operator" => "equals", "field_name" => "code", "value" => "x"}]
+             }
+
+      assert [%CustomFilter{path: nil, children: nil, field_name: "code"}] =
+               json |> :base64.encode() |> CustomFilter.from_string() |> Map.get(:children)
+
+      assert JSON.decode!(JSON.encode!(map_row([], "contains")))["path"] == []
+    end
+
     test "is read only with keys for a path and an operator a map row offers" do
       assert CustomFilter.readable?(map_row([], "contains"))
       assert CustomFilter.readable?(map_row(["k"], "has_key", nil))
