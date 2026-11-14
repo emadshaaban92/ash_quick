@@ -645,6 +645,72 @@ msgstr ""
 msgid "This list has new records."
 msgstr ""
 
+#, elixir-format
+msgid "%{count} item"
+msgid_plural "%{count} items"
+msgstr[0] ""
+msgstr[1] ""
+
+#, elixir-format
+msgid "%{count} key"
+msgid_plural "%{count} keys"
+msgstr[0] ""
+msgstr[1] ""
+
+#, elixir-format
+msgid "%{count} more not shown; see Raw JSON"
+msgid_plural "%{count} more not shown; see Raw JSON"
+msgstr[0] ""
+msgstr[1] ""
+
+#, elixir-format
+msgid "+%{count}"
+msgstr ""
+
+#, elixir-format
+msgid "Copied"
+msgstr ""
+
+#, elixir-format
+msgid "Copy"
+msgstr ""
+
+#, elixir-format
+msgid "Empty"
+msgstr ""
+
+#, elixir-format
+msgid "Raw JSON"
+msgstr ""
+
+#, elixir-format
+msgid "Redacted"
+msgstr ""
+
+#, elixir-format
+msgid "Show all"
+msgstr ""
+
+#, elixir-format
+msgid "Show less"
+msgstr ""
+
+#, elixir-format
+msgid "empty"
+msgstr ""
+
+#, elixir-format
+msgid "[%{count} item]"
+msgid_plural "[%{count} items]"
+msgstr[0] ""
+msgstr[1] ""
+
+#, elixir-format
+msgid "{%{count} key}"
+msgid_plural "{%{count} keys}"
+msgstr[0] ""
+msgstr[1] ""
+
 msgid "Accepts"
 msgstr ""
 

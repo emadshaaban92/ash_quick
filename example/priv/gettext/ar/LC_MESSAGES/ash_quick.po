@@ -677,6 +677,92 @@ msgstr "إعادة التحميل"
 msgid "This list has new records."
 msgstr "توجد سجلات جديدة في هذه القائمة."
 
+#, elixir-format
+msgid "%{count} item"
+msgid_plural "%{count} items"
+msgstr[0] "لا عناصر"
+msgstr[1] "عنصر واحد"
+msgstr[2] "عنصران"
+msgstr[3] "%{count} عناصر"
+msgstr[4] "%{count} عنصرًا"
+msgstr[5] "%{count} عنصر"
+
+#, elixir-format
+msgid "%{count} key"
+msgid_plural "%{count} keys"
+msgstr[0] "لا مفاتيح"
+msgstr[1] "مفتاح واحد"
+msgstr[2] "مفتاحان"
+msgstr[3] "%{count} مفاتيح"
+msgstr[4] "%{count} مفتاحًا"
+msgstr[5] "%{count} مفتاح"
+
+#, elixir-format
+msgid "%{count} more not shown; see Raw JSON"
+msgid_plural "%{count} more not shown; see Raw JSON"
+msgstr[0] "لم يُعرض شيء آخر؛ راجع JSON الخام"
+msgstr[1] "لم يُعرض عنصر آخر؛ راجع JSON الخام"
+msgstr[2] "لم يُعرض عنصران آخران؛ راجع JSON الخام"
+msgstr[3] "لم تُعرض %{count} عناصر أخرى؛ راجع JSON الخام"
+msgstr[4] "لم يُعرض %{count} عنصرًا آخر؛ راجع JSON الخام"
+msgstr[5] "لم يُعرض %{count} عنصر آخر؛ راجع JSON الخام"
+
+#, elixir-format
+msgid "+%{count}"
+msgstr "+%{count}"
+
+#, elixir-format
+msgid "Copied"
+msgstr "تم النسخ"
+
+#, elixir-format
+msgid "Copy"
+msgstr "نسخ"
+
+#, elixir-format
+msgid "Empty"
+msgstr "فارغ"
+
+#, elixir-format
+msgid "Raw JSON"
+msgstr "JSON الخام"
+
+#, elixir-format
+msgid "Redacted"
+msgstr "محجوب"
+
+#, elixir-format
+msgid "Show all"
+msgstr "عرض الكل"
+
+#, elixir-format
+msgid "Show less"
+msgstr "عرض أقل"
+
+#, elixir-format
+msgid "empty"
+msgstr "فارغ"
+
+#, elixir-format
+msgid "[%{count} item]"
+msgid_plural "[%{count} items]"
+msgstr[0] "[لا عناصر]"
+msgstr[1] "[عنصر واحد]"
+msgstr[2] "[عنصران]"
+msgstr[3] "[%{count} عناصر]"
+msgstr[4] "[%{count} عنصرًا]"
+msgstr[5] "[%{count} عنصر]"
+
+#, elixir-format
+msgid "{%{count} key}"
+msgid_plural "{%{count} keys}"
+msgstr[0] "{لا مفاتيح}"
+msgstr[1] "{مفتاح واحد}"
+msgstr[2] "{مفتاحان}"
+msgstr[3] "{%{count} مفاتيح}"
+msgstr[4] "{%{count} مفتاحًا}"
+msgstr[5] "{%{count} مفتاح}"
+
 msgid "Accepts"
 msgstr ""
 

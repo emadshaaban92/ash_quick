@@ -96,7 +96,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
             <dt class="w-1/4 flex-none text-base-content/60">
               {Labels.field(field)}
             </dt>
-            <dd class="w-3/4 text-base-content">
+            <dd class="w-3/4 min-w-0 text-base-content">
               <.render_field
                 field={field}
                 index={index}
@@ -285,7 +285,8 @@ defmodule AshQuick.LiveView.Components.DetailsView do
   end
 
   # An attachment field opens its images in a viewer of its own, named for
-  # its position: a field can be listed twice, so its name is not unique.
+  # its position: a field can be listed twice, so its name is not unique. A
+  # stored map's Raw JSON is named the same way, for its Copy button.
   # The resource is in the name so it does not take a host's own id. The
   # viewer is announced by the field's label, as the page shows it.
   defp render_field(%{field: %QuickField{path: path}, record: %resource{} = record} = assigns) do
@@ -297,6 +298,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
         :viewer,
         "#{Ash.Resource.Info.short_name(resource)}-attachment-viewer-#{assigns.index}"
       )
+      |> assign(:dom_id, "#{Ash.Resource.Info.short_name(resource)}-field-#{assigns.index}")
 
     ~H"""
     <.field_value
@@ -306,6 +308,8 @@ defmodule AshQuick.LiveView.Components.DetailsView do
       viewer={@viewer}
       viewer_label={Labels.field(@field)}
       linker={@linker}
+      view={:details}
+      dom_id={@dom_id}
     />
     """
   end

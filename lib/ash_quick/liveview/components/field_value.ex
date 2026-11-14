@@ -5,7 +5,9 @@ defmodule AshQuick.LiveView.Components.FieldValue do
 
   alias AshQuick.Labels
   alias AshQuick.LiveView.EnumOptions
+  alias AshQuick.LiveView.Components.MapValue
   alias AshQuick.LiveView.QuickField
+  alias AshQuick.LiveView.StoredMap
 
   attr :value, :any, required: true
   attr :path, :any, required: true
@@ -33,6 +35,16 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     default: nil,
     doc:
       "a function from a record to its details path or `nil`, from `AshQuick.Nav.Info.details_linker/3`; a related record is plain text when nil"
+
+  attr :view, :atom,
+    default: :cell,
+    values: [:cell, :details],
+    doc:
+      "where the value shows: a list cell, or a details page, which spells a stored map out in full"
+
+  attr :dom_id, :string,
+    default: nil,
+    doc: "a prefix for ids of the value's own elements, such as a stored map's Copy button"
 
   def field_value(%{value: nil} = assigns) do
     ~H"""
@@ -101,7 +113,21 @@ defmodule AshQuick.LiveView.Components.FieldValue do
   # came from. A nested `field_value/1` is handed a field of its own and asks
   # again.
   def field_value(assigns) when not is_map_key(assigns, :choice) do
-    assigns |> assign(:choice, EnumOptions.kind(assigns[:ash_field])) |> field_value()
+    assigns
+    |> assign(:choice, EnumOptions.kind(assigns[:ash_field]))
+    |> assign(:stored_map?, assigns.path == [] and StoredMap.field?(assigns[:ash_field]))
+    |> field_value()
+  end
+
+  # A map whose shape is only known at runtime, or a list of them: summed up
+  # in a list cell, spelled out on a details page. See
+  # `AshQuick.LiveView.StoredMap`.
+  def field_value(%{stored_map?: true, value: value} = assigns)
+      when is_non_struct_map(value) or is_list(value) do
+    ~H"""
+    <MapValue.details :if={@view == :details} value={@value} id={@dom_id} />
+    <MapValue.cell :if={@view != :details} value={@value} />
+    """
   end
 
   # A value of a field with a fixed set reads as its label: an atom, or the
@@ -156,6 +182,8 @@ defmodule AshQuick.LiveView.Components.FieldValue do
       viewer={@viewer}
       viewer_label={@viewer_label}
       linker={@linker}
+      view={@view}
+      dom_id={@dom_id}
     />
     """
   end
@@ -178,6 +206,8 @@ defmodule AshQuick.LiveView.Components.FieldValue do
       viewer={@viewer}
       viewer_label={@viewer_label}
       linker={@linker}
+      view={@view}
+      dom_id={@dom_id}
     />
     """
   end
@@ -213,6 +243,8 @@ defmodule AshQuick.LiveView.Components.FieldValue do
           viewer={@viewer}
           viewer_label={@viewer_label}
           linker={@linker}
+          view={@view}
+          dom_id={@dom_id}
         />
     <% end %>
     """
@@ -251,12 +283,6 @@ defmodule AshQuick.LiveView.Components.FieldValue do
   def field_value(%{value: %{__struct__: Money}} = assigns) do
     ~H"""
     <span>{AshQuick.Config.format_money(@value)}</span>
-    """
-  end
-
-  def field_value(%{ash_field: %{type: Ash.Type.Map}} = assigns) do
-    ~H"""
-    <pre>{Jason.encode!(@value, pretty: true)}</pre>
     """
   end
 
