@@ -4,13 +4,10 @@ defmodule AshQuick.LiveView.AttachmentKeys do
   # was built and those this page minted for an upload, each held to its
   # top-level field.
   require Logger
-  import Phoenix.Component, only: [assign: 2, assign: 3]
+  import Phoenix.Component, only: [assign: 2]
   alias AshQuick.LiveView.FormParams
+  alias AshQuick.LiveView.FormUploads
   alias AshQuick.Storage
-
-  # The assign `AshQuick.LiveView.FormUploads` holds sub-form upload names
-  # under; a new form starts without any.
-  @upload_names :ash_quick_upload_names
 
   # The attachment keys this form will take from a post, per top-level field:
   # what the form held in that field when it was built, read off the form
@@ -35,7 +32,7 @@ defmodule AshQuick.LiveView.AttachmentKeys do
       ash_quick_issued_attachment_keys: attachment_keys_by_field(socket.assigns.form, true)
     )
     |> assign(ash_quick_minted_attachment_keys: %{})
-    |> assign(@upload_names, %{})
+    |> FormUploads.clear_upload_names()
     |> assign(ash_quick_cleared_attachments: MapSet.new())
   end
 
