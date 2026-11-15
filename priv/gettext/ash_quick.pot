@@ -465,7 +465,7 @@ msgstr ""
 msgid "Confirm"
 msgstr ""
 
-#: lib/ash_quick/liveview/list_utils.ex
+#: lib/ash_quick/liveview/list_bulk.ex
 #, elixir-autogen, elixir-format
 msgid "%{action} applied to %{applied} of 1 selected row."
 msgid_plural "%{action} applied to %{applied} of %{count} selected rows."
@@ -502,7 +502,7 @@ msgstr ""
 msgid "Something went wrong on our end. Please try again, or contact support if it keeps happening."
 msgstr ""
 
-#: lib/ash_quick/liveview/list_utils.ex
+#: lib/ash_quick/liveview/list_filter_guard.ex
 #, elixir-autogen, elixir-format
 msgid "That filter couldn't be applied to this list, so it was ignored."
 msgstr ""
@@ -517,7 +517,7 @@ msgstr ""
 msgid "That session has already ended."
 msgstr ""
 
-#: lib/ash_quick/liveview/list_utils.ex
+#: lib/ash_quick/liveview/list_bulk.ex
 #, elixir-autogen, elixir-format
 msgid "The other row was not changed and is still selected: check it and try again."
 msgid_plural "The other %{count} rows were not changed and are still selected: check them and try again."
@@ -544,7 +544,7 @@ msgstr ""
 msgid "Too large"
 msgstr ""
 
-#: lib/ash_quick/liveview/list_utils.ex
+#: lib/ash_quick/liveview/list_export.ex
 #, elixir-autogen, elixir-format
 msgid "Unable to determine current user for export"
 msgstr ""
@@ -760,7 +760,7 @@ msgstr ""
 msgid "%{relationship} › %{field}"
 msgstr ""
 
-#: lib/ash_quick/liveview/list_utils.ex
+#: lib/ash_quick/liveview/list_bulk.ex
 #, elixir-autogen, elixir-format
 msgid "%{action} was not applied. The selected row was not changed and is still selected: check it and try again."
 msgid_plural "%{action} was not applied. The %{count} selected rows were not changed and are still selected: check them and try again."

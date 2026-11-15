@@ -543,6 +543,7 @@ defmodule AshQuick.LiveView.QuickView do
   alias AshQuick.LiveView.QuickView.Options
   alias AshQuick.LiveView.QuickView
   alias AshQuick.LiveView.ListUtils
+  alias AshQuick.LiveView.CellFilterMenu
   alias AshQuick.LiveView.DetailsUtils
   alias AshQuick.LiveView.FormUtils
   alias AshQuick.LiveView.Liveness
@@ -1098,7 +1099,7 @@ defmodule AshQuick.LiveView.QuickView do
     |> assign(:id, "#{Ash.Resource.Info.trace_name(options.resource)}-list")
     |> assign(:fields, fields)
     # The columns whose cells offer to filter the list by their value.
-    |> assign(:cell_filters, ListUtils.cell_filters(socket, fields, action, options))
+    |> assign(:cell_filters, CellFilterMenu.cell_filters(socket, fields, action, options))
     |> assign(:sortable, options.list_sortable)
     |> assign(:filterable, options.list_filterable)
     |> assign(:new_action_label, options.new_action_label)

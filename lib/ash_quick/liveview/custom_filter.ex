@@ -597,7 +597,7 @@ defmodule AshQuick.LiveView.CustomFilter do
 
   # One item of a list field, by its type and the constraints its items have.
   # Any other field is its own item: Has Any Of on one, which only a link
-  # carries, is dropped before the read (`ListUtils`), with the
+  # carries, is dropped before the read (`ListFilterGuard`), with the
   # refused-filter flash.
   defp item_field(%{type: {:array, type}} = field),
     do: %{type: type, constraints: (Map.get(field, :constraints) || [])[:items] || []}

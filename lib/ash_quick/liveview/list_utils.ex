@@ -1,41 +1,26 @@
 defmodule AshQuick.LiveView.ListUtils do
   @moduledoc false
-  require Ash.Query
-  require Logger
+  # The list page's lifecycle: its params, its events and messages, row
+  # selection and the row actions menu. The read, live rows, the filter
+  # guard, export, bulk actions and the cell filter menu are in `ListRead`,
+  # `ListRows`, `ListFilterGuard`, `ListExport`, `ListBulk` and
+  # `CellFilterMenu`.
   import Phoenix.LiveView
   import Phoenix.Component, only: [assign: 2, assign: 3, assign_new: 3]
-  use Gettext, backend: AshQuick.Gettext
 
   alias Ash.Resource.Actions
-  alias Phoenix.LiveView.AsyncResult
   alias AshQuick.Labels
-  alias AshQuick.LiveView.ActionErrors
-  alias AshQuick.LiveView.BulkActions
-  alias AshQuick.LiveView.BulkForm
-  alias AshQuick.LiveView.FieldErrors
-  alias AshQuick.LiveView.FormParams
   alias AshQuick.LiveView.URLParams
-  alias AshQuick.LiveView.CellFilter
-  alias AshQuick.LiveView.CustomFilter
-  alias AshQuick.LiveView.DetailsUtils
-  alias AshQuick.LiveView.FilterField
-  alias AshQuick.LiveView.QuickField
-  alias AshQuick.LiveView.LocalDatetime
+  alias AshQuick.LiveView.CellFilterMenu
   alias AshQuick.LiveView.Components.FilterForm
+  alias AshQuick.LiveView.ListBulk
+  alias AshQuick.LiveView.ListExport
+  alias AshQuick.LiveView.ListFilterGuard
+  alias AshQuick.LiveView.ListRead
+  alias AshQuick.LiveView.ListRows
   alias AshQuick.LiveView.Liveness
-  alias AshQuick.LiveView.DownloadUtils
-  alias AshQuick.LiveView.PrintUtils
   alias AshQuick.LiveView.Utils
   alias AshQuick.LiveView.QuickView.Options
-
-  # Names no field, because the field is not always the part that was wrong —
-  # an unusable value on a perfectly good field lands here too. A visitor who
-  # typed the filter knows which one they typed, and a visitor who was handed
-  # the link cannot act on the name either way.
-  defp refused_filter_message,
-    do: gettext("That filter couldn't be applied to this list, so it was ignored.")
-
-  @error_classes [Ash.Error.Invalid, Ash.Error.Forbidden, Ash.Error.Framework, Ash.Error.Unknown]
 
   def do_handle_params(
         socket,
@@ -43,16 +28,18 @@ defmodule AshQuick.LiveView.ListUtils do
         %Actions.Read{get?: false} = action,
         %Options{} = options
       ) do
-    {socket, params} = drop_refused_rows(socket, params, action, options)
-    params = URLParams.allow_filter_form(params, offered_fields(socket, action, options))
+    {socket, params} = ListFilterGuard.drop_refused_rows(socket, params, action, options)
 
-    {socket, params, page} = initial_read(socket, params, options)
+    params =
+      URLParams.allow_filter_form(params, ListFilterGuard.offered_fields(socket, action, options))
+
+    {socket, params, page} = ListRead.initial_read(socket, params, options)
 
     socket
     |> assign(:params, params)
-    |> assign(fresh_screen(page))
+    |> assign(ListRows.fresh_screen(page))
     |> assign(:selected_rows, %{})
-    |> assign(:export_data, running_export(socket))
+    |> assign(:export_data, ListExport.running_export(socket))
     # Kept across patches: an export a patch interrupted still finishes, and
     # its modal comes back, so a failed one still needs its format to retry.
     |> assign_new(:export_format, fn -> nil end)
@@ -73,229 +60,15 @@ defmodule AshQuick.LiveView.ListUtils do
     |> set_title(options)
     |> AshPhoenix.LiveView.keep_live(
       :data,
-      &refetch_rows(&1, params, options),
-      [initial: page, results: :lose, after_fetch: &after_refetch(&1, &2, params, options)] ++
+      &ListRows.refetch_rows(&1, params, options),
+      [
+        initial: page,
+        results: :lose,
+        after_fetch: &ListRows.after_refetch(&1, &2, params, options)
+      ] ++
         Liveness.list_options(options)
     )
   end
-
-  # Rows hold their place
-  # ---------------------
-  #
-  # Nothing on a live list moves unless its reader asks: a row that shifted
-  # under the pointer is a click or a tick on the wrong record. So a refetch
-  # re-reads the rows already on screen, by id, with the list's own search and
-  # filters and through the reader's scope, and puts each back in its slot.
-  #
-  # A row that does not come back keeps its slot as a placeholder: no data, no
-  # link, no checkbox, only "No longer available". That one wording covers a
-  # row destroyed, one edited out of the filter and one the reader may no
-  # longer read: why a record left is not the reader's to know, and telling
-  # the last two apart would mean reading past the reader's policies.
-  #
-  # A record that would now belong on the page but is not on it — created
-  # elsewhere, or edited into the filter — is announced, not inserted: a bar
-  # over the table offers a Reload, which reads the list afresh from its URL.
-  # Whether there is one is asked of the reader's own read of their page (see
-  # `news?/6`), so a record they may not read never raises the bar.
-  #
-  # The reader's own actions are the exception, being what they asked for: a
-  # row action returns through its modal to a fresh read, and a bulk run reads
-  # the list afresh, so a queue the reader works through closes up.
-  #
-  # `:row_order` is the screen: the ids drawn, in the order drawn, the
-  # placeholders' among them. `:data` holds only the records still read back,
-  # so everything that acts on rows — selection, bulk runs, row menus, export —
-  # sees none of the placeholders.
-  @no_pending %{refresh?: false, candidates: %{}}
-
-  defp fresh_screen(page) do
-    %{
-      row_order: Enum.map(page.results, & &1.id),
-      gone_rows: MapSet.new(),
-      list_news: false,
-      list_pending: @no_pending
-    }
-  end
-
-  # The rows on screen that are not placeholders yet, read again and put back
-  # in screen order. Which of them did not come back is `after_refetch/4`'s to
-  # work out, since the refetch callback can only return the page.
-  defp read_rows!(socket, params, options, order, gone) do
-    case Enum.reject(order, &MapSet.member?(gone, &1)) do
-      [] ->
-        []
-
-      ids ->
-        by_id =
-          socket
-          |> list_query(params, options)
-          |> Ash.Query.filter(id in ^ids)
-          |> Ash.Query.page(limit: length(ids), offset: 0, count: false)
-          |> Ash.read!()
-          |> Map.fetch!(:results)
-          |> Map.new(&{&1.id, &1})
-
-        for id <- order, record = by_id[id], do: record
-    end
-  end
-
-  # What a refetch reads depends on what woke it. A row on screen, or a record
-  # one of them shows, re-reads the rows; a record off screen only asks whether
-  # the bar should go up. Woken by nothing it recorded (a host's own
-  # `handle_live/4`), it re-reads the rows.
-  defp refetch_rows(socket, params, options) do
-    %{data: data, row_order: order, gone_rows: gone, list_pending: pending} = socket.assigns
-
-    if pending.refresh? or pending.candidates == %{} do
-      %{data | results: read_rows!(socket, params, options, order, gone)}
-    else
-      data
-    end
-  end
-
-  defp after_refetch(page, socket, params, options) do
-    %{row_order: order, list_pending: pending} = socket.assigns
-    back = MapSet.new(page.results, & &1.id)
-
-    gone = for id <- order, not MapSet.member?(back, id), into: MapSet.new(), do: id
-
-    news? =
-      socket.assigns.list_news or
-        (pending.candidates != %{} and
-           news?(socket, params, options, order, gone, pending.candidates))
-
-    socket
-    |> assign(gone_rows: gone, list_news: news?, list_pending: @no_pending)
-    |> keep_to_shown_rows(back)
-  end
-
-  # Whether a record this page was told about, and is not showing, now belongs
-  # on it. Asked of the reader's own read of the page they are on (its offset
-  # and limit), so a record they may not read never counts.
-  #
-  # A created record on that page is new. An updated one may only have moved
-  # up from the next page because a row above it left, which is no news at
-  # all, so it counts only where a move-up cannot explain it: sorted in among
-  # the rows still shown, or on a page that was the last when drawn, which had
-  # no next page to move up from. What that leaves out — an edit that sorts a
-  # record onto the very end of a full page — waits for the next navigation.
-  defp news?(socket, params, options, order, gone, candidates) do
-    fresh = page_ids(socket, params, options)
-    shown = order |> Enum.reject(&MapSet.member?(gone, &1)) |> MapSet.new()
-
-    last_shown =
-      fresh
-      |> Enum.with_index()
-      |> Enum.flat_map(fn {id, at} -> if MapSet.member?(shown, id), do: [at], else: [] end)
-      |> Enum.max(fn -> -1 end)
-
-    last_page? = length(order) < params.limit
-
-    fresh
-    |> Enum.with_index()
-    |> Enum.any?(fn {id, at} ->
-      case candidates do
-        %{^id => :create} -> true
-        %{^id => :update} -> last_page? or at < last_shown
-        _not_told -> false
-      end
-    end)
-  end
-
-  # The ids on the reader's page, and nothing else: no loads, no count.
-  defp page_ids(socket, params, options) do
-    socket
-    |> read_query(params, options)
-    |> Ash.Query.select([:id])
-    |> Ash.Query.page(
-      limit: params.limit,
-      offset: get_offset(params.page, params.limit),
-      count: false
-    )
-    |> Ash.read!()
-    |> Map.fetch!(:results)
-    |> Enum.map(& &1.id)
-  end
-
-  # A tick on a row no longer shown would keep the bulk menu open over nothing,
-  # and "all" stays ticked only while every row shown still is.
-  defp keep_to_shown_rows(socket, shown) do
-    selected_rows = Map.get(socket.assigns, :selected_rows, %{})
-
-    selected =
-      for {id, "on"} <- selected_rows, MapSet.member?(shown, id), into: %{}, do: {id, "on"}
-
-    selected =
-      if selected_rows["all"] == "on" and MapSet.size(shown) > 0 and
-           map_size(selected) == MapSet.size(shown),
-         do: Map.put(selected, "all", "on"),
-         else: selected
-
-    row_actions =
-      case Map.get(socket.assigns, :row_actions) do
-        %{id: id} = open -> if(MapSet.member?(shown, id), do: open)
-        nil -> nil
-      end
-
-    assign(socket, selected_rows: selected, row_actions: row_actions)
-  end
-
-  # A notification is noted before the refetch it may defer, so a coalesced
-  # refetch still knows everything that woke it. One heard on the resource's
-  # bare topic names its record: on screen, it refreshes that row; off screen,
-  # or shown as "No longer available", a create or an update makes it a
-  # candidate for the bar — a row edited back into the search comes back
-  # through Reload. A destroy off screen adds nothing. One heard on a record's
-  # own topic is a record a row shows, whatever its resource: the list holds no
-  # row's own topic, and a category's parent arrives on both, where the bare
-  # topic's copy alone would only make it a candidate.
-  defp note_notification(socket, topic, %Ash.Notifier.Notification{} = notification, options) do
-    current = socket.assigns.list_pending
-
-    pending =
-      case notification do
-        %{resource: resource, data: %{id: id}} when resource == options.resource ->
-          if topic == AshQuick.Topics.collection(resource),
-            do: note_own(current, id, notification, socket.assigns),
-            else: %{current | refresh?: true}
-
-        _related ->
-          %{current | refresh?: true}
-      end
-
-    # Unchanged means either nothing to do, or a refetch already deferred that
-    # will do it.
-    if pending == current,
-      do: :ignore,
-      else: {:ok, assign(socket, :list_pending, pending)}
-  end
-
-  defp note_own(pending, id, notification, %{row_order: order, gone_rows: gone} = assigns) do
-    cond do
-      id in order and not MapSet.member?(gone, id) -> %{pending | refresh?: true}
-      assigns.list_news -> pending
-      true -> note_candidate(pending, id, notification)
-    end
-  end
-
-  defp note_candidate(pending, id, %{action: %{type: type}}) when type in [:create, :update],
-    do: %{pending | candidates: Map.update(pending.candidates, id, type, &max_kind(&1, type))}
-
-  defp note_candidate(pending, _id, _destroy), do: pending
-
-  # Created and then edited inside one window is still a create.
-  defp max_kind(:create, _type), do: :create
-  defp max_kind(_kind, type), do: type
-
-  # A patch closes a finished export's modal and leaves a running one in
-  # place. The running one is also what refuses a second export, so dropping
-  # it here would let a patch between two requests run them side by side.
-  defp running_export(%{assigns: %{export_data: %AsyncResult{loading: loading} = export}})
-       when not is_nil(loading),
-       do: export
-
-  defp running_export(_socket), do: nil
 
   defp set_title(socket, %{resource: resource}) do
     title =
@@ -306,457 +79,6 @@ defmodule AshQuick.LiveView.ListUtils do
 
     socket |> assign(page_title: title)
   end
-
-  def load_data!(socket, %URLParams{} = params, %Options{} = options) do
-    limit = params.limit
-    offset = get_offset(params.page, limit)
-
-    socket
-    |> list_query(params, options)
-    |> Ash.Query.page(limit: limit, offset: offset, count: countable?(socket.assigns.ash_action))
-    |> Ash.read!()
-  end
-
-  defp list_query(socket, %URLParams{} = params, %Options{} = options) do
-    socket
-    |> read_query(params, options)
-    |> Utils.load_fields(options.list_fields, strict?: true)
-    |> Ash.Query.load(options.load ++ options.list_load, strict?: true)
-    |> then(
-      &Ash.Query.load(
-        &1,
-        DetailsUtils.related_hint_load(options.resource, options.list_fields, &1.tenant)
-      )
-    )
-    |> maybe_load_active(options.resource)
-  end
-
-  # Which rows, in which order: the list's read through its search, filters
-  # and sort, loading nothing.
-  defp read_query(socket, %URLParams{} = params, %Options{} = options) do
-    options.resource
-    |> Ash.Query.for_read(
-      socket.assigns.ash_action.name,
-      Utils.lookup_input(options.resource, params.search),
-      scope: socket.assigns.scope
-    )
-    |> maybe_apply_base_filter(options.base_filter)
-    |> maybe_apply_filters(options.filters, params.selected_filters)
-    |> maybe_apply_custom_filter(params.custom_filter, socket.assigns.scope, options)
-    |> apply_sort(params, options)
-  end
-
-  # An action that counts on request (Ash's default, `countable true`) is asked
-  # to, so its pager can say how many pages there are. One that declares
-  # `countable false` refuses the request outright, and its list pages without
-  # a total.
-  defp countable?(%{pagination: %{countable: countable}}), do: countable != false
-  defp countable?(_action), do: false
-
-  defp maybe_apply_base_filter(query, nil), do: query
-  defp maybe_apply_base_filter(query, base_filter), do: Ash.Query.filter(query, ^base_filter)
-
-  defp maybe_apply_filters(query, _, []), do: query
-
-  defp maybe_apply_filters(query, filters, [filter_name | rest]) do
-    case Enum.find(filters, &(&1["name"] == filter_name)) do
-      %{"expression" => expression} -> Ash.Query.filter(query, ^expression)
-      _ -> query
-    end
-    |> maybe_apply_filters(filters, rest)
-  end
-
-  defp maybe_apply_custom_filter(query, nil, _scope, _options), do: query
-
-  # On Day reads its date in the reader's zone, the one the list shows
-  # timestamps in.
-  defp maybe_apply_custom_filter(query, custom_filter, scope, options) do
-    case CustomFilter.build_ash_filter(custom_filter,
-           fields: row_fields(query, options),
-           timezone: AshQuick.Scope.timezone(scope)
-         ) do
-      nil -> query
-      ash_filter -> Ash.Query.filter_input(query, ash_filter)
-    end
-  end
-
-  # The fields a row can name, the ones the list offers, whose types say how
-  # some rows are asked: Is Empty on a string or a list, and a row comparing
-  # a `Money`. `drop_refused_rows/4` has dropped a row on any other, and
-  # `build_ash_filter/2` reads none.
-  defp row_fields(query, options), do: listed_fields(query.resource, options)
-
-  defp listed_fields(resource, options),
-    do:
-      resource
-      |> CustomFilter.filterable_fields(options.list_filterable)
-      |> Map.new(&{&1.name, &1})
-
-  defp emptiness_rows(filter),
-    do:
-      filter
-      |> CustomFilter.leaves()
-      |> Enum.filter(&(CustomFilter.value_shape(&1.operator) == :none))
-
-  # A row on a field a field policy hides from the actor on every record is
-  # dropped before the read, the way `FilterForm` leaves the field out: Ash
-  # would read the field as `nil`, so the list would come back empty under a
-  # filter that looked like an answer. Only a link carries one, written for an
-  # actor who could see the field or by hand, so the visitor is told, and the
-  # address bar is corrected with the rest of `:params`.
-  #
-  # So is Is Empty or Is Not Empty on a field hidden from the actor on only
-  # some records, which `FilterForm` does not offer on it: Ash reads the field
-  # as `nil` where it is hidden, so Is Empty would keep a row whose value the
-  # actor may not see as one that has none.
-  #
-  # And so is On Day with a value it cannot read as a day in the list's zone:
-  # one that is no date, or any date when the zone will not load. The filter
-  # it builds leaves such a row out, and the visitor is told here why.
-  #
-  # And so is Has Any Of on a field that holds no list, which asks the data
-  # layer for something it does not have: Postgres would refuse the read with
-  # an error, logged before the list is read again without the filter.
-  #
-  # And so is a row on a field the list does not offer, which the form does
-  # not offer either: one the QuickView's `filterable:` leaves out, as the
-  # host named the fields this list may be filtered by, most likely the ones
-  # its table has indexes for, or without `filterable:` one the filter takes
-  # no type of, or that is no field at all. A row through a relationship,
-  # `"brand.name"`, is dropped unless `filterable:` names it, so a link can
-  # reach no related field, nor go further, by itself. Ash's filter input
-  # reads a relationship's name as one to filter through, so a row naming
-  # `brand` with `name` as its operator would otherwise do just that.
-  #
-  # And so is a row comparing by an operator the form does not offer, or with
-  # a value its operator cannot take, `CustomFilter.readable?/1`: Ash's filter
-  # input reads any name where an operator goes, and a list where one value
-  # goes as something else again. And one holding a key path on a field that
-  # is no map, or none on a map, which the form never writes either.
-  #
-  # A root left with no rows, as one a hand-written link wrote as a single
-  # row is, leaves no filter at all.
-  defp drop_refused_rows(socket, %URLParams{custom_filter: nil} = params, _action, _options),
-    do: {socket, params}
-
-  defp drop_refused_rows(socket, %URLParams{custom_filter: filter} = params, action, options) do
-    scope = socket.assigns[:scope]
-    by_name = listed_fields(options.resource, options)
-
-    names = CustomFilter.field_names(filter)
-    hidden = hidden_fields(names, by_name, action, scope) ++ unoffered_fields(names, by_name)
-
-    partly_hidden =
-      case filter |> emptiness_rows() |> Enum.map(& &1.field_name) |> Enum.uniq() do
-        [] -> []
-        names -> hidden_fields(names, by_name, action, scope, filter_is: false)
-      end
-
-    # A group whose rows were all removed is a leaf to `leaves/1`, and
-    # filters by nothing, so it is never refused.
-    refused? = &(not CustomFilter.group?(&1) and refused_row?(&1, partly_hidden, by_name, scope))
-
-    case {hidden, filter |> CustomFilter.leaves() |> Enum.filter(refused?)} do
-      {[], []} ->
-        {socket, params}
-
-      _ ->
-        filter =
-          filter
-          |> CustomFilter.reject_fields(hidden)
-          |> CustomFilter.reject_rows(refused?)
-          |> unless_emptied()
-
-        {put_flash(socket, :error, refused_filter_message()),
-         %URLParams{params | custom_filter: filter}}
-    end
-  end
-
-  # A root left with no rows by the drop leaves no filter at all, and no
-  # filter in the URL: a link's root that was one row is that row in a group.
-  defp unless_emptied(%CustomFilter{children: []}), do: nil
-  defp unless_emptied(filter), do: filter
-
-  # The fields the filter offers this visitor, by name: the ones the
-  # QuickView's `filterable:` names, or every one the form can take, less those
-  # field policies hide from the visitor. Asked on every navigation, as the
-  # list's columns are; the answer only changes with the scope.
-  defp offered_fields(socket, action, %Options{} = options) do
-    options.resource
-    |> CustomFilter.offered_fields(options.list_filterable, action, socket.assigns[:scope])
-    |> Enum.map(& &1.spec)
-  end
-
-  defp unoffered_fields(names, by_name), do: Enum.reject(names, &Map.has_key?(by_name, &1))
-
-  # Whether `row` is refused by its operator: one the form does not offer, or
-  # with a value it cannot take, Is Empty on a field hidden on some rows, On
-  # Day on no day, and Has Any Of on a field holding no list. Or by its key
-  # path: one on a field that is no map, or none on one that is.
-  defp refused_row?(row, partly_hidden, by_name, scope) do
-    case CustomFilter.readable?(row) and fits?(row, by_name) and
-           CustomFilter.value_shape(row.operator) do
-      false -> true
-      :none -> row.field_name in partly_hidden
-      :day -> unreadable_day?(row, scope)
-      :list -> row.operator == "has_any" and not list_row?(row, by_name)
-      _ -> false
-    end
-  end
-
-  # Whether a row holds a key path exactly when its field is a map. A name the
-  # list does not offer is refused with its field.
-  defp fits?(%CustomFilter{field_name: name} = row, by_name) do
-    case by_name[name] do
-      nil -> true
-      field -> CustomFilter.fits?(row, field)
-    end
-  end
-
-  # Whether a row names a field holding a list. A row left without a value
-  # filters by nothing, and a name the list does not offer is refused with
-  # its field, so neither is refused here.
-  defp list_row?(%CustomFilter{field_name: name} = row, by_name) do
-    case by_name[name] do
-      %{field: %{type: {:array, _type}}} -> true
-      nil -> true
-      _field -> not CustomFilter.applied?(row)
-    end
-  end
-
-  # A row left without a value filters by nothing, and is not refused.
-  defp unreadable_day?(%CustomFilter{value: value} = row, scope) do
-    CustomFilter.applied?(row) and
-      LocalDatetime.day_range(value, AshQuick.Scope.timezone(scope)) == :error
-  end
-
-  # Those of `names` that are fields a row can name, `by_name`, the actor may
-  # not see: on every record, or with `filter_is: false` on some. A name the
-  # list does not offer is refused by `unoffered_fields/2`.
-  defp hidden_fields(names, by_name, action, scope, opts \\ []) do
-    named = Enum.filter(names, &(is_binary(&1) and Map.has_key?(by_name, &1)))
-
-    visible =
-      named
-      |> Enum.map(&by_name[&1])
-      |> CustomFilter.visible(action, scope, opts)
-      |> MapSet.new(& &1.name)
-
-    Enum.reject(named, &MapSet.member?(visible, &1))
-  end
-
-  # A custom filter is the one part of this query a visitor authors, and there
-  # is no asking in advance whether it works. `drop_refused_rows/4` has
-  # dropped every row on a field the list does not offer, or by an operator
-  # the form does not offer, but a row can still fail where nothing before the
-  # read sees it:
-  #
-  #   * a real field carrying a value its type cannot cast — which
-  #     `filter_input/2` accepts, and the *data layer* refuses, as an
-  #     `Ecto.Query.CastError`. `FilterForm` refuses such a value on Apply,
-  #     under its row, by asking the field's type as Ash's filter does
-  #     (`Ash.Type.coerce/3`), so a typed one never gets here. A link still
-  #     can, written by hand;
-  #   * anything else the data layer refuses that the form cannot know of.
-  #
-  # Each arrives the same way: raised by `Ash.read!` from inside
-  # `handle_params/3`, taking the mount down rather than showing on the page.
-  # The form's check is for the visitor, who is told which row was wrong; it
-  # sees only what the form offers, and only the cast, not everything the data
-  # layer will refuse. So the filter is not validated here — it is tried, and
-  # this path stays the backstop for whatever reaches it.
-  #
-  # A read that raises with a filter applied is read once more without it. If
-  # that succeeds the filter was the problem: it is dropped from the params the
-  # whole page is built from, with a flash saying so, and the list, the export
-  # query, the filter form and `full_path/2` all follow. If it raises too, the
-  # filter was never the problem and that error stands — `base_filter`,
-  # `filters` and `sort_by` are the host's own, and a bug in one should keep
-  # raising loudly rather than become a flash a visitor can do nothing about.
-  #
-  # Neither is recognisable. An uncastable value reaches us as an
-  # `Ash.Error.Unknown` whose `:error` is the data layer's
-  # `Ecto.Query.CastError` already rendered to a string — the same struct a
-  # bug in the read produces, so there is nothing to tell them apart. What the
-  # rescue can say is that the error came from the read at all:
-  # `ash_error?/1` lets a raise out of `load_data!/3`'s own pipeline keep
-  # raising instead of being reported as the visitor's filter.
-  #
-  # Rescued either way means the flash can be wrong — a read that fails once and
-  # succeeds on the retry gets it too — so the error is logged before the retry.
-  #
-  # The page is handed to `keep_live/4` as `:initial`, so this is the render's
-  # one read rather than a probe in front of another one. Refetches re-run the
-  # closure below, which closes over the corrected params.
-  defp initial_read(socket, %URLParams{custom_filter: nil} = params, %Options{} = options),
-    do: {socket, params, load_data!(socket, params, options)}
-
-  defp initial_read(socket, %URLParams{} = params, %Options{} = options) do
-    {socket, params, load_data!(socket, params, options)}
-  rescue
-    error ->
-      if Ash.Error.ash_error?(error) do
-        retry_without_filter(socket, params, options, error)
-      else
-        reraise error, __STACKTRACE__
-      end
-  end
-
-  defp retry_without_filter(socket, %URLParams{} = params, %Options{} = options, error) do
-    # Never the filter's values: they are what the visitor typed (an email, a
-    # name), and the data layer's cast error quotes them back, so each value is
-    # redacted out of the messages. The start of a message stays, because it is
-    # what tells a refused value from a host bug or a dropped connection; the
-    # rest goes, because an error such as `InvalidFilterValue` goes on to
-    # inspect the whole query, the actor and their email included. The field
-    # names come from the URL too, so they are inspected, and a message is cut
-    # to one line, or a newline in one would forge a log line. The frames are
-    # each inner error's own: the rescue's trace is only where `Ash.read!`
-    # re-raised, the same for every failure.
-    values = CustomFilter.values(params.custom_filter)
-
-    Logger.warning("""
-    AshQuick is re-reading #{inspect(options.resource)} without the custom \
-    filter the URL carried, which raised. The visitor will be told the filter \
-    was refused, whether or not that is what this error means.
-
-    Filtered fields: #{Enum.map_join(CustomFilter.field_names(params.custom_filter), ", ", &inspect/1)}
-    Errors:
-
-    #{Enum.map_join(inner_errors(error), "\n", &raised_at(&1, values))}\
-    """)
-
-    params = %URLParams{params | custom_filter: nil}
-
-    {put_flash(socket, :error, refused_filter_message()), params,
-     load_data!(socket, params, options)}
-  end
-
-  defp inner_errors(error) do
-    case Ash.Error.to_error_class(error) do
-      %{errors: [_ | _] = errors} -> errors
-      class -> [class]
-    end
-  end
-
-  @message_length 160
-
-  defp raised_at(error, values) do
-    "#{inspect(error.__struct__)}: #{summary(error, values)}\n#{frames(error)}"
-  end
-
-  # The message without Ash's bread crumbs, values redacted, on one line and cut
-  # short of whatever context the error inspects after it.
-  defp summary(error, values) do
-    summary =
-      error
-      |> Exception.message()
-      |> redact(values)
-      |> String.split("\n")
-      |> Enum.reject(&(String.trim(&1) in ["", "Bread Crumbs:"] or bread_crumb?(&1)))
-      |> Enum.join(" ")
-
-    if String.length(summary) > @message_length,
-      do: String.slice(summary, 0, @message_length) <> "…",
-      else: summary
-  end
-
-  defp bread_crumb?(line), do: String.starts_with?(String.trim_leading(line), "> ")
-
-  defp frames(%{stacktrace: %{stacktrace: [_ | _] = frames}}),
-    do: Exception.format_stacktrace(frames)
-
-  defp frames(_error), do: "    (no stack trace)\n"
-
-  @redacted "[filter value]"
-
-  # Quoted wherever it appears; bare only from four characters up, below which
-  # it would be cut out of words and numbers the message needs. A value that
-  # short identifies no one.
-  defp redact(message, values) do
-    Enum.reduce(values, message, fn value, message ->
-      message = String.replace(message, inspect(value), @redacted)
-
-      if String.length(value) >= 4,
-        do: String.replace(message, value, @redacted),
-        else: message
-    end)
-  end
-
-  # A column the visitor sorted by goes first, then the QuickView's `sort_by`,
-  # then the action's own sort, each ordering the rows the one before ties on;
-  # Ash ends every paginated read with the primary key, so ties left after all
-  # of them keep their order across pages. The column goes through
-  # `sort_input/3`, as a visitor's input: Ash refuses a private field there,
-  # and authorizes it against field policies. Prepending it shifts the indices
-  # Ash keeps of input sorts, so `sort_by` is not authorized as one.
-  defp apply_sort(query, %URLParams{} = params, %Options{} = options) do
-    query = maybe_apply_sort(query, options.sort_by)
-
-    case URLParams.sort_input(params) do
-      nil -> query
-      sort -> Ash.Query.sort_input(query, sort, prepend?: true)
-    end
-  end
-
-  defp maybe_apply_sort(query, nil), do: query
-  defp maybe_apply_sort(query, sort_by), do: Ash.Query.sort(query, sort_by, prepend?: true)
-
-  # The page's own query either way: a selection narrows what the page lists,
-  # it does not step outside the base filter, the filters or the search.
-  defp build_export_query(resource, selection, socket, options) do
-    params = socket.assigns.params
-
-    resource
-    |> Ash.Query.for_read(
-      socket.assigns.ash_action.name,
-      Utils.lookup_input(resource, params.search),
-      scope: socket.assigns.scope
-    )
-    |> maybe_apply_base_filter(options.base_filter)
-    |> maybe_apply_filters(options.filters, params.selected_filters)
-    |> maybe_apply_custom_filter(params.custom_filter, socket.assigns.scope, options)
-    |> apply_sort(params, options)
-    |> only_selected(selection)
-  end
-
-  defp only_selected(query, :all), do: query
-  defp only_selected(query, ids) when is_list(ids), do: Ash.Query.filter(query, id in ^ids)
-
-  # Nothing ticked exports the whole list. Anything ticked exports the ticked
-  # rows the page is showing, as a bulk action runs over them: an id that is
-  # not among them came from somewhere other than this page's checkboxes.
-  defp export_selection(socket) do
-    case selected_ids(socket) do
-      [] -> :all
-      _ticked -> Enum.map(selected_records(socket), & &1.id)
-    end
-  end
-
-  defp run_export(query, actor, options, format, timezone) do
-    case AshQuick.LiveView.ExportUtils.generate_export_url(
-           query,
-           actor,
-           options,
-           String.to_existing_atom(format),
-           timezone
-         ) do
-      {:ok, url} -> {:ok, %{export_data: %{url: url}}}
-      # A refusal, not a failure: the modal words it and offers no Retry,
-      # since the same list would be refused again.
-      {:error, {:too_many_rows, _max}} = refused -> refused
-    end
-  end
-
-  defp maybe_load_active(query, resource) do
-    case AshQuick.Info.activation(resource) do
-      nil -> query
-      %{attribute: attribute} -> Ash.Query.load(query, attribute, strict?: true)
-    end
-  end
-
-  def get_offset(nil, _), do: 0
-  def get_offset(page, limit), do: (page - 1) * limit
 
   # Every event the list handles. A name outside it is the host's, and goes on
   # to the QuickView module; the clause below makes this the only way in, so a
@@ -769,8 +91,23 @@ defmodule AshQuick.LiveView.ListUtils do
   @doc false
   def events, do: @events
 
+  # The export, bulk action and cell filter menu events are handled with the
+  # rest of each, in `ListExport`, `ListBulk` and `CellFilterMenu`.
+  @export_events ~w(export close-export-modal)
+  @bulk_events ~w(bulk_action bulk_validate bulk_save bulk_close)
+  @cell_filter_events ~w(cell_filter_open cell_filter)
+
   defp handle_list_events(event, _params, socket, _options) when event not in @events,
     do: {:cont, socket}
+
+  defp handle_list_events(event, params, socket, options) when event in @export_events,
+    do: ListExport.handle_list_events(event, params, socket, options)
+
+  defp handle_list_events(event, params, socket, options) when event in @bulk_events,
+    do: ListBulk.handle_list_events(event, params, socket, options)
+
+  defp handle_list_events(event, params, socket, options) when event in @cell_filter_events,
+    do: CellFilterMenu.handle_list_events(event, params, socket, options)
 
   defp handle_list_events("search", %{"search" => search}, socket, _options) do
     params =
@@ -801,120 +138,6 @@ defmodule AshQuick.LiveView.ListUtils do
     {:halt, push_patch(socket, to: URLParams.full_path(socket.assigns.path, params))}
   end
 
-  # One export per page at a time. Each one streams a whole list, so a second
-  # asked for while the first runs is left unanswered rather than run beside it.
-  defp handle_list_events(
-         "export",
-         _params,
-         %{assigns: %{export_data: %AsyncResult{loading: loading}}} = socket,
-         _options
-       )
-       when not is_nil(loading),
-       do: {:halt, socket}
-
-  defp handle_list_events("export", %{"format" => format}, socket, options) do
-    selection = export_selection(socket)
-
-    # A column every row would export blank is left out, as it is on the page.
-    options = %{
-      options
-      | export_fields:
-          Utils.visible_fields(
-            options.export_fields,
-            options.resource,
-            socket.assigns.ash_action,
-            socket.assigns.scope
-          )
-    }
-
-    export_query =
-      options.resource
-      |> build_export_query(selection, socket, options)
-      |> Utils.load_fields(options.export_fields, strict?: true)
-
-    # The header and the dates are in the reader's language, and a task
-    # inherits no locale. The scope's is the one a host puts on its pages;
-    # set process-wide, the host's backend falls back to it.
-    locale = AshQuick.Scope.locale(socket.assigns.scope)
-    timezone = AshQuick.Scope.timezone(socket.assigns.scope)
-
-    socket =
-      case Ash.Scope.ToOpts.get_actor(socket.assigns.scope) do
-        {:ok, actor} when not is_nil(actor) ->
-          # The format stays with the modal, so its Retry runs this same export.
-          socket
-          |> assign(:export_format, format)
-          |> assign_async(:export_data, fn ->
-            Gettext.put_locale(locale)
-
-            run_export(export_query, actor, options, format, timezone)
-          end)
-
-        _ ->
-          socket |> put_flash(:error, gettext("Unable to determine current user for export"))
-      end
-
-    {:halt, socket}
-  end
-
-  defp handle_list_events("close-export-modal", _, socket, _) do
-    socket =
-      socket
-      |> cancel_async(socket.assigns.export_data)
-      |> assign(export_data: nil, export_format: nil)
-
-    {:halt, socket}
-  end
-
-  defp handle_list_events("bulk_action", %{"action_name" => action_name}, socket, options) do
-    case BulkActions.offered(socket.assigns[:bulk_actions], options.resource, action_name) do
-      nil -> {:halt, refuse_bulk_action(socket)}
-      action -> {:halt, open_bulk_action(action, socket, options)}
-    end
-  end
-
-  # Nothing to validate or run: no bulk action is open, so the event was forged.
-  defp handle_list_events(event, _params, %{assigns: %{ash_quick_bulk: nil}} = socket, _options)
-       when event in ["bulk_validate", "bulk_save"] do
-    {:halt, refuse_action(socket)}
-  end
-
-  # A confirmation, or a form whose only inputs a field policy hides, posts
-  # nothing.
-  defp handle_list_events(event, params, socket, options)
-       when event in ["bulk_validate", "bulk_save"] and not is_map_key(params, "form") do
-    handle_list_events(event, Map.put(params, "form", %{}), socket, options)
-  end
-
-  defp handle_list_events("bulk_validate", %{"form" => params} = event, socket, _options) do
-    {:halt, update_bulk_form(socket, params, event["_target"])}
-  end
-
-  defp handle_list_events("bulk_save", %{"form" => params}, socket, options) do
-    socket = update_bulk_form(socket, params, nil)
-
-    case socket.assigns.ash_quick_bulk do
-      %{form: %AshPhoenix.Form{} = form} = bulk ->
-        if BulkForm.valid?(form),
-          do:
-            {:halt,
-             run_bulk_action(
-               bulk,
-               BulkForm.input(form, options.resource, bulk.action),
-               socket,
-               options
-             )},
-          else: {:halt, socket}
-
-      bulk ->
-        {:halt, run_bulk_action(bulk, %{}, socket, options)}
-    end
-  end
-
-  defp handle_list_events("bulk_close", _params, socket, _options) do
-    {:halt, assign(socket, :ash_quick_bulk, nil)}
-  end
-
   # Resolved on open rather than on render — see `ListView.record_actions/1`. Only
   # the one open row is kept.
   defp handle_list_events("row_actions_open", %{"id" => id}, socket, options) do
@@ -932,66 +155,6 @@ defmodule AshQuick.LiveView.ListUtils do
       action -> {:halt, row_action(id, action, socket, options)}
     end
   end
-
-  # A cell's filter menu, opened: its entries are read off the record as the
-  # page holds it, and only the one open cell's are kept, as only the one
-  # open row's actions are. A cell with none, or one the page has no menu
-  # on, opens to none.
-  defp handle_list_events(
-         "cell_filter_open",
-         %{"id" => id, "column" => column},
-         socket,
-         _options
-       ) do
-    # Focus and click both open a menu (see `ListView.record_actions/1`), so
-    # the second asks again for the menu already open. It is read afresh all
-    # the same, as a live update may have changed the cell since the first:
-    # an assign equal to the one held draws nothing.
-    choices =
-      case cell_choices(socket, id, column) do
-        {:ok, _filter_field, choices} -> choices
-        :error -> []
-      end
-
-    {:halt, assign(socket, :cell_menu, %{id: id, column: column, choices: choices})}
-  end
-
-  # A cell menu's choice: the row it adds is read off the record as the page
-  # holds it, by `CellFilter.choices/4`, which drew the menu, so the event
-  # names only the record, the column and which entry was picked. The entry
-  # must be the one the open menu shows at that place: a live update can
-  # change the cell under an open menu, and the entry read off the record now
-  # would then be another than the one clicked. One naming a record not on
-  # the page, a column with no menu, an entry the open menu does not show,
-  # or one the cell no longer offers filters by nothing and says so.
-  defp handle_list_events(
-         "cell_filter",
-         %{"id" => id, "column" => column, "choice" => choice},
-         socket,
-         _options
-       ) do
-    with index when is_integer(index) <- choice_index(choice),
-         %{id: ^id, column: ^column, choices: shown} <- socket.assigns[:cell_menu],
-         {:ok, filter_field, choices} <- cell_choices(socket, id, column),
-         %CellFilter.Choice{} = picked <- Enum.at(choices, index),
-         ^picked <- Enum.at(shown, index) do
-      row = CellFilter.row(picked, filter_field)
-
-      params =
-        URLParams.change_custom_filter(
-          socket.assigns.params,
-          CustomFilter.and_also(socket.assigns.params.custom_filter, row)
-        )
-
-      {:halt, push_patch(socket, to: URLParams.full_path(socket.assigns.path, params))}
-    else
-      _ -> {:halt, put_flash(socket, :error, refused_filter_message())}
-    end
-  end
-
-  defp handle_list_events(event, _params, socket, _options)
-       when event in ["cell_filter_open", "cell_filter"],
-       do: {:halt, put_flash(socket, :error, refused_filter_message())}
 
   defp handle_list_events("toggle-filter", %{"name" => filter_name}, socket, _) do
     params =
@@ -1025,117 +188,17 @@ defmodule AshQuick.LiveView.ListUtils do
 
   defp handle_list_events(_, _, socket, _options), do: {:cont, socket}
 
-  # Opened over the list rather than at a URL of its own: a patch would reset
-  # the selection it is about to act on. Who may run it is left to the run,
-  # which asks of each selected row: asked here of no row, a policy that only
-  # a row can answer would refuse a selection it allows.
-  #
-  # A refused open closes whatever bulk action was open before it, so no later
-  # event runs one the page no longer shows.
-  defp open_bulk_action(action, socket, options) do
-    if selected_records(socket) == [] do
-      refuse_bulk_action(socket)
-    else
-      scope = socket.assigns.scope
-
-      form =
-        if Utils.action_fields(options.resource, action.name, scope) != [],
-          do: BulkForm.new(options.resource, action, scope)
-
-      # Inputs it takes, every one hidden from the actor: nothing left that
-      # they may set, and a confirmation would run it over values they never
-      # saw.
-      if form && Utils.form_fields(form, scope) == [] do
-        refuse_bulk_action(socket)
-      else
-        assign(socket, :ash_quick_bulk, %{action: action, form: form})
-      end
-    end
-  end
-
-  defp refuse_bulk_action(socket),
-    do: socket |> assign(:ash_quick_bulk, nil) |> refuse_action()
-
-  defp update_bulk_form(socket, params, target) do
-    case socket.assigns.ash_quick_bulk do
-      %{form: %AshPhoenix.Form{} = form, action: action} = bulk ->
-        params =
-          params
-          |> FieldErrors.mark_used(target)
-          |> FormParams.put_emptied_selections()
-          |> FormParams.maybe_put_has_many(form)
-
-        assign(socket, :ash_quick_bulk, %{bulk | form: BulkForm.validate(form, params, action)})
-
-      _confirmation ->
-        socket
-    end
-  end
-
-  defp selected_ids(socket) do
+  def selected_ids(socket) do
     for {id, "on"} <- socket.assigns.selected_rows, id != "all", do: id
   end
 
   # Only rows the list is showing, read through the actor's scope: a selected id
   # that is not among them is one the actor cannot read, or one that has left
   # the list since it was ticked.
-  defp selected_records(socket) do
+  def selected_records(socket) do
     selected = selected_ids(socket)
     Enum.filter(socket.assigns.data.results, &(&1.id in selected))
   end
-
-  defp run_bulk_action(%{action: action}, input, socket, options) do
-    selected = selected_ids(socket)
-    records = selected_records(socket)
-
-    result = records |> bulk_run(action, input, socket) |> in_selection_order(records)
-    socket = socket |> PrintUtils.print(result) |> DownloadUtils.deliver(result)
-
-    case result do
-      # `transaction: :all` rolled every row back, so the modal stays as it was
-      # for the values to be corrected or the run abandoned.
-      %{status: :error, errors: errors} ->
-        put_flash(socket, :error, bulk_error_message(errors, options.resource))
-
-      # A bulk write that matches no row (a stale one, say) is not an error, so
-      # `:success` does not mean every selected row was written. The records it
-      # returns are the ones that were; the rest are reported and kept selected.
-      %{records: written} ->
-        written_ids = Enum.map(written || [], & &1.id)
-        skipped_ids = selected -- written_ids
-        data = load_data!(socket, socket.assigns.params, options)
-        shown = MapSet.new(data.results, & &1.id)
-
-        socket
-        |> assign(:ash_quick_bulk, nil)
-        # The reader's own run, so the list closes up: a queue it worked
-        # through empties, and the rows after it move up.
-        |> assign(data: data)
-        |> assign(fresh_screen(data))
-        |> assign(
-          selected_rows:
-            Map.take(socket.assigns.selected_rows, Enum.filter(skipped_ids, &(&1 in shown)))
-        )
-        |> report_skipped_rows({options.resource, action}, length(selected), skipped_ids)
-        |> Liveness.resync(:data, options)
-        |> refresh_row_actions(options)
-    end
-  end
-
-  # A bulk result holds an error class per failed batch. Unwrapped into one
-  # class, the errors inside are what `ActionErrors` words; left wrapped, a
-  # class inside a class reads as an error of ours.
-  defp bulk_error_message([_ | _] = errors, resource) do
-    errors
-    |> Enum.flat_map(fn
-      %class{errors: [_ | _] = inner} when class in @error_classes -> inner
-      error -> [error]
-    end)
-    |> Ash.Error.to_error_class()
-    |> ActionErrors.user_facing_message(resource)
-  end
-
-  defp bulk_error_message(_no_errors, _resource), do: ActionErrors.generic_message()
 
   # Every action opens at its own URL, over this list, and runs from there: a
   # form for one that takes input, a confirmation for one that does not. What
@@ -1166,7 +229,7 @@ defmodule AshQuick.LiveView.ListUtils do
         topics -> topic in topics
       end
 
-    case subscribed? and note_notification(socket, topic, notification, options) do
+    case subscribed? and ListRows.note_notification(socket, topic, notification, options) do
       {:ok, socket} -> {:halt, AshPhoenix.LiveView.handle_live(socket, topic, :data)}
       _ignored -> {:halt, socket}
     end
@@ -1196,158 +259,8 @@ defmodule AshQuick.LiveView.ListUtils do
 
   defp handle_list_info(_, socket, _options), do: {:cont, socket}
 
-  # What the cell of record `id` in `column` offers, and the `FilterField` its
-  # rows name: only a cell of a column the page draws a menu on, of a record
-  # on the page.
-  defp cell_choices(socket, id, column) when is_binary(id) and is_binary(column) do
-    with %{filter_field: %FilterField{} = filter_field, emptiness?: emptiness?} <-
-           (socket.assigns[:cell_filters] || %{})[column],
-         %QuickField{path: path} <-
-           Enum.find(socket.assigns.fields, &(QuickField.data_field(&1) == column)),
-         %{} = record <- Enum.find(socket.assigns.data.results, &(to_string(&1.id) == id)) do
-      timezone = AshQuick.Scope.timezone(socket.assigns[:scope])
-      value = QuickField.resolve_value(record, path)
-
-      {:ok, filter_field,
-       CellFilter.choices(filter_field, value, timezone, emptiness?: emptiness?)}
-    else
-      _ -> :error
-    end
-  end
-
-  defp cell_choices(_socket, _id, _column), do: :error
-
-  @doc """
-  The list's columns whose cells offer to filter the list by their value, as
-  `CellFilter.columns/4` gives them, for `fields`, the columns drawn: Is
-  Empty and Is Not Empty are left out on a field a field policy hides on some
-  of the reader's rows, which the read refuses either on
-  (`drop_refused_rows/4`), so an entry offering one could only ever end in
-  the refused-filter flash, and an empty cell offers nothing. Asked per
-  navigation, as the columns and the filter's fields are.
-  """
-  def cell_filters(socket, fields, action, %Options{} = options) do
-    filterable = socket.assigns.params.filterable
-
-    case CellFilter.columns(fields, options.resource, filterable) do
-      columns when columns == %{} ->
-        columns
-
-      columns ->
-        partly_hidden =
-          hidden_fields(
-            Map.keys(columns),
-            listed_fields(options.resource, options),
-            action,
-            socket.assigns[:scope],
-            filter_is: false
-          )
-
-        CellFilter.columns(fields, options.resource, filterable, partly_hidden)
-    end
-  end
-
-  # Which entry of a cell's menu was picked. `Enum.at/2` reads a negative
-  # index from the end, so none is taken.
-  defp choice_index(choice) when is_integer(choice) and choice >= 0, do: choice
-
-  defp choice_index(choice) when is_binary(choice) do
-    case Integer.parse(choice) do
-      {index, ""} when index >= 0 -> index
-      _ -> nil
-    end
-  end
-
-  defp choice_index(_choice), do: nil
-
-  defp refuse_action(socket) do
+  def refuse_action(socket) do
     socket |> put_flash(:error, AshQuick.LiveView.ActionErrors.forbidden_message())
-  end
-
-  # Stamped as every other run is, whatever surface offered it: a policy scoped
-  # to `:ash_quick_list_bulk` decides what the menu shows, not what runs.
-  defp bulk_run(records, %Actions.Update{} = action, input, socket) do
-    Ash.bulk_update(records, action.name, input, bulk_opts(socket))
-  end
-
-  defp bulk_run(records, %Actions.Destroy{} = action, input, socket) do
-    Ash.bulk_destroy(records, action.name, input, bulk_opts(socket))
-  end
-
-  defp bulk_opts(socket) do
-    [
-      scope: socket.assigns.scope,
-      context: %{
-        :action_source => AshQuick.form_source(),
-        AshQuick.form_stage_key() => AshQuick.form_submit_stage()
-      },
-      # A write that names an actor is authorized under every domain
-      # `authorize` setting, and a `use AshQuick.Scope` scope always names one,
-      # even `nil`. A host scope with its own `Ash.Scope.ToOpts` may name none,
-      # and a `:when_requested` domain then skips authorization. The run's
-      # policy, not the menu, is what refuses a forged bulk event, so it asks.
-      authorize?: true,
-      strategy: :stream,
-      transaction: :all,
-      stop_on_error?: true,
-      return_records?: true,
-      # A refused run is worded for the person who asked for it, which needs
-      # the error that refused it.
-      return_errors?: true,
-      # One publication per row written, so a page holding a row hears about a
-      # bulk write as it does a row action's. A batch that errors is rolled back
-      # whole by `transaction: :all` and publishes nothing, so nothing is
-      # announced that was then undone.
-      notify?: true
-    ]
-  end
-
-  # A print's pages follow the rows as the list showed them, whatever order the
-  # bulk run hands its records back in.
-  defp in_selection_order(%Ash.BulkResult{records: [_ | _] = written} = result, records) do
-    position =
-      records |> Enum.with_index() |> Map.new(fn {record, index} -> {record.id, index} end)
-
-    %{result | records: Enum.sort_by(written, &position[&1.id])}
-  end
-
-  defp in_selection_order(result, _records), do: result
-
-  defp report_skipped_rows(socket, _action, _selected, []), do: socket
-
-  defp report_skipped_rows(socket, action, selected, skipped_ids) do
-    put_flash(socket, :error, skipped_rows_message(action, selected, length(skipped_ids)))
-  end
-
-  # With nothing applied there is no "other" row to speak of, so the flash says
-  # the action did not go through at all.
-  defp skipped_rows_message({resource, action}, selected, selected) do
-    ngettext(
-      "%{action} was not applied. The selected row was not changed and is still selected: check it and try again.",
-      "%{action} was not applied. The %{count} selected rows were not changed and are still selected: check them and try again.",
-      selected,
-      action: Labels.name(action.name, resource)
-    )
-  end
-
-  defp skipped_rows_message({resource, action}, selected, skipped) do
-    applied =
-      ngettext(
-        "%{action} applied to %{applied} of 1 selected row.",
-        "%{action} applied to %{applied} of %{count} selected rows.",
-        selected,
-        action: Labels.name(action.name, resource),
-        applied: selected - skipped
-      )
-
-    not_changed =
-      ngettext(
-        "The other row was not changed and is still selected: check it and try again.",
-        "The other %{count} rows were not changed and are still selected: check them and try again.",
-        skipped
-      )
-
-    applied <> " " <> not_changed
   end
 
   defp assign_row_actions(socket, id, %Options{resource: resource}) do
@@ -1365,7 +278,7 @@ defmodule AshQuick.LiveView.ListUtils do
   # still open in front of whoever took it. One row's worth of `Ash.can?` is
   # what the whole list used to cost per render, so re-resolving the open one
   # keeps it honest for free.
-  defp refresh_row_actions(socket, options) do
+  def refresh_row_actions(socket, options) do
     case socket.assigns.row_actions do
       %{id: id} -> assign_row_actions(socket, id, options)
       nil -> socket
