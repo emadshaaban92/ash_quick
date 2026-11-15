@@ -60,12 +60,12 @@ defmodule AshQuick.LiveView.ListRead do
   defp countable?(%{pagination: %{countable: countable}}), do: countable != false
   defp countable?(_action), do: false
 
-  def maybe_apply_base_filter(query, nil), do: query
-  def maybe_apply_base_filter(query, base_filter), do: Ash.Query.filter(query, ^base_filter)
+  defp maybe_apply_base_filter(query, nil), do: query
+  defp maybe_apply_base_filter(query, base_filter), do: Ash.Query.filter(query, ^base_filter)
 
-  def maybe_apply_filters(query, _, []), do: query
+  defp maybe_apply_filters(query, _, []), do: query
 
-  def maybe_apply_filters(query, filters, [filter_name | rest]) do
+  defp maybe_apply_filters(query, filters, [filter_name | rest]) do
     case Enum.find(filters, &(&1["name"] == filter_name)) do
       %{"expression" => expression} -> Ash.Query.filter(query, ^expression)
       _ -> query
@@ -73,11 +73,11 @@ defmodule AshQuick.LiveView.ListRead do
     |> maybe_apply_filters(filters, rest)
   end
 
-  def maybe_apply_custom_filter(query, nil, _scope, _options), do: query
+  defp maybe_apply_custom_filter(query, nil, _scope, _options), do: query
 
   # On Day reads its date in the reader's zone, the one the list shows
   # timestamps in.
-  def maybe_apply_custom_filter(query, custom_filter, scope, options) do
+  defp maybe_apply_custom_filter(query, custom_filter, scope, options) do
     case CustomFilter.build_ash_filter(custom_filter,
            fields: row_fields(query, options),
            timezone: AshQuick.Scope.timezone(scope)
@@ -238,7 +238,7 @@ defmodule AshQuick.LiveView.ListRead do
   # `sort_input/3`, as a visitor's input: Ash refuses a private field there,
   # and authorizes it against field policies. Prepending it shifts the indices
   # Ash keeps of input sorts, so `sort_by` is not authorized as one.
-  def apply_sort(query, %URLParams{} = params, %Options{} = options) do
+  defp apply_sort(query, %URLParams{} = params, %Options{} = options) do
     query = maybe_apply_sort(query, options.sort_by)
 
     case URLParams.sort_input(params) do
