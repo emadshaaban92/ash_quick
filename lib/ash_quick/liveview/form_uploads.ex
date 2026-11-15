@@ -13,6 +13,10 @@ defmodule AshQuick.LiveView.FormUploads do
   # The name each sub-form's uploads were allowed under (`upload_name/3`).
   @upload_names :ash_quick_upload_names
 
+  # A new form starts without any.
+  @doc false
+  def clear_upload_names(socket), do: assign(socket, @upload_names, %{})
+
   @doc false
   def allow_image_upload(socket, nil), do: socket
 

@@ -11,9 +11,9 @@ defmodule AshQuick.LiveView.Components.FormView do
   alias Phoenix.LiveView.JS
 
   alias AshQuick.LiveView.ActionErrors
+  alias AshQuick.LiveView.AttachmentUpload
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.FieldErrors
-  alias AshQuick.LiveView.AttachmentUpload
   alias AshQuick.LiveView.Utils
   alias AshQuick.LiveView.URLParams
 
