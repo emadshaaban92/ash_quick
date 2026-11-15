@@ -48,8 +48,8 @@ defmodule AshQuick.LiveView.ListExport do
     }
 
     export_query =
-      options.resource
-      |> build_export_query(selection, socket, options)
+      socket
+      |> build_export_query(selection, options)
       |> Utils.load_fields(options.export_fields, strict?: true)
 
     # The header and the dates are in the reader's language, and a task
@@ -90,19 +90,9 @@ defmodule AshQuick.LiveView.ListExport do
 
   # The page's own query either way: a selection narrows what the page lists,
   # it does not step outside the base filter, the filters or the search.
-  defp build_export_query(resource, selection, socket, options) do
-    params = socket.assigns.params
-
-    resource
-    |> Ash.Query.for_read(
-      socket.assigns.ash_action.name,
-      Utils.lookup_input(resource, params.search),
-      scope: socket.assigns.scope
-    )
-    |> ListRead.maybe_apply_base_filter(options.base_filter)
-    |> ListRead.maybe_apply_filters(options.filters, params.selected_filters)
-    |> ListRead.maybe_apply_custom_filter(params.custom_filter, socket.assigns.scope, options)
-    |> ListRead.apply_sort(params, options)
+  defp build_export_query(socket, selection, options) do
+    socket
+    |> ListRead.read_query(socket.assigns.params, options)
     |> only_selected(selection)
   end
 
