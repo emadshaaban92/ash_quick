@@ -536,16 +536,7 @@ defmodule AshQuick.LiveView.QuickView do
       (`AshQuick.Print`)
     * `ex_aws` + `ex_aws_s3` — S3 storage for exports and image uploads
   """
-  import Phoenix.Component, only: [assign: 2, assign: 3]
-  alias Ash.Resource.Actions
-  alias Phoenix.LiveView.JS
-  alias AshQuick.LiveView.URLParams
-  alias AshQuick.LiveView.QuickView.Options
   alias AshQuick.LiveView.QuickView
-  alias AshQuick.LiveView.ListUtils
-  alias AshQuick.LiveView.CellFilterMenu
-  alias AshQuick.LiveView.DetailsUtils
-  alias AshQuick.LiveView.FormUtils
   alias AshQuick.LiveView.Liveness
 
   defmacro __using__(opts) do
@@ -717,6 +708,9 @@ defmodule AshQuick.LiveView.QuickView do
     end
   end
 
+  # The generated callbacks, and a host's own `mount/3` or
+  # `handle_params/3`, call these here; each lives in the module named.
+
   @doc """
   The base path of the route currently being served.
 
@@ -724,130 +718,13 @@ defmodule AshQuick.LiveView.QuickView do
   cannot disagree: `AshQuick.LiveView.Router.quick_view/3` is what puts it
   there, and it is the same value the router matched on.
   """
-  def base_path!(socket, %URI{} = uri) do
-    case Phoenix.Router.route_info(socket.router, "GET", uri.path, uri.host) do
-      %{ash_quick: %{base_path: base_path}} ->
-        base_path
-
-      _ ->
-        raise """
-        #{inspect(socket.view)} was reached at #{uri.path}, through a route that \
-        carries no AshQuick metadata.
-
-        QuickView routes must be declared with `quick_view/3`, which is what \
-        pins the base path onto the route:
-
-            import AshQuick.LiveView.Router
-
-            quick_view "#{uri.path}", #{inspect(socket.view)}
-        """
-    end
-  end
+  defdelegate base_path!(socket, uri), to: QuickView.Address
 
   @doc false
-  # Public only because the generated `handle_params/3` calls it.
-  #
-  # The page renders what the query string *parsed* to, so the address
-  # bar is made to say the same thing rather than keep the promise the
-  # link made: a limit past the ceiling, a page before the first, a
-  # filter that will not decode. Corrected at the first render or not
-  # at all — that is the moment the visitor can still tie the link they
-  # followed to the list they got, and by the time a control rebuilds
-  # the path the evidence of what was dropped has gone with it.
-  #
-  # Read back off the socket rather than from `params`, because the
-  # parse is not the last thing that can drop a value: a custom filter
-  # the data layer will not take decodes perfectly well and is refused
-  # at the read, where `ListUtils.do_handle_params/4` drops it.
-  #
-  # `:params` in assigns is the page's record of what it actually
-  # rendered, and every control already rebuilds its path from there
-  # rather than from the query string — `handle_list_events/4` does it
-  # for search, paging and filters. Correcting the query from the same
-  # place is that rule applied to the address bar, not a new contract.
-  #
-  # Only what `URLParams` models survives, so an unmodeled `?foo=bar`
-  # is dropped here. That is not a new loss: every control has always
-  # rebuilt the path from the parsed struct alone, so the first click
-  # dropped it anyway. This only makes the library honest about it at
-  # the render the visitor is looking at.
-  #
-  # The query is corrected; the path never is. `full_path/2` rebuilds
-  # both, but a path derived from the parsed params is a navigation
-  # rather than a tidy-up when it disagrees with the one being served —
-  # see `correctable_query?/2`, which is what refuses those.
-  #
-  # Which is why `/create` needs its base named rather than rebuilt.
-  # It is the only one of the four shapes carrying no path param — its
-  # action comes from the router's `live_action` — so the parsed params
-  # rebuild it as the *index* path, the two never agree, and the query
-  # under it could never be corrected. The route already knows better.
-  #
-  # Only where nothing in the query names an action: `?action=` is
-  # priority 1 of the resolution order and the only way to reach a
-  # second create-type action, so `/products/create?action=quick_add`
-  # rebuilds as `/products?action=quick_add`, disagrees with the path
-  # being served, and is left exactly as it came in.
-  #
-  # Last, and only over a socket nothing else has redirected, because
-  # `push_patch/2` *raises* on a socket already set to redirect rather
-  # than overruling it. A host patching from `after_handle_params/2` —
-  # `/profile` to `/profile/<id>` — would otherwise be taken down by a
-  # query string it never looked at.
-  def canonicalize_query(socket, %URI{} = uri, base_path, ash_action) do
-    canonical_base =
-      if socket.assigns.live_action == :create and
-           is_nil(socket.assigns.params.action),
-         do: uri.path,
-         else: base_path
-
-    canonical_path = URLParams.full_path(canonical_base, socket.assigns.params)
-
-    if ash_action && is_nil(socket.redirected) &&
-         correctable_query?(uri, canonical_path) do
-      # `replace: true`: Back belongs to wherever the visitor came
-      # from, not to the URL they were just moved off.
-      Phoenix.LiveView.push_patch(socket, to: canonical_path, replace: true)
-    else
-      socket
-    end
-  end
+  defdelegate canonicalize_query(socket, uri, base_path, ash_action), to: QuickView.Address
 
   @doc false
-  # Whether `canonical_path` corrects `uri`'s query without moving the page.
-  #
-  # Public only because the generated `handle_params/3` calls it; it is an
-  # internal detail of that callback rather than surface a host may rely on.
-  #
-  # Canonicalize the query, never the path. `full_path/2` rebuilds both, but
-  # only the query is this function's to correct: the path it writes is from
-  # the parsed params, and where that disagrees with the path actually being
-  # served, rewriting it does not tidy the URL — it navigates.
-  #
-  # Two ways they disagree, both of them real:
-  #
-  #   * `?action=` is priority 1 of the action resolution order, and
-  #     `quick_view/3` serves no `/<action>` route, so it is the only way to
-  #     reach a second create-type action. `full_path/2` names it in the query
-  #     over the base path, so `/products/create?action=quick_add` rebuilds as
-  #     `/products?action=quick_add`, a different page.
-  #   * An id the URL percent-encodes comes back raw from `full_path/2`, so the
-  #     two never agree and the patch repeats forever.
-  #
-  # So the path is compared only to be left alone: when it differs, the URL came
-  # in naming something this cannot rewrite, and is returned as typed.
-  #
-  # The query is compared as decoded maps, which is the only form the two sides
-  # agree in — and a wrong comparison here is not a cosmetic bug but an endless
-  # loop, since each patch is another request. Against the raw params map it
-  # never settles: `URLParams` holds `limit` and `page` as integers where a query
-  # holds strings.
-  def correctable_query?(%URI{} = uri, canonical_path) when is_binary(canonical_path) do
-    canonical = URI.parse(canonical_path)
-
-    canonical.path == uri.path and
-      URI.decode_query(uri.query || "") != URI.decode_query(canonical.query || "")
-  end
+  defdelegate correctable_query?(uri, canonical_path), to: QuickView.Address
 
   @doc """
   Renders the not-found page for a URL naming an action the resource lacks.
@@ -856,294 +733,7 @@ defmodule AshQuick.LiveView.QuickView do
   not there, and a mistyped one is a wrong turn rather than a fault worth
   reporting.
   """
-  def render_unknown_action(assigns) do
-    assigns
-    |> assign(:record, nil)
-    |> AshQuick.LiveView.Components.DetailsView.details_view()
-  end
-
-  @doc false
-  # Public only because the generated `handle_params/3` calls it.
-  #
-  # A patch to a URL this page cannot serve leaves the page it came from. The
-  # hooks that page attached would otherwise stay: a list's refetch already
-  # scheduled would read through an action that is now nil and crash the view,
-  # and its events would act on a selection the not-found page does not show.
-  # So the page's own events and messages are dropped here, as the form drops
-  # the page under it, and the selection goes with the page. Anything else is
-  # the host's and goes on.
-  def leave_page(socket) do
-    page_events = ListUtils.events() ++ DetailsUtils.events() ++ FormUtils.events()
-
-    socket
-    |> Phoenix.LiveView.detach_hook(:quick_view_events_hook, :handle_event)
-    |> Phoenix.LiveView.attach_hook(:quick_view_events_hook, :handle_event, fn
-      event, _params, socket ->
-        if event in page_events, do: {:halt, socket}, else: {:cont, socket}
-    end)
-    |> Phoenix.LiveView.detach_hook(:quick_view_info_hook, :handle_info)
-    |> Phoenix.LiveView.attach_hook(:quick_view_info_hook, :handle_info, fn
-      {:refetch, _assign, _info}, socket -> {:halt, socket}
-      %{payload: %Ash.Notifier.Notification{}}, socket -> {:halt, socket}
-      _message, socket -> {:cont, socket}
-    end)
-    |> assign(selected_rows: %{}, row_actions: nil)
-  end
-
-  @doc false
-  # Public only because the generated `handle_params/3` calls it.
-  #
-  # A create or an update opens in a modal over the page the visitor was on —
-  # a snapshot of it, since the socket now holds the form. It is the page they
-  # come back to, so where they came from needs no tracking: an action opened
-  # from the list closes onto the list, at the page and filters it had.
-  #
-  # One action opened from another keeps the page the first opened over. A URL
-  # reached with nothing before it — a link, a refresh — opens over the page
-  # the action belongs to: the record's details for an update, the list for a
-  # create.
-  #
-  # Either way the background says where that page is (`:path`), and what it
-  # showed (`:params`, `:record`), which is how a destroy tells whether it
-  # destroyed the record its page was about. A modal's also holds the page's
-  # `:assigns`, which it is drawn over; an action the resource declared
-  # `full_page` is drawn on its own and holds none, so it returns to the same
-  # page without rendering it.
-  def put_background(socket, previous, %URI{} = uri, %Options{} = options, after_handle_params) do
-    action = socket.assigns.ash_action
-
-    background =
-      cond do
-        match?(%Actions.Read{}, action) ->
-          nil
-
-        AshQuick.Info.full_page?(options.resource, action.name) ->
-          return_to(socket, previous, options)
-
-        true ->
-          modal_background(socket, previous, action, options, after_handle_params)
-      end
-
-    socket
-    |> assign(:ash_quick_background, background)
-    |> assign(:ash_quick_request_path, request_path(uri))
-  end
-
-  # Where this page is, query and all, for an action opened over it to return to.
-  defp request_path(%URI{path: path, query: nil}), do: path
-  defp request_path(%URI{path: path, query: query}), do: "#{path}?#{query}"
-
-  defp modal_background(socket, previous, action, options, after_handle_params) do
-    case previous do
-      %{ash_quick_background: %{assigns: %{}} = background} ->
-        background
-
-      %{ash_action: %Actions.Read{}, ash_quick_request_path: path} ->
-        page(path, snapshot(previous))
-
-      _previous ->
-        parent_background(socket, action, options, after_handle_params)
-    end
-  end
-
-  # A full page draws nothing underneath, so the page it returns to is only
-  # named. With nothing before it, that is the page the action belongs to, at
-  # the URL's own search and filters: the list it lands on reads it then.
-  defp return_to(socket, previous, %Options{} = options) do
-    case previous do
-      %{ash_quick_background: %{} = background} ->
-        Map.delete(background, :assigns)
-
-      %{ash_action: %Actions.Read{}, ash_quick_request_path: path} ->
-        path |> page(previous) |> Map.delete(:assigns)
-
-      _previous ->
-        parent_return(socket, options)
-    end
-  end
-
-  defp page(path, assigns),
-    do: %{path: path, params: assigns.params, record: assigns[:record], assigns: assigns}
-
-  defp parent_return(socket, %Options{} = options) do
-    params = parent_params(socket.assigns.params, socket.assigns.ash_action)
-
-    if params |> action_from_params(options, nil) |> then(&resolve_parent(options, &1, params)) do
-      %{
-        path: URLParams.full_path(socket.assigns.base_path, params),
-        params: params,
-        record: nil
-      }
-    end
-  end
-
-  defp parent_background(socket, action, %Options{} = options, after_handle_params) do
-    params = parent_params(socket.assigns.params, action)
-
-    parent_action =
-      params |> action_from_params(options, nil) |> then(&resolve_parent(options, &1, params))
-
-    if parent_action do
-      params = apply_pagination(params, parent_action)
-
-      parent =
-        socket
-        |> assign(params: params, ash_action: parent_action)
-        |> do_handle_params(params, parent_action, options)
-        |> after_handle_params.()
-
-      # Only rendered, never live: what loading it subscribed to is let go.
-      Liveness.unsubscribe_all(parent, options)
-
-      page(
-        URLParams.full_path(socket.assigns.base_path, parent.assigns.params),
-        snapshot(parent.assigns)
-      )
-    end
-  end
-
-  defp parent_params(%URLParams{} = params, %Actions.Create{}),
-    do: %URLParams{params | action: nil, id: nil}
-
-  defp parent_params(%URLParams{} = params, _record_action), do: %URLParams{params | action: nil}
-
-  defp resolve_parent(%Options{} = options, action_name, params) do
-    if reachable?(options, action_name),
-      do: resolved_action(options.resource, action_name, params)
-  end
-
-  # Rendered whole whenever it renders at all, which is only when it is taken.
-  defp snapshot(assigns) do
-    assigns
-    |> Map.drop([:flash, :ash_quick_background])
-    |> Map.put(:__changed__, nil)
-  end
-
-  def do_mount(socket, _params, _session, %Options{} = options) do
-    socket
-    # The layout renders the nav, so the option has to reach it from here — a
-    # view is what knows it wants the width, and the layout is what wraps it.
-    |> assign(:sidebar, options.sidebar)
-    |> assign(:filters, options.filters)
-    # Once: a record-less `Ash.can?` answers from the scope alone.
-    |> assign(:bulk_actions, AshQuick.LiveView.BulkActions.menu(options, socket))
-    |> assign(:ash_quick_bulk, nil)
-    |> assign(:action_running, false)
-  end
-
-  def do_handle_params(socket, params, ash_action, %Options{} = options) do
-    socket
-    |> assign(:ash_quick_bulk, nil)
-    |> load_params(params, ash_action, options)
-    |> prepare_assigns(ash_action, options)
-  end
-
-  defp load_params(
-         socket,
-         %{id: nil} = params,
-         %Actions.Read{get?: false} = action,
-         %Options{} = options
-       ) do
-    ListUtils.do_handle_params(socket, params, action, options)
-  end
-
-  defp load_params(socket, %{id: _} = params, %Actions.Read{} = action, %Options{} = options) do
-    DetailsUtils.do_handle_params(socket, params, action, options)
-  end
-
-  defp load_params(
-         socket,
-         %{id: nil} = params,
-         %Actions.Create{} = action,
-         %Options{} = options
-       ) do
-    FormUtils.do_handle_params(socket, params, action, options)
-  end
-
-  defp load_params(socket, %{id: _} = params, %type{} = action, %Options{} = options)
-       when type in [Actions.Update, Actions.Destroy] do
-    FormUtils.do_handle_params(socket, params, action, options)
-  end
-
-  # Assigns what the generic templates render from, beyond what
-  # `load_params/4` loaded: the component id, the field list, the bulk action
-  # menu, the pagination path builder, and the list's linker. After the load because the
-  # list read can still drop a refused filter from `:params`, and
-  # `path_for_page` has to build from what the page rendered; before
-  # `after_handle_params/2` so a host can still override any of these.
-  #
-  # It runs against the socket rather than inside `render/1`. A key assigned
-  # during a render is never stored on the socket, so the next render finds it
-  # absent again and change tracking marks it changed every time, re-rendering
-  # every part of the template that reads it — every row, through `@fields` —
-  # on every event. Assigned here, a key is only marked changed when its value
-  # actually differs, which is when the URL moved.
-  #
-  # Public only so a test can drive it without a data layer to read through.
-  @doc false
-  def prepare_assigns(socket, ash_action, %Options{} = options) do
-    do_prepare_assigns(socket, socket.assigns.params, ash_action, options)
-  end
-
-  defp do_prepare_assigns(
-         socket,
-         %{id: nil},
-         %Actions.Read{get?: false} = action,
-         %Options{} = options
-       ) do
-    %{path: path, params: params} = socket.assigns
-
-    fields = visible_fields(socket, options.list_fields, action, options)
-
-    socket
-    |> assign(:id, "#{Ash.Resource.Info.trace_name(options.resource)}-list")
-    |> assign(:fields, fields)
-    # The columns whose cells offer to filter the list by their value.
-    |> assign(:cell_filters, CellFilterMenu.cell_filters(socket, fields, action, options))
-    |> assign(:sortable, options.list_sortable)
-    |> assign(:filterable, options.list_filterable)
-    |> assign(:new_action_label, options.new_action_label)
-    |> assign(:new_click, fn -> JS.push("new_click") end)
-    |> assign(:actions, socket.assigns[:bulk_actions] || [])
-    |> assign(:path_for_page, &URLParams.path_for_page(path, params, &1))
-    |> assign(:linker, list_linker(socket, options))
-  end
-
-  defp do_prepare_assigns(socket, %{id: id}, %Actions.Read{} = action, %Options{} = options) do
-    socket
-    |> assign(:id, "#{id}-details")
-    |> assign(:fields, visible_fields(socket, options.details_fields, action, options))
-  end
-
-  defp do_prepare_assigns(socket, %{id: nil}, %Actions.Create{}, %Options{} = options) do
-    socket
-    |> assign(:id, "#{Ash.Resource.Info.trace_name(options.resource)}-create")
-  end
-
-  defp do_prepare_assigns(socket, %{id: id}, %type{}, %Options{})
-       when type in [Actions.Update, Actions.Destroy] do
-    socket
-    |> assign(:id, "#{id}-form")
-  end
-
-  # What a record a list column names links to, the way the details page
-  # links it: one `AshQuick.Nav.Info.details_linker/3` over the resources the
-  # columns name, asked of every cell. Built again it is an equal function,
-  # so a navigation that changes neither the scope nor the routes leaves the
-  # rows untouched.
-  defp list_linker(socket, %Options{} = options) do
-    options.resource
-    |> DetailsUtils.linked_records(options.list_fields)
-    |> Enum.map(&elem(&1, 1))
-    |> AshQuick.Nav.Info.details_linker(socket.assigns[:scope])
-  end
-
-  # A column every row would show as hidden is left out instead. Recomputed per
-  # navigation, but the answer only changes with the scope, so the assign is
-  # only marked changed when it does.
-  defp visible_fields(socket, fields, action, %Options{resource: resource}) do
-    AshQuick.LiveView.Utils.visible_fields(fields, resource, action, socket.assigns[:scope])
-  end
+  defdelegate render_unknown_action(assigns), to: QuickView.Render
 
   @doc """
   Whether a custom `action_*` form template must be skipped in favour of the
@@ -1160,27 +750,26 @@ defmodule AshQuick.LiveView.QuickView do
   Read actions are gated by `DetailsView`, not `FormView`, so they are left
   to their custom templates.
   """
-  def forbidden_form?(%{ash_action: %action_type{}} = assigns)
-      when action_type in [Actions.Create, Actions.Update, Actions.Destroy] do
-    AshQuick.LiveView.Components.FormView.forbidden?(assigns)
-  end
+  defdelegate forbidden_form?(assigns), to: QuickView.Render
 
-  def forbidden_form?(_assigns), do: false
+  @doc false
+  defdelegate do_render(assigns, params, ash_action), to: QuickView.Render
 
-  def do_render(assigns, %{id: nil}, %Actions.Read{get?: false}) do
-    assigns
-    |> AshQuick.LiveView.Components.ListView.list_view()
-  end
+  @doc false
+  defdelegate leave_page(socket), to: QuickView.Page
 
-  def do_render(assigns, %{id: id}, %Actions.Read{}) when not is_nil(id) do
-    assigns
-    |> AshQuick.LiveView.Components.DetailsView.details_view()
-  end
+  @doc false
+  defdelegate do_mount(socket, params, session, options), to: QuickView.Page
 
-  def do_render(assigns, _, _) do
-    assigns
-    |> AshQuick.LiveView.Components.FormView.form_view()
-  end
+  @doc false
+  defdelegate do_handle_params(socket, params, ash_action, options), to: QuickView.Page
+
+  @doc false
+  defdelegate prepare_assigns(socket, ash_action, options), to: QuickView.Page
+
+  @doc false
+  defdelegate put_background(socket, previous, uri, options, after_handle_params),
+    to: QuickView.Background
 
   @doc """
   What this page will serve for a URL: the params it renders from, and the
@@ -1189,115 +778,8 @@ defmodule AshQuick.LiveView.QuickView do
   The action is `nil` where the URL named one this page cannot serve, which is
   what the generated `render/1` renders not found for.
   """
-  def resolve(url_params, %Options{} = options, live_action) do
-    params =
-      url_params
-      |> URLParams.from_url_params()
-      |> params_for_shape(live_action)
+  defdelegate resolve(url_params, options, live_action), to: QuickView.Resolve
 
-    action_name = action_from_params(params, options, live_action)
-
-    action =
-      if reachable?(options, action_name),
-        do: resolved_action(options.resource, action_name, params)
-
-    params =
-      params
-      |> paginate(action, options)
-      |> URLParams.allow_sort(options.list_sortable)
-
-    {params, action}
-  end
-
-  # Every page is sized by a list: a list page by its own action, and a record
-  # or create page by the list it links back to, which is the default one. So
-  # a record page holding `?limit=20` under a list whose default is 2 says so
-  # in every link back, rather than measuring it against a default no list has.
-  defp paginate(%URLParams{id: nil} = params, %Actions.Read{get?: false} = action, _options),
-    do: size_by(params, action)
-
-  defp paginate(params, _action, %Options{} = options),
-    do: size_by(params, Ash.Resource.Info.action(options.resource, options.list_default_action))
-
-  # The page behind a modal is sized only when it is a list. A record page
-  # behind an update keeps the size `paginate/3` gave it.
-  defp apply_pagination(%URLParams{id: nil} = params, action), do: size_by(params, action)
-  defp apply_pagination(params, _action), do: params
-
-  # A list reads its action's `default_limit` unless the URL says otherwise, and
-  # at most its `max_page_size`, so that is the most its page may say it reads.
-  # See `URLParams.apply_pagination/2`.
-  defp size_by(params, %Actions.Read{pagination: %{} = pagination}),
-    do: URLParams.apply_pagination(params, pagination)
-
-  defp size_by(params, _action), do: params
-
-  # A URL names actions on the visitor's behalf, so it reaches only public
-  # ones. See `AshQuick.LiveView.Utils.record_actions/1` for what a private
-  # action is, and why the policy Ash recommends for one cannot be relied on to
-  # refuse a visitor. The page's own defaults are the exception, because the
-  # host named them in code: a lookup action kept private so that no API serves
-  # it is still what this page lists through.
-  defp reachable?(%Options{} = options, action_name) do
-    action_name in [options.list_default_action, options.details_default_action] or
-      AshQuick.LiveView.Utils.public_action?(options.resource, action_name)
-  end
-
-  # `/create` is the only shape `quick_view/3` declares with a `live_action`,
-  # and the only one whose path holds no `:id` — so an `?id=` there names
-  # nothing. Dropped rather than refused, and dropping it is also what carries
-  # it out of the canonicalized URL.
-  defp params_for_shape(%URLParams{} = params, nil), do: params
-
-  defp params_for_shape(%URLParams{} = params, _live_action),
-    do: %URLParams{params | id: nil}
-
-  # The combinations `do_handle_params/4` serves, mirrored: a URL naming
-  # any other pairing of shape and action resolves to no action rather than
-  # reaching a clause that is not there. The list's read is held to
-  # `Lookup.Contract` on top — what a list needs of a read, and what `Options`
-  # already holds a declared `default_action` to while the page compiles.
-  defp resolved_action(resource, action_name, %URLParams{id: nil}) do
-    case Ash.Resource.Info.action(resource, action_name) do
-      %Actions.Read{get?: false} = action -> if listable?(resource, action), do: action
-      %Actions.Create{} = action -> action
-      _ -> nil
-    end
-  end
-
-  defp resolved_action(resource, action_name, %URLParams{}) do
-    case Ash.Resource.Info.action(resource, action_name) do
-      %Actions.Read{} = action -> action
-      %Actions.Update{} = action -> action
-      %Actions.Destroy{} = action -> action
-      _ -> nil
-    end
-  end
-
-  defp listable?(resource, %Actions.Read{} = action) do
-    AshQuick.Lookup.Contract.check(
-      resource,
-      action.name,
-      AshQuick.Info.lookup_search_argument(resource)
-    ) == :ok
-  end
-
-  def action_from_params(%URLParams{action: action}, _config, _live_action)
-      when not is_nil(action) do
-    action
-  end
-
-  def action_from_params(%URLParams{id: nil}, _config, live_action)
-      when not is_nil(live_action) do
-    live_action
-  end
-
-  def action_from_params(%URLParams{id: nil}, %Options{} = options, nil) do
-    options.list_default_action
-  end
-
-  def action_from_params(%URLParams{action: nil, id: id}, %Options{} = options, nil)
-      when not is_nil(id) do
-    options.details_default_action
-  end
+  @doc false
+  defdelegate action_from_params(params, options, live_action), to: QuickView.Resolve
 end
