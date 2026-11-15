@@ -168,7 +168,7 @@ defmodule AshQuick.LiveView.URLParams do
   end
 
   # Bounded against the limit rather than on its own, because a page is only
-  # read as an offset: `ListUtils.get_offset/2` multiplies the two, and the data
+  # read as an offset: `ListRead.get_offset/2` multiplies the two, and the data
   # layer refuses a product outside a 64-bit integer. Nothing real is lost — a
   # page past the end of the data lists nothing at any depth.
   #

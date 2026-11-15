@@ -9,8 +9,8 @@ defmodule AshQuick.Lookup.Contract do
   #   * it exists, because `Ash.Query.for_read/4` raises on a name the resource
   #     does not define;
   #   * it takes the search argument and takes it as optional, because all four
-  #     readers pass it — `ListUtils.load_data!/3`,
-  #     `ListUtils.build_export_query/4`, `BelongsToInput` and `HasManyInput` —
+  #     readers pass it — `ListRead.load_data!/3`,
+  #     `ListExport.build_export_query/4`, `BelongsToInput` and `HasManyInput` —
   #     and all four pass `nil` through it when there is nothing to search for.
   #     An `allow_nil?: false` argument turns every unsearched read into an
   #     `Ash.Query.require_arguments/2` error: the list page under an empty box,

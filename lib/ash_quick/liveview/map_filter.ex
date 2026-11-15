@@ -170,7 +170,8 @@ defmodule AshQuick.LiveView.MapFilter do
   # they may not see: Contains, a character at a time, would read it back.
   # So the plain reference beside it decides first. Key Missing, above, keeps
   # a hidden map as one holding nothing, as Is Empty does a hidden field;
-  # `ListUtils` refuses it on a map hidden on some rows, as it does Is Empty.
+  # `ListFilterGuard` refuses it on a map hidden on some rows, as it does Is
+  # Empty.
   defp seen(name, matches), do: expr(not is_nil(^ref(name)) and ^matches)
 
   # Not Equals and Not Contains keep a row whose map holds the key, with no

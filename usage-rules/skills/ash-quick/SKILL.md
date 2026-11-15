@@ -1338,7 +1338,7 @@ config :ash_quick,
 ## Key source files
 
 - `deps/ash_quick/lib/ash_quick/liveview/quick_view.ex` — Main macro and moduledoc
-- `deps/ash_quick/lib/ash_quick/liveview/list_utils.ex` — List view logic
+- `deps/ash_quick/lib/ash_quick/liveview/list_utils.ex` — List view lifecycle and events; `list_read.ex`, `list_rows.ex`, `list_filter_guard.ex`, `list_export.ex`, `list_bulk.ex`, `cell_filter_menu.ex` beside it
 - `deps/ash_quick/lib/ash_quick/liveview/details_utils.ex` — Detail view logic
 - `deps/ash_quick/lib/ash_quick/liveview/form_utils.ex` — Form lifecycle, events and save; `form_params.ex`, `form_save_errors.ex`, `form_uploads.ex`, `form_attachments.ex`, `attachment_keys.ex` beside it
 - `deps/ash_quick/lib/ash_quick/liveview/attachment_upload.ex` — signing, naming and checking an upload, for custom upload widgets

@@ -235,8 +235,8 @@ defmodule AshQuick do
       end
 
   One declaration stands behind three surfaces. The list page and the export
-  both read through it (`AshQuick.LiveView.ListUtils`), and so does every
-  BelongsTo and HasMany dropdown pointing *at* this resource
+  both read through it (`AshQuick.LiveView.ListRead` and `ListExport`), and so
+  does every BelongsTo and HasMany dropdown pointing *at* this resource
   (`AshQuick.LiveView.Components.BelongsToInput` and `HasManyInput`). They are
   one question — "find me records of this resource matching what the user
   typed" — asked from three places, so a resource answers it once.

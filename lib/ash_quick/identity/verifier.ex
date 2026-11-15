@@ -22,7 +22,7 @@ defmodule AshQuick.Identity.Verifier do
   # Uniqueness is the same requirement and not a second one, which is why both
   # halves live here: `AshQuick.LiveView.DetailsUtils.load_record!/3` filters
   # `id == ^id` and takes the answer through `Ash.read_one/2`, and
-  # `ListUtils.do_action/4` finds the first record on the page whose `:id`
+  # `ListUtils.row_action/4` finds the first record on the page whose `:id`
   # matches what was clicked. A repeated `:id` makes the first answer with an
   # error the details page renders as not-found, and the second hand back
   # whichever row was loaded first.
@@ -33,7 +33,7 @@ defmodule AshQuick.Identity.Verifier do
   # its `:id` already has.
   #
   # Not a reason, so nobody re-derives it: the list view does not sort by `:id`.
-  # `sort_by` has no default, and `ListUtils.maybe_apply_sort(query, nil)` is the
+  # `sort_by` has no default, and `ListRead.maybe_apply_sort(query, nil)` is the
   # identity — a list is unsorted unless a QuickView opts in.
   use Spark.Dsl.Verifier
 

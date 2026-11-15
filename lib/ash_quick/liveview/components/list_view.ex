@@ -315,7 +315,7 @@ defmodule AshQuick.LiveView.Components.ListView do
   # The rows in the order they were drawn, each record still read back as
   # `{:row, record}` and each one that was not as `{:gone, %{id: id}}`: a
   # live refetch never moves a row, so what the reader was about to click is
-  # still where it was. See `AshQuick.LiveView.ListUtils`.
+  # still where it was. See `AshQuick.LiveView.ListRows`.
   defp screen_rows(results, nil, _gone), do: Enum.map(results, &{:row, &1})
 
   defp screen_rows(results, order, gone) do
@@ -357,8 +357,8 @@ defmodule AshQuick.LiveView.Components.ListView do
         id: to_string(assigns.record.id),
         column: QuickField.data_field(assigns.field),
         filter_field: filter_field,
-        # Asked as the menu's events ask it (`ListUtils`), so a cell offers a
-        # menu only where opening it has an entry.
+        # Asked as the menu's events ask it (`CellFilterMenu`), so a cell
+        # offers a menu only where opening it has an entry.
         offered?:
           CellFilter.choices(
             filter_field,
