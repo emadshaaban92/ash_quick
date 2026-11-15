@@ -1337,7 +1337,7 @@ config :ash_quick,
 
 ## Key source files
 
-- `deps/ash_quick/lib/ash_quick/liveview/quick_view.ex` — Main macro and moduledoc
+- `deps/ash_quick/lib/ash_quick/liveview/quick_view.ex` — Main macro and moduledoc; `quick_view_resolve.ex` (URL to action), `quick_view_page.ex` (mount and params), `quick_view_background.ex` (the page an action opens over), `quick_view_address.ex` (base path and query correction) and `quick_view_render.ex` (what the page draws) beside it
 - `deps/ash_quick/lib/ash_quick/liveview/list_utils.ex` — List view lifecycle and events; `list_read.ex`, `list_rows.ex`, `list_filter_guard.ex`, `list_export.ex`, `list_bulk.ex`, `cell_filter_menu.ex` beside it
 - `deps/ash_quick/lib/ash_quick/liveview/details_utils.ex` — Detail view logic
 - `deps/ash_quick/lib/ash_quick/liveview/form_utils.ex` — Form lifecycle, events and save; `form_params.ex`, `form_save_errors.ex`, `form_uploads.ex`, `form_attachments.ex`, `attachment_keys.ex` beside it
