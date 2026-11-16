@@ -54,9 +54,11 @@ defmodule AshQuick.Config do
   * `:s3_bucket` — The S3 bucket name `AshQuick.Storage.S3` uses for
     uploads (image uploads, exports, prints).
 
-  * `:s3_host` — The S3-compatible host `AshQuick.Storage.S3` constructs
-    public URLs against (e.g. `"s3.amazonaws.com"`,
-    `"storage.googleapis.com"`). Defaults to `"s3.amazonaws.com"`.
+  * `:s3_host` — The host `AshQuick.Storage.S3` builds public URLs against,
+    over `https` (e.g. `"s3.amazonaws.com"`, `"storage.googleapis.com"`), for
+    public reads served from another host than the one ExAws signs against.
+    Unset, public URLs use the `:s3` scheme, host and port under
+    `config :ex_aws`, the endpoint presigned URLs are signed for.
 
   * `:error_translator` — A `{Module, :function}` tuple for translating
     changeset error tuples. The function receives `{msg, opts}` and must
@@ -479,10 +481,10 @@ defmodule AshQuick.Config do
   end
 
   @doc """
-  Returns the configured S3 host. Defaults to `"s3.amazonaws.com"`.
+  Returns the configured S3 host, or `nil` when none is.
   """
   def s3_host do
-    get(:s3_host, "s3.amazonaws.com")
+    get(:s3_host)
   end
 
   @doc """

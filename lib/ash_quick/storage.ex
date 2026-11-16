@@ -626,8 +626,28 @@ defmodule AshQuick.Storage do
 
         def url(key, opts), do: AshQuick.Storage.S3.url(key, [bucket: "mine"] ++ opts)
 
-    `put_file/3` also takes `:ex_aws`, overrides for the `ExAws` request it
-    makes, as `ExAws.request/2` takes them.
+    Every callback also takes `:ex_aws`, overrides for the ExAws `:s3`
+    configuration, as `ExAws.request/2` takes them: the request `put_file/3`
+    makes, and the endpoint and credentials the other callbacks sign for.
+
+    ## S3-compatible stores
+
+    URLs name the bucket in the host (`https://bucket.host/key`), as AWS
+    prefers. A store that only answers path-style URLs
+    (`https://host/bucket/key`), such as MinIO without `MINIO_DOMAIN`, says so
+    with `virtual_host: false`. ExAws's own requests (`put_file/3`, and the
+    reads of `AshQuick.Storage.S3.Proxy`) are the other way round: path-style
+    unless the key is `true`, so with it unset they and the URLs use opposite
+    styles, which AWS answers either way.
+
+        config :ex_aws, :s3,
+          scheme: "https://",
+          host: "minio.internal",
+          port: 9000,
+          virtual_host: false
+
+    Public URLs are built against the same endpoint, unless `:s3_host` (or a
+    `:host` opt) names another host to serve them from over `https`.
     """
     @behaviour AshQuick.Storage
 
@@ -694,7 +714,8 @@ defmodule AshQuick.Storage do
         |> maybe_param("content-length", Keyword.get(opts, :content_length))
         |> maybe_param("content-type", content_type)
 
-      url = presigned_url(bucket(opts), :put, key, expires_in: ttl(opts), headers: headers)
+      url =
+        presigned_url(bucket(opts), :put, key, [expires_in: ttl(opts), headers: headers], opts)
 
       meta = if content_type, do: %{url: url, content_type: content_type}, else: %{url: url}
       {:external, "S3", meta}
@@ -702,22 +723,37 @@ defmodule AshQuick.Storage do
 
     @doc """
     The anonymous-read URL for `key`. No signing: the bucket policy is what
-    makes the read succeed. Opts: `:bucket`, `:host`.
+    makes the read succeed. Opts: `:bucket`, `:host`, `:ex_aws`.
     """
     def public_url(key, opts \\ []) do
-      host = Keyword.get_lazy(opts, :host, &AshQuick.Config.s3_host/0)
-      "https://#{bucket(opts)}.#{host}/#{encode_key(key)}"
+      config = ex_aws_config(opts)
+
+      base =
+        case Keyword.get_lazy(opts, :host, &AshQuick.Config.s3_host/0) do
+          nil -> "#{config.scheme}#{config.host}#{port(config)}"
+          host -> "https://#{host}"
+        end
+
+      %URI{scheme: scheme, authority: authority} = URI.parse(base)
+      bucket = bucket(opts)
+
+      if virtual_host?(config),
+        do: "#{scheme}://#{bucket}.#{authority}/#{encode_key(key)}",
+        else: "#{scheme}://#{authority}/#{bucket}/#{encode_key(key)}"
     end
 
     @doc """
-    A presigned `GET` for `key`. Opts: `:bucket`, `:expires_in`, and
-    `:query_params`, extra signed query params such as
+    A presigned `GET` for `key`. Opts: `:bucket`, `:expires_in`, `:ex_aws`,
+    and `:query_params`, extra signed query params such as
     `response-content-disposition`.
     """
     def presigned_get_url(key, opts \\ []) do
-      presigned_url(bucket(opts), :get, key,
-        expires_in: ttl(opts),
-        query_params: Keyword.get(opts, :query_params, [])
+      presigned_url(
+        bucket(opts),
+        :get,
+        key,
+        [expires_in: ttl(opts), query_params: Keyword.get(opts, :query_params, [])],
+        opts
       )
     end
 
@@ -734,13 +770,31 @@ defmodule AshQuick.Storage do
       |> Enum.map_join("/", &URI.encode(&1, fn c -> URI.char_unreserved?(c) end))
     end
 
-    defp presigned_url(bucket, method, key, opts) do
-      config = ExAws.Config.new(:s3)
+    defp presigned_url(bucket, method, key, opts, store_opts) do
+      config = ex_aws_config(store_opts)
 
       {:ok, url} =
-        ExAws.S3.presigned_url(config, method, bucket, key, [virtual_host: true] ++ opts)
+        ExAws.S3.presigned_url(
+          config,
+          method,
+          bucket,
+          key,
+          [virtual_host: virtual_host?(config)] ++ opts
+        )
 
       url
     end
+
+    defp ex_aws_config(opts), do: ExAws.Config.new(:s3, Keyword.get(opts, :ex_aws, []))
+
+    # Virtual-hosted URLs (`bucket.host/key`) unless the ExAws configuration
+    # says `virtual_host: false`, for a store that only answers path-style
+    # ones (`host/bucket/key`).
+    defp virtual_host?(config), do: Map.get(config, :virtual_host, true) != false
+
+    # As ExAws builds the URLs it signs: no port when it is a default one.
+    defp port(%{port: port}) when port in [nil, "", 80, "80", 443, "443"], do: ""
+    defp port(%{port: port}), do: ":#{port}"
+    defp port(_config), do: ""
   end
 end
