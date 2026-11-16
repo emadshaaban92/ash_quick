@@ -45,8 +45,9 @@ defmodule AshQuick.Audit.Store do
   store that refuses the batch fails the write that produced it and both go
   back. That is deliberate and is the trade the store makes: an audited write
   that cannot be recorded did not happen, which puts the audit table on the
-  critical path of every write. Keep the store dumb — no policies to evaluate,
-  no validations to trip, one bulk insert.
+  critical path of every write. Keep the store dumb — no validations to trip,
+  one bulk insert. The insert runs with `authorize?: false`, so the store's
+  policies never see it: they govern only who else may read or write it.
 
   An audited read (`read_actions`, see `AshQuick.Audit.Preparation`) is held to
   the same rule: its rows are written before the records are handed back, and a

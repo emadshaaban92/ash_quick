@@ -1,6 +1,6 @@
 if Code.ensure_loaded?(Igniter) do
   defmodule Mix.Tasks.AshQuick.Gen.QuickView do
-    @example "mix ash_quick.gen.quick_view MyApp.Catalog.Product"
+    @example "mix ash_quick.gen.quick_view MyApp.Catalog.Product --grant-to admin"
 
     @shortdoc "Generates a QuickView over a resource, routes it, and grants the route"
 
@@ -25,10 +25,12 @@ if Code.ensure_loaded?(Igniter) do
         `AshQuick.LiveView.Mount`. A resource with no `:create` action is routed
         `except: [:create]`, which is what keeps something the system creates
         out of the "New" flow.
-      * The path, in the application's `AshQuick.AccessControl`. Without it the
-        route exists and every navigation to it is refused. The path is added
-        to the module's `@routes` list, or with `--grant-to` to the clause of
-        each role named.
+      * The path, in the application's `AshQuick.AccessControl`, with
+        `--grant-to` added to the clause of each role named. Without it the
+        route exists and every navigation to it is refused. An access control
+        that keeps one `@routes` list for every scope gets the path there when
+        no role is named; the one `mix igniter.install ash_quick` generates
+        lists routes per role and grants nothing unless told which role.
 
     The sidebar needs nothing further: a QuickView is discovered from its route.
     A tile in the apps grid is a `group` in the nav, which is a decision about
@@ -786,7 +788,7 @@ if Code.ensure_loaded?(Igniter) do
         _other ->
           {:warning,
            Igniter.Util.Warning.formatted_warning(
-             "Could not find a `@routes` list to grant this route in. Grant it wherever `AshQuick.AccessControl` is implemented, or name the roles with `--grant-to` when it lists routes per role. " <>
+             "No role was named, so this task granted the route to no role: unless your access control already covers it, every navigation to it is refused. Name the roles with `--grant-to admin,editor`, or grant it by hand wherever `AshQuick.AccessControl` is implemented. " <>
                strict_note(),
              ~s|"#{path}"|
            )}

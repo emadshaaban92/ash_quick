@@ -39,9 +39,9 @@ order to work — which is more than the file it is named after. Reach for them
 before writing a QuickView, a route or an audit store by hand.
 
 ```console
-$ mix igniter.install ash_quick                      # config, audit store, nav, access control, router import
-$ mix ash_quick.gen.resource MyApp.Catalog.Product   # the extension, and the columns that costs
-$ mix ash_quick.gen.quick_view MyApp.Catalog.Product # the view, its route, and the grant for it
+$ mix igniter.install ash_quick                                       # config, audit store, nav, access control, router import
+$ mix ash_quick.gen.resource MyApp.Catalog.Product                    # the extension, and the columns that costs
+$ mix ash_quick.gen.quick_view MyApp.Catalog.Product --grant-to admin # the view, its route, and the grant to :admin
 ```
 
 `mix ash_quick.gen.quick_view` derives the field list from the resource's own
@@ -53,6 +53,13 @@ create action, and grants the path in the application's `AshQuick.AccessControl`
 why. The file follows the layout of the QuickViews already routed, in a
 directory of its own (`--file` overrides it), and an access control that lists
 routes per role is granted with `--grant-to admin,editor`.
+
+Both generated defaults refuse. The installed access control grants no route
+until its `role/1` reads a role off the scope and that role's
+`routes_for_role/1` clause lists the route, so generate QuickViews there with
+`--grant-to`. The installed audit store forbids every create and read through
+its policies (AshQuick's own writes skip authorization), so its `:read` policy
+must name who may read the trail.
 
 `mix ash_quick.gen.resource` takes an existing resource onto the extension
 through `mix ash.extend`, and reports the columns that adds before you run the
@@ -900,7 +907,9 @@ and what to write.
 - **Audit** — **On unless the resource turns it off.** Every create, update and
   destroy writes a row into the store, in `after_batch` **inside the action's
   transaction**: a store that refuses the batch fails the write. So keep the
-  store dumb — no policies to evaluate, no validations to trip.
+  store dumb — no validations to trip. Its policies do not run on that
+  write (AshQuick writes with `authorize?: false`), so they only govern who
+  else may read or write it; the generated store forbids both.
 
   There is no fallback sink, so a resource with no store resolvable (from
   `audit do store ... end`, else the configured `:audit_resource`) **does not

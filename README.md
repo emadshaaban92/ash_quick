@@ -30,6 +30,12 @@ the Tailwind source line. It states the one step it will not guess at — the
 client half of `app.js`, which is a rewrite rather than a line to append — and
 running it again changes only what is missing.
 
+The audit store and the access control it writes both refuse until told
+otherwise. The store's policies forbid every create and read except AshQuick's
+own writes, which skip authorization, so say in its `:read` policy who may read
+the trail. The access control grants no route until its `role/1` reads a role
+off your scope and that role's `routes_for_role/1` clause lists the route.
+
 The rest of this section is what it does and why, for reading the diff or wiring
 it by hand.
 
@@ -1028,7 +1034,7 @@ says when the resource has no field to name a record by, which the extension
 will otherwise refuse to compile over on the next `mix compile`.
 
 ```console
-$ mix ash_quick.gen.quick_view MyApp.Catalog.Product
+$ mix ash_quick.gen.quick_view MyApp.Catalog.Product --grant-to admin
 ```
 
 Writes the QuickView, with a starter field list taken from the resource's own
@@ -1042,9 +1048,11 @@ QuickViews already there or in the live_session running
 `AshQuick.LiveView.Mount`, named relative to that scope's alias, and with
 `except: [:create]` when the resource has no create action. And grants the path
 in the application's `AshQuick.AccessControl`, without which the route exists
-and every navigation to it is refused: in its `@routes` list, or, for an access
-control that lists routes per role, in the clause of each role
-`--grant-to admin,editor` names.
+and every navigation to it is refused: in the clause of each role
+`--grant-to admin,editor` names, or, for an access control that keeps one
+`@routes` list for every scope, in that list. The installed access control
+lists routes per role, so a QuickView generated there without `--grant-to` is
+granted to nobody, and the task says so.
 
 A tile in the apps grid is a `group` in the nav — a decision about where the
 page belongs, which is left to you.
@@ -1139,7 +1147,7 @@ reference.
 | Seam | What it is |
 |---|---|
 | `AshQuick.Scope` | `use` it on the host's scope struct. Generates `Ash.Scope.ToOpts` and the provenance AshQuick needs on top of it: the real actor behind an impersonation, the request IP, the reader's timezone and the actor's locale. Fails the compile if a named field is not on the struct. The IP is the peer address unless `:client_ip` names another source; behind a proxy, see `AshQuick.LiveView.Mount`. A controller reads the same address with `AshQuick.ClientIp.from_conn/1`. |
-| The audit store | An Ash resource in the host app, named app-wide as `:audit_resource` or per resource under `audit do store ... end`. It must accept `resource_name`, `resource_id`, `action_type`, `action_name`, `attributes`, `arguments`, `context`, `actor_id`, `real_actor_id`, `ip`, `tenant`, and may also accept a `:map` `changes` — the only optional column. `actor_id` and `real_actor_id` must allow `nil`: a write with no actor is recorded with both `nil` (on a resource that stamps `inserted_by` / `updated_by`, only a destroy gets that far, since the stamp refuses a create or update with no actor). Keep it dumb — no policies, no validations: it is written inside the transaction of every audited write. |
+| The audit store | An Ash resource in the host app, named app-wide as `:audit_resource` or per resource under `audit do store ... end`. It must accept `resource_name`, `resource_id`, `action_type`, `action_name`, `attributes`, `arguments`, `context`, `actor_id`, `real_actor_id`, `ip`, `tenant`, and may also accept a `:map` `changes` — the only optional column. `actor_id` and `real_actor_id` must allow `nil`: a write with no actor is recorded with both `nil` (on a resource that stamps `inserted_by` / `updated_by`, only a destroy gets that far, since the stamp refuses a create or update with no actor). Keep it dumb — no validations, nothing that can refuse a row: it is written inside the transaction of every audited write. AshQuick writes it with `authorize?: false`, so its policies govern only other access, and reading it is the host's to protect: the generated store forbids every read until its `:read` policy says who. |
 | `AshQuick.Storage` | Where objects live: a URL to render one from (`url/2`), a URL to download one under a filename (`download_url/2`), storing a server-side file (`put_file/3`), and where a browser sends a picked file (`upload_target/2`, optional: without it uploads come over the LiveView socket). Plus optional lifecycle callbacks for routing an arriving upload and withholding objects that are not servable yet. Defaults to `AshQuick.Storage.S3`, which serves straight from the key and implements no lifecycle. `AshQuick.Storage.Local` keeps objects on the server's disk instead (see Storing files on local disk), and `AshQuick.Storage.S3.Proxy` serves a bucket only the application can reach through the application (see Serving files from a bucket only the app can reach). |
 | `AshQuick.AccessControl` | Answers which routes a scope may navigate to. Named on the nav, and what every rendering of it filters through. Not `Ash.can?`: a filter policy allows the action and returns no rows, so `can?` says yes for a page that would be empty. |
 | `AshQuick.Nav` | The host's navigation registry — one declaration the sidebar and the apps grid are both rendered from. QuickViews are discovered from the declared router; the declaration adds only what the router cannot say: a better label, an icon, a group, a non-QuickView path. |
