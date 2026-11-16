@@ -246,6 +246,96 @@ jobs:
       - name: Run tests + coverage
         run: mix coveralls
 
+  # AshQuick.Storage.S3 and S3.Proxy against a real S3-compatible server
+  # rather than the example's stub: signing, key encoding, multipart uploads
+  # and ranged reads, in both URL styles. MinIO publishes no binaries or images
+  # any more, so the last community release is built from its tagged source
+  # once and cached. See example/test/example/s3_minio_test.exs.
+  minio:
+    name: S3 storage against MinIO (example app)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: example
+    env:
+      MINIO_VERSION: RELEASE.2025-10-15T17-29-55Z
+      MINIO_ENDPOINT: http://localhost:9000
+    services:
+      db:
+        image: postgres:18
+        env:
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: admin
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U admin"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Cache the MinIO build
+        id: minio-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/minio-bin
+          key: ${{ runner.os }}-minio-${{ env.MINIO_VERSION }}
+
+      - name: Set up Go
+        if: steps.minio-cache.outputs.cache-hit != 'true'
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.24"
+          cache: false
+
+      - name: Build MinIO
+        if: steps.minio-cache.outputs.cache-hit != 'true'
+        run: GOBIN="$HOME/minio-bin" go install "github.com/minio/minio@$MINIO_VERSION"
+
+      # MINIO_DOMAIN makes it answer virtual-hosted URLs too, and the hosts
+      # entry makes the bucket's name resolve.
+      - name: Start MinIO
+        run: |
+          echo "127.0.0.1 ash-quick-minio.localhost" | sudo tee -a /etc/hosts
+          mkdir -p "$RUNNER_TEMP/minio-data"
+          MINIO_DOMAIN=localhost "$HOME/minio-bin/minio" server "$RUNNER_TEMP/minio-data" \
+            --address 127.0.0.1:9000 > "$RUNNER_TEMP/minio.log" 2>&1 &
+          for _ in $(seq 30); do
+            curl -sf http://localhost:9000/minio/health/live && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/minio.log"
+          exit 1
+
+      - name: Set up Elixir / OTP
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.20"
+          otp-version: "29"
+
+      - name: Cache example deps and _build
+        uses: actions/cache@v6
+        with:
+          path: |
+            example/deps
+            example/_build
+          key: ${{ runner.os }}-mix-example-test-${{ hashFiles('example/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-example-test-
+
+      - name: Map the "db" host to localhost
+        run: echo "127.0.0.1 db" | sudo tee -a /etc/hosts
+
+      - name: Install example dependencies
+        run: mix deps.get
+
+      - name: Run the MinIO cases
+        run: mix test --only minio
+
   # Scan the example app's real router and endpoint — coverage the library, with
   # neither of its own, cannot get. Sobelow is installed as an archive because
   # the example app does not carry it as a dependency. See example/.sobelow-conf.

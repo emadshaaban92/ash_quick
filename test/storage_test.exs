@@ -136,6 +136,50 @@ defmodule AshQuick.StorageTest do
     end
   end
 
+  describe "AshQuick.Storage.S3 against an S3-compatible endpoint" do
+    @minio [scheme: "http://", host: "minio.internal", port: 9000]
+
+    test "signs virtual-hosted URLs unless the ExAws config says otherwise" do
+      private = AshQuick.Storage.S3.url("private/a b.pdf", bucket: "b", ex_aws: @minio)
+      assert private =~ ~r{^http://b\.minio\.internal:9000/private/a%20b\.pdf\?X-Amz-}
+
+      path_style = [bucket: "b", ex_aws: [virtual_host: false] ++ @minio]
+
+      assert AshQuick.Storage.S3.url("private/a b.pdf", path_style) =~
+               ~r{^http://minio\.internal:9000/b/private/a%20b\.pdf\?X-Amz-}
+
+      assert {:external, "S3", %{url: put}} =
+               AshQuick.Storage.S3.upload_target("private/a.png", path_style)
+
+      assert put =~ ~r{^http://minio\.internal:9000/b/private/a\.png\?X-Amz-}
+
+      assert AshQuick.Storage.S3.download_url("x.csv", [filename: "x.csv"] ++ path_style) =~
+               ~r{^http://minio\.internal:9000/b/x\.csv\?}
+    end
+
+    test "builds public URLs against the ExAws endpoint when no host is named" do
+      opts = [bucket: "b", host: nil, ex_aws: @minio]
+
+      assert AshQuick.Storage.S3.public_url("public/a b.png", opts) ==
+               "http://b.minio.internal:9000/public/a%20b.png"
+
+      assert AshQuick.Storage.S3.public_url(
+               "public/a.png",
+               Keyword.update!(opts, :ex_aws, &[{:virtual_host, false} | &1])
+             ) == "http://minio.internal:9000/b/public/a.png"
+
+      assert AshQuick.Storage.S3.public_url("public/a.png", bucket: "b", host: nil) ==
+               "https://b.s3.amazonaws.com/public/a.png"
+    end
+
+    test "a named host serves public URLs over https, in the configured style" do
+      opts = [bucket: "b", host: "cdn.example.com", ex_aws: [virtual_host: false] ++ @minio]
+
+      assert AshQuick.Storage.S3.public_url("public/a.png", opts) ==
+               "https://cdn.example.com/b/public/a.png"
+    end
+  end
+
   describe "url_for/2 with prefetched states" do
     setup do
       %{value: %Value{key: "public/products/abc.jpg", file_type: :image}}
