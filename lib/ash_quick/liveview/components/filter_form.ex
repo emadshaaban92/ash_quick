@@ -79,6 +79,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
         <select
           name={"operator-#{@group.uuid}"}
           class="select select-sm sm:w-auto"
+          aria-label={gettext("Match")}
         >
           {Phoenix.HTML.Form.options_for_select(
             [{gettext("AND"), "and"}, {gettext("OR"), "or"}],
@@ -92,6 +93,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
           phx-target={@myself}
           phx-value-uuid={@group.uuid}
           class="btn btn-error btn-sm btn-square"
+          aria-label={gettext("Remove group")}
         >
           <.icon name="hero-x-mark" class="w-4 h-4" />
         </button>
@@ -165,6 +167,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       <select
         name={"field_name-#{@filter.uuid}"}
         class="select select-sm sm:w-auto"
+        aria-label={gettext("Field")}
       >
         {Phoenix.HTML.Form.options_for_select(
           field_options(@fields, @filter.field_name, @labels, @resource),
@@ -188,6 +191,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
         <select
           name={"operator-#{@filter.uuid}"}
           class="select select-sm w-auto shrink-0"
+          aria-label={gettext("Operator")}
         >
           {Phoenix.HTML.Form.options_for_select(
             operator_options(@field, @filter.operator, @emptiable),
@@ -209,6 +213,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
           phx-target={@myself}
           phx-value-uuid={@filter.uuid}
           class="btn btn-error btn-sm btn-square"
+          aria-label={gettext("Remove filter")}
         >
           <.icon name="hero-x-mark" class="w-4 h-4" />
         </button>
@@ -264,6 +269,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       id={"#{@picker_id}-wrap"}
       phx-hook=".ValuesPicker"
       data-error-id={@error && "value-error-#{@filter.uuid}"}
+      data-label={gettext("Value")}
       class="min-w-0 flex-1"
     >
       <%!-- An input holding picks is drawn as primary, which would hide the
@@ -291,8 +297,8 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       />
     </div>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".ValuesPicker">
-      // Puts the aria wiring other rows render on their input on LiveSelect's,
-      // which takes no attributes for it. Set through `js()`, so it outlives
+      // Puts the name and aria wiring other rows render on their input on
+      // LiveSelect's, which takes no attributes for them. Set through `js()`, so it outlives
       // LiveView's patches of the input, which never renders it itself.
       //
       // Brings an opened dropdown into view: the modal scrolls its content,
@@ -309,6 +315,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
         mark() {
           const input = this.el.querySelector("input[type=text]")
           if (!input) return
+          this.js().setAttribute(input, "aria-label", this.el.dataset.label)
           const errorId = this.el.dataset.errorId
           if (errorId) {
             this.js().setAttribute(input, "aria-invalid", "true")
@@ -339,6 +346,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       name={"value-#{@filter.uuid}"}
       value={typed_list(@filter.value, @field, @timezone)}
       class={["input input-sm min-w-0 flex-1", @error && "input-error"]}
+      aria-label={gettext("Value")}
       {invalid_attrs(@filter, @error)}
     />
     """
@@ -356,6 +364,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       value={LocalDatetime.to_local(@filter.value, @timezone)}
       step="1"
       class={["input input-sm min-w-0 flex-1", @error && "input-error"]}
+      aria-label={gettext("Value")}
       {invalid_attrs(@filter, @error)}
     />
     """
@@ -368,6 +377,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     <select
       name={"value-#{@filter.uuid}"}
       class={["select select-sm min-w-0 flex-1", @error && "select-error"]}
+      aria-label={gettext("Value")}
       {invalid_attrs(@filter, @error)}
     >
       {Phoenix.HTML.Form.options_for_select(
@@ -388,6 +398,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     <select
       name={"value-#{@filter.uuid}"}
       class={["select select-sm min-w-0 flex-1", @error && "select-error"]}
+      aria-label={gettext("Value")}
       {invalid_attrs(@filter, @error)}
     >
       {Phoenix.HTML.Form.options_for_select(@options, @filter.value)}
@@ -405,6 +416,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       name={"value-#{@filter.uuid}"}
       value={typed_list(@filter.value, @field, @timezone)}
       class={["input input-sm min-w-0 flex-1", @error && "input-error"]}
+      aria-label={gettext("Value")}
       {invalid_attrs(@filter, @error)}
     />
     """
@@ -417,6 +429,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       name={"value-#{@filter.uuid}"}
       value={@filter.value}
       class={["input input-sm min-w-0 flex-1", @error && "input-error"]}
+      aria-label={gettext("Value")}
       {invalid_attrs(@filter, @error)}
     />
     """

@@ -675,6 +675,7 @@ defmodule AshQuick.LiveView.QuickView do
           <AshQuick.LiveView.Components.ActionModal.action_modal
             class="w-11/12 max-w-5xl p-0"
             close={@ash_quick_background.path}
+            flash={@flash}
           >
             {@ash_quick_action}
           </AshQuick.LiveView.Components.ActionModal.action_modal>

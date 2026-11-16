@@ -249,7 +249,7 @@ defmodule ExampleWeb.PrintScenarioTest do
   end
 
   defp open_row_actions(view, id) do
-    view |> element("##{id}-row-actions-dropdown [role=button]") |> render_click()
+    view |> element("##{id}-row-actions-dropdown [data-menu-trigger]") |> render_click()
   end
 
   defp tick_rows(view, ids) do

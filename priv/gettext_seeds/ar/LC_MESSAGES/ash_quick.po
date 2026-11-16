@@ -616,6 +616,7 @@ msgid "Clear all"
 msgstr "مسح الكل"
 
 #: lib/ash_quick/liveview/components/filter_chips.ex
+#: lib/ash_quick/liveview/components/filter_form.ex
 #, elixir-autogen, elixir-format
 msgid "Remove filter"
 msgstr "إزالة الفلتر"
@@ -1018,3 +1019,43 @@ msgstr "استبعاد هذه القيمة"
 #, elixir-autogen, elixir-format
 msgid "Has"
 msgstr "يحتوي على"
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "Back to list"
+msgstr "العودة إلى القائمة"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Field"
+msgstr "الحقل"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Match"
+msgstr "المطابقة"
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "More actions"
+msgstr "مزيد من الإجراءات"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Operator"
+msgstr "المعامل"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Remove group"
+msgstr "إزالة المجموعة"
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Value"
+msgstr "القيمة"
+
+#: lib/ash_quick/liveview/components/action_modal.ex
+#, elixir-autogen, elixir-format
+msgid "Dismiss"
+msgstr "إخفاء"

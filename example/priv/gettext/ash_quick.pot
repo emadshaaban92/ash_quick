@@ -775,6 +775,38 @@ msgstr ""
 msgid "Has"
 msgstr ""
 
+#, elixir-format
+msgid "Back to list"
+msgstr ""
+
+#, elixir-format
+msgid "Field"
+msgstr ""
+
+#, elixir-format
+msgid "Match"
+msgstr ""
+
+#, elixir-format
+msgid "More actions"
+msgstr ""
+
+#, elixir-format
+msgid "Operator"
+msgstr ""
+
+#, elixir-format
+msgid "Remove group"
+msgstr ""
+
+#, elixir-format
+msgid "Value"
+msgstr ""
+
+#, elixir-format
+msgid "Dismiss"
+msgstr ""
+
 msgid "Accepts"
 msgstr ""
 

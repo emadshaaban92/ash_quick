@@ -12,6 +12,7 @@ defmodule AshQuick.LiveView.Components.ListView do
   alias AshQuick.LiveView.QuickField
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.Components.ActionModal
+  alias AshQuick.LiveView.Components.Menu
   alias AshQuick.LiveView.Components.FilterChips
   alias AshQuick.LiveView.CellFilter
   alias AshQuick.LiveView.CustomFilter
@@ -99,7 +100,7 @@ defmodule AshQuick.LiveView.Components.ListView do
   # where it is tracked through them and re-rendered only when one changes.
   def list_view(assigns) do
     ~H"""
-    <section class="bg-base-200 p-3 sm:p-5">
+    <section id={"#{@id}-menus"} class="bg-base-200 p-3 sm:p-5" phx-hook={Menu.hook()}>
       <div class="mx-auto max-w-full">
         <div class="card bg-base-100 shadow-md overflow-hidden">
           <div class="flex flex-col lg:flex-row items-center justify-between space-y-3 lg:space-y-0 lg:space-x-4 p-4">
@@ -162,7 +163,6 @@ defmodule AshQuick.LiveView.Components.ListView do
               <table
                 id={"#{@id}-table"}
                 class="table table-sm text-base-content"
-                phx-hook={@cell_filters != %{} && ".CellFilters"}
               >
                 <thead>
                   <tr>
@@ -293,21 +293,6 @@ defmodule AshQuick.LiveView.Components.ListView do
         export_data={@export_data}
         export_format={@export_format}
       />
-      <script :type={Phoenix.LiveView.ColocatedHook} name=".CellFilters">
-        // A cell's filter menu is a CSS dropdown, open while focus is inside
-        // it, and an entry picked keeps the focus: the row it filtered by
-        // stays on the page, and so would the menu, open over it. So focus
-        // leaves the menu once an entry is picked.
-        export default {
-          mounted() {
-            this.el.addEventListener("click", (event) => {
-              if (event.target.closest("[data-cell-filter-choice]")) {
-                document.activeElement?.blur()
-              }
-            })
-          }
-        }
-      </script>
     </section>
     """
   end
@@ -377,49 +362,42 @@ defmodule AshQuick.LiveView.Components.ListView do
       <%!-- Opened from a column of the table's first half toward the line's
       end, and from one of its second half toward its start, so it stays
       inside the table, which cuts off what passes its edge. --%>
-      <div class={["dropdown", @toward_start && "dropdown-end"]}>
-        <div
-          tabindex="0"
-          role="button"
-          class="btn btn-xs btn-square bg-base-100 shadow-sm opacity-0 group-hover/cell:opacity-100 group-focus-within/cell:opacity-100 focus:opacity-100"
-          aria-label={gettext("Filter by this cell")}
-          title={gettext("Filter by this cell")}
-          phx-focus={JS.push("cell_filter_open", value: %{id: @id, column: @column})}
-          phx-click={JS.push("cell_filter_open", value: %{id: @id, column: @column})}
-        >
-          <.icon name="hero-funnel-mini" class="w-3.5 h-3.5" />
-        </div>
-        <ul
-          tabindex="0"
-          class="dropdown-content menu menu-sm bg-base-300 rounded-box z-10 w-max max-w-72 p-2 shadow-[0_2px_15px_rgba(0,0,0,0.3)] border border-base-content/10"
-        >
-          <%= case @cell_menu do %>
-            <% %{id: id, column: column, choices: choices} when id == @id and column == @column -> %>
-              <li :for={{choice, i} <- Enum.with_index(choices)}>
-                <button
-                  type="button"
-                  class="whitespace-nowrap"
-                  data-cell-filter-choice={choice.operator}
-                  phx-click={JS.push("cell_filter", value: %{id: @id, column: @column, choice: i})}
-                >
-                  <.icon name={choice_icon(choice)} class="w-4 h-4 shrink-0 opacity-70" />
-                  <span class="min-w-0 truncate">
-                    {CellFilter.label(choice)}
-                    <.choice_value choice={choice} filter_field={@filter_field} scope={@scope} />
-                  </span>
-                </button>
-              </li>
-            <% _ -> %>
-              <li class="menu-disabled">
-                <span
-                  class="loading loading-spinner loading-xs"
-                  role="status"
-                  aria-label={gettext("Loading…")}
-                ></span>
-              </li>
-          <% end %>
-        </ul>
-      </div>
+      <Menu.menu
+        id={"#{@id}-cell-filter-#{@column}"}
+        class={@toward_start && "dropdown-end"}
+        trigger_class="btn btn-xs btn-square bg-base-100 shadow-sm opacity-0 group-hover/cell:opacity-100 group-focus-within/cell:opacity-100 focus:opacity-100"
+        content_class="menu menu-sm w-max max-w-72 p-2"
+        label={gettext("Filter by this cell")}
+        title={gettext("Filter by this cell")}
+        on_open={JS.push("cell_filter_open", value: %{id: @id, column: @column})}
+      >
+        <:trigger><.icon name="hero-funnel-mini" class="w-3.5 h-3.5" /></:trigger>
+        <%= case @cell_menu do %>
+          <% %{id: id, column: column, choices: choices} when id == @id and column == @column -> %>
+            <li :for={{choice, i} <- Enum.with_index(choices)} role="none">
+              <button
+                type="button"
+                role="menuitem"
+                tabindex="-1"
+                class="whitespace-nowrap"
+                data-cell-filter-choice={choice.operator}
+                phx-click={JS.push("cell_filter", value: %{id: @id, column: @column, choice: i})}
+              >
+                <.icon name={choice_icon(choice)} class="w-4 h-4 shrink-0 opacity-70" />
+                <span class="min-w-0 truncate">
+                  {CellFilter.label(choice)}
+                  <.choice_value choice={choice} filter_field={@filter_field} scope={@scope} />
+                </span>
+              </button>
+            </li>
+          <% _ -> %>
+            <li class="menu-disabled" role="none">
+              <span role="menuitem" aria-disabled="true" aria-label={gettext("Loading…")}>
+                <span class="loading loading-spinner loading-xs" aria-hidden="true"></span>
+              </span>
+            </li>
+        <% end %>
+      </Menu.menu>
     </div>
     """
   end
@@ -595,23 +573,20 @@ defmodule AshQuick.LiveView.Components.ListView do
   # scale with rows × actions, which is what a raised `?limit=` was really
   # paying for. See `ListUtils` "row_actions_open".
   #
-  # Both focus and click, because either can be the one that opens the menu: the
-  # dropdown is the CSS variant, so a keyboard user who tabs to the trigger has it
-  # open having never clicked, and a pointer user on a UA that doesn't focus a
-  # `tabindex` div has clicked without focusing. Asking twice costs one more
-  # round trip on one row; asking on the wrong one leaves the menu on its
-  # placeholder for good.
+  # Only the button opens the menu (`Menu`), so its click is the one moment
+  # to ask. A click that closes it asks again, which costs one more round trip
+  # on one row.
   defp record_actions(assigns) do
     ~H"""
-    <div id={"#{@record.id}-row-actions-dropdown"} class="dropdown dropdown-end">
-      <div
-        tabindex="0"
-        role="button"
-        class="btn btn-ghost btn-xs btn-square"
-        phx-focus={JS.push("row_actions_open", value: %{id: @record.id})}
-        phx-click={JS.push("row_actions_open", value: %{id: @record.id})}
-      >
-        <span class="sr-only">{gettext("Row actions")}</span>
+    <Menu.menu
+      id={"#{@record.id}-row-actions-dropdown"}
+      class="dropdown-end"
+      trigger_class="btn btn-ghost btn-xs btn-square"
+      content_class="menu w-44 p-2"
+      label={gettext("Row actions")}
+      on_open={JS.push("row_actions_open", value: %{id: @record.id})}
+    >
+      <:trigger>
         <svg
           class="w-5 h-5"
           aria-hidden="true"
@@ -621,14 +596,9 @@ defmodule AshQuick.LiveView.Components.ListView do
         >
           <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
         </svg>
-      </div>
-      <ul
-        tabindex="0"
-        class="dropdown-content menu bg-base-300 rounded-box z-10 w-44 p-2 shadow-[0_2px_15px_rgba(0,0,0,0.3)] border border-base-content/10"
-      >
-        <.row_action_items record={@record} row_actions={@row_actions} />
-      </ul>
-    </div>
+      </:trigger>
+      <.row_action_items record={@record} row_actions={@row_actions} />
+    </Menu.menu>
     """
   end
 
@@ -637,7 +607,7 @@ defmodule AshQuick.LiveView.Components.ListView do
   # the same state, and the answer is one round trip away in both.
   defp row_action_items(%{record: %{id: id}, row_actions: %{id: id, actions: [_ | _]}} = assigns) do
     ~H"""
-    <li :for={action <- @row_actions.actions}>
+    <li :for={action <- @row_actions.actions} role="none">
       <.row_action record={@record} action={action} />
     </li>
     """
@@ -645,14 +615,20 @@ defmodule AshQuick.LiveView.Components.ListView do
 
   defp row_action_items(%{record: %{id: id}, row_actions: %{id: id, actions: []}} = assigns) do
     ~H"""
-    <li class="menu-disabled"><span>{gettext("No actions available")}</span></li>
+    <li class="menu-disabled" role="none">
+      <span role="menuitem" aria-disabled="true">{gettext("No actions available")}</span>
+    </li>
     """
   end
 
   defp row_action_items(assigns) do
     ~H"""
-    <li class="menu-disabled">
-      <span><span class="loading loading-spinner loading-xs"></span> {gettext("Loading…")}</span>
+    <li class="menu-disabled" role="none">
+      <span role="menuitem" aria-disabled="true">
+        <span class="loading loading-spinner loading-xs" aria-hidden="true"></span> {gettext(
+          "Loading…"
+        )}
+      </span>
     </li>
     """
   end
@@ -661,6 +637,8 @@ defmodule AshQuick.LiveView.Components.ListView do
     ~H"""
     <.link
       id={"#{@record.id}-action-#{@action.name}"}
+      role="menuitem"
+      tabindex="-1"
       phx-click={JS.push("row_action_click", value: %{id: @record.id, action_name: @action.name})}
     >
       {Labels.name(@action.name, @record.__struct__)}
@@ -711,34 +689,33 @@ defmodule AshQuick.LiveView.Components.ListView do
 
   defp export_menu(assigns) do
     ~H"""
-    <div class="dropdown dropdown-end">
-      <div tabindex="0" role="button" class="btn btn-outline btn-sm">
+    <Menu.menu id="export-menu" class="dropdown-end" content_class="menu w-28 p-2">
+      <:trigger>
         <.icon name="hero-chevron-down" class="w-4 h-4" /> {gettext("Export")}
-      </div>
-      <ul
-        tabindex="0"
-        class="dropdown-content menu bg-base-300 rounded-box z-10 w-28 p-2 shadow-[0_2px_15px_rgba(0,0,0,0.3)] border border-base-content/10"
-      >
-        <li>
-          <.link
-            phx-click="export"
-            phx-value-format="xlsx"
-            class="phx-click-loading:opacity-75"
-          >
-            Excel
-          </.link>
-        </li>
-        <li>
-          <.link
-            phx-click="export"
-            phx-value-format="csv"
-            class="phx-click-loading:opacity-75"
-          >
-            CSV
-          </.link>
-        </li>
-      </ul>
-    </div>
+      </:trigger>
+      <li role="none">
+        <.link
+          role="menuitem"
+          tabindex="-1"
+          phx-click="export"
+          phx-value-format="xlsx"
+          class="phx-click-loading:opacity-75"
+        >
+          Excel
+        </.link>
+      </li>
+      <li role="none">
+        <.link
+          role="menuitem"
+          tabindex="-1"
+          phx-click="export"
+          phx-value-format="csv"
+          class="phx-click-loading:opacity-75"
+        >
+          CSV
+        </.link>
+      </li>
+    </Menu.menu>
     """
   end
 
@@ -806,78 +783,79 @@ defmodule AshQuick.LiveView.Components.ListView do
 
   defp actions_menu(assigns) do
     ~H"""
-    <div
+    <Menu.menu
       :if={
         (@filtered_actions && not Enum.empty?(@filtered_actions) && not @action_running) and
           @selected_rows != %{}
       }
-      class="dropdown dropdown-end"
+      id="bulk-actions-menu"
+      class="dropdown-end"
+      content_class="menu w-44 p-2"
     >
-      <div tabindex="0" role="button" class="btn btn-outline btn-sm">
+      <:trigger>
         <.icon name="hero-chevron-down" class="w-4 h-4" /> {gettext("Actions")}
-      </div>
-      <ul
-        id="bulk-actions-menu"
-        tabindex="0"
-        class="dropdown-content menu bg-base-300 rounded-box z-10 w-44 p-2 shadow-[0_2px_15px_rgba(0,0,0,0.3)] border border-base-content/10"
-      >
-        <li :for={action <- @filtered_actions}>
-          <.link
-            :if={action[:func]}
-            phx-click={action.func}
-            class="phx-click-loading:opacity-75"
-          >
-            {action.title}
-          </.link>
-          <.link
-            :if={action[:link]}
-            navigate={action.link}
-            target="_blank"
-          >
-            {action.title}
-          </.link>
-        </li>
-      </ul>
-    </div>
+      </:trigger>
+      <li :for={action <- @filtered_actions} role="none">
+        <.link
+          :if={action[:func]}
+          role="menuitem"
+          tabindex="-1"
+          phx-click={action.func}
+          class="phx-click-loading:opacity-75"
+        >
+          {action.title}
+        </.link>
+        <.link
+          :if={action[:link]}
+          role="menuitem"
+          tabindex="-1"
+          navigate={action.link}
+          target="_blank"
+        >
+          {action.title}
+        </.link>
+      </li>
+    </Menu.menu>
     """
   end
 
   defp filters_menu(assigns) do
     ~H"""
-    <div :if={@filters && Enum.count(@filters) > 0} class="dropdown dropdown-end">
-      <div tabindex="0" role="button" class="btn btn-outline btn-sm">
+    <Menu.menu
+      :if={@filters && Enum.count(@filters) > 0}
+      id="filters-menu"
+      kind={:panel}
+      class="dropdown-end"
+      content_class="w-48 p-3"
+    >
+      <:trigger>
         <.icon name="hero-funnel" class="w-4 h-4" /> {gettext("Filter")}
         <.icon name="hero-chevron-down" class="w-4 h-4" />
-      </div>
-      <div
-        tabindex="0"
-        class="dropdown-content bg-base-300 rounded-box z-10 w-48 p-3 shadow-[0_2px_15px_rgba(0,0,0,0.3)] border border-base-content/10"
-      >
-        <h6 class="mb-3 text-sm font-medium">
-          {gettext("Select filters")}
-        </h6>
-        <ul class="space-y-2 text-sm">
-          <li
-            :for={%{"name" => filter_name, "label" => label} <- @filters}
-            class="flex items-center cursor-pointer"
-            phx-click={JS.push("toggle-filter", value: %{"name" => filter_name})}
+      </:trigger>
+      <h6 class="mb-3 text-sm font-medium">
+        {gettext("Select filters")}
+      </h6>
+      <ul class="space-y-2 text-sm">
+        <li
+          :for={%{"name" => filter_name, "label" => label} <- @filters}
+          class="flex items-center cursor-pointer"
+          phx-click={JS.push("toggle-filter", value: %{"name" => filter_name})}
+        >
+          <input
+            id={"filter_#{filter_name}"}
+            type="checkbox"
+            checked={filter_name in @params.selected_filters}
+            class="checkbox checkbox-sm"
+          />
+          <label
+            for={"filter_#{filter_name}"}
+            class="ms-2 text-sm font-medium cursor-pointer"
           >
-            <input
-              id={"filter_#{filter_name}"}
-              type="checkbox"
-              checked={filter_name in @params.selected_filters}
-              class="checkbox checkbox-sm"
-            />
-            <label
-              for={"filter_#{filter_name}"}
-              class="ms-2 text-sm font-medium cursor-pointer"
-            >
-              {Labels.translate(label)}
-            </label>
-          </li>
-        </ul>
-      </div>
-    </div>
+            {Labels.translate(label)}
+          </label>
+        </li>
+      </ul>
+    </Menu.menu>
     """
   end
 

@@ -295,7 +295,7 @@ defmodule ExampleWeb.CellFilterScenarioTest do
     do: menu(record, column) <> ~s( button[data-cell-filter-choice="#{operator}"])
 
   defp open_menu(view, record, column) do
-    view |> element(menu(record, column) <> " [role=button]") |> render_click()
+    view |> element(menu(record, column) <> " [data-menu-trigger]") |> render_click()
   end
 
   # The page's path once the pick is applied.

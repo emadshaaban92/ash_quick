@@ -35,7 +35,7 @@ defmodule ExampleWeb.CellFilterLiveScenarioTest do
     view = products(conn, prefix)
     menu = ~s(tr[id="#{product.id}"] [data-cell-filter="tags"])
 
-    view |> element(menu <> " [role=button]") |> render_click()
+    view |> element(menu <> " [data-menu-trigger]") |> render_click()
     assert texts(view, menu <> " li") == ["Has Sale", "Has New"]
 
     # The tags change without a notification of their own; the deactivation
@@ -65,14 +65,14 @@ defmodule ExampleWeb.CellFilterLiveScenarioTest do
     view = products(conn, prefix)
     menu = ~s(tr[id="#{product.id}"] [data-cell-filter="tags"])
 
-    view |> element(menu <> " [role=button]") |> render_click()
+    view |> element(menu <> " [data-menu-trigger]") |> render_click()
     assert texts(view, menu <> " li") == ["Has Sale", "Has New"]
 
     Ash.Seed.update!(product, %{tags: [:new]})
     Ash.update!(product, action: :deactivate, actor: admin)
     assert eventually(fn -> "No" in texts(view, ~s(tr[id="#{product.id}"] td)) end)
 
-    view |> element(menu <> " [role=button]") |> render_click()
+    view |> element(menu <> " [data-menu-trigger]") |> render_click()
     assert texts(view, menu <> " li") == ["Has New"]
 
     view

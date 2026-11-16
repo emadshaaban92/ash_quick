@@ -95,7 +95,7 @@ defmodule ExampleWeb.FullPageActionScenarioTest do
 
       {:ok, view, _html} = live(conn, ~p"/test/long_forms?search=#{search}")
 
-      view |> element("##{record.id}-row-actions-dropdown [role=button]") |> render_click()
+      view |> element("##{record.id}-row-actions-dropdown [data-menu-trigger]") |> render_click()
       view |> element("##{record.id}-action-rework") |> render_click()
 
       assert_patch(view, ~p"/test/long_forms/#{record.id}/rework?search=#{search}")
@@ -164,7 +164,7 @@ defmodule ExampleWeb.FullPageActionScenarioTest do
 
       {:ok, view, _html} = live(conn, ~p"/test/long_forms?search=#{search}")
 
-      view |> element("##{record.id}-row-actions-dropdown [role=button]") |> render_click()
+      view |> element("##{record.id}-row-actions-dropdown [data-menu-trigger]") |> render_click()
       view |> element("##{record.id}-action-destroy") |> render_click()
 
       assert_patch(view, ~p"/test/long_forms/#{record.id}/destroy?search=#{search}")
