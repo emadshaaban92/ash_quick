@@ -612,8 +612,9 @@ defmodule AshQuick do
   that produced the entry, so a record cannot be written without its row and a
   store that refuses the batch fails the write with an
   `AshQuick.Audit.WriteError`. That puts the store on the critical path of
-  every write, which is the trade: keep it dumb, with no policies to evaluate
-  and no validations to trip.
+  every write, which is the trade: keep it dumb, with no validations to trip.
+  It is written with `authorize?: false`, so its policies do not run on that
+  write and are free to refuse everything else.
 
   A resource wanting only *some* of its actions audited turns the section off
   and attaches the change itself, which keeps the rest of its writes out of

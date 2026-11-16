@@ -8,15 +8,20 @@ defmodule <%= inspect @module %> do
   roll that write back — an audit table that can veto a business action is a
   liability rather than a record.
 
-  Reading it is the other question, and that one wants a policy: an audit trail
-  is exactly the sort of thing not everyone should be able to page through. Add
-  one before routing this resource.
+  AshQuick writes every entry with `authorize?: false`, so the policies below
+  never see that write. They are for everything else that reaches this
+  resource, an API, a generated page, a console, and as generated they refuse
+  all of it: nobody may add an entry by hand, and nobody may page through the
+  trail. An audit trail holds the values every audited write was given, so it
+  deserves the strictest read policy in the application. Say who may read it
+  in the `:read` policy before routing this resource.
   """
 
   use Ash.Resource,
     domain: <%= inspect @domain %>,<%= if @repo do %>
     data_layer: AshPostgres.DataLayer,<% end %>
-    extensions: [AshQuick]
+    extensions: [AshQuick],
+    authorizers: [Ash.Policy.Authorizer]
 <%= if @repo do %>
   postgres do
     table "audit_logs"
@@ -47,6 +52,20 @@ defmodule <%= inspect @module %> do
     # Append-only. AshQuick bulk-inserts every entry through `:create`; nothing
     # updates or destroys one.
     defaults [:create, :read]
+  end
+
+  policies do
+    # An entry is written by the audited write it records, and by nothing else.
+    policy action_type(:create) do
+      forbid_if always()
+    end
+
+    # Who may read the trail. Nobody, until this says so, for example with
+    # `authorize_if actor_attribute_equals(:role, :admin)` in place of the
+    # `forbid_if`.
+    policy action_type(:read) do
+      forbid_if always()
+    end
   end
 
   ash_quick do

@@ -40,8 +40,8 @@ defmodule AshQuick.Audit.WriteError do
     #{describe(errors)}
 
     An audit store is written on the critical path of every audited action on \
-    #{inspect(resource)}, so keep it dumb: no policies, no validations, and \
-    every column AshQuick fills present on the resource.
+    #{inspect(resource)}, so keep it dumb: no validations, nothing that refuses a row, \
+    and every column AshQuick fills present on the resource.
     """
   end
 

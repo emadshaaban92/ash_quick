@@ -77,6 +77,12 @@ defmodule Mix.Tasks.AshQuick.Gen.QuickViewTest do
   end
   """
 
+  defp installed_access_control do
+    :ash_quick
+    |> Application.app_dir("priv/templates/ash_quick.install/access_control.ex.eex")
+    |> EEx.eval_file(assigns: [module: TestWeb.AccessControl, nav: TestWeb.Nav])
+  end
+
   defp generate(argv, extra \\ %{}) do
     test_project(
       files:
@@ -583,8 +589,32 @@ defmodule Mix.Tasks.AshQuick.Gen.QuickViewTest do
         widget(%{"lib/test_web/access_control.ex" => @per_role_access_control})
 
       assert_unchanged(igniter, "lib/test_web/access_control.ex")
+      assert_has_warning(igniter, &(&1 =~ "granted the route to no role"))
       assert_has_warning(igniter, &(&1 =~ "--grant-to"))
       assert_has_warning(igniter, &(&1 =~ "mix ash_quick.check --strict"))
+    end
+
+    # The access control `mix igniter.install ash_quick` writes grants nothing:
+    # a route reaches a role only when that role is named.
+    test "against the installed access control, grants only the roles named" do
+      installed = installed_access_control()
+
+      unnamed = widget(%{"lib/test_web/access_control.ex" => installed})
+      assert_unchanged(unnamed, "lib/test_web/access_control.ex")
+      assert_has_warning(unnamed, &(&1 =~ "granted the route to no role"))
+
+      named =
+        generate(
+          ["AshQuick.Test.Gen.Widget", "--grant-to", "admin"],
+          %{"lib/test_web/access_control.ex" => installed}
+        )
+
+      assert_has_patch(named, "lib/test_web/access_control.ex", """
+      - |  def routes_for_role(:admin), do: []
+      + |  def routes_for_role(:admin), do: ["/widgets"]
+      """)
+
+      refute diff(named) =~ ~s|routes_for_role(_role), do: ["/widgets"]|
     end
 
     test "grants it to the roles named, in their own clauses" do

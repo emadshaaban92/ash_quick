@@ -7,20 +7,20 @@ defmodule <%= inspect @module %> do
   says yes for a page that would be empty. `<%= inspect @nav %>` names this
   module, and every rendering of the nav filters through it.
 
-  `mix ash_quick.gen.quick_view` adds each path it routes to `@routes`. That
-  list is a starting point rather than an answer: as written, every scope
-  reaches every route in it. Split it by role before this application has more
-  than one kind of user —
+  As generated it grants nothing. `role/1` reads no role off a scope yet, so
+  every scope is answered as `nil` and reaches no route, and a role with no
+  `routes_for_role/1` clause of its own reaches none either. Make `role/1` read
+  your scope —
 
-      def routes_for(%MyApp.Scope{current_user: %{role: role}}), do: routes_for_role(role)
-      def routes_for(_scope), do: []
+      defp role(%MyApp.Scope{current_user: %{role: role}}), do: role
+      defp role(_scope), do: nil
 
-      defp routes_for_role(:admin), do: ~w(/products /users)
-      defp routes_for_role(_role), do: []
-
-  — writing each role's routes out in full. That is what makes adding a route a
-  decision about which roles reach it, and leaves a role nobody opened up
-  fail-closed.
+  — and give each role a clause listing every route it unlocks, written out in
+  full. `mix ash_quick.gen.quick_view MyApp.Catalog.Product --grant-to admin`
+  appends the path it routes to the `:admin` clause. Writing each role's routes
+  out is what makes adding a route a decision about which roles reach it, and
+  leaves a role nobody opened up fail-closed. A new role also goes in `@roles`,
+  which `all_routes/0` reads.
 
   Matching is strict prefix matching: `/products` covers `/products` and
   `/products/123`, but not `/products_archive`. Two routes that mean different
@@ -29,10 +29,20 @@ defmodule <%= inspect @module %> do
 
   @behaviour AshQuick.AccessControl
 
-  @routes []
+  # Every role a `routes_for_role/1` clause grants routes to.
+  @roles [:admin]
 
   @impl AshQuick.AccessControl
-  def routes_for(_scope), do: @routes
+  def routes_for(scope), do: scope |> role() |> routes_for_role()
+
+  # The role `scope` holds. Nothing is read yet, so no scope holds one.
+  defp role(_scope), do: nil
+
+  @doc """
+  Every route `role` may navigate to. A role without a clause gets none.
+  """
+  def routes_for_role(:admin), do: []
+  def routes_for_role(_role), do: []
 
   @doc """
   True when `scope` may navigate to `path`.
@@ -47,12 +57,8 @@ defmodule <%= inspect @module %> do
   defp path_matches?(path, route), do: path == route or String.starts_with?(path, route <> "/")
 
   @doc """
-  Every route any scope at all can reach, for `mix ash_quick.check`.
-
-  Once `routes_for/1` splits by role, derive this from wherever the roles are
-  declared rather than restating the paths, or it goes stale exactly when a role
-  is added.
+  Every route any role at all can reach, for `mix ash_quick.check`.
   """
   @impl AshQuick.AccessControl
-  def all_routes, do: @routes
+  def all_routes, do: @roles |> Enum.flat_map(&routes_for_role/1) |> Enum.uniq()
 end

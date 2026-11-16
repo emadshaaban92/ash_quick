@@ -47,6 +47,13 @@ if Code.ensure_loaded?(Igniter) do
         params) and attaches the socket with `attachAshQuick` (its listeners
         for impersonation, the page's locale and printed PDFs).
 
+    The audit store and the access control both refuse until told otherwise.
+    The store's policies forbid every create and read that does not come from
+    AshQuick, which writes with `authorize?: false`, so nobody reads the trail
+    until its `:read` policy says who. The access control reads no role off a
+    scope, so it grants no route until its `role/1` does and that role's
+    clause lists the route.
+
     Writing the templates the host translates Ash's error messages and
     AshQuick in (`mix ash.gen.gettext`, `mix ash_quick.gen.gettext`), which
     write into `priv/gettext`, is stated in a notice rather than done.
@@ -887,7 +894,11 @@ if Code.ensure_loaded?(Igniter) do
       """
       Put `AshQuick.LiveView.Mount` first in the `on_mount` of the
       live_session serving the QuickViews, and route one with
-      `mix ash_quick.gen.quick_view`.
+      `mix ash_quick.gen.quick_view MyApp.Catalog.Product --grant-to admin`.
+
+      The generated access control grants no route until its `role/1` reads a
+      role off your scope, and the audit store lets nobody read the trail until
+      its `:read` policy says who.
       """
     end
   end

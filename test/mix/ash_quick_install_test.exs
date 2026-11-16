@@ -412,6 +412,15 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
     defp carrier(:real_actor_id), do: "belongs_to :real_actor, Test.Accounts.User"
     defp carrier(field), do: ~r/attribute[ (]:#{field},/
 
+    test "the store's policies refuse every create and read" do
+      source = created(install(), @store)
+
+      assert source =~ "authorizers: [Ash.Policy.Authorizer]"
+      assert source =~ ~r/policy[ (]action_type\(:create\)/
+      assert source =~ ~r/policy[ (]action_type\(:read\)/
+      refute source =~ ~r/^\s*authorize_if/m
+    end
+
     test "the store is append-only, unpublished, and stamps no actor of its own" do
       source = created(install(), @store)
 
@@ -489,6 +498,54 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
                  |> Ash.create(authorize?: false)
 
         assert row.actor_id == nil
+
+        refused_by_default(store)
+        audited_writes_land(store)
+      end
+    end
+
+    # The write AshQuick actually makes: `Audit.Store.write/2`'s bulk insert,
+    # from a create and an update, with an actor and under `authorize?: true`.
+    # A refused batch would raise `AshQuick.Audit.WriteError` here.
+    defp audited_writes_land(store) do
+      with_audit_resource(store, fn ->
+        assert AshQuick.Audit.Declaration.store(AshQuick.Test.Credential) == store
+        actor = %{id: Ash.UUID.generate()}
+
+        assert {:ok, credential} =
+                 AshQuick.Test.Credential
+                 |> Ash.Changeset.for_create(:create, %{name: "a"}, actor: actor)
+                 |> Ash.create(authorize?: true)
+
+        assert {:ok, _credential} =
+                 credential
+                 |> Ash.Changeset.for_update(:update, %{name: "b"}, actor: actor)
+                 |> Ash.update(authorize?: true)
+      end)
+    end
+
+    # AshQuick writes the trail with `authorize?: false`; everything else that
+    # reaches the store, with or without an actor, is refused until the host's
+    # policies say otherwise.
+    defp refused_by_default(store) do
+      for actor <- [nil, %{id: Ash.UUID.generate(), role: :admin}] do
+        refute Ash.can?({store, :read}, actor), inspect(actor)
+        refute Ash.can?({store, :create}, actor), inspect(actor)
+
+        assert {:error, %Ash.Error.Forbidden{}} =
+                 store
+                 |> Ash.Changeset.for_create(:create, %{
+                   resource_name: :credential,
+                   resource_id: Ash.UUID.generate(),
+                   action_type: :update,
+                   action_name: :update,
+                   attributes: %{},
+                   arguments: %{},
+                   context: %{}
+                 })
+                 |> Ash.create(actor: actor)
+
+        assert {:error, %Ash.Error.Forbidden{}} = Ash.read(store, actor: actor)
       end
     end
 
@@ -532,8 +589,36 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
       source = created(install(), "lib/test_web/access_control.ex")
 
       assert source =~ "@behaviour AshQuick.AccessControl"
-      assert source =~ "@routes []"
+      assert source =~ "def routes_for_role(:admin), do: []"
       assert source =~ "def all_routes"
+    end
+
+    # Fail-closed as written: no scope, whatever it holds, reaches a route until
+    # the host reads a role off it and grants that role the route.
+    test "the access control grants no route to any scope" do
+      source = created(install(), "lib/test_web/access_control.ex")
+      namespace = "InstallProbe#{:erlang.unique_integer([:positive])}"
+
+      output =
+        capture_io(:stderr, fn ->
+          source |> String.replace("TestWeb.", namespace <> ".") |> Code.compile_string()
+        end)
+
+      assert output == "", output
+
+      access_control = Module.concat(namespace, AccessControl)
+
+      for scope <- [nil, %{}, %{current_user: %{role: :admin}}, %{role: :admin}] do
+        assert access_control.routes_for(scope) == [], inspect(scope)
+        refute access_control.can_access?(scope, "/"), inspect(scope)
+      end
+
+      assert access_control.routes_for_role(:admin) == []
+      assert access_control.all_routes() == []
+    end
+
+    test "says the generated defaults refuse until granted" do
+      assert_has_notice(install(), &(&1 =~ "grants no route" and &1 =~ ":read` policy"))
     end
   end
 
