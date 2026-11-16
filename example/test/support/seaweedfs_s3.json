@@ -1,0 +1,11 @@
+{
+  "identities": [
+    {
+      "name": "ash-quick",
+      "credentials": [
+        {"accessKey": "ashquickadmin", "secretKey": "ash-quick-s3-secret"}
+      ],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

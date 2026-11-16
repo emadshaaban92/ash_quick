@@ -1,5 +1,5 @@
-# `:minio` cases need a MinIO server; see `Example.S3MinioTest`.
-ExUnit.start(exclude: [:minio])
+# `:s3_server` cases need an S3-compatible server; see `Example.S3ServerTest`.
+ExUnit.start(exclude: [:s3_server])
 Ecto.Adapters.SQL.Sandbox.mode(Example.Repo, :manual)
 
 # Ash's Ets data layer registers a table's manager before the manager creates

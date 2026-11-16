@@ -1,20 +1,24 @@
-defmodule Example.S3MinioTest do
+defmodule Example.S3ServerTest do
   @moduledoc """
   `AshQuick.Storage.S3` and `AshQuick.Storage.S3.Proxy` against a real
-  S3-compatible server, MinIO, rather than `Example.Test.S3Stub`: the signing,
-  the key encoding, the multipart upload and the ranged reads are all checked
-  by a server that refuses what S3 would refuse.
+  S3-compatible server, SeaweedFS in CI, rather than `Example.Test.S3Stub`: the
+  signing, the key encoding, the multipart upload and the ranged reads are all
+  checked by a server that refuses what S3 would refuse.
 
-  Tagged `:minio` and left out of a plain `mix test`. To run it:
+  Tagged `:s3_server` and left out of a plain `mix test`. To run it, from
+  `example/`:
 
-      MINIO_DOMAIN=localhost minio server /tmp/minio-data
-      echo "127.0.0.1 ash-quick-minio.localhost" | sudo tee -a /etc/hosts
-      mix test --only minio
+      docker run -d -p 8333:8333 -v "$PWD/test/support/seaweedfs_s3.json:/etc/s3.json:ro" \\
+        chrislusf/seaweedfs:4.54 server -s3 -s3.config=/etc/s3.json -s3.domainName=localhost
+      echo "127.0.0.1 ash-quick-s3.localhost" | sudo tee -a /etc/hosts
+      mix test --only s3_server
 
-  `MINIO_DOMAIN` is what makes MinIO answer virtual-hosted URLs
+  `-s3.domainName` is what makes SeaweedFS answer virtual-hosted URLs
   (`bucket.localhost`), and the hosts entry is what makes that name resolve.
-  `MINIO_ENDPOINT`, `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` default to
-  `http://localhost:9000` and MinIO's own `minioadmin`.
+  `S3_ENDPOINT`, `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` default to
+  `http://localhost:8333` and the credentials in
+  `test/support/seaweedfs_s3.json`. Any S3-compatible server that takes bucket
+  policies and both URL styles will do.
 
   Every request names the server in its `ex_aws:` overrides, so the global
   ExAws configuration (pointed at the stub) is left alone and the suite runs
@@ -22,15 +26,15 @@ defmodule Example.S3MinioTest do
   """
   use ExUnit.Case, async: true
 
-  @moduletag :minio
+  @moduletag :s3_server
 
   import Plug.Test
 
   alias AshQuick.Storage.S3
   alias AshQuick.Storage.S3.Proxy
 
-  @bucket "ash-quick-minio"
-  @secret String.duplicate("minio-proxy-secret-", 4)
+  @bucket "ash-quick-s3"
+  @secret String.duplicate("s3-proxy-secret-", 4)
 
   # The characters a filename brings into a key that each layer encodes its
   # own way: a space, `+` (which S3 once read as a space), parentheses, `&`,
@@ -62,15 +66,15 @@ defmodule Example.S3MinioTest do
     :ok
   end
 
-  defp endpoint, do: URI.parse(System.get_env("MINIO_ENDPOINT", "http://localhost:9000"))
+  defp endpoint, do: URI.parse(System.get_env("S3_ENDPOINT", "http://localhost:8333"))
 
   defp ex_aws(style) do
     %URI{scheme: scheme, host: host, port: port} = endpoint()
 
     [
       http_client: ExAws.Request.Req,
-      access_key_id: System.get_env("MINIO_ROOT_USER", "minioadmin"),
-      secret_access_key: System.get_env("MINIO_ROOT_PASSWORD", "minioadmin"),
+      access_key_id: System.get_env("S3_ACCESS_KEY_ID", "ashquickadmin"),
+      secret_access_key: System.get_env("S3_SECRET_ACCESS_KEY", "ash-quick-s3-secret"),
       region: "us-east-1",
       scheme: "#{scheme}://",
       host: host,
@@ -84,10 +88,10 @@ defmodule Example.S3MinioTest do
   # ExAws endpoint, as they are when `:s3_host` is unset.
   defp opts(style), do: [bucket: @bucket, host: nil, ex_aws: ex_aws(style)]
 
-  defp key(prefix, name), do: "#{prefix}/minio/#{System.unique_integer([:positive])}-#{name}"
+  defp key(prefix, name), do: "#{prefix}/e2e/#{System.unique_integer([:positive])}-#{name}"
 
   defp file(bytes) do
-    path = Path.join(System.tmp_dir!(), "ash-quick-minio-#{System.unique_integer([:positive])}")
+    path = Path.join(System.tmp_dir!(), "ash-quick-s3-#{System.unique_integer([:positive])}")
     File.write!(path, bytes)
     on_exit(fn -> File.rm(path) end)
     path
@@ -138,7 +142,7 @@ defmodule Example.S3MinioTest do
 
         # The signature covers the key: another key under the same signature
         # is refused.
-        assert %{status: 403} = fetch(:get, String.replace(url, "/minio/", "/minio2/"))
+        assert %{status: 403} = fetch(:get, String.replace(url, "/e2e/", "/e2e2/"))
 
         short = S3.url(key, [visibility: :private, expires_in: 1] ++ opts(style))
         Process.sleep(2_000)
