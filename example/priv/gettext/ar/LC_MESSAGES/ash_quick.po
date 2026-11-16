@@ -827,6 +827,38 @@ msgstr "استبعاد هذه القيمة"
 msgid "Has"
 msgstr "يحتوي على"
 
+#, elixir-format
+msgid "Back to list"
+msgstr "العودة إلى القائمة"
+
+#, elixir-format
+msgid "Field"
+msgstr "الحقل"
+
+#, elixir-format
+msgid "Match"
+msgstr "المطابقة"
+
+#, elixir-format
+msgid "More actions"
+msgstr "مزيد من الإجراءات"
+
+#, elixir-format
+msgid "Operator"
+msgstr "المعامل"
+
+#, elixir-format
+msgid "Remove group"
+msgstr "إزالة المجموعة"
+
+#, elixir-format
+msgid "Value"
+msgstr "القيمة"
+
+#, elixir-format
+msgid "Dismiss"
+msgstr "إخفاء"
+
 msgid "Accepts"
 msgstr ""
 

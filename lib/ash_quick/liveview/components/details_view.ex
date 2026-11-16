@@ -12,6 +12,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
   alias AshQuick.LiveView.Utils
   alias AshQuick.LiveView.QuickField
   alias AshQuick.LiveView.URLParams
+  alias AshQuick.LiveView.Components.Menu
 
   def details_view(%{record: nil} = assigns) do
     ~H"""
@@ -56,11 +57,12 @@ defmodule AshQuick.LiveView.Components.DetailsView do
       )
 
     ~H"""
-    <section class="bg-base-200 p-3 sm:p-5">
+    <section id="details-menus" class="bg-base-200 p-3 sm:p-5" phx-hook={Menu.hook()}>
       <.header class="p-5">
         <.link
           patch={URLParams.full_path(@base_path, @params |> URLParams.to_list_params())}
           class="btn btn-ghost btn-sm btn-square"
+          aria-label={gettext("Back to list")}
         >
           <.icon name="hero-arrow-left" class="w-5 h-5 rtl:rotate-180" />
         </.link>
@@ -337,27 +339,28 @@ defmodule AshQuick.LiveView.Components.DetailsView do
 
   defp overflow_actions_dropdown(assigns) do
     ~H"""
-    <div id="details-more-actions-dropdown" class="dropdown dropdown-end">
-      <div tabindex="0" role="button" class="btn btn-outline btn-sm btn-square">
-        <.icon name="hero-ellipsis-vertical" class="w-5 h-5" />
-      </div>
-      <ul
-        tabindex="0"
-        class="dropdown-content menu bg-base-300 rounded-box z-10 w-48 p-2 shadow-[0_2px_15px_rgba(0,0,0,0.3)] border border-base-content/10"
-      >
-        <li :for={action <- @actions}>
-          <.overflow_action_item record={@record} resource={@resource} action={action} />
-        </li>
-      </ul>
-    </div>
+    <Menu.menu
+      id="details-more-actions-dropdown"
+      class="dropdown-end"
+      trigger_class="btn btn-outline btn-sm btn-square"
+      content_class="menu w-48 p-2"
+      label={gettext("More actions")}
+    >
+      <:trigger><.icon name="hero-ellipsis-vertical" class="w-5 h-5" /></:trigger>
+      <li :for={action <- @actions} role="none">
+        <.overflow_action_item record={@record} resource={@resource} action={action} />
+      </li>
+    </Menu.menu>
     """
   end
 
   defp overflow_action_item(assigns) do
     ~H"""
-    <.link phx-click={
-      JS.push("row_action_click", value: %{id: @record.id, action_name: @action.name})
-    }>
+    <.link
+      role="menuitem"
+      tabindex="-1"
+      phx-click={JS.push("row_action_click", value: %{id: @record.id, action_name: @action.name})}
+    >
       {Labels.name(@action.name, @record.__struct__)}
     </.link>
     """

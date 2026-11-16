@@ -49,7 +49,7 @@ defmodule ExampleWeb.DeclaredLabelsScenarioTest do
     refute "Business" in cells
 
     view
-    |> element(~s([id="#{loan.id}-row-actions-dropdown"] [role="button"]))
+    |> element(~s([id="#{loan.id}-row-actions-dropdown"] [data-menu-trigger]))
     |> render_click()
 
     assert has_element?(

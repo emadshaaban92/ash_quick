@@ -11,6 +11,10 @@ defmodule AshQuick.LiveView.Components.ActionModal do
   attr :id, :string, default: "ash-quick-action-modal"
   attr :class, :any, default: nil, doc: "the box's size and padding"
 
+  attr :flash, :map,
+    default: %{},
+    doc: "the page's flash, drawn in the box while the modal is open"
+
   slot :title, doc: "a heading drawn above the content, which names the dialog"
   slot :inner_block, required: true
 
@@ -21,9 +25,22 @@ defmodule AshQuick.LiveView.Components.ActionModal do
   # by an event instead, since a patch would drop the selection a bulk action
   # was opened over, and the export has nothing to reload.
   #
+  # A real modal dialog: the hook opens it with `showModal()`, so the browser
+  # keeps the keyboard and a screen reader inside it and the page underneath
+  # inert, and gives the focus back to what opened it once it goes. It is
+  # drawn open (`modal-open`) as well, so it shows before the hook runs.
+  #
   # Only ✕ and Cancel close it. Escape would also reach it from inside a
   # dropdown that closes on Escape, and a tap outside is easy to make by
-  # accident on a phone: both would throw away what was typed.
+  # accident on a phone: both would throw away what was typed. So the hook
+  # refuses the browser's Escape (and a phone's back gesture), and reopens the
+  # dialog should a browser close it anyway: it is the server's to close.
+  #
+  # A flash raised while it is open (a refused run, a save that failed with
+  # no field to show it at, a file not stored) is drawn in the box too, as
+  # an alert: the host's flash sits outside the dialog, under its backdrop,
+  # inert, where it is neither readable nor read out. Its ✕ clears the flash,
+  # the host's copy with it.
   #
   # Nor does it close while a form in it submits: that patch would race the
   # one a successful run makes, and reads as abandoning a run that goes on.
@@ -35,8 +52,11 @@ defmodule AshQuick.LiveView.Components.ActionModal do
     ~H"""
     <dialog
       id={@id}
-      class="modal modal-open"
+      class="modal modal-open outline-none"
       aria-labelledby={@title != [] && "#{@id}-title"}
+      tabindex="-1"
+      phx-hook=".ActionModal"
+      phx-mounted={Phoenix.LiveView.JS.ignore_attributes(["open"])}
     >
       <div class={["modal-box group/modal", @class]}>
         <.link
@@ -61,10 +81,90 @@ defmodule AshQuick.LiveView.Components.ActionModal do
         <h3 :if={@title != []} id={"#{@id}-title"} class="text-lg font-semibold mb-4 pe-10">
           {render_slot(@title)}
         </h3>
+        <div
+          :for={{kind, message} <- flash_messages(@flash)}
+          id={"#{@id}-flash-#{kind}"}
+          role="alert"
+          class={[
+            "alert alert-soft text-sm flex items-start",
+            kind == :error && "alert-error",
+            kind == :info && "alert-info",
+            if(@title == [], do: "m-4 me-14", else: "mb-4")
+          ]}
+        >
+          <.icon
+            name={if kind == :error, do: "hero-exclamation-circle", else: "hero-information-circle"}
+            class="w-5 h-5 shrink-0"
+          />
+          <span class="flex-1 min-w-0 break-words">{message}</span>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs btn-square"
+            aria-label={gettext("Dismiss")}
+            phx-click={Phoenix.LiveView.JS.push("lv:clear-flash", value: %{key: kind})}
+          >
+            <.icon name="hero-x-mark" class="w-4 h-4" />
+          </button>
+        </div>
         {render_slot(@inner_block)}
       </div>
     </dialog>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".ActionModal">
+      // The last control focused on the page. By the time the server's reply
+      // draws the modal, the page under it may have been drawn again and the
+      // control that asked for it lost the focus with its old node, so the
+      // modal goes back to it by id once it closes.
+      let lastFocused = null
+      document.addEventListener("focusin", (event) => {
+        if (!event.target.closest("dialog")) lastFocused = event.target
+      })
+
+      export default {
+        mounted() {
+          const at = document.activeElement
+          this.opener = at && at !== document.body && !this.el.contains(at) ? at : lastFocused
+          this.el.addEventListener("cancel", (event) => event.preventDefault())
+          this.el.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") event.preventDefault()
+          })
+          // A browser may close a modal on a second Escape whatever the page
+          // says. The server still draws it, so it opens again.
+          this.el.addEventListener("close", () => {
+            if (this.el.isConnected) this.show()
+          })
+          this.show()
+        },
+        show() {
+          if (this.el.matches(":modal")) return
+          if (this.el.open) this.el.close()
+          this.el.showModal()
+          // The dialog itself takes the focus, so a screen reader names it
+          // and Tab goes on to its first control, rather than the browser's
+          // pick: the ✕, ringed as though tabbed to, or the scrolling box.
+          if (!this.el.querySelector("[autofocus]")) this.el.focus({preventScroll: true})
+        },
+        // A frame on, once the patch that closed the modal has settled, and
+        // unless the focus has gone somewhere of its own.
+        destroyed() {
+          const opener = this.opener
+          const dialog = this.el
+          requestAnimationFrame(() => {
+            const at = document.activeElement
+            const lost = !at || at === document.body || !at.isConnected || dialog.contains(at)
+            const back = opener && (opener.isConnected ? opener : opener.id && document.getElementById(opener.id))
+            if (lost && back) back.focus({preventScroll: true})
+          })
+        }
+      }
+    </script>
     """
+  end
+
+  defp flash_messages(flash) do
+    for kind <- [:error, :info],
+        message = Phoenix.Flash.get(flash, kind),
+        message,
+        do: {kind, message}
   end
 
   @doc false

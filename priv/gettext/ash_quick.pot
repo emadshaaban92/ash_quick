@@ -596,6 +596,7 @@ msgid "Clear all"
 msgstr ""
 
 #: lib/ash_quick/liveview/components/filter_chips.ex
+#: lib/ash_quick/liveview/components/filter_form.ex
 #, elixir-autogen, elixir-format
 msgid "Remove filter"
 msgstr ""
@@ -965,4 +966,44 @@ msgstr ""
 #: lib/ash_quick/liveview/cell_filter.ex
 #, elixir-autogen, elixir-format
 msgid "Has"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "Back to list"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Field"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Match"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/details_view.ex
+#, elixir-autogen, elixir-format
+msgid "More actions"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Operator"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Remove group"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/filter_form.ex
+#, elixir-autogen, elixir-format
+msgid "Value"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/action_modal.ex
+#, elixir-autogen, elixir-format
+msgid "Dismiss"
 msgstr ""

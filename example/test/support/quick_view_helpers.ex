@@ -35,7 +35,7 @@ defmodule ExampleWeb.QuickViewHelpers do
   def open_row_actions(session, record_id) do
     PhoenixTest.unwrap(session, fn view ->
       view
-      |> LiveViewTest.element(~s([id="#{record_id}-row-actions-dropdown"] [role="button"]))
+      |> LiveViewTest.element(~s([id="#{record_id}-row-actions-dropdown"] [data-menu-trigger]))
       |> LiveViewTest.render_click()
     end)
   end

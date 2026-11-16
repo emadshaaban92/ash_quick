@@ -46,7 +46,7 @@ defmodule ExampleWeb.LabelScenarioTest do
 
     # An action, in the row's menu and in the menu over a selection.
     view
-    |> element(~s([id="#{product.id}-row-actions-dropdown"] [role="button"]))
+    |> element(~s([id="#{product.id}-row-actions-dropdown"] [data-menu-trigger]))
     |> render_click()
 
     assert has_element?(view, ~s([id="#{product.id}-action-reprice"]), "تغيير السعر")

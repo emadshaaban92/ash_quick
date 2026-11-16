@@ -846,11 +846,14 @@ defmodule AshQuick.Components do
           value="true"
           checked={@checked}
           class="checkbox checkbox-primary checkbox-sm"
+          {invalid_attrs(@id, @errors)}
           {@rest}
         />
         {@label}
       </label>
-      <.error :for={msg <- @errors}>{msg}</.error>
+      <div :if={@errors != []} id={errors_id(@id)}>
+        <.error :for={msg <- @errors}>{msg}</.error>
+      </div>
     </div>
     """
   end
@@ -868,12 +871,15 @@ defmodule AshQuick.Components do
           @errors != [] && "select-error"
         ]}
         multiple={@multiple}
+        {invalid_attrs(@id, @errors)}
         {@rest}
       >
         <option :if={@prompt} value="">{@prompt}</option>
         {Phoenix.HTML.Form.options_for_select(@options, @value)}
       </select>
-      <.error :for={msg <- @errors}>{msg}</.error>
+      <div :if={@errors != []} id={errors_id(@id)}>
+        <.error :for={msg <- @errors}>{msg}</.error>
+      </div>
     </div>
     """
   end
@@ -890,9 +896,12 @@ defmodule AshQuick.Components do
           "textarea w-full",
           @errors != [] && "textarea-error"
         ]}
+        {invalid_attrs(@id, @errors)}
         {@rest}
       ><%= Phoenix.HTML.Form.normalize_value("textarea", @value) %></textarea>
-      <.error :for={msg <- @errors}>{msg}</.error>
+      <div :if={@errors != []} id={errors_id(@id)}>
+        <.error :for={msg <- @errors}>{msg}</.error>
+      </div>
     </div>
     """
   end
@@ -911,9 +920,12 @@ defmodule AshQuick.Components do
           "input w-full phx-submit-loading:pointer-events-none",
           @errors != [] && "input-error"
         ]}
+        {invalid_attrs(@id, @errors)}
         {@rest}
       />
-      <.error :for={msg <- @errors}>{msg}</.error>
+      <div :if={@errors != []} id={errors_id(@id)}>
+        <.error :for={msg <- @errors}>{msg}</.error>
+      </div>
     </div>
     """
   end
@@ -996,6 +1008,7 @@ defmodule AshQuick.Components do
             "input min-w-0 flex-1 phx-submit-loading:pointer-events-none",
             @errors != [] && "input-error"
           ]}
+          {invalid_attrs(@id, @errors)}
           {@rest}
         />
         <select
@@ -1022,7 +1035,9 @@ defmodule AshQuick.Components do
       />
       <input type="hidden" name={@name} value={@instant} data-instant />
       <AshQuick.LiveView.FieldErrors.used_marker field={@field} />
-      <.error :for={msg <- @errors}>{msg}</.error>
+      <div :if={@errors != []} id={errors_id(@id)}>
+        <.error :for={msg <- @errors}>{msg}</.error>
+      </div>
     </div>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".ZonedDatetime">
       // A wall time and a zone, as the instant they mean. The time is read the
@@ -1130,4 +1145,16 @@ defmodule AshQuick.Components do
   # in a flash, and a var with no `String.Chars` (the `%Regex{}` every `validate
   # match/2` error carries) crashes neither.
   def translate_error({msg, opts}), do: AshQuick.LiveView.ActionErrors.translate(msg, opts)
+
+  # An input's errors are drawn under it, in a box its `aria-describedby`
+  # names, so a screen reader reads them with the input rather than only
+  # where they sit in the page. An input drawn with no id has nothing to
+  # point at and is only marked invalid.
+  defp errors_id(nil), do: nil
+  defp errors_id(id), do: "#{id}-errors"
+
+  defp invalid_attrs(_id, []), do: []
+
+  defp invalid_attrs(id, _errors),
+    do: ["aria-invalid": "true", "aria-describedby": errors_id(id)]
 end

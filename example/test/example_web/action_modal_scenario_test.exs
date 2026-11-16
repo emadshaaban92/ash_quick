@@ -35,7 +35,7 @@ defmodule ExampleWeb.ActionModalScenarioTest do
 
     {:ok, view, _html} = conn |> log_in(admin) |> live(~p"/products?search=#{search}")
 
-    view |> element("##{product.id}-row-actions-dropdown [role=button]") |> render_click()
+    view |> element("##{product.id}-row-actions-dropdown [data-menu-trigger]") |> render_click()
     view |> element("##{product.id}-action-reprice") |> render_click()
 
     assert_patch(view, ~p"/products/#{product.id}/reprice?search=#{search}")
@@ -64,7 +64,7 @@ defmodule ExampleWeb.ActionModalScenarioTest do
 
     {:ok, view, _html} = conn |> log_in(admin) |> live(~p"/products?search=#{search}")
 
-    view |> element("##{product.id}-row-actions-dropdown [role=button]") |> render_click()
+    view |> element("##{product.id}-row-actions-dropdown [data-menu-trigger]") |> render_click()
     view |> element("##{product.id}-action-update") |> render_click()
     assert_patch(view, ~p"/products/#{product.id}/update?search=#{search}")
 
@@ -249,6 +249,7 @@ defmodule ExampleWeb.ActionModalScenarioTest do
       render_submit(view, "save", %{})
 
       assert has_element?(view, "#flash-error", "You don't have permission to do that.")
+      assert has_element?(view, "#{@modal} [role=alert]", "You don't have permission to do that.")
       assert Ash.reload!(product, authorize?: false).active
     end
   end
@@ -265,7 +266,7 @@ defmodule ExampleWeb.ActionModalScenarioTest do
 
       {:ok, view, _html} = conn |> log_in(admin) |> live(~p"/products?search=#{search}")
 
-      view |> element("##{product.id}-row-actions-dropdown [role=button]") |> render_click()
+      view |> element("##{product.id}-row-actions-dropdown [data-menu-trigger]") |> render_click()
       view |> element("##{product.id}-action-reprice") |> render_click()
       assert_patch(view, ~p"/products/#{product.id}/reprice?search=#{search}")
 
@@ -286,7 +287,7 @@ defmodule ExampleWeb.ActionModalScenarioTest do
 
       {:ok, view, _html} = conn |> log_in(admin) |> live(~p"/products?search=#{search}")
 
-      view |> element("##{product.id}-row-actions-dropdown [role=button]") |> render_click()
+      view |> element("##{product.id}-row-actions-dropdown [data-menu-trigger]") |> render_click()
       view |> element("##{product.id}-action-deactivate") |> render_click()
       assert_patch(view, ~p"/products/#{product.id}/deactivate?search=#{search}")
 
@@ -328,7 +329,7 @@ defmodule ExampleWeb.ActionModalScenarioTest do
 
       {:ok, view, _html} = conn |> log_in(admin) |> live(~p"/products?search=#{product.name}")
 
-      view |> element("##{product.id}-row-actions-dropdown [role=button]") |> render_click()
+      view |> element("##{product.id}-row-actions-dropdown [data-menu-trigger]") |> render_click()
       view |> element("##{product.id}-action-deactivate") |> render_click()
 
       # `ProductLive.Quick` handles its "discount" bulk item itself; with no row
@@ -397,7 +398,7 @@ defmodule ExampleWeb.ActionModalScenarioTest do
 
       {:ok, view, _html} = conn |> log_in(admin) |> live(~p"/products?search=#{search}")
 
-      view |> element("##{product.id}-row-actions-dropdown [role=button]") |> render_click()
+      view |> element("##{product.id}-row-actions-dropdown [data-menu-trigger]") |> render_click()
       view |> element("##{product.id}-action-destroy") |> render_click()
       assert_patch(view, ~p"/products/#{product.id}/destroy?search=#{search}")
 
@@ -417,7 +418,7 @@ defmodule ExampleWeb.ActionModalScenarioTest do
       {:ok, view, _html} = conn |> log_in(admin) |> live(~p"/products/#{product.id}")
       render_patch(view, ~p"/products?search=#{search}&page=1")
 
-      view |> element("##{product.id}-row-actions-dropdown [role=button]") |> render_click()
+      view |> element("##{product.id}-row-actions-dropdown [data-menu-trigger]") |> render_click()
       view |> element("##{product.id}-action-destroy") |> render_click()
 
       view |> form("#{@modal} form") |> render_submit()
