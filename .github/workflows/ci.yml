@@ -247,19 +247,19 @@ jobs:
         run: mix coveralls
 
   # AshQuick.Storage.S3 and S3.Proxy against a real S3-compatible server
-  # rather than the example's stub: signing, key encoding, multipart uploads
-  # and ranged reads, in both URL styles. MinIO publishes no binaries or images
-  # any more, so the last community release is built from its tagged source
-  # once and cached. See example/test/example/s3_minio_test.exs.
-  minio:
-    name: S3 storage against MinIO (example app)
+  # rather than the example's stub: signing, key encoding, multipart uploads,
+  # bucket policies and ranged reads, in both URL styles. The server is
+  # SeaweedFS (Apache 2.0), from its published image. See
+  # example/test/example/s3_server_test.exs.
+  s3-server:
+    name: S3 storage against SeaweedFS (example app)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: example
     env:
-      MINIO_VERSION: RELEASE.2025-10-15T17-29-55Z
-      MINIO_ENDPOINT: http://localhost:9000
+      SEAWEEDFS_IMAGE: chrislusf/seaweedfs:4.54@sha256:4b42c212543a0acd4c0e675215ecdcaf62a186ef98def76c7e12701871222d15
+      S3_ENDPOINT: http://localhost:8333
     services:
       db:
         image: postgres:18
@@ -278,37 +278,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Cache the MinIO build
-        id: minio-cache
-        uses: actions/cache@v6
-        with:
-          path: ~/minio-bin
-          key: ${{ runner.os }}-minio-${{ env.MINIO_VERSION }}
-
-      - name: Set up Go
-        if: steps.minio-cache.outputs.cache-hit != 'true'
-        uses: actions/setup-go@v6
-        with:
-          go-version: "1.24"
-          cache: false
-
-      - name: Build MinIO
-        if: steps.minio-cache.outputs.cache-hit != 'true'
-        run: GOBIN="$HOME/minio-bin" go install "github.com/minio/minio@$MINIO_VERSION"
-
-      # MINIO_DOMAIN makes it answer virtual-hosted URLs too, and the hosts
+      # -s3.domainName makes it answer virtual-hosted URLs too, and the hosts
       # entry makes the bucket's name resolve.
-      - name: Start MinIO
+      - name: Start SeaweedFS
         run: |
-          echo "127.0.0.1 ash-quick-minio.localhost" | sudo tee -a /etc/hosts
-          mkdir -p "$RUNNER_TEMP/minio-data"
-          MINIO_DOMAIN=localhost "$HOME/minio-bin/minio" server "$RUNNER_TEMP/minio-data" \
-            --address 127.0.0.1:9000 > "$RUNNER_TEMP/minio.log" 2>&1 &
-          for _ in $(seq 30); do
-            curl -sf http://localhost:9000/minio/health/live && exit 0
+          echo "127.0.0.1 ash-quick-s3.localhost" | sudo tee -a /etc/hosts
+          docker run -d --name seaweedfs -p 8333:8333 \
+            -v "$PWD/test/support/seaweedfs_s3.json:/etc/s3.json:ro" \
+            "$SEAWEEDFS_IMAGE" server -s3 -s3.config=/etc/s3.json -s3.domainName=localhost
+          for _ in $(seq 60); do
+            curl -sf http://localhost:8333/healthz && exit 0
             sleep 1
           done
-          cat "$RUNNER_TEMP/minio.log"
+          docker logs seaweedfs
           exit 1
 
       - name: Set up Elixir / OTP
@@ -333,8 +315,8 @@ jobs:
       - name: Install example dependencies
         run: mix deps.get
 
-      - name: Run the MinIO cases
-        run: mix test --only minio
+      - name: Run the S3 server cases
+        run: mix test --only s3_server
 
   # Scan the example app's real router and endpoint — coverage the library, with
   # neither of its own, cannot get. Sobelow is installed as an archive because
