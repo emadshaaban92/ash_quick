@@ -79,9 +79,11 @@ defmodule ExampleWeb.LivenessScenarioTest do
       # The same write to the record it *is* holding.
       Ash.update!(on_screen, action: :deactivate, actor: admin)
 
+      # The row's checkbox is named from the record the refetch read, too.
       session
       |> assert_has("td", text: renamed.name)
       |> assert_has("tr[id='#{on_screen.id}'].opacity-50")
+      |> assert_has(~s(#select_row_#{on_screen.id}[aria-label="Select #{renamed.name}"]))
     end
   end
 

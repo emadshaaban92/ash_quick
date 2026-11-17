@@ -183,6 +183,67 @@ defmodule ExampleWeb.AccessibilityScenarioTest do
     end
   end
 
+  describe "a list's row checkboxes" do
+    setup %{conn: conn, admin: admin} do
+      {:ok, conn: log_in(conn, admin)}
+    end
+
+    # The label is a calculation the list draws no column for, so this is the
+    # list loading it for the checkboxes alone.
+    test "are named after their records", %{conn: conn} do
+      tent = named_row(code: "A1", name: "Ridge tent")
+      stove = named_row(code: "A2", name: "Camp stove")
+      {:ok, view, _html} = live(conn, "/test/named_rows")
+
+      assert names(view, "#select_row_#{tent.id}") == ["Select Ridge tent"]
+      assert names(view, "#select_row_#{stove.id}") == ["Select Camp stove"]
+      assert names(view, "#select_row_all") == ["Select all rows"]
+    end
+
+    test "fall back to the id for a record with no label", %{conn: conn} do
+      unnamed = named_row(code: "B1")
+      {:ok, view, _html} = live(conn, "/test/named_rows")
+
+      assert names(view, "#select_row_#{unnamed.id}") == ["Select #{unnamed.id}"]
+    end
+
+    test "fall back to the id for a label a field policy withholds", %{conn: conn} do
+      private = named_row(code: "C1", name: "Hidden name", private: true)
+      {:ok, view, _html} = live(conn, "/test/named_rows")
+
+      assert names(view, "#select_row_#{private.id}") == ["Select #{private.id}"]
+      refute render(view) =~ "Hidden name"
+    end
+
+    # A count of records held per tenant cannot be loaded for a reader with
+    # no tenant: the list skips it, as it would the column, rather than
+    # failing the whole read.
+    test "fall back to the id for a label the reader's tenant cannot load", %{conn: conn} do
+      counted =
+        Example.Test.NamedRows.Counted
+        |> Ash.Changeset.for_create(:create, %{code: "D1"})
+        |> Ash.create!(authorize?: false)
+
+      {:ok, view, _html} = live(conn, "/test/named_rows_counted")
+
+      assert names(view, "#select_row_#{counted.id}") == ["Select #{counted.id}"]
+    end
+
+    # A sensitive label reads as the same mark on every row, which tells no
+    # two checkboxes apart.
+    test "fall back to the id for a sensitive label", %{conn: conn} do
+      secret =
+        Example.Test.Secrets
+        |> Ash.Changeset.for_create(:create, %{code: "S1", pin: "pin-4321-zq"})
+        |> Ash.create!(authorize?: false)
+
+      {:ok, view, _html} = live(conn, "/test/secrets")
+
+      assert names(view, "#select_row_#{secret.id}") == ["Select #{secret.id}"]
+      refute render(view) =~ "pin-4321-zq"
+    end
+  end
+
   describe "a modal" do
     test "is a dialog its hook opens as a modal", %{conn: conn, admin: admin} do
       {:ok, view, _html} = conn |> log_in(admin) |> live("/products?show_custom_filter=true")
@@ -293,6 +354,12 @@ defmodule ExampleWeb.AccessibilityScenarioTest do
     end
 
     for li <- LazyHTML.query(menu, "li"), do: assert(LazyHTML.attribute(li, "role") == ["none"])
+  end
+
+  defp named_row(attrs) do
+    Example.Test.NamedRows
+    |> Ash.Changeset.for_create(:create, Map.new(attrs))
+    |> Ash.create!(authorize?: false)
   end
 
   # The name a browser gives each control the selector matches.

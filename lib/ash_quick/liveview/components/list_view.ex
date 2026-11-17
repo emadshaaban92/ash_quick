@@ -229,7 +229,7 @@ defmodule AshQuick.LiveView.Components.ListView do
                           id={"select_row_#{row.id}"}
                           name={"#{row.id}"}
                           type="checkbox"
-                          aria-label={gettext("Select row")}
+                          aria-label={row_checkbox_label(row)}
                           checked={@selected_rows[row.id] == "on"}
                           class="checkbox checkbox-sm bg-base-300 text-base-content"
                         />
@@ -303,6 +303,26 @@ defmodule AshQuick.LiveView.Components.ListView do
       />
     </section>
     """
+  end
+
+  # What a row's checkbox is called: the record's display label, so a screen
+  # reader moving down the column hears which record each box selects rather
+  # than "Select row" over and over. The list query loads the label for this
+  # (`AshQuick.LiveView.ListRead.list_query/3`). A label that names nothing —
+  # blank, refused by a field policy, or `sensitive?` and so read as the same
+  # mark on every row — falls back to the id, which still tells two boxes
+  # apart.
+  defp row_checkbox_label(%resource{} = row) do
+    gettext("Select %{record}", record: row_name(resource, row))
+  end
+
+  defp row_name(resource, row) do
+    label =
+      if AshQuick.Info.sensitive?(resource, AshQuick.Info.display_label(resource)),
+        do: nil,
+        else: AshQuick.Info.display_value(row)
+
+    if label in [nil, ""], do: to_string(Map.get(row, :id)), else: label
   end
 
   # The rows in the order they were drawn, each record still read back as

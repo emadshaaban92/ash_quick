@@ -296,11 +296,6 @@ msgstr ""
 
 #: lib/ash_quick/liveview/components/list_view.ex
 #, elixir-autogen, elixir-format
-msgid "Select row"
-msgstr ""
-
-#: lib/ash_quick/liveview/components/list_view.ex
-#, elixir-autogen, elixir-format
 msgid "Rows per page"
 msgstr ""
 
@@ -1006,4 +1001,9 @@ msgstr ""
 #: lib/ash_quick/liveview/components/action_modal.ex
 #, elixir-autogen, elixir-format
 msgid "Dismiss"
+msgstr ""
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Select %{record}"
 msgstr ""

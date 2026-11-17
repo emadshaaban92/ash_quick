@@ -132,6 +132,8 @@ defmodule ExampleWeb.Router do
         quick_view "/live_rows", Example.Test.LiveRowsLive.Quick
         quick_view "/long_forms", Example.Test.LongFormsLive.Quick
         quick_view "/lookup_items", Example.Test.LookupItemsLive.Quick
+        quick_view "/named_rows", Example.Test.NamedRowsLive.Quick
+        quick_view "/named_rows_counted", Example.Test.NamedRowsCountedLive.Quick
         quick_view "/nested_items", Example.Test.NestedItemsLive.Quick
         quick_view "/offset_pages", Example.Test.OffsetPagesLive.Quick
         quick_view "/picked_labels", Example.Test.PickedLabelsLive.Quick

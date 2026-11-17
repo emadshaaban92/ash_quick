@@ -300,11 +300,6 @@ msgstr "اختيار الفلاتر"
 
 #: lib/ash_quick/liveview/components/list_view.ex
 #, elixir-autogen, elixir-format
-msgid "Select row"
-msgstr "تحديد الصف"
-
-#: lib/ash_quick/liveview/components/list_view.ex
-#, elixir-autogen, elixir-format
 msgid "Rows per page"
 msgstr "عدد الصفوف في الصفحة"
 
@@ -1059,3 +1054,8 @@ msgstr "القيمة"
 #, elixir-autogen, elixir-format
 msgid "Dismiss"
 msgstr "إخفاء"
+
+#: lib/ash_quick/liveview/components/list_view.ex
+#, elixir-autogen, elixir-format
+msgid "Select %{record}"
+msgstr "تحديد %{record}"

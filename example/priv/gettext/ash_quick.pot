@@ -238,10 +238,6 @@ msgid "Select filters"
 msgstr ""
 
 #, elixir-format
-msgid "Select row"
-msgstr ""
-
-#, elixir-format
 msgid "Rows per page"
 msgstr ""
 
@@ -805,6 +801,10 @@ msgstr ""
 
 #, elixir-format
 msgid "Dismiss"
+msgstr ""
+
+#, elixir-format
+msgid "Select %{record}"
 msgstr ""
 
 msgid "Accepts"
