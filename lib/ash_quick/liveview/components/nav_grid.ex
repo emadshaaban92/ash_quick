@@ -31,13 +31,15 @@ defmodule AshQuick.LiveView.Components.NavGrid do
         <.link
           :for={tile <- @tiles}
           navigate={tile.path}
-          class="block p-2 @min-[22rem]:p-4 text-center rounded-lg hover:bg-base-300/70 group"
+          class="block px-1 py-2 @min-[22rem]:py-4 text-center rounded-lg hover:bg-base-300/70 group"
         >
           <.nav_icon
             icon={tile.group.icon}
             class="mx-auto mb-1 w-6/12 @min-[22rem]:w-5/12 max-w-32 h-auto aspect-square text-base-content/40 group-hover:text-base-content/60"
           />
-          <div class="text-xs @min-[22rem]:text-sm">{tile.group.label}</div>
+          <%!-- A one-word label can't wrap, so it would spill past the tile:
+          thin side padding fits it, and hyphenation catches what still won't. --%>
+          <div class="text-xs @min-[22rem]:text-sm break-words hyphens-auto">{tile.group.label}</div>
         </.link>
       </div>
     </div>
