@@ -211,6 +211,64 @@ defmodule ExampleWeb.AccessibilityScenarioTest do
       |> assert_has("dialog [role='alert']", text: "Ref: must match ~r/^[A-Z]+$/")
       |> assert_has("dialog [role='alert'] button[aria-label='Dismiss']")
     end
+
+    # A link that opens the filter modal on a filter the list refuses.
+    test "is shown in the filter modal too", %{conn: conn, admin: admin} do
+      filter =
+        encode_filter([%{"field_name" => "pin", "operator" => "starts_with", "value" => "pin-4"}])
+
+      {:ok, view, _html} =
+        conn
+        |> log_in(admin)
+        |> live("/test/secrets?show_custom_filter=true&custom_filter=#{filter}")
+
+      assert has_element?(
+               view,
+               "dialog#ash-quick-filter-modal [role='alert']",
+               "That filter couldn't be applied to this list"
+             )
+    end
+
+    # Dismissing it re-renders the modal, which must not hand the filter
+    # form the URL's filter again over the rows being edited.
+    test "is dismissed in the filter modal without dropping the rows added", %{
+      conn: conn,
+      admin: admin
+    } do
+      filter =
+        encode_filter([%{"field_name" => "pin", "operator" => "starts_with", "value" => "pin-4"}])
+
+      {:ok, view, _html} =
+        conn
+        |> log_in(admin)
+        |> live("/test/secrets?show_custom_filter=true&custom_filter=#{filter}")
+
+      assert filter_rows(view) == 1
+      view |> element("#custom-filter-form button[phx-value-nested='false']") |> render_click()
+      assert filter_rows(view) == 2
+
+      view
+      |> element("dialog#ash-quick-filter-modal [role='alert'] button[aria-label='Dismiss']")
+      |> render_click()
+
+      refute has_element?(view, "dialog#ash-quick-filter-modal [role='alert']")
+      assert filter_rows(view) == 2
+    end
+  end
+
+  defp filter_rows(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#custom-filter-form select[name^='field_name-']")
+    |> Enum.count()
+  end
+
+  defp encode_filter(rows) do
+    %{"operator" => "and", "children" => rows}
+    |> JSON.encode!()
+    |> :base64.encode()
+    |> URI.encode_www_form()
   end
 
   # A menu button: a button over the list it opens, shut, whose entries are

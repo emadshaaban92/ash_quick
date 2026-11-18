@@ -91,6 +91,12 @@ defmodule AshQuick.LiveView.Components.ListView do
     doc: "`%{id: record_id, actions: [action]}` for the row whose menu was last opened"
   )
 
+  # Read as `assigns[:flash]`, which change tracking follows as it does
+  # `@flash`, so a list drawn without it draws no flash rather than raising.
+  attr(:flash, :map,
+    doc: "the page's flash, which the filter and export modals draw while they are open"
+  )
+
   # Called with the LiveView's own assigns, so `__changed__` here is the
   # socket's. A key assigned in this function is one the socket never holds:
   # the next render finds it absent again and change tracking marks it changed
@@ -114,6 +120,7 @@ defmodule AshQuick.LiveView.Components.ListView do
                 path={@path}
                 columns={@fields}
                 filterable={@params.filterable}
+                flash={assigns[:flash] || %{}}
               />
 
               <div class="flex items-center w-full space-x-2">
@@ -292,6 +299,7 @@ defmodule AshQuick.LiveView.Components.ListView do
         :if={AshQuick.Config.exports_enabled?()}
         export_data={@export_data}
         export_format={@export_format}
+        flash={assigns[:flash] || %{}}
       />
     </section>
     """
@@ -515,19 +523,18 @@ defmodule AshQuick.LiveView.Components.ListView do
   # The shared modal: only its ✕ or Cancel closes it, and not while Apply
   # submits, when the ✕'s patch (made from the params before the filter)
   # would race the one Apply makes and could undo it.
+  #
+  # The close path is built inline, not assigned: an assign here is marked
+  # changed on every render, and the filter form, handed it again, would go
+  # back to the URL's filter and drop what was typed, as a flash dismissed
+  # in the modal re-renders it.
   defp custom_filter_modal(assigns) do
-    assigns =
-      assign(
-        assigns,
-        :close,
-        URLParams.full_path(assigns.path, URLParams.toggle_show_custom_filter(assigns.params))
-      )
-
     ~H"""
     <ActionModal.action_modal
       id="ash-quick-filter-modal"
       class="w-full max-w-2xl lg:max-w-4xl"
-      close={@close}
+      close={URLParams.full_path(@path, URLParams.toggle_show_custom_filter(@params))}
+      flash={@flash}
     >
       <:title>{gettext("Custom Filter")}</:title>
       <.live_component
@@ -539,7 +546,7 @@ defmodule AshQuick.LiveView.Components.ListView do
         scope={@scope}
         custom_filter={@params.custom_filter}
         labels={FilterChips.column_labels(@columns)}
-        close={@close}
+        close={URLParams.full_path(@path, URLParams.toggle_show_custom_filter(@params))}
       />
     </ActionModal.action_modal>
     """
@@ -727,6 +734,7 @@ defmodule AshQuick.LiveView.Components.ListView do
       :if={@export_data && @export_data.failed != {:exit, {:shutdown, :cancel}}}
       id="ash-quick-export-modal"
       close={JS.push("close-export-modal")}
+      flash={@flash}
     >
       <:title>{gettext("Export")}</:title>
       <div class="flex flex-col items-center justify-center py-8">
