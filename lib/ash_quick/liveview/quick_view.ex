@@ -506,8 +506,9 @@ defmodule AshQuick.LiveView.QuickView do
       catching an absence the resource-level verifier cannot judge. See
       `AshQuick.Info.lookup_action/1`.
     * **A display label** — Required. What a record is called in detail
-      headers, BelongsTo/HasMany dropdowns, print file names and any field
-      listing a bare relationship. Declared as
+      headers, BelongsTo/HasMany dropdowns, print file names, the name of
+      each list row's selection checkbox and any field listing a bare
+      relationship. Declared as
       `ash_quick do display do label :the_field end end`; undeclared, the
       extension fills it in with a `:display_name` field, then a `:name`
       attribute. A resource offering neither does not compile: an id is a
