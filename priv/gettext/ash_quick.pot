@@ -1007,3 +1007,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Select %{record}"
 msgstr ""
+
+#: lib/ash_quick/liveview/filter_records.ex
+#, elixir-autogen, elixir-format
+msgid "Unavailable record"
+msgstr ""

@@ -1059,3 +1059,8 @@ msgstr "إخفاء"
 #, elixir-autogen, elixir-format
 msgid "Select %{record}"
 msgstr "تحديد %{record}"
+
+#: lib/ash_quick/liveview/filter_records.ex
+#, elixir-autogen, elixir-format
+msgid "Unavailable record"
+msgstr "سجل غير متاح"

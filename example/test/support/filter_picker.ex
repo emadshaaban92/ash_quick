@@ -54,11 +54,13 @@ defmodule ExampleWeb.FilterPicker do
 
   @doc """
   Picks each of `labels` from the row's dropdown, by clicking its option, and
-  posts each pick.
+  posts each pick. Each is picked from the dropdown focused afresh, or with
+  `searched: true` from the one a search left open, which focusing would
+  clear.
   """
-  def pick_values(view, uuid, labels) do
+  def pick_values(view, uuid, labels, opts \\ []) do
     for label <- labels do
-      focus_values(view, uuid)
+      unless opts[:searched], do: focus_values(view, uuid)
       id = picker!(view, uuid)
 
       options = view |> query("##{id} ul li div[data-idx]") |> Enum.to_list()

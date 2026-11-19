@@ -8,6 +8,8 @@ defmodule AshQuick.LiveView.Components.FilterChips do
   alias AshQuick.LiveView.Components.FieldValue
   alias AshQuick.LiveView.Components.FilterForm
   alias AshQuick.LiveView.CustomFilter
+  alias AshQuick.LiveView.FilterField
+  alias AshQuick.LiveView.FilterRecords
   alias AshQuick.LiveView.MapFilter
   alias AshQuick.LiveView.QuickField
   alias AshQuick.LiveView.URLParams
@@ -19,24 +21,36 @@ defmodule AshQuick.LiveView.Components.FilterChips do
   something together. Nothing renders without a filter.
 
   Read from the params the page was built from, so a row dropped before the
-  read (a hidden field, or a filter the read refused) has no chip.
+  read (a hidden field, or a filter the read refused) has no chip. A record
+  row's chip names the records it holds, as `records` gives them; without
+  it, they are read here, in one query per row's field through the
+  destination's lookup action with the reader's scope.
   """
   attr :resource, :atom, required: true
   attr :params, :map, required: true
   attr :path, :string, required: true
   attr :scope, :any, default: nil, doc: "the reader's scope, whose zone a timestamp reads in"
 
+  attr :records, :map,
+    default: nil,
+    doc:
+      "the options naming the records each record row holds, by field name and id, as " <>
+        "`AshQuick.LiveView.FilterRecords.held_by_field/3` reads them where the list is read"
+
   attr :columns, :list,
     default: [],
     doc: "the list's `QuickField`s, whose labels name a chip's field as its column does"
 
   def filter_chips(%{params: %URLParams{custom_filter: %CustomFilter{} = filter}} = assigns) do
+    %{resource: resource, params: params, scope: scope} = assigns
+
     assigns =
       assign(assigns,
         filter: filter,
         chips: CustomFilter.chips(filter),
-        fields: CustomFilter.fields_by_name(assigns.resource, assigns.params.filterable),
-        labels: column_labels(assigns.columns)
+        fields: CustomFilter.fields_by_name(resource, params.filterable),
+        labels: column_labels(assigns.columns),
+        records: assigns.records || FilterRecords.held_by_field(resource, params, scope)
       )
 
     ~H"""
@@ -54,6 +68,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
         resource={@resource}
         fields={@fields}
         labels={@labels}
+        records={@records}
         params={@params}
         path={@path}
         scope={@scope}
@@ -84,6 +99,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
   attr :resource, :atom, required: true
   attr :fields, :map, required: true
   attr :labels, :map, required: true
+  attr :records, :map, default: %{}
   attr :params, :map, required: true
   attr :path, :string, required: true
   attr :scope, :any, default: nil
@@ -100,6 +116,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
           resource={@resource}
           fields={@fields}
           labels={@labels}
+          records={@records}
           params={@params}
           path={@path}
           scope={@scope}
@@ -134,6 +151,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
       resource={@resource}
       fields={@fields}
       labels={@labels}
+      records={@records}
       params={@params}
       path={@path}
       scope={@scope}
@@ -150,6 +168,7 @@ defmodule AshQuick.LiveView.Components.FilterChips do
   attr :resource, :atom, default: nil
   attr :fields, :map, default: %{}
   attr :labels, :map, default: %{}
+  attr :records, :map, default: %{}
   attr :params, :map, required: true
   attr :path, :string, required: true
   attr :scope, :any, default: nil
@@ -174,6 +193,8 @@ defmodule AshQuick.LiveView.Components.FilterChips do
           <.chip_value
             leaf={@leaf}
             field={@field && @field.field}
+            filter_field={@field}
+            records={@records[@leaf.field_name] || %{}}
             resource={(@field && @field.resource) || @resource}
             scope={@scope}
           />
@@ -224,6 +245,8 @@ defmodule AshQuick.LiveView.Components.FilterChips do
   # does not have, reads as written.
   attr :leaf, CustomFilter, required: true
   attr :field, :any, required: true
+  attr :filter_field, :any, default: nil
+  attr :records, :map, default: %{}
   attr :resource, :atom, default: nil
   attr :scope, :any, default: nil
 
@@ -232,6 +255,23 @@ defmodule AshQuick.LiveView.Components.FilterChips do
   defp chip_value(%{leaf: %{operator: operator}} = assigns)
        when operator in ~w(is_nil is_not_nil has_key missing_key) do
     ~H""
+  end
+
+  # A record row names the records it holds, as a relationship dropdown
+  # labels them, and a placeholder for one the reader may not read.
+  defp chip_value(%{filter_field: %FilterField{record?: true}, leaf: %{value: value}} = assigns) do
+    ids = for id <- List.wrap(value), is_binary(id) and id != "", uniq: true, do: id
+
+    assigns =
+      assign(
+        assigns,
+        :names,
+        Enum.map(ids, &(assigns.records[&1] || FilterRecords.unavailable(&1)).label)
+      )
+
+    ~H"""
+    <span class="font-semibold" dir="auto">{Enum.join(@names, ", ")}</span>
+    """
   end
 
   # A map row's value is compared with whatever the map holds, of any type,

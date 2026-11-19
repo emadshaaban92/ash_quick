@@ -13,6 +13,7 @@ defmodule AshQuick.LiveView.ListUtils do
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.CellFilterMenu
   alias AshQuick.LiveView.Components.FilterForm
+  alias AshQuick.LiveView.FilterRecords
   alias AshQuick.LiveView.ListBulk
   alias AshQuick.LiveView.ListExport
   alias AshQuick.LiveView.ListFilterGuard
@@ -37,6 +38,12 @@ defmodule AshQuick.LiveView.ListUtils do
 
     socket
     |> assign(:params, params)
+    # The records the filter's chips name, read with the list rather than as
+    # the chips render.
+    |> assign(
+      :filter_records,
+      FilterRecords.held_by_field(options.resource, params, socket.assigns[:scope])
+    )
     |> assign(ListRows.fresh_screen(page))
     |> assign(:selected_rows, %{})
     |> assign(:export_data, ListExport.running_export(socket))

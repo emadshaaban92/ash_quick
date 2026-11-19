@@ -153,6 +153,7 @@ defmodule AshQuick.LiveView.Components.ListView do
             path={@path}
             scope={@scope}
             columns={@fields}
+            records={assigns[:filter_records]}
           />
           <div
             :if={@list_news}

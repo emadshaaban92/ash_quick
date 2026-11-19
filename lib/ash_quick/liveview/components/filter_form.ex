@@ -3,12 +3,14 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   use Phoenix.LiveComponent
   use Gettext, backend: AshQuick.Gettext
   import AshQuick.Components
+  import AshQuick.LiveView.Components.RecordOption
 
   alias AshQuick.Labels
   alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.CustomFilter
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.FilterField
+  alias AshQuick.LiveView.FilterRecords
   alias AshQuick.LiveView.LocalDatetime
   alias AshQuick.LiveView.MapFilter
 
@@ -53,6 +55,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
           labels={@labels}
           value_errors={@value_errors}
           timezone={@timezone}
+          record_options={@record_options}
         />
 
         <div class="flex w-full gap-2 pt-4 pb-1">
@@ -112,6 +115,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
               labels={@labels}
               value_errors={@value_errors}
               timezone={@timezone}
+              record_options={@record_options}
             />
           <% else %>
             <.filter_row
@@ -123,6 +127,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
               field={field_for(@fields, filter.field_name)}
               error={@value_errors[filter.uuid]}
               timezone={@timezone}
+              record_options={@record_options}
               myself={@myself}
             />
           <% end %>
@@ -163,10 +168,14 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # left blank to look at every value.
   defp filter_row(assigns) do
     ~H"""
-    <div class="flex flex-col sm:flex-row sm:items-center gap-1">
+    <%!-- The field and operator take fixed widths from `sm` up, so the
+    values of a group's rows start at one edge and their ✕s line up. Items
+    align at the top: a picker holding tags grows downwards, and the row's
+    selects stay level with its first line. --%>
+    <div class="flex flex-col sm:flex-row sm:items-start gap-1">
       <select
         name={"field_name-#{@filter.uuid}"}
-        class="select select-sm sm:w-auto"
+        class="select select-sm sm:w-44 sm:shrink-0"
         aria-label={gettext("Field")}
       >
         {Phoenix.HTML.Form.options_for_select(
@@ -187,10 +196,10 @@ defmodule AshQuick.LiveView.Components.FilterForm do
         class="input input-sm sm:w-40"
         data-filter-key
       />
-      <div class="flex items-center gap-1">
+      <div class="flex min-w-0 flex-1 items-start gap-1">
         <select
           name={"operator-#{@filter.uuid}"}
-          class="select select-sm w-auto shrink-0"
+          class="select select-sm w-auto sm:w-36 shrink-0"
           aria-label={gettext("Operator")}
         >
           {Phoenix.HTML.Form.options_for_select(
@@ -201,9 +210,11 @@ defmodule AshQuick.LiveView.Components.FilterForm do
         <.filter_value
           filter={@filter}
           field={@field && @field.field}
+          filter_field={@field}
           resource={(@field && @field.resource) || @resource}
           error={@error}
           timezone={@timezone}
+          record_options={@record_options[@filter.field_name] || %{}}
           myself={@myself}
         />
 
@@ -241,6 +252,51 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     """
   end
 
+  # A record row picks related records, as tags: searched on the server
+  # through the destination's lookup action, as a relationship dropdown is,
+  # and drawn as one draws them, with each record's hint. The records held
+  # are named from `record_options`, read once for the ids a link carried.
+  defp filter_value(
+         %{filter: %{operator: "in"}, filter_field: %FilterField{record?: true}} = assigns
+       ) do
+    %{filter: filter, record_options: options} = assigns
+    held = held_values(filter.value)
+
+    assigns =
+      assign(assigns,
+        picker_id: picker_id(filter),
+        picker_field: to_form(%{"values" => held}, as: "value-#{filter.uuid}")[:values],
+        held_options: Enum.map(held, &Map.get(options, &1, FilterRecords.unavailable(&1))),
+        value_mapper: &Map.get(options, &1, FilterRecords.unavailable(&1))
+      )
+
+    ~H"""
+    <div
+      id={"#{@picker_id}-wrap"}
+      phx-hook=".ValuesPicker"
+      data-error-id={@error && "value-error-#{@filter.uuid}"}
+      data-label={gettext("Value")}
+      class="min-w-0 flex-1"
+    >
+      <LiveSelect.live_select
+        id={@picker_id}
+        field={@picker_field}
+        style={:daisyui}
+        mode={:quick_tags}
+        {picker_classes(@error)}
+        update_min_len={0}
+        options={@held_options}
+        value_mapper={@value_mapper}
+        phx-target={@myself}
+        phx-focus="offer_values"
+      >
+        <:option :let={option}><.record_option option={option} /></:option>
+        <:tag :let={option}><.record_tag option={option} /></:tag>
+      </LiveSelect.live_select>
+    </div>
+    """
+  end
+
   # Any Of picks several values from a fixed set, and so does Has Any Of from
   # the set a list's items are picked from: as tags, searched by label.
   #
@@ -272,23 +328,12 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       data-label={gettext("Value")}
       class="min-w-0 flex-1"
     >
-      <%!-- An input holding picks is drawn as primary, which would hide the
-      error's colour, so the error takes its place then. The tag class is
-      ChoiceInput's: daisyUI 5's badge is a fixed-height
-      box with inline padding only, so live_select's preset adds vertical
-      padding the line has no room for and the text spills out. A long set
-      scrolls within the dropdown, as the native select's five rows did;
-      daisyUI's menu would wrap it into columns, so it is kept to one. --%>
       <LiveSelect.live_select
         id={@picker_id}
         field={@picker_field}
         style={:daisyui}
         mode={:quick_tags}
-        container_extra_class="w-full"
-        text_input_extra_class={if @error, do: "input-sm input-error", else: "input-sm"}
-        text_input_selected_class={if @error, do: "input-error"}
-        dropdown_extra_class="max-h-60 overflow-y-auto flex-nowrap"
-        tag_class="badge badge-primary h-auto min-h-6 py-0.5 max-w-full whitespace-normal"
+        {picker_classes(@error)}
         update_min_len={0}
         options={@options}
         value_mapper={@value_mapper}
@@ -460,6 +505,32 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   defp picker_id(%CustomFilter{uuid: uuid, field_name: name}),
     do: "filter-values-#{uuid}-#{String.replace(to_string(name), ".", "--")}"
 
+  # How a filter row's LiveSelect is drawn: one box the height of the row's
+  # other inputs, holding its tags and its text input on one line and
+  # growing a line at a time as tags wrap, so a picker holding tags is not a
+  # column of tags over an input, taller than its row. The box is daisyUI's
+  # `input`, which draws focus and error on a wrapper; the text input inside
+  # is bare. An error replaces the primary colour picks would draw, which
+  # would hide it.
+  #
+  # The tag class is ChoiceInput's: daisyUI 5's badge is a fixed-height box
+  # with inline padding only, so live_select's preset adds vertical padding
+  # the line has no room for and the text spills out. A long set scrolls
+  # within the dropdown, as a native select's rows did; daisyUI's menu would
+  # wrap it into columns, so it is kept to one.
+  defp picker_classes(error) do
+    %{
+      container_extra_class:
+        "input input-sm h-auto min-h-(--size) w-full flex flex-wrap items-center gap-1 py-0.5 " <>
+          "[&>div]:grow [&>div]:basis-16" <> if(error, do: " input-error", else: ""),
+      tags_container_class: "contents",
+      text_input_class: "w-full min-w-0 bg-transparent outline-none",
+      text_input_selected_class: "",
+      dropdown_extra_class: "top-full start-0 mt-1 max-h-60 overflow-y-auto flex-nowrap",
+      tag_class: "badge badge-primary h-auto min-h-6 py-0.5 max-w-full whitespace-normal"
+    }
+  end
+
   # The values a row holds, as its tags: a link can hold one bare value, a
   # blank or an empty list, or the same value twice.
   defp held_values(value),
@@ -519,8 +590,10 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       # The zone the list shows timestamps in, which a timestamp is typed in.
       |> assign(:timezone, AshQuick.Scope.timezone(assigns[:scope] || socket.assigns[:scope]))
       |> assign_new(:value_errors, fn -> %{} end)
+      |> assign_new(:record_options, fn -> %{} end)
       |> assign_fields()
       |> maybe_assign_new_filter()
+      |> name_held_records()
 
     {:ok, socket}
   end
@@ -626,14 +699,14 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       nil ->
         {:noreply, socket}
 
-      %FilterField{field: field} = offered ->
+      %FilterField{} = offered ->
         custom_filter =
           socket.assigns.custom_filter
           |> CustomFilter.update_filter(uuid, :field_name, field_name)
           |> CustomFilter.update_filter(
             uuid,
             :operator,
-            first_operator(field)
+            first_operator(offered)
           )
           |> CustomFilter.update_filter(uuid, :value, "")
           |> CustomFilter.update_filter(uuid, :path, start_path(offered))
@@ -714,23 +787,97 @@ defmodule AshQuick.LiveView.Components.FilterForm do
     value = held_value(socket, uuid, value)
     custom_filter = CustomFilter.update_filter(socket.assigns.custom_filter, uuid, :value, value)
 
-    socket |> assign(:custom_filter, custom_filter) |> forget_error(uuid)
+    socket |> assign(:custom_filter, custom_filter) |> forget_error(uuid) |> name_held_records()
   end
 
   # The options of the row whose LiveSelect has `id`, narrowed to the labels
   # holding `search`. An id no row has now is a stale page, and is ignored.
+  # A record row's are searched for, and kept to name a record once picked.
   defp offer_values(socket, id, search) do
     %{custom_filter: custom_filter, fields: fields} = socket.assigns
 
     with %CustomFilter{field_name: name, value: value} <-
            custom_filter |> CustomFilter.leaves() |> Enum.find(&(picker_id(&1) == id)),
-         %FilterField{field: field, resource: resource} <- field_for(fields, name) do
-      {options, _labels} = value_choices(field, resource, held_values(value))
-      send_update(LiveSelect.Component, id: id, options: EnumOptions.search(options, search))
+         %FilterField{} = offered <- field_for(fields, name) do
+      offer(socket, id, offered, held_values(value), search)
+    else
+      _ -> socket
     end
+  end
 
+  defp offer(socket, id, %FilterField{record?: true, name: name} = field, _held, search) do
+    known = socket.assigns.record_options[name] || %{}
+
+    options =
+      field |> FilterRecords.search(search, socket.assigns.scope) |> distinct_records(known)
+
+    send_update(LiveSelect.Component, id: id, options: options)
+
+    remember_records(socket, name, Map.new(options, &{&1.value, &1}))
+  end
+
+  defp offer(socket, id, %FilterField{field: field, resource: resource}, held, search) do
+    {options, _labels} = value_choices(field, resource, held)
+    send_update(LiveSelect.Component, id: id, options: EnumOptions.search(options, search))
     socket
   end
+
+  # LiveSelect tells a picked option from the others by its label, so a
+  # record already named keeps its label, and one sharing a label with
+  # another record names its id too, rather than unpicking it.
+  defp distinct_records(options, known) do
+    options = Enum.map(options, &Map.get(known, &1.value, &1))
+    taken = for {value, %{label: label}} <- known, into: %{}, do: {label, value}
+    counts = Enum.frequencies_by(options, & &1.label)
+
+    Enum.map(options, fn %{label: label, value: value} = option ->
+      if counts[label] > 1 or Map.get(taken, label, value) != value,
+        do: %{option | label: "#{label} (#{value})"},
+        else: option
+    end)
+  end
+
+  defp remember_records(socket, name, options),
+    do:
+      update(socket, :record_options, fn known ->
+        Map.update(known, name, options, &Map.merge(options, &1))
+      end)
+
+  # The records the form's record rows hold that it has no option for yet,
+  # read once per field: ids a link carried, or the form opened with. A
+  # record picked was offered, so it is named already. Records sharing a
+  # label are told apart as offered ones are, or LiveSelect would take a
+  # click on one in the dropdown for the other.
+  defp name_held_records(%{assigns: %{custom_filter: %CustomFilter{} = filter}} = socket) do
+    %{fields: fields, record_options: known, scope: scope} = socket.assigns
+
+    filter
+    |> CustomFilter.leaves()
+    |> Enum.flat_map(&unnamed_ids(&1, field_for(fields, &1.field_name), known))
+    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+    |> Enum.reduce(socket, fn {field, ids}, socket ->
+      {ids, options} = field |> FilterRecords.held(Enum.uniq(ids), scope) |> Enum.unzip()
+      named = Enum.zip(ids, distinct_records(options, known[field.name] || %{}))
+      remember_records(socket, field.name, Map.new(named))
+    end)
+  end
+
+  defp name_held_records(socket), do: socket
+
+  defp unnamed_ids(
+         %CustomFilter{field_name: name, value: value},
+         %FilterField{record?: true} = field,
+         known
+       ),
+       do:
+         for(
+           id <- held_values(value),
+           is_binary(id),
+           not Map.has_key?(known[name] || %{}, id),
+           do: {field, id}
+         )
+
+  defp unnamed_ids(_row, _field, _known), do: []
 
   # An error answers the value it was found on, so it goes once the row is
   # edited, rather than standing under a value it no longer describes.
@@ -900,8 +1047,8 @@ defmodule AshQuick.LiveView.Components.FilterForm do
 
   # A new row starts on the first field offered: no one field is one every
   # resource has, or one every actor may see.
-  defp first_leaf([%FilterField{name: name, field: field} = first | _]),
-    do: %{field_name: name, operator: first_operator(field), path: start_path(first)}
+  defp first_leaf([%FilterField{name: name} = first | _]),
+    do: %{field_name: name, operator: first_operator(first), path: start_path(first)}
 
   defp first_leaf([]), do: nil
 
@@ -909,8 +1056,9 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # path at all on any other field.
   defp start_path(field), do: if(CustomFilter.map_field?(field), do: [])
 
-  # Is Empty is never first: a row starts comparing its field with a value.
-  defp first_operator(field), do: field |> base_operators() |> List.first()
+  # Is Empty is never first: a row starts comparing its field with a value,
+  # and a record row picking records.
+  defp first_operator(%FilterField{} = field), do: field |> filter_operators() |> List.first()
 
   @doc """
   What `operator` reads as, here and on the list's chips. One a link names that
@@ -974,13 +1122,18 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # sees it on every row.
   defp field_operators(nil, _emptiable), do: []
 
-  defp field_operators(%FilterField{name: name, field: field}, emptiable) do
-    operators = base_operators(field)
+  defp field_operators(%FilterField{name: name, field: field} = offered, emptiable) do
+    operators = filter_operators(offered)
 
     if operators != [] and name in emptiable,
       do: operators ++ emptiness(field),
       else: operators
   end
+
+  # A record row asks whether its relationship holds any of the records
+  # picked; any other row compares its field.
+  defp filter_operators(%FilterField{record?: true}), do: ["in"]
+  defp filter_operators(%FilterField{field: field}), do: base_operators(field)
 
   # A map is asked whether a key is there rather than whether it is empty.
   defp emptiness(field) do
@@ -1013,6 +1166,12 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # A field reached through a belongs_to that may be unset is empty on a row
   # that has no related record, whether or not the related field can be. A
   # map can lack any key, whether or not the column can be `nil`.
+  #
+  # A record row is empty on a row holding no related record: always possible
+  # through a to-many hop, and through a belongs_to that may be unset.
+  defp emptiable?(%FilterField{record?: true, hops: hops}),
+    do: Enum.any?(hops, &(&1.type != :belongs_to or &1.allow_nil?))
+
   defp emptiable?(%FilterField{relationship: %{allow_nil?: true}}), do: true
 
   defp emptiable?(%FilterField{field: field}),

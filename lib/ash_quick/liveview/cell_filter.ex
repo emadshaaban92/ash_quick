@@ -53,7 +53,8 @@ defmodule AshQuick.LiveView.CellFilter do
   each as `%{filter_field: filter_field, emptiness?: true}`, the
   `FilterField` its filter row names, and whether its cells may offer Is
   Empty: those of `fields`, the columns drawn, whose field `filterable`, the
-  fields the filter offers this visitor as `filterable:` names them, holds.
+  fields the filter offers this visitor as `filterable:` names them, holds,
+  its record rows aside.
   None when the list offers no filter.
 
   `partly_hidden` names the columns whose field a field policy hides on some
@@ -64,7 +65,12 @@ defmodule AshQuick.LiveView.CellFilter do
 
   def columns(fields, resource, filterable, partly_hidden)
       when is_list(filterable) and filterable != [] do
-    offered = resource |> CustomFilter.filterable_fields(filterable) |> Map.new(&{&1.name, &1})
+    # A record row picks records, which no cell's value is one of.
+    offered =
+      resource
+      |> CustomFilter.filterable_fields(filterable)
+      |> Enum.reject(& &1.record?)
+      |> Map.new(&{&1.name, &1})
 
     for field <- fields,
         name = QuickField.data_field(field),
