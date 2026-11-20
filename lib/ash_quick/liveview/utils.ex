@@ -253,9 +253,29 @@ defmodule AshQuick.LiveView.Utils do
   One `load` covers every kind of label the resource can carry: an attribute is
   selected, a calculation or aggregate loaded. Callers that only render the
   label narrow the select themselves first.
+
+  Loads what `label_fields/2` names for the query's tenant, so an aggregate
+  label the reader's tenant cannot count is left unloaded rather than failing
+  the read; `AshQuick.Info.display_value/1` then reads `nil` and the caller
+  falls back to the id.
   """
-  def load_display_label(%Ash.Query{resource: resource} = query) do
-    Ash.Query.load(query, AshQuick.Info.display_label(resource), strict?: true)
+  def load_display_label(%Ash.Query{resource: resource, tenant: tenant} = query) do
+    Ash.Query.load(query, label_fields(resource, tenant), strict?: true)
+  end
+
+  @doc """
+  What a load names to bring `resource`'s display label: `[label]`.
+
+  `[]` for an aggregate label over a resource that needs a tenant, when
+  `tenant` is nil: loading it would fail the whole read rather than drop one
+  label, which is the rule `load_fields/3` applies to an aggregate field and
+  `hint_fields/2` to a hint. Every label load asks here — a list's rows, a
+  details record and its writers, a dropdown's options, the record a field
+  links and a print — so that rule holds wherever a label is loaded.
+  """
+  def label_fields(resource, tenant) do
+    label = AshQuick.Info.display_label(resource)
+    if loadable?(resource, label, tenant), do: [label], else: []
   end
 
   @doc """
@@ -336,11 +356,53 @@ defmodule AshQuick.LiveView.Utils do
     |> load_fields(rest, opts)
   end
 
+  def load_fields(%Ash.Query{} = query, [[{name, _nested}] = path | rest], opts)
+      when is_atom(name) do
+    {load, labels} = path_loads(query.resource, path, query.tenant)
+
+    query
+    |> Ash.Query.load(load, opts)
+    |> Ash.Query.load(labels || [])
+    |> load_fields(rest, opts)
+  end
+
   def load_fields(%Ash.Query{} = query, [field | rest], opts) do
     query
     |> Ash.Query.load(field, opts)
     |> load_fields(rest, opts)
   end
+
+  # A path through relationships (`[bin: :item_count]`,
+  # `[packing: [box: :bin]]`) loaded by the rule its last field would be
+  # loaded by at the top: an aggregate needing a tenant the query has not got
+  # is left out, though the relationships reaching it are still loaded, so the
+  # record it would have named is still there to link; and a path stopping at a
+  # relationship brings the destination's label too. Returns the path's load,
+  # and the label load beside it, or `nil` — merged rather than strict, for the
+  # reason `maybe_load_field/3` gives.
+  defp path_loads(resource, [{name, nested}], tenant) when is_atom(name) do
+    case Ash.Resource.Info.relationship(resource, name) do
+      %{destination: destination} ->
+        {load, labels} = path_loads(destination, nested, tenant)
+        {[{name, load}], labels && [{name, labels}]}
+
+      # Not a relationship: loaded as written, so Ash says what is wrong.
+      nil ->
+        {[{name, nested}], nil}
+    end
+  end
+
+  defp path_loads(resource, name, tenant) when is_atom(name) do
+    case Ash.Resource.Info.field(resource, name) do
+      %struct{destination: destination} when struct in @relationships ->
+        {name, [{name, label_fields(destination, tenant)}]}
+
+      _field ->
+        if loadable?(resource, name, tenant), do: {name, nil}, else: {[], nil}
+    end
+  end
+
+  defp path_loads(_resource, nested, _tenant), do: {nested, nil}
 
   defp maybe_load_field(query, field_name, opts) when is_atom(field_name) do
     field = query.resource |> Ash.Resource.Info.field(field_name)
@@ -368,7 +430,7 @@ defmodule AshQuick.LiveView.Utils do
        when struct in @relationships do
     query
     |> Ash.Query.load(name, opts)
-    |> Ash.Query.load([{name, AshQuick.Info.display_label(destination)}])
+    |> Ash.Query.load([{name, label_fields(destination, query.tenant)}])
   end
 
   defp maybe_load_field(%{tenant: tenant} = query, %{name: field_name}, opts)

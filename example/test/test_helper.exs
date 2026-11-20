@@ -7,6 +7,10 @@ Ecto.Adapters.SQL.Sandbox.mode(Example.Repo, :manual)
 # `:table_not_found`. Creating each table up front closes it.
 for resource <- [
       Example.Test.BulkGuarded,
+      Example.Test.CountedLabels.Bin,
+      Example.Test.CountedLabels.Box,
+      Example.Test.CountedLabels.Item,
+      Example.Test.CountedLabels.Packing,
       Example.Test.DefaultPages,
       Example.Test.DigitsOnly,
       Example.Test.HiddenAddress,

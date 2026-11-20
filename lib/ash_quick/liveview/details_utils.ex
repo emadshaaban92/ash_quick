@@ -89,8 +89,7 @@ defmodule AshQuick.LiveView.DetailsUtils do
 
       actor ->
         fields =
-          Enum.reject([AshQuick.Info.display_label(actor)], &is_nil/1) ++
-            Utils.hint_fields(actor, tenant)
+          Utils.label_fields(actor, tenant) ++ Utils.hint_fields(actor, tenant)
 
         resource |> AshQuick.Info.actor_fields() |> Enum.map(&{&1, fields})
     end
