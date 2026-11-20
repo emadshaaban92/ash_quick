@@ -2,8 +2,9 @@ defmodule AshQuick.LabelsVerifierTest do
   @moduledoc """
   What a resource's `labels` will not let compile: a label naming nothing the
   resource has, one for a value its field does not offer, and a name or value
-  labelled twice. A label naming nothing would leave the humanized name drawn
-  with no sign of why.
+  labelled twice; help naming nothing a form draws, blank, or given twice. A
+  label naming nothing would leave the humanized name drawn with no sign of
+  why.
 
   Probed the way `AshQuick.PrintVerifierTest` probes, through
   `AshQuick.Test.VerifierErrors`.
@@ -114,6 +115,39 @@ defmodule AshQuick.LabelsVerifierTest do
 
     assert message =~ "labels a value :status does not offer"
     assert message =~ ":active, :paid_off, :cancelled"
+  end
+
+  test "help for an attribute, relationship or argument compiles, as text or false" do
+    assert verifier_errors("""
+           help :name, "What the loan is called"
+           help :borrower, "Who the loan is to"
+           help :borrower_id, false
+           help :settled_status, "How it ends"
+           """) == []
+  end
+
+  test "help naming nothing a form draws does not compile" do
+    assert message(~s(help :nmae, "Typo")) =~
+             "`help :nmae` names no attribute, relationship or action argument"
+
+    # A calculation or an action is never a form input.
+    assert message(~s(help :shout, "Loud")) =~ "`help :shout` names no attribute"
+    assert message(~s(help :settle, "Settle")) =~ "`help :settle` names no attribute"
+  end
+
+  test "blank help does not compile" do
+    assert message(~s(help :name, "  ")) =~ "`help :name` is blank. Write `help :name, false`"
+  end
+
+  test "a name given help twice does not compile" do
+    assert message("""
+           help :name, "One"
+           help :name, false
+           """) =~ "`:name` has more than one `help`"
+  end
+
+  test "help that is neither text nor false does not compile" do
+    assert_raise Spark.Error.DslError, fn -> verifier_errors(~s(help :name, true)) end
   end
 
   test "a name or value labelled twice does not compile" do

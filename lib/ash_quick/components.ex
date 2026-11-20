@@ -41,6 +41,8 @@ defmodule AshQuick.Components do
   use Phoenix.Component
   use Gettext, backend: AshQuick.Gettext
 
+  alias AshQuick.LiveView.Components.FieldHelp
+
   ## Icons
 
   @doc """
@@ -809,6 +811,12 @@ defmodule AshQuick.Components do
     doc: "a form field struct retrieved from the form, for example: @form[:email]"
 
   attr :errors, :list, default: []
+
+  attr :help, :string,
+    default: nil,
+    doc:
+      "help text drawn under the input, which its `aria-describedby` names (`AshQuick.Labels.help/2`)"
+
   attr :checked, :boolean, doc: "the checked flag for checkbox inputs"
   attr :prompt, :string, default: nil, doc: "the prompt for select inputs"
   attr :options, :list, doc: "the options to pass to Phoenix.HTML.Form.options_for_select/2"
@@ -846,11 +854,12 @@ defmodule AshQuick.Components do
           value="true"
           checked={@checked}
           class="checkbox checkbox-primary checkbox-sm"
-          {invalid_attrs(@id, @errors)}
+          {FieldHelp.describe_attrs(@id, @help, @errors)}
           {@rest}
         />
         {@label}
       </label>
+      <FieldHelp.help id={@id} text={@help} />
       <div :if={@errors != []} id={errors_id(@id)}>
         <.error :for={msg <- @errors}>{msg}</.error>
       </div>
@@ -871,12 +880,13 @@ defmodule AshQuick.Components do
           @errors != [] && "select-error"
         ]}
         multiple={@multiple}
-        {invalid_attrs(@id, @errors)}
+        {FieldHelp.describe_attrs(@id, @help, @errors)}
         {@rest}
       >
         <option :if={@prompt} value="">{@prompt}</option>
         {Phoenix.HTML.Form.options_for_select(@options, @value)}
       </select>
+      <FieldHelp.help id={@id} text={@help} />
       <div :if={@errors != []} id={errors_id(@id)}>
         <.error :for={msg <- @errors}>{msg}</.error>
       </div>
@@ -896,9 +906,10 @@ defmodule AshQuick.Components do
           "textarea w-full",
           @errors != [] && "textarea-error"
         ]}
-        {invalid_attrs(@id, @errors)}
+        {FieldHelp.describe_attrs(@id, @help, @errors)}
         {@rest}
       ><%= Phoenix.HTML.Form.normalize_value("textarea", @value) %></textarea>
+      <FieldHelp.help id={@id} text={@help} />
       <div :if={@errors != []} id={errors_id(@id)}>
         <.error :for={msg <- @errors}>{msg}</.error>
       </div>
@@ -920,9 +931,10 @@ defmodule AshQuick.Components do
           "input w-full phx-submit-loading:pointer-events-none",
           @errors != [] && "input-error"
         ]}
-        {invalid_attrs(@id, @errors)}
+        {FieldHelp.describe_attrs(@id, @help, @errors)}
         {@rest}
       />
+      <FieldHelp.help id={@id} text={@help} />
       <div :if={@errors != []} id={errors_id(@id)}>
         <.error :for={msg <- @errors}>{msg}</.error>
       </div>
@@ -964,6 +976,11 @@ defmodule AshQuick.Components do
   attr :id, :string, default: nil
   attr :label, :string, default: nil
   attr :required, :boolean, default: false
+
+  attr :help, :string,
+    default: nil,
+    doc: "help text drawn under the input, which its `aria-describedby` names"
+
   attr :rest, :global, include: ~w(disabled readonly min max phx-debounce)
 
   def zoned_datetime_input(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
@@ -1008,7 +1025,7 @@ defmodule AshQuick.Components do
             "input min-w-0 flex-1 phx-submit-loading:pointer-events-none",
             @errors != [] && "input-error"
           ]}
-          {invalid_attrs(@id, @errors)}
+          {FieldHelp.describe_attrs(@id, @help, @errors)}
           {@rest}
         />
         <select
@@ -1035,6 +1052,7 @@ defmodule AshQuick.Components do
       />
       <input type="hidden" name={@name} value={@instant} data-instant />
       <AshQuick.LiveView.FieldErrors.used_marker field={@field} />
+      <FieldHelp.help id={@id} text={@help} />
       <div :if={@errors != []} id={errors_id(@id)}>
         <.error :for={msg <- @errors}>{msg}</.error>
       </div>
@@ -1147,14 +1165,8 @@ defmodule AshQuick.Components do
   def translate_error({msg, opts}), do: AshQuick.LiveView.ActionErrors.translate(msg, opts)
 
   # An input's errors are drawn under it, in a box its `aria-describedby`
-  # names, so a screen reader reads them with the input rather than only
-  # where they sit in the page. An input drawn with no id has nothing to
-  # point at and is only marked invalid.
+  # names beside its help (`FieldHelp.describe_attrs/3`), so a screen reader
+  # reads them with the input rather than only where they sit in the page.
   defp errors_id(nil), do: nil
   defp errors_id(id), do: "#{id}-errors"
-
-  defp invalid_attrs(_id, []), do: []
-
-  defp invalid_attrs(id, _errors),
-    do: ["aria-invalid": "true", "aria-describedby": errors_id(id)]
 end

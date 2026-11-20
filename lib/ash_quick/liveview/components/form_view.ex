@@ -13,6 +13,7 @@ defmodule AshQuick.LiveView.Components.FormView do
   alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.AttachmentUpload
   alias AshQuick.LiveView.EnumOptions
+  alias AshQuick.LiveView.Components.FieldHelp
   alias AshQuick.LiveView.FieldErrors
   alias AshQuick.LiveView.FormInputs
   alias AshQuick.LiveView.Utils
@@ -256,12 +257,14 @@ defmodule AshQuick.LiveView.Components.FormView do
       |> assign(:fields, Utils.form_fields(form, scope))
       |> assign(:phx_form, form |> to_form())
       |> assign_new(:widgets, fn -> %{} end)
+      |> assign_new(:help, fn -> nil end)
 
     ~H"""
     <section class="sm:col-span-4 card card-border border-base-300 shadow-lg bg-base-200/30 p-5 my-3">
       <h3 :if={@title} class="text-lg font-semibold mb-3">
         {@title}
       </h3>
+      <FieldHelp.help text={@help} class="-mt-2 mb-3" />
       <div class="grid gap-4 sm:grid-cols-4 sm:gap-6">
         <.field_input
           :for={field <- @fields}
@@ -274,6 +277,7 @@ defmodule AshQuick.LiveView.Components.FormView do
           form_key_type={@form.form_keys[field.name][:type]}
           widget={Map.get(@widgets, field.name)}
           choice={EnumOptions.kind(field)}
+          help={Labels.help(field, @form.resource)}
         />
       </div>
     </section>
@@ -282,11 +286,12 @@ defmodule AshQuick.LiveView.Components.FormView do
 
   # A configured widget replaces this field's input entirely. It receives the
   # same assigns the built-in clauses do — `@field`, `@phx_field`, `@form`,
-  # `@uploads`, `@scope` — so it can render its own controls over the same
-  # `AshPhoenix.Form`. Only the top-level fields of the action are matched:
-  # nested embed sub-forms render through `form_fields/1` without a widget map,
-  # since the key is a bare field name and would otherwise collide with a
-  # same-named field one level down.
+  # `@uploads`, `@scope`, and `@help`, the field's help text or nil — so it
+  # can render its own controls over the same `AshPhoenix.Form`. Only the
+  # top-level fields of the action are matched: nested embed sub-forms render
+  # through `form_fields/1` without a widget map, since the key is a bare
+  # field name and would otherwise collide with a same-named field one level
+  # down.
   defp field_input(%{widget: widget} = assigns) when is_function(widget) do
     widget.(assigns)
   end
@@ -309,6 +314,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       autocomplete="one-time-code"
       placeholder={if @update?, do: gettext("Leave blank to keep it")}
       label={Labels.name(@field.name, @resource)}
+      help={@help}
       phx-debounce="blur"
     />
     """
@@ -331,6 +337,7 @@ defmodule AshQuick.LiveView.Components.FormView do
           id={"select-#{@phx_field.id}"}
           module={AshQuick.LiveView.Components.HasManyInput}
           label={Labels.name(@relationship.name, @resource)}
+          help={@help}
           relationship={@relationship}
           scope={@scope}
           form={@form |> to_form()}
@@ -350,6 +357,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       required={not @field.allow_nil?}
       module={AshQuick.LiveView.Components.BelongsToInput}
       label={Labels.name(@field.name, @resource)}
+      help={@help}
       relationship={@field}
       scope={@scope}
       form={@form |> to_form()}
@@ -367,6 +375,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       module={AshQuick.LiveView.Components.ChoiceInput}
       multiple={@choice == :array}
       label={Labels.name(@field.name, @resource)}
+      help={@help}
       attribute={@field}
       resource={@resource}
       scope={@scope}
@@ -424,6 +433,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       class="flex flex-col gap-2 sm:col-span-4 card bg-base-100 p-5 my-3 phx-submit-loading:pointer-events-none"
     >
       <h3 class="font-semibold">{Labels.name(@field.name, @resource)}</h3>
+      <FieldHelp.help text={@help} class={nil} />
       <ul :if={@rows != []} class="divide-y divide-base-300">
         <.attachment_row
           :for={{value, index} <- @rows}
@@ -500,7 +510,9 @@ defmodule AshQuick.LiveView.Components.FormView do
         upload={@uploads[@upload_name]}
         id={@phx_field.id}
         class="file-input w-full"
+        {FieldHelp.describe_attrs(@phx_field.id, @help, [])}
       />
+      <FieldHelp.help id={@phx_field.id} text={@help} />
       <%!-- The client uploader `AshQuick.Storage.S3.upload_target/2` names: a
       `PUT` of the file to the presigned URL. Bundled into the host's app.js
       as `uploaders.S3` by `withAshQuick`, so a strict CSP lets it run. It renders nothing here. --%>
@@ -576,6 +588,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       field={@phx_field}
       timezone={AshQuick.Scope.timezone(@scope)}
       label={Labels.name(@field.name, @resource)}
+      help={@help}
       phx-debounce="blur"
     />
     """
@@ -589,6 +602,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       <h3 class="text-lg font-semibold mb-3">
         {Labels.name(@field.name, @resource)}
       </h3>
+      <FieldHelp.help text={@help} class="-mt-2 mb-3" />
 
       <.inputs_for :let={nested_phx_form} field={@phx_field}>
         <div class="flex justify-between">
@@ -635,6 +649,7 @@ defmodule AshQuick.LiveView.Components.FormView do
         scope={@scope}
         uploads={@uploads}
         title={Labels.name(@field.name, @resource)}
+        help={@help}
       />
       <.error :for={msg <- @errors}>{msg}</.error>
     </.inputs_for>
@@ -649,6 +664,7 @@ defmodule AshQuick.LiveView.Components.FormView do
         field={@phx_field}
         type="textarea"
         label={Labels.name(@field.name, @resource)}
+        help={@help}
         phx-debounce="blur"
       />
     </div>
@@ -657,7 +673,12 @@ defmodule AshQuick.LiveView.Components.FormView do
 
   defp field_input(%{field: %{type: Type.Boolean}} = assigns) do
     ~H"""
-    <.input field={@phx_field} type="checkbox" label={Labels.name(@field.name, @resource)} />
+    <.input
+      field={@phx_field}
+      type="checkbox"
+      label={Labels.name(@field.name, @resource)}
+      help={@help}
+    />
     """
   end
 
@@ -670,6 +691,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       field={@phx_field}
       autocomplete="on"
       label={Labels.name(@field.name, @resource)}
+      help={@help}
       phx-debounce="blur"
       {FormInputs.attrs(@field, @phx_field.value)}
     />

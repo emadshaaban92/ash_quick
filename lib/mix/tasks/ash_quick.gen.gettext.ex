@@ -11,9 +11,11 @@ defmodule Mix.Tasks.AshQuick.Gen.Gettext do
       mix ash_quick.gen.gettext --check
 
   Labels (field, action and value names, or the labels their resource declares
-  for them, `label:` options, nav entries, page titles) are not `gettext` call
-  sites, so `mix gettext.extract` cannot find them. This reads them off the nav and the QuickViews its router serves,
-  together with the resources they reach. A label it cannot read, such as the
+  for them, `label:` options, nav entries, page titles) and the help text under
+  form inputs (a resource's `help` entries, or the fields' descriptions) are
+  not `gettext` call sites, so `mix gettext.extract` cannot find them. This
+  reads them off the nav and the QuickViews its router serves, together with
+  the resources they reach. A label it cannot read, such as the
   title of a bulk item a function builds, is marked where the host writes it,
   with `dgettext_noop("ash_quick", "…")`: `mix gettext.extract` adds it to the
   same template, and this task keeps it. Run either in any order (this task

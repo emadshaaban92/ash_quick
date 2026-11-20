@@ -173,6 +173,10 @@ defmodule Example.Catalog.Product do
   end
 
   ash_quick do
+    labels do
+      help :price, "Before tax."
+    end
+
     activation do
       enabled? true
     end
@@ -204,16 +208,23 @@ defmodule Example.Catalog.Product do
   attributes do
     uuid_v7_primary_key :id
 
-    attribute :sku, :string, allow_nil?: false, public?: true
+    # A description is the help text under the field's form input.
+    attribute :sku, :string,
+      allow_nil?: false,
+      public?: true,
+      description: "Your own stock code. Unique within a store."
+
     attribute :name, :string, allow_nil?: false, public?: true
 
     # `:text` renders as a textarea on the form and is truncated in the list —
     # the difference between it and `:string` is entirely about the surface.
     attribute :description, :text, allow_nil?: true, public?: true
 
+    # Written for the API's readers; the `help` below says it for a form's.
     attribute :price, :money do
       allow_nil? false
       public? true
+      description "Stored in minor units, converted by ex_money."
       constraints ex_money_opts: [default_currency: :USD, only: [:USD, :EUR]]
     end
 
@@ -233,6 +244,7 @@ defmodule Example.Catalog.Product do
     belongs_to :brand, Example.Catalog.Brand do
       public? true
       allow_nil? false
+      description "Who makes it, as printed on the box."
     end
 
     belongs_to :category, Example.Catalog.Category do

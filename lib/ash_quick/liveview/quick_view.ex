@@ -192,8 +192,10 @@ defmodule AshQuick.LiveView.QuickView do
       The widget is a function component receiving the same assigns the built-in
       inputs get: `@field` (the Ash attribute, argument or relationship),
       `@phx_field` (the `Phoenix.HTML.FormField`), `@form` (the
-      `AshPhoenix.Form`), `@uploads`, `@scope` and `@resource`. It is responsible
-      for rendering its own inputs and errors.
+      `AshPhoenix.Form`), `@uploads`, `@scope`, `@resource` and `@help` (the
+      field's help text, `AshQuick.Labels.help/2`, or nil). It is responsible
+      for rendering its own inputs, help and errors: `<.input help={@help} />`
+      draws the help and points the input's `aria-describedby` at it.
 
       The key is the field's `name` as QuickView sees it — for a `belongs_to`
       that is the relationship (`:brand`), not the source attribute

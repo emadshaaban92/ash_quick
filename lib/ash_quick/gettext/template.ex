@@ -182,6 +182,7 @@ defmodule AshQuick.Gettext.Template do
     context = Labels.context(resource)
 
     Enum.map(names, &{context, Labels.english(&1.name, resource)}) ++
+      Enum.map(helps(resource), &{context, &1}) ++
       for field <- fields,
           label <- values(field, resource),
           do: {Labels.context(resource, field.name), label}
@@ -232,10 +233,11 @@ defmodule AshQuick.Gettext.Template do
 
   defp bulk_labels(_items_from_a_function, _resource), do: []
 
-  # What a resource names: its fields, its actions and their inputs, and the
-  # values any of them picks from. Each as the resource labels it, and as its
-  # humanized name too: a custom template calling `Labels.name/1` or
-  # `EnumOptions.label/2`, which know no resource, still draws that one.
+  # What a resource names: its fields, its actions and their inputs, the
+  # values any of them picks from, and the help under each input. Each as the
+  # resource labels it, and as its humanized name too: a custom template
+  # calling `Labels.name/1` or `EnumOptions.label/2`, which know no resource,
+  # still draws that one.
   defp resource_labels(resource) do
     {fields, names} = names(resource)
 
@@ -243,8 +245,19 @@ defmodule AshQuick.Gettext.Template do
       Enum.map(names, &Labels.english(&1.name, resource)),
       Enum.map(names, &Utils.humanize(&1.name)),
       Enum.map(fields, &values(&1, resource)),
-      Enum.map(fields, &values(&1, nil))
+      Enum.map(fields, &values(&1, nil)),
+      helps(resource)
     ]
+  end
+
+  # The help text each input of a public action is drawn with: declared, or
+  # read from a description.
+  defp helps(resource) do
+    resource
+    |> Ash.Resource.Info.public_actions()
+    |> Enum.flat_map(&Utils.action_fields(resource, &1.name))
+    |> Enum.map(&Labels.english_help(&1, resource))
+    |> Enum.reject(&is_nil/1)
   end
 
   # What has values (fields and action inputs), and everything with a name:
@@ -265,8 +278,9 @@ defmodule AshQuick.Gettext.Template do
   defp values(field, resource),
     do: field |> EnumOptions.english_options(resource) |> Enum.map(&elem(&1, 0))
 
-  # Every resource a public relationship path leads to from `resources`, those
-  # included: a column or a nested form can be any number of hops away.
+  # Every resource a public relationship path or an embedded field leads to
+  # from `resources`, those included: a column or a nested form can be any
+  # number of hops away, and an embed's sub-form draws its own fields.
   defp reachable(resources), do: reachable(resources, MapSet.new())
 
   defp reachable([], seen), do: MapSet.to_list(seen)
@@ -276,11 +290,26 @@ defmodule AshQuick.Gettext.Template do
       reachable(rest, seen)
     else
       next =
-        resource
-        |> Ash.Resource.Info.public_relationships()
-        |> Enum.map(& &1.destination)
+        Enum.map(Ash.Resource.Info.public_relationships(resource), & &1.destination) ++
+          embeds(resource)
 
       reachable(next ++ rest, MapSet.put(seen, resource))
     end
   end
+
+  # The embedded resources a public attribute or action argument holds, alone
+  # or in a list: each is drawn as a sub-form.
+  defp embeds(resource) do
+    arguments =
+      resource
+      |> Ash.Resource.Info.public_actions()
+      |> Enum.flat_map(&Map.get(&1, :arguments, []))
+
+    (Ash.Resource.Info.public_attributes(resource) ++ arguments)
+    |> Enum.map(&unwrap(&1.type))
+    |> Enum.filter(&(is_atom(&1) and Ash.Type.embedded_type?(&1)))
+  end
+
+  defp unwrap({:array, type}), do: unwrap(type)
+  defp unwrap(type), do: type
 end

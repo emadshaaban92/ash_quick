@@ -12,6 +12,7 @@ defmodule AshQuick.LiveView.Components.BelongsToInput do
     assigns =
       assigns
       |> assign(:errors, AshQuick.LiveView.FieldErrors.for_select(field))
+      |> assign_new(:help, fn -> nil end)
       |> assign(:placeholder, assigns[:placeholder] || "")
 
     ~H"""
@@ -33,7 +34,10 @@ defmodule AshQuick.LiveView.Components.BelongsToInput do
       </LiveSelect.live_select>
 
       <AshQuick.LiveView.FieldErrors.used_marker field={@field} />
-      <.error :for={msg <- @errors} class="-mt-6">{msg}</.error>
+      <%!-- LiveSelect leaves no aria hook on its text box, so the help and the
+      errors are drawn under it without an `aria-describedby`. --%>
+      <AshQuick.LiveView.Components.FieldHelp.help text={@help} />
+      <.error :for={msg <- @errors} class={if !@help, do: "-mt-6"}>{msg}</.error>
     </div>
     """
   end

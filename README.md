@@ -285,6 +285,19 @@ leave the ones your language does not need empty. Two resources sharing a
 short name share their contexts. Labels with no resource behind them, a nav
 entry or a page title, have none.
 
+A form draws each field's Ash `description` under its input as help text,
+translated like a label and listed by the same task. A `help` in the same
+`labels` section replaces it, or hides it with `false`:
+
+```elixir
+ash_quick do
+  labels do
+    help :price, "Before tax"
+    help :internal_code, false
+  end
+end
+```
+
 The template being complete does not make a locale's translation complete: an
 entry left with an empty `msgstr` is drawn in English. To hear about those in
 dev, override your backend's `handle_missing_translation/5`, which Gettext calls

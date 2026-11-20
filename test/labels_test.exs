@@ -130,6 +130,42 @@ defmodule AshQuick.LabelsTest do
     end
   end
 
+  describe "a field's help" do
+    alias AshQuick.Test.Labels.Loan
+
+    defp attribute(name), do: Ash.Resource.Info.attribute(Loan, name)
+
+    test "is its description, translated" do
+      assert Labels.help(attribute(:name), Loan) == "اسم القرض كما يظهر"
+    end
+
+    test "is the help the resource declares in its place, under its context" do
+      assert Labels.help(attribute(:borrower_national_id), Loan) == "كما في بطاقة المقترض"
+
+      assert Labels.english_help(attribute(:borrower_national_id), Loan) ==
+               "As on the borrower's ID card"
+    end
+
+    test "is nothing where the resource declares false, or the description is blank" do
+      assert Labels.help(attribute(:kind), Loan) == nil
+      assert Labels.help(attribute(:status), Loan) == nil
+      assert Labels.help(attribute(:id), Loan) == nil
+    end
+
+    test "reads a relationship's and an argument's description" do
+      borrower = Ash.Resource.Info.relationship(Loan, :borrower)
+      [reason] = Ash.Resource.Info.action(Loan, :issue_bill_of_sale).arguments
+
+      assert Labels.help(borrower, Loan) == "Who the loan is to"
+      assert Labels.help(reason, Loan) == "Why the bill is issued"
+    end
+
+    test "is the description as it is, without a resource that declares any" do
+      assert Labels.help(attribute(:borrower_national_id), nil) ==
+               "Synced nightly from the registry"
+    end
+  end
+
   # A word agrees with the noun it describes: the catalogue translates
   # "Cancelled" for a loan's status apart from everywhere else.
   describe "a label's context" do

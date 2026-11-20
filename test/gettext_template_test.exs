@@ -55,6 +55,20 @@ defmodule AshQuick.GettextTemplateTest do
       assert "Standard" in labels
     end
 
+    test "reads the help under each form input, declared or described" do
+      labels = Template.labels(@nav)
+
+      assert "As printed on invoices" in labels
+      assert "The name on the label" in labels
+    end
+
+    test "reads the fields and help of an embed's sub-form" do
+      labels = Template.labels(@nav)
+
+      assert "Alt Text" in labels
+      assert "Read aloud in its place" in labels
+    end
+
     test "lists each label once, sorted" do
       labels = Template.labels(@nav)
       assert labels == labels |> Enum.uniq() |> Enum.sort()
@@ -73,6 +87,8 @@ defmodule AshQuick.GettextTemplateTest do
       assert {"brand", "Name"} in contexted
       assert {"brand", "Maker"} in contexted
       assert {"brand", "Delete"} in contexted
+      assert {"brand", "As printed on invoices"} in contexted
+      assert {"brand", "The name on the label"} in contexted
       assert {"brand.tier", "Premium Partner"} in contexted
       assert {"brand.tier", "Standard"} in contexted
       # Two hops away, under its own resource.
