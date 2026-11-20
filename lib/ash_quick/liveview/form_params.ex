@@ -2,7 +2,9 @@ defmodule AshQuick.LiveView.FormParams do
   @moduledoc false
   # How a form's params are shaped on their way into AshPhoenix: nested and
   # embedded sub-forms, blank secrets, emptied selections and list arguments.
+  alias AshQuick.LiveView.Digits
   alias AshQuick.LiveView.EnumOptions
+  alias AshQuick.LiveView.FormInputs
   alias AshQuick.LiveView.Utils
   alias Ash.Resource.Actions.Argument
   alias Ash.Type
@@ -11,7 +13,121 @@ defmodule AshQuick.LiveView.FormParams do
   def transform_nested_params(form, params, _) do
     form
     |> keep_blank_secrets(params)
+    |> normalize_digits(form.resource, form.action)
     |> transform_nested_form_params(form)
+  end
+
+  # `params` with the numbers typed into the inputs of `action` that hold one
+  # read the way Ash reads a number: trimmed, the digits an Arabic or Persian
+  # keyboard types and its separators as ASCII (`Digits.normalize/1`), and,
+  # on a field that takes a fraction, a decimal comma as a point. A phone's
+  # decimal pad in a comma locale offers only ",". The comma is read so only
+  # where it is the only separator and is not followed by exactly three
+  # digits: `1,000` could be a thousand, and is left for Ash to refuse rather
+  # than read as one. Other inputs keep what was typed.
+  @doc false
+  def normalize_digits(params, resource, action) when is_map(params) do
+    case action && action(resource, action) do
+      nil ->
+        params
+
+      action ->
+        action
+        |> numeric_inputs(resource)
+        |> Enum.reduce(params, &normalize_digits_at/2)
+    end
+  end
+
+  def normalize_digits(params, _resource, _action), do: params
+
+  defp action(resource, action) when is_atom(action),
+    do: Ash.Resource.Info.action(resource, action)
+
+  defp action(_resource, %{arguments: _} = action), do: action
+  defp action(_resource, _action), do: nil
+
+  defp normalize_digits_at({name, kind}, params) do
+    case Map.fetch(params, name) do
+      {:ok, value} when is_binary(value) -> Map.put(params, name, typed_number(value, kind))
+      _ -> params
+    end
+  end
+
+  defp typed_number(value, kind) do
+    value = value |> String.trim() |> Digits.normalize()
+
+    if kind == :fraction and Regex.match?(~r/\A-?\d+,(\d{1,2}|\d{4,})\z/, value),
+      do: String.replace(value, ",", "."),
+      else: value
+  end
+
+  defp numeric_inputs(action, resource) do
+    attributes =
+      for name <- Map.get(action, :accept, []),
+          attribute = Ash.Resource.Info.attribute(resource, name),
+          kind = FormInputs.number_kind(attribute),
+          do: {to_string(name), kind}
+
+    arguments =
+      for argument <- action.arguments,
+          kind = FormInputs.number_kind(argument),
+          do: {to_string(argument.name), kind}
+
+    attributes ++ arguments
+  end
+
+  # Each nested form's config in `forms` (and in those nested under it, built
+  # now or by an `updater` when the sub-form is added) given a
+  # `transform_params` that reads its numbers as `normalize_digits/3` does,
+  # before the one it already has. AshPhoenix runs a nested form's
+  # `transform_params` from its own config only, so the root form's
+  # `transform_nested_params/3` never sees an embed's or a related record's
+  # inputs.
+  @doc false
+  def with_nested_digits(forms) when is_list(forms) do
+    Enum.map(forms, fn
+      {key, opts} when is_atom(key) and key != :auto? and is_list(opts) ->
+        {key, nested_digits(opts)}
+
+      other ->
+        other
+    end)
+  end
+
+  def with_nested_digits(forms), do: forms
+
+  defp nested_digits(opts) do
+    opts
+    |> Keyword.put(:transform_params, digits_first(opts[:transform_params]))
+    |> Keyword.update(:forms, [], &with_nested_digits/1)
+    |> wrap_updater()
+  end
+
+  defp wrap_updater(opts) do
+    case opts[:updater] do
+      updater when is_function(updater, 1) ->
+        Keyword.put(opts, :updater, fn o -> nested_digits(updater.(o)) end)
+
+      updater when is_function(updater, 3) ->
+        Keyword.put(opts, :updater, fn o, data, params ->
+          nested_digits(updater.(o, data, params))
+        end)
+
+      _ ->
+        opts
+    end
+  end
+
+  defp digits_first(transform) do
+    fn form, params, type ->
+      params = normalize_digits(params, form.resource, form.action)
+
+      cond do
+        is_function(transform, 3) -> transform.(form, params, type)
+        is_function(transform, 2) -> transform.(params, type)
+        true -> params
+      end
+    end
   end
 
   # The input for a `sensitive?` field never shows the stored value, so on an

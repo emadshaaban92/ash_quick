@@ -1012,6 +1012,27 @@ use AshQuick.LiveView.QuickView,
   form: [widgets: %{tags: &__MODULE__.tags_input/1}]
 ```
 
+A scalar's input follows its Ash type, through a NewType too. A date gets the
+browser's date picker, a time held to the second a time picker, and a naive
+datetime a `datetime-local` one; a zoned timestamp gets its own input with a
+zone beside it. A time held to the microsecond stays text, since a time input
+carries milliseconds at most. An integer, float or decimal stays a text input,
+not `type="number"`, reads left to right in a right-to-left page, and brings
+up a phone's number pad (`inputmode`) when its `min` or `greater_than` rules
+out a negative value; a pad may have no minus key, so a field that allows one
+keeps the full keyboard. A number is trimmed, and Arabic-Indic and Persian
+digits typed into it, with the Arabic decimal and thousands separators, are
+saved as the number they mean, in sub-forms too; a text field keeps what was
+typed. A float or decimal also reads a decimal comma as a point, since a
+phone's decimal pad in a comma locale offers only ",": `12,5` is 12.5, while
+`1,000`, which could be a thousand, is left for Ash to refuse. A string gets
+`minlength` from `min_length` when Ash counts graphemes or code points, where
+the browser, counting UTF-16 code units of the untrimmed value, is never
+stricter than Ash. It gets no `maxlength`: a browser would cut a pasted value
+short without a word, at a count Ash, trimming first, does not make, and
+Ash's error under the input says when a value is too long. Each is a hint for
+the browser; Ash still casts and validates what is posted.
+
 ## Routing
 
 A QuickView is routed through `AshQuick.LiveView.Router.quick_view/3` and

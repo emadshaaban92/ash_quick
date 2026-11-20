@@ -128,6 +128,10 @@ defmodule AshQuick.LiveView.FormUtils do
   defp set_form(socket, :create, _options) do
     form =
       AshPhoenix.Form.for_create(socket.assigns.resource, socket.assigns.ash_action.name,
+        forms:
+          FormParams.with_nested_digits(
+            Utils.nested_forms(socket.assigns.resource, socket.assigns.ash_action.name, [])
+          ),
         transform_params: &FormParams.transform_nested_params/3,
         transform_errors: &ActionErrors.renderable_vars/2,
         scope: socket.assigns.scope,
@@ -171,7 +175,10 @@ defmodule AshQuick.LiveView.FormUtils do
 
     form =
       AshPhoenix.Form.for_update(record, action,
-        forms: Utils.nested_forms(resource, action, Utils.hidden_field_names(record)),
+        forms:
+          resource
+          |> Utils.nested_forms(action, Utils.hidden_field_names(record))
+          |> FormParams.with_nested_digits(),
         transform_params: &FormParams.transform_nested_params/3,
         transform_errors: &ActionErrors.renderable_vars/2,
         scope: socket.assigns.scope,

@@ -897,6 +897,15 @@ and what to write.
   render it with a form widget that posts a list
   (`form: [widgets: %{tags: &__MODULE__.tags_input/1}]`), or leave it out of
   the action.
+- **Typed inputs** — A date, a time held to the second and a naive datetime
+  get the browser's pickers. A number stays `type="text"` (match it as such in
+  tests), with `dir="ltr"`, and gets `inputmode` for a phone's number pad
+  only when `min` or `greater_than` rules out a negative value, so give a
+  count `constraints: [min: 0]`. Arabic-Indic and Persian digits typed into a
+  number, in sub-forms too, are saved as 0-9, and a float or decimal reads
+  `12,5` as 12.5 (not `1,000`). A string's `min_length` becomes `minlength`
+  where the browser counts no stricter than Ash; `max_length` sets no
+  `maxlength` (a browser would cut a pasted value short), Ash's error says it.
 - **Activation** — Optional, and declared rather than detected: a resource opting in
   with `ash_quick do activation do enabled? true end end` gets an `:active` attribute,
   `:activate`/`:deactivate` actions, dimmed rows for its inactive records, activate/deactivate
