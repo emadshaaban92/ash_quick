@@ -48,6 +48,8 @@ defmodule AshQuick.CheckTest do
                {:unroutable_action, "/widgets/:id/rename"},
                {:unroutable_action, "/widgets/:id/destroy"},
                {:unroutable_show, "/gizmos/:id"},
+               {:ungated_quick_view, "/gizmos"},
+               {:ungated_quick_view, "/my_twins"},
                {:unrouted_display_path, AshQuick.Test.Check.Gizmo},
                {:ambiguous_display_path, AshQuick.Test.Check.Twin},
                {:unrouted_display_path, AshQuick.Test.Check.Stray},
@@ -125,6 +127,18 @@ defmodule AshQuick.CheckTest do
       for {check, subject} <- found(run()), subject == "/gone" do
         assert check == :unrouted_grant
       end
+    end
+
+    # `/twins` is gated with options and `/widgets` shares its base path with a
+    # hand-written route in the same session, so neither is reported.
+    test "an ungated QuickView names where it is routed" do
+      assert [outside, ungated] =
+               Enum.filter(run().findings, &(&1.check == :ungated_quick_view))
+
+      assert outside.message =~
+               "/gizmos serves AshQuick.Test.Check.GizmoLive.Quick outside any live session"
+
+      assert ungated.message =~ "in the live session :ungated, which does not run"
     end
 
     test "nothing is found when there is nothing to check" do
@@ -206,7 +220,7 @@ defmodule AshQuick.CheckTest do
       assert reason =~ "no domains"
       assert found(report) |> Keyword.keys() |> Enum.uniq() == ~w(
                hand_routed_quick_view mislabelled_route stray_base_path unroutable_action
-               unroutable_show unrouted_nav_path unrouted_grant linkless_route unreachable_entry
+               unroutable_show ungated_quick_view unrouted_nav_path unrouted_grant linkless_route unreachable_entry
                unconfigured_error_reporter
              )a
     end
@@ -223,7 +237,7 @@ defmodule AshQuick.CheckTest do
       assert text =~ "## missing_extension (1) — advisory, not counted"
       assert text =~ "## unreachable_entry (2)"
       assert text =~ "AshQuick.Test.Check.Bare does not carry the AshQuick extension."
-      assert text =~ "15 defect(s), 2 advisory."
+      assert text =~ "17 defect(s), 2 advisory."
 
       checks = Regex.scan(~r/^## (\w+)/m, text, capture: :all_but_first) |> List.flatten()
       assert checks == Enum.sort(checks)

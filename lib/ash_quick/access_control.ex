@@ -12,9 +12,11 @@ defmodule AshQuick.AccessControl do
           access_control: MyAppWeb.AccessControl
       end
 
-  When declared, AshQuick uses the module to filter the sidebar and the apps
-  grid so only paths the user can actually navigate to are listed. When not
-  declared, no filtering is applied and every entry is shown.
+  AshQuick asks it in two places. The sidebar and the apps grid list only the
+  paths the scope may navigate to, and `AshQuick.LiveView.RouteGate`, in the
+  live session's `on_mount`, refuses a navigation to any other. Without the
+  gate the list hides links and refuses nothing. A nav that names no access
+  control lists every entry, and the gate refuses to mount without one.
 
   ## Why a behaviour and not `Ash.can?`
 
@@ -30,8 +32,12 @@ defmodule AshQuick.AccessControl do
 
   @doc """
   Returns the list of route paths the given scope is allowed to navigate
-  to. Each path is a leading-slash string like `"/products"` that
-  matches `"/\#{Ash.Resource.Info.plural_name(resource)}"`.
+  to, each a leading-slash string such as `"/products"`.
+
+  A route covers itself and every path under it: `"/products"` covers
+  `"/products"` and `"/products/123"`, but not `"/products_archive"`
+  (`AshQuick.Nav.Info.allowed?/2`). The scope is `nil` for a visitor nobody
+  signed in as, and should get no route.
   """
   @callback routes_for(scope :: any()) :: [String.t()]
 

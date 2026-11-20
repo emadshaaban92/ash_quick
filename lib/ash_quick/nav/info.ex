@@ -99,15 +99,34 @@ defmodule AshQuick.Nav.Info do
   @doc """
   Whether `path` is covered by `routes` — equal to one, or directly under it.
 
-  The rule the whole registry matches on, and the same one a host's route gate
-  applies on navigation: an entry for `/products` is reachable by a scope
-  granted `/products`, and `/scan/history` by one granted `/scan`.
+  The rule the whole registry matches on, and the one
+  `AshQuick.LiveView.RouteGate` applies on navigation: an entry for
+  `/products` is reachable by a scope granted `/products`, and `/scan/history`
+  by one granted `/scan`.
+
+  The path and every route are matched as the router reads them, with empty
+  segments dropped, so `//users` and `/users/` are `/users`. Matched as
+  written, a `/` grant would cover `//users`, which Phoenix serves as `/users`.
+  A `nil` path is `/`.
   """
   def allowed?(_path, :all), do: true
 
   def allowed?(path, routes) when is_list(routes) do
-    Enum.any?(routes, &(path == &1 or String.starts_with?(path, &1 <> "/")))
+    path = normalize_path(path)
+
+    Enum.any?(routes, fn route ->
+      route = normalize_path(route)
+      # A `/` grant is `/` alone: no normalised path starts with `//`.
+      path == route or String.starts_with?(path, route <> "/")
+    end)
   end
+
+  @doc false
+  # A path as the router reads it: empty segments dropped, `nil` as `/`.
+  def normalize_path(nil), do: "/"
+
+  def normalize_path(path) when is_binary(path),
+    do: "/" <> Enum.join(String.split(path, "/", trim: true), "/")
 
   @doc """
   The routes `scope` may navigate to, or `:all` when `nav` declares no access

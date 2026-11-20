@@ -390,6 +390,13 @@ defmodule AshQuick.Test.Check.WidgetLive.Quick do
   use AshQuick.LiveView.QuickView, resource: AshQuick.Test.Check.Widget
 end
 
+defmodule AshQuick.Test.Check.SelfGatedLive.Quick do
+  @moduledoc "A QuickView that runs the route gate itself, wherever it is routed."
+  use AshQuick.LiveView.QuickView, resource: AshQuick.Test.Check.Widget
+
+  on_mount {AshQuick.LiveView.RouteGate, access_control: AshQuick.Test.Check.AccessControl}
+end
+
 defmodule AshQuick.Test.Check.GizmoLive.Quick do
   @moduledoc false
   use AshQuick.LiveView.QuickView, resource: AshQuick.Test.Check.Gizmo
@@ -416,17 +423,37 @@ defmodule AshQuick.Test.Check.Router do
   use Phoenix.Router
 
   import AshQuick.LiveView.Router
-  import Phoenix.LiveView.Router, only: [live: 3, live: 4]
+  import Phoenix.LiveView.Router, only: [live: 3, live: 4, live_session: 3]
 
-  # Right, except that `:rename` has nowhere to patch to.
-  quick_view("/widgets", AshQuick.Test.Check.WidgetLive.Quick, only: [:index, :show])
+  live_session :gated, on_mount: [AshQuick.LiveView.RouteGate] do
+    # Right, except that `:rename` has nowhere to patch to.
+    quick_view("/widgets", AshQuick.Test.Check.WidgetLive.Quick, only: [:index, :show])
 
-  # A list whose rows link to a details page that is not served.
+    # A QuickView carrying a base path it is not served under, which only a
+    # hand-written metadata can produce — `quick_view/3` takes the scope prefix
+    # into account.
+    live("/elsewhere", AshQuick.Test.Check.WidgetLive.Quick, nil,
+      metadata: %{ash_quick: %{base_path: "/widgets"}}
+    )
+  end
+
+  # A list whose rows link to a details page that is not served, in no live
+  # session at all, so nothing gates it either.
   quick_view("/gizmos", AshQuick.Test.Check.GizmoLive.Quick, only: [:index])
 
-  # One resource at two pages, neither of them its declared own.
-  quick_view("/twins", AshQuick.Test.Check.TwinLive.Quick, only: [:index, :show])
-  quick_view("/my_twins", AshQuick.Test.Check.TwinLive.Quick, only: [:index, :show])
+  # One resource at two pages, neither of them its declared own: one gated with
+  # options, one in a live session that runs no gate.
+  live_session :gated_with_options,
+    on_mount: [{AshQuick.LiveView.RouteGate, fallback: "/widgets"}] do
+    quick_view("/twins", AshQuick.Test.Check.TwinLive.Quick, only: [:index, :show])
+  end
+
+  live_session :ungated, on_mount: [] do
+    quick_view("/my_twins", AshQuick.Test.Check.TwinLive.Quick, only: [:index, :show])
+
+    # Gated by the view's own `on_mount`, which the check reads as well.
+    quick_view("/self_gated", AshQuick.Test.Check.SelfGatedLive.Quick)
+  end
 
   # A QuickView with no base path to read.
   live("/hand_routed", AshQuick.Test.Check.WidgetLive.Quick, nil)
@@ -434,13 +461,6 @@ defmodule AshQuick.Test.Check.Router do
   # A base path on something that cannot read one.
   live("/plain", AshQuick.Test.Check.PlainLive, :index,
     metadata: %{ash_quick: %{base_path: "/plain"}}
-  )
-
-  # A QuickView carrying a base path it is not served under, which only a
-  # hand-written metadata can produce — `quick_view/3` takes the scope prefix
-  # into account.
-  live("/elsewhere", AshQuick.Test.Check.WidgetLive.Quick, nil,
-    metadata: %{ash_quick: %{base_path: "/widgets"}}
   )
 
   # Served, and in neither the nav nor a group.
@@ -481,7 +501,7 @@ defmodule AshQuick.Test.Check.AccessControl do
   def routes_for(_scope), do: all_routes()
 
   @impl true
-  def all_routes, do: ~w(/widgets /twins /my_twins /plain /orphan /gone)
+  def all_routes, do: ~w(/widgets /twins /my_twins /self_gated /plain /orphan /gone)
 end
 
 defmodule AshQuick.Test.Check.SilentAccessControl do

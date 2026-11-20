@@ -893,7 +893,10 @@ if Code.ensure_loaded?(Igniter) do
     defp mount_notice do
       """
       Put `AshQuick.LiveView.Mount` first in the `on_mount` of the
-      live_session serving the QuickViews, and route one with
+      live_session serving the QuickViews, and `AshQuick.LiveView.RouteGate`
+      last, after the stages that assign the scope and require a user. The gate
+      is what refuses a route the access control does not grant. Then route a
+      QuickView with
       `mix ash_quick.gen.quick_view MyApp.Catalog.Product --grant-to admin`.
 
       The generated access control grants no route until its `role/1` reads a

@@ -610,7 +610,7 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
 
       for scope <- [nil, %{}, %{current_user: %{role: :admin}}, %{role: :admin}] do
         assert access_control.routes_for(scope) == [], inspect(scope)
-        refute access_control.can_access?(scope, "/"), inspect(scope)
+        refute AshQuick.LiveView.RouteGate.allowed?(access_control, scope, "/"), inspect(scope)
       end
 
       assert access_control.routes_for_role(:admin) == []
@@ -806,8 +806,9 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
     end
 
     # Which live_session serves the QuickViews is the host's to say.
-    test "states where the mount goes instead of patching it" do
+    test "states where the mount and the gate go instead of patching them" do
       assert_has_notice(install(), &(&1 =~ "AshQuick.LiveView.Mount"))
+      assert_has_notice(install(), &(&1 =~ "AshQuick.LiveView.RouteGate"))
     end
   end
 

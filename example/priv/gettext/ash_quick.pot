@@ -811,6 +811,10 @@ msgstr ""
 msgid "Unavailable record"
 msgstr ""
 
+#, elixir-format
+msgid "The person you are acting as can't open %{path}."
+msgstr ""
+
 msgid "Accepts"
 msgstr ""
 

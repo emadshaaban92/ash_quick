@@ -336,7 +336,7 @@ defmodule ExampleWeb.TenancyScenarioTest do
       # action wherever they are shown — and holds no route to the page.
       assert Ash.can?({Store, :read}, keeper)
 
-      assert_raise ExampleWeb.NotAllowedError, fn ->
+      assert_raise AshQuick.LiveView.RouteGate.NotAllowedError, fn ->
         live(log_in(conn, keeper), ~p"/stores")
       end
 

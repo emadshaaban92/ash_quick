@@ -5,7 +5,7 @@ defmodule ExampleWeb.NavAccessScenarioTest do
   One list of routes is rendered three times — as the sidebar, as the apps
   grid, and as the mount-time gate — and nothing holds the three to each other
   at runtime. Two ways that goes wrong are invisible to a test that only asks
-  `ExampleWeb.AccessControl.can_access?/2`:
+  `AshQuick.LiveView.RouteGate.allowed?/3`:
 
     * a route granted to a role that no `group` in `ExampleWeb.Nav` names has a
       page and no tile leading to it, and
@@ -111,7 +111,7 @@ defmodule ExampleWeb.NavAccessScenarioTest do
       |> assert_has("td", text: ctx.object.key)
 
       for denied <- ~w(/users /stores /audit_logs /browser_sessions) do
-        assert_raise ExampleWeb.NotAllowedError, fn ->
+        assert_raise AshQuick.LiveView.RouteGate.NotAllowedError, fn ->
           live(log_in(conn, editor), denied)
         end
       end
@@ -133,7 +133,7 @@ defmodule ExampleWeb.NavAccessScenarioTest do
       # Every catalog page a viewer is granted has their records on it. This is
       # the pairing nothing else asserts: a read policy narrowed to exclude
       # viewers would leave all five links in place and every page blank, which
-      # `can_access?/2` would still answer yes to.
+      # `AshQuick.LiveView.RouteGate.allowed?/3` would still answer yes to.
       conn
       |> log_in(viewer)
       |> visit(~p"/products")
@@ -146,9 +146,25 @@ defmodule ExampleWeb.NavAccessScenarioTest do
       |> assert_has("td", text: product.name)
 
       for denied <- ~w(/users /stores /audit_logs /file_objects /browser_sessions) do
-        assert_raise ExampleWeb.NotAllowedError, fn ->
+        assert_raise AshQuick.LiveView.RouteGate.NotAllowedError, fn ->
           live(log_in(conn, viewer), denied)
         end
+      end
+    end
+
+    # The router drops empty segments and serves `//users` as `/users`, while
+    # every role holds `/`. Matched as written, the one would cover the other.
+    test "is refused a page reached with doubled slashes, as without them", ctx do
+      %{conn: conn, viewer: viewer} = ctx
+
+      for denied <- ~w(//users ///users //browser_sessions) do
+        assert_raise AshQuick.LiveView.RouteGate.NotAllowedError, fn ->
+          live(log_in(conn, viewer), "http://www.example.com" <> denied)
+        end
+      end
+
+      assert_raise AshQuick.LiveView.RouteGate.NotAllowedError, fn ->
+        live(log_in(conn, viewer), "http://www.example.com//users?action=create")
       end
     end
 
@@ -156,8 +172,8 @@ defmodule ExampleWeb.NavAccessScenarioTest do
       %{conn: conn, viewer: viewer, product: product} = ctx
 
       # `/products` grants `/products/<id>` and nothing that merely starts with
-      # the same letters — the rule `can_access?/2` documents, driven rather
-      # than asserted against the function.
+      # the same letters — the rule `AshQuick.LiveView.RouteGate` documents,
+      # driven rather than asserted against the function.
       conn
       |> log_in(viewer)
       |> visit(~p"/products/#{product.id}")
@@ -206,7 +222,7 @@ defmodule ExampleWeb.NavAccessScenarioTest do
 
       Ash.update!(admin, %{role: :viewer}, actor: admin, authorize?: false)
 
-      assert_raise ExampleWeb.NotAllowedError, fn ->
+      assert_raise AshQuick.LiveView.RouteGate.NotAllowedError, fn ->
         visit(session, ~p"/audit_logs")
       end
 
@@ -259,6 +275,19 @@ defmodule ExampleWeb.NavAccessScenarioTest do
   #
   # Asserted as whole lists, so a page that appears where it should not fails
   # here rather than waiting for someone to write a `refute_has` for it.
+
+  # A LiveView that declares the gate itself can still be rendered nested: it
+  # inherits its parent's router, and LiveView refuses a nested child a
+  # `handle_params` hook, so the gate lets it through to the page that has the
+  # path. `/test/nested_gate` sits in the test session, which no gate runs.
+  describe "a LiveView that runs the gate itself" do
+    test "renders when nested in another page", %{conn: conn, viewer: viewer} do
+      {:ok, view, html} = conn |> log_in(viewer) |> live(~p"/test/nested_gate")
+
+      assert html =~ "Rendered nested"
+      assert view |> find_live_child("nested-gate-child") |> render() =~ "Rendered nested"
+    end
+  end
 
   defp sidebar(conn, user) do
     conn

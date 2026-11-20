@@ -1259,7 +1259,9 @@ covers wiring them up.
   For either store `mix ash_quick.check` reports `:unserved_storage` (no route
   to the plug at `:at`) and `:piped_storage` (forward inside a pipeline).
 - `AshQuick.AccessControl` — which routes a scope may navigate to. Named on the
-  nav. Deliberately **not** `Ash.can?`: a filter policy allows the action and
+  nav, and enforced by `AshQuick.LiveView.RouteGate`, the last stage of the
+  live session's `on_mount`, which answers any other route with a 403
+  (`RouteGate.NotAllowedError`). Deliberately **not** `Ash.can?`: a filter policy allows the action and
   returns no rows, so `can?` says yes for a page that would be empty.
 - `AshQuick.Nav` — the navigation registry (see Navigation above).
 - `AshQuick.PrintTemplate`, `AshQuick.ReadOnlyFields.Check` — print
@@ -1300,7 +1302,10 @@ covers wiring them up.
   endpoint (it starts `AshQuick.Supervisor`, which runs every process the
   library needs; `{AshQuick, pubsub_server: MyApp.PubSub}` when the endpoint's
   configuration names no PubSub server under its own application), and
-  `AshQuick.LiveView.Mount` **first** in the live session's `on_mount`.
+  `AshQuick.LiveView.Mount` **first** in the live session's `on_mount` and
+  `AshQuick.LiveView.RouteGate` **last**, after the stages that assign the
+  scope and require a user. Without the gate the nav hides a route and a typed
+  URL still opens it; `mix ash_quick.check` reports `:ungated_quick_view`.
 - In `app.js`: `import {withAshQuick, attachAshQuick} from "ash_quick"`,
   then `new LiveSocket("/live", Socket, withAshQuick({...}))` with the host's
   options unchanged, and `attachAshQuick(liveSocket)`. `withAshQuick` adds the

@@ -68,9 +68,9 @@ $ mix ash_quick.gen.quick_view MyApp.Catalog.Product # the view, its route, and 
 ```
 
 Reach for them before writing a QuickView by hand. A route with no grant in the
-`AshQuick.AccessControl` is a page that 403s with nothing to say why, and a
-QuickView routed by a plain `live/3` has no base path at request time — both are
-mistakes the generator does not make.
+`AshQuick.AccessControl` is a page that `AshQuick.LiveView.RouteGate` 403s with
+nothing to say why, and a QuickView routed by a plain `live/3` has no base path
+at request time — both are mistakes the generator does not make.
 
 ## Check the application, do not eyeball it
 

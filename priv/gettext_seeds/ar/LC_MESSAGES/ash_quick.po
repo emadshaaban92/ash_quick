@@ -1064,3 +1064,8 @@ msgstr "تحديد %{record}"
 #, elixir-autogen, elixir-format
 msgid "Unavailable record"
 msgstr "سجل غير متاح"
+
+#: lib/ash_quick/liveview/route_gate.ex
+#, elixir-autogen, elixir-format
+msgid "The person you are acting as can't open %{path}."
+msgstr "لا يمكن للحساب الذي تتصفح به فتح ⁨%{path}⁩."

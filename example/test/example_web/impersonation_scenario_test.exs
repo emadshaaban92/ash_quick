@@ -259,7 +259,7 @@ defmodule ExampleWeb.ImpersonationScenarioTest do
 
       # They land somewhere they really can be as this person, and are told why
       # they were moved.
-      assert html =~ "can&#39;t access /users"
+      assert html =~ "can&#39;t open /users"
       assert html =~ "You&#39;re impersonating #{viewer.name}"
     end
 
@@ -421,7 +421,7 @@ defmodule ExampleWeb.ImpersonationScenarioTest do
       refute Ash.can?({admin, :impersonate}, editor)
 
       for refused <- [editor, viewer] do
-        assert_raise ExampleWeb.NotAllowedError, fn ->
+        assert_raise AshQuick.LiveView.RouteGate.NotAllowedError, fn ->
           live(log_in(conn, refused), ~p"/browser_sessions")
         end
       end

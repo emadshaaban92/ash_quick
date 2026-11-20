@@ -499,7 +499,9 @@ name than its own passes it: `{AshQuick, pubsub_server: MyApp.PubSub}`.
 
 `AshQuick.LiveView.Mount` goes **first** in the live session's `on_mount`. It
 resolves the tab's impersonation and reads the connection's address, and the
-host's scope stage is what consumes both:
+host's scope stage is what consumes both. `AshQuick.LiveView.RouteGate` goes
+**last**, once there is a scope and a signed-out visitor has been sent to sign
+in:
 
 ```elixir
 live_session :authenticated,
@@ -507,11 +509,31 @@ live_session :authenticated,
   on_mount: [
     AshQuick.LiveView.Mount,
     {MyAppWeb.UserAuth, :assign_scope},
-    {MyAppWeb.UserAuth, :require_user}
+    {MyAppWeb.UserAuth, :require_user},
+    AshQuick.LiveView.RouteGate
   ] do
   quick_view "/products", MyAppWeb.ProductLive.Quick
 end
 ```
+
+The gate is what makes the access control binding. On every navigation, a live
+patch included, it asks the nav's `AshQuick.AccessControl` for the routes
+`@scope` holds and refuses any other path with
+`AshQuick.LiveView.RouteGate.NotAllowedError`, a 403. Without it the sidebar
+hides a page and a typed URL still opens it. A tab standing in for somebody is
+sent to `"/"` with a flash instead (`fallback:` moves it), since its first
+render ran as the real actor; see the module for why. With no access control to
+ask it refuses to mount. `mix ash_quick.check` reports a QuickView routed in a
+live session without it.
+
+A host that keeps a gate of its own should match paths the way the router reads
+them, or call `AshQuick.LiveView.RouteGate.allowed?/3`: Phoenix serves `//users`
+as `/users`, so a gate that matches the raw path by prefix lets a `/` grant open
+every page. A gate that deliberately lets some scopes reach any page, so a
+layout can show them a notice instead (an inactive account, unfinished
+onboarding), is not a drop-in for this one, which answers them with a 403:
+either grant those scopes their routes in `routes_for/1`, or keep the gate and
+exempt the pages from `:ungated_quick_view`.
 
 QuickView sets no layout of its own; the `live_session` does.
 
@@ -1165,7 +1187,7 @@ reference.
 | `AshQuick.Scope` | `use` it on the host's scope struct. Generates `Ash.Scope.ToOpts` and the provenance AshQuick needs on top of it: the real actor behind an impersonation, the request IP, the reader's timezone and the actor's locale. Fails the compile if a named field is not on the struct. The IP is the peer address unless `:client_ip` names another source; behind a proxy, see `AshQuick.LiveView.Mount`. A controller reads the same address with `AshQuick.ClientIp.from_conn/1`. |
 | The audit store | An Ash resource in the host app, named app-wide as `:audit_resource` or per resource under `audit do store ... end`. It must accept `resource_name`, `resource_id`, `action_type`, `action_name`, `attributes`, `arguments`, `context`, `actor_id`, `real_actor_id`, `ip`, `tenant`, and may also accept a `:map` `changes` — the only optional column. `actor_id` and `real_actor_id` must allow `nil`: a write with no actor is recorded with both `nil` (on a resource that stamps `inserted_by` / `updated_by`, only a destroy gets that far, since the stamp refuses a create or update with no actor). Keep it dumb — no validations, nothing that can refuse a row: it is written inside the transaction of every audited write. AshQuick writes it with `authorize?: false`, so its policies govern only other access, and reading it is the host's to protect: the generated store forbids every read until its `:read` policy says who. |
 | `AshQuick.Storage` | Where objects live: a URL to render one from (`url/2`), a URL to download one under a filename (`download_url/2`), storing a server-side file (`put_file/3`), and where a browser sends a picked file (`upload_target/2`, optional: without it uploads come over the LiveView socket). Plus optional lifecycle callbacks for routing an arriving upload and withholding objects that are not servable yet. Defaults to `AshQuick.Storage.S3`, which serves straight from the key and implements no lifecycle. `AshQuick.Storage.Local` keeps objects on the server's disk instead (see Storing files on local disk), and `AshQuick.Storage.S3.Proxy` serves a bucket only the application can reach through the application (see Serving files from a bucket only the app can reach). |
-| `AshQuick.AccessControl` | Answers which routes a scope may navigate to. Named on the nav, and what every rendering of it filters through. Not `Ash.can?`: a filter policy allows the action and returns no rows, so `can?` says yes for a page that would be empty. |
+| `AshQuick.AccessControl` | Answers which routes a scope may navigate to. Named on the nav, what every rendering of it filters through, and what `AshQuick.LiveView.RouteGate` refuses every other route by. Not `Ash.can?`: a filter policy allows the action and returns no rows, so `can?` says yes for a page that would be empty. |
 | `AshQuick.Nav` | The host's navigation registry — one declaration the sidebar and the apps grid are both rendered from. QuickViews are discovered from the declared router; the declaration adds only what the router cannot say: a better label, an icon, a group, a non-QuickView path. |
 | `AshQuick.PrintTemplate` | One module per print template: its label, what to load, and the HTML ChromicPDF renders. Chrome renders it on the server, so a template must escape every record value it interpolates and never put a URL from a record into `src`, `href` or CSS (see the module docs). A create or update action prints through it with `change {AshQuick.Print, template: ..., delivery: :print \| :download}`; the PDF is rendered after the action commits and reaches the browser over the LiveView socket, where `attachAshQuick` saves or prints it. |
 | `AshQuick.ReadOnlyFields.Check` | `match?/2` over an actor and tenant, deciding whether that actor may write a field a `read_only_fields` entry names. For an actor it refuses, the field still reads everywhere, is left out of forms, and is stripped from the changeset. |
@@ -1462,8 +1484,9 @@ collision no resource verifier can see, because it is only ever looking at one
 of them. And, as an **advisory**, a resource carrying no extension at all.
 
 Over the router: a QuickView declared with a plain `live/3`, a non-QuickView
-carrying `ash_quick` metadata, a route served outside its base path, and a
-control leading to a route `:only` or `:except` left out — rows link to
+carrying `ash_quick` metadata, a route served outside its base path, a
+QuickView in a live session that does not run `AshQuick.LiveView.RouteGate`,
+and a control leading to a route `:only` or `:except` left out — rows link to
 `<base>/<id>` and every public update or destroy, with inputs or without, opens
 at `<base>/<id>/<action>`, neither of which consults the router. A private
 action is never offered, so it needs no route.

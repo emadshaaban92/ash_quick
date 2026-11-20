@@ -863,6 +863,10 @@ msgstr "تحديد %{record}"
 msgid "Unavailable record"
 msgstr "سجل غير متاح"
 
+#, elixir-format
+msgid "The person you are acting as can't open %{path}."
+msgstr "لا يمكن للحساب الذي تتصفح به فتح ⁨%{path}⁩."
+
 msgid "Accepts"
 msgstr ""
 
