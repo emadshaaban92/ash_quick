@@ -8,13 +8,14 @@ defmodule ExampleWeb.UserAuth do
   the two seams worth seeing here — how a scope is assembled, and where route
   access is enforced.
 
-  The four mount stages run in this order, and every step of it matters:
+  The five mount stages run in this order, and every step of it matters:
 
       on_mount: [
         {ExampleWeb.UserAuth, :assign_current_user},
         AshQuick.LiveView.Mount,
         {ExampleWeb.UserAuth, :assign_scope},
-        {ExampleWeb.UserAuth, :require_user}
+        {ExampleWeb.UserAuth, :require_user},
+        AshQuick.LiveView.RouteGate
       ]
 
   `:assign_current_user` first, because `AshQuick.LiveView.Mount` resolves the
@@ -27,6 +28,10 @@ defmodule ExampleWeb.UserAuth do
   token resolves — `/browser_sessions` is empty and the banner never appears.
   `:assign_scope` ahead of `Mount` builds a scope that is always the real user,
   with the same result. Both serve every page perfectly well.
+
+  `AshQuick.LiveView.RouteGate` goes last, once there is a scope to ask about
+  and a signed-out visitor has already been sent to the sign-in page rather than
+  refused with a 403.
   """
 
   import Plug.Conn
@@ -121,7 +126,7 @@ defmodule ExampleWeb.UserAuth do
         {:halt, Phoenix.LiveView.redirect(socket, to: ~p"/login")}
 
       _signed_in ->
-        {:cont, attach_route_access_hook(socket)}
+        {:cont, attach_current_path_hook(socket)}
     end
   end
 
@@ -133,39 +138,14 @@ defmodule ExampleWeb.UserAuth do
     end
   end
 
-  # Every navigation, not only the first: a live-navigated patch to a page the
-  # role does not hold has to be refused the same way a fresh load is.
-  defp attach_route_access_hook(socket) do
-    Phoenix.LiveView.attach_hook(socket, :route_access, :handle_params, fn
+  # The page a navigation landed on, which the layout reads back:
+  # `ExampleWeb.Layouts.nav?/1` draws no sidebar without it, and the sidebar
+  # marks the current entry by it. Whether the scope may be on that page is
+  # `AshQuick.LiveView.RouteGate`'s to say, the stage after this one.
+  defp attach_current_path_hook(socket) do
+    Phoenix.LiveView.attach_hook(socket, :current_path, :handle_params, fn
       _params, uri, socket ->
-        path = URI.parse(uri).path
-        scope = socket.assigns.scope
-
-        # The page a navigation landed on, which the layout reads back:
-        # `ExampleWeb.Layouts.nav?/1` draws no sidebar without it, and the
-        # sidebar marks the current entry by it.
-        socket = Phoenix.Component.assign(socket, :current_path, path)
-
-        cond do
-          ExampleWeb.AccessControl.can_access?(scope, path) ->
-            {:cont, socket}
-
-          # Raising here would be a trap: the dead render ran as the real user,
-          # who can reach more, so only the connected mount would fail — and the
-          # reload the client answers with lands on the same page and fails
-          # again. Take them somewhere they can be this user instead.
-          scope.impersonating_mode ->
-            {:halt,
-             socket
-             |> Phoenix.LiveView.put_flash(
-               :error,
-               "#{scope.current_user.name} can't access #{path}."
-             )
-             |> Phoenix.LiveView.push_navigate(to: ~p"/")}
-
-          true ->
-            raise ExampleWeb.NotAllowedError, path: path, user: scope.current_user
-        end
+        {:cont, Phoenix.Component.assign(socket, :current_path, URI.parse(uri).path)}
     end)
   end
 

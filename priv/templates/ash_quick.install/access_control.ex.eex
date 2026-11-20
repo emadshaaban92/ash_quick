@@ -6,6 +6,8 @@ defmodule <%= inspect @module %> do
   `Ash.can?`: a filter policy allows the action and returns no rows, so `can?`
   says yes for a page that would be empty. `<%= inspect @nav %>` names this
   module, and every rendering of the nav filters through it.
+  `AshQuick.LiveView.RouteGate`, in the live session's `on_mount`, asks it on
+  every navigation and refuses a route it does not grant.
 
   As generated it grants nothing. `role/1` reads no role off a scope yet, so
   every scope is answered as `nil` and reaches no route, and a role with no
@@ -43,18 +45,6 @@ defmodule <%= inspect @module %> do
   """
   def routes_for_role(:admin), do: []
   def routes_for_role(_role), do: []
-
-  @doc """
-  True when `scope` may navigate to `path`.
-
-  Either the path equals an allowed route or it sits directly under one. A
-  mount-time gate calls this on every navigation.
-  """
-  def can_access?(scope, path) when is_binary(path) do
-    scope |> routes_for() |> Enum.any?(&path_matches?(path, &1))
-  end
-
-  defp path_matches?(path, route), do: path == route or String.starts_with?(path, route <> "/")
 
   @doc """
   Every route any role at all can reach, for `mix ash_quick.check`.

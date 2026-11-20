@@ -143,7 +143,7 @@ defmodule ExampleWeb.QuickViewScenarioTest do
 
     # And a route the role does not hold at all is a 403 rather than an empty
     # page, however they arrive at it.
-    assert_raise ExampleWeb.NotAllowedError, fn ->
+    assert_raise AshQuick.LiveView.RouteGate.NotAllowedError, fn ->
       conn |> log_in(viewer) |> live(~p"/users")
     end
 
@@ -161,7 +161,7 @@ defmodule ExampleWeb.QuickViewScenarioTest do
     assert html =~ admin.name
 
     # Which the viewer holds no route to.
-    assert_raise ExampleWeb.NotAllowedError, fn ->
+    assert_raise AshQuick.LiveView.RouteGate.NotAllowedError, fn ->
       conn |> log_in(viewer) |> live(~p"/audit_logs")
     end
   end

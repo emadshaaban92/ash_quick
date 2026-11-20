@@ -25,7 +25,8 @@ defmodule AshQuick.Check.Routing do
       hand_routed(router, live_routes) ++
         mislabelled(router, live_routes) ++
         stray_base_paths(live_routes) ++
-        route_gaps(live_routes, served)
+        route_gaps(live_routes, served) ++
+        ungated(live_routes)
 
     {findings, []}
   end
@@ -187,6 +188,75 @@ defmodule AshQuick.Check.Routing do
       policies, so the action is still reported.
       """
     }
+  end
+
+  # One finding per page rather than per route: a QuickView's routes all sit in
+  # the `live_session` its one `quick_view/3` line was written in. A hook the
+  # view declares itself with `on_mount` counts the same as one the session
+  # runs.
+  defp ungated(routes) do
+    routes
+    |> Enum.filter(&(match?(%{ash_quick: %{base_path: _}}, &1.metadata) and quick_view?(&1)))
+    |> Enum.group_by(& &1.metadata.ash_quick.base_path)
+    |> Enum.sort()
+    |> Enum.flat_map(fn {base, routes} ->
+      case Enum.reject(routes, &gated?/1) do
+        [] -> []
+        [route | _] -> [ungated_quick_view(base, route)]
+      end
+    end)
+  end
+
+  defp ungated_quick_view(base, route) do
+    %Finding{
+      check: :ungated_quick_view,
+      subject: base,
+      message: """
+      #{base} serves #{inspect(view(route))} #{where(route)}, which does not \
+      run `AshQuick.LiveView.RouteGate`.
+
+      The nav hides #{base} from a scope its access control does not grant, \
+      and nothing refuses that scope the page when it types the URL. Add the \
+      gate after the stages that assign the scope and require a user:
+
+          live_session :authenticated,
+            on_mount: [
+              AshQuick.LiveView.Mount,
+              {MyAppWeb.UserAuth, :assign_scope},
+              {MyAppWeb.UserAuth, :require_user},
+              AshQuick.LiveView.RouteGate
+            ] do
+      """
+    }
+  end
+
+  # A route outside every `live_session` is in Phoenix's own `:default` one,
+  # which no host names and none can give an `on_mount`.
+  defp where(%{metadata: %{phoenix_live_view: {_view, _action, _opts, %{name: :default}}}}),
+    do: "outside any live session"
+
+  defp where(%{metadata: %{phoenix_live_view: {_view, _action, _opts, %{name: name}}}}),
+    do: "in the live session #{inspect(name)}"
+
+  defp gated?(route), do: Enum.any?(session_hooks(route) ++ view_hooks(route), &gate_hook?/1)
+
+  defp gate_hook?(%{id: {AshQuick.LiveView.RouteGate, _arg}}), do: true
+  defp gate_hook?(_hook), do: false
+
+  defp session_hooks(%{metadata: %{phoenix_live_view: {_view, _action, _opts, session}}}),
+    do: get_in(session, [:extra, :on_mount]) || []
+
+  defp view_hooks(route) do
+    view = view(route)
+
+    if Code.ensure_loaded?(view) and function_exported?(view, :__live__, 0) do
+      case view.__live__() do
+        %{lifecycle: %{mount: hooks}} -> hooks
+        _live -> []
+      end
+    else
+      []
+    end
   end
 
   # The actions the page offers on a record, so the check reports exactly the

@@ -54,7 +54,8 @@ defmodule ExampleWeb.Router do
         {ExampleWeb.UserAuth, :assign_current_user},
         AshQuick.LiveView.Mount,
         {ExampleWeb.UserAuth, :assign_scope},
-        {ExampleWeb.UserAuth, :require_user}
+        {ExampleWeb.UserAuth, :require_user},
+        AshQuick.LiveView.RouteGate
       ] do
       live "/", HomeLive, :index
 
@@ -164,6 +165,7 @@ defmodule ExampleWeb.Router do
         quick_view "/wide_offset_pages", Example.Test.WideOffsetPagesLive.Quick
         quick_view "/worded_policy", Example.Test.WordedPolicyLive.Quick
         quick_view "/writers_only", Example.Test.WritersOnlyLive.Quick
+        live "/nested_gate", Example.Test.NestedGateLive
       end
     end
   end

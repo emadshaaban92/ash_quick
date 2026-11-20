@@ -1012,3 +1012,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Unavailable record"
 msgstr ""
+
+#: lib/ash_quick/liveview/route_gate.ex
+#, elixir-autogen, elixir-format
+msgid "The person you are acting as can't open %{path}."
+msgstr ""

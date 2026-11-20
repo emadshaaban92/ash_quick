@@ -52,6 +52,11 @@ defmodule AshQuick.Check do
       both are reported. (The New button
       *is* gated on its route — see `AshQuick.LiveView.Router.served_shapes/2`
       — so there is nothing to report there.)
+    * `:ungated_quick_view` — a QuickView served in a live session whose
+      `on_mount` does not run `AshQuick.LiveView.RouteGate`, and which does not
+      declare it itself. The nav hides a route the access control does not
+      grant; without the gate the page still serves anybody who types the URL.
+      The subject is the QuickView's base path.
 
   Over the resources and the router together:
 
