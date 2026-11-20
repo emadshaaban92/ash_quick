@@ -698,13 +698,31 @@ show, and:
   its modal (or full page) to a fresh read, and a bulk run reads the list
   afresh, so a queue the reader works through empties. Every arrival (a link,
   a search, Reload, closing a modal) reads afresh.
-- The bare topic is not tenant-scoped: on a multitenant resource every
-  tenant's writes wake every open list (one ids-only page read per
-  `refetch_window` at most). Each write's full notification reaches every open
-  list, so a bulk write of thousands of rows queues that many messages in each
-  one's mailbox before they coalesce into one refetch.
+- On a multitenant resource the topics are the tenant's
+  (`"product:tenant:<t>"`), so only the reader's own tenant's writes reach the
+  page; see "Tenants and payloads" below. A bulk write of thousands of rows
+  still queues that many messages in each open list's mailbox before they
+  coalesce into one refetch.
 - A custom list template passes `row_order`, `gone_rows` and `list_news` to
   `ListView.list_view/1` to keep this.
+
+**Tenants and payloads.** A broadcast is an `AshQuick.PubSub.Notice`
+(`resource`, `id`, `type`) and nothing else: no record, changeset or actor.
+The page that hears one reads again under its own reader's scope, so it shows
+only what that reader may read. A multitenant resource publishes inside its
+tenant, `"product:tenant:<t>"` and `"product:tenant:<t>:<id>"`, where `<t>` is
+the tenant attribute's value (`strategy :attribute`, read off the record as
+written, so a write made with no tenant still reaches the record's tenant, and
+a record moved to another tenant is announced in the new one only) or the
+changeset's tenant (`strategy :context`). A resource some
+reader may read across tenants (`global? true`, or a read action with
+`multitenancy :allow_global`, `:bypass` or `:bypass_all`) also publishes every
+write on the bare topics, where a page reading across tenants listens: one with
+no tenant, or one reading through a `:bypass`/`:bypass_all` action. A tenant
+whose value contains `":"` names no topic: its writes are not published inside
+it and its pages are not live. A page derives its topics from the tenant on its scope, through
+`AshQuick.Topics.collection/2` and `record/3`; a host subscribing by hand does
+the same.
 
 A related resource that publishes nothing is **skipped silently** — the page
 just is not live on its changes, and nobody is forced to publish. Since the

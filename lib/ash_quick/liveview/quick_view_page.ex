@@ -159,7 +159,7 @@ defmodule AshQuick.LiveView.QuickView.Page do
     |> Phoenix.LiveView.detach_hook(:quick_view_info_hook, :handle_info)
     |> Phoenix.LiveView.attach_hook(:quick_view_info_hook, :handle_info, fn
       {:refetch, _assign, _info}, socket -> {:halt, socket}
-      %{payload: %Ash.Notifier.Notification{}}, socket -> {:halt, socket}
+      %{payload: %AshQuick.PubSub.Notice{}}, socket -> {:halt, socket}
       _message, socket -> {:cont, socket}
     end)
     |> assign(selected_rows: %{}, row_actions: nil)

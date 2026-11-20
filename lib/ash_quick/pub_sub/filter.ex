@@ -40,4 +40,10 @@ defmodule AshQuick.PubSub.Filter do
   end
 
   def publish?(_notification), do: true
+
+  @doc false
+  # The update publication inside a tenant: as `publish?/1`, and only for a
+  # tenant that names a topic (`AshQuick.Topics.nameable?/1`).
+  def publish_tenanted?(notification),
+    do: AshQuick.Topics.nameable?(notification) and publish?(notification)
 end

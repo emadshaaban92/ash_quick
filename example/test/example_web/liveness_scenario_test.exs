@@ -547,8 +547,8 @@ defmodule ExampleWeb.LivenessScenarioTest do
       # One publication per row written, the same as a row action's — a bulk
       # write is a write, and a page holding the row has no way to tell which
       # menu it came from.
-      assert_receive %Broadcast{topic: ^first_topic, payload: %Ash.Notifier.Notification{}}
-      assert_receive %Broadcast{topic: ^second_topic, payload: %Ash.Notifier.Notification{}}
+      assert_receive %Broadcast{topic: ^first_topic, payload: %AshQuick.PubSub.Notice{}}
+      assert_receive %Broadcast{topic: ^second_topic, payload: %AshQuick.PubSub.Notice{}}
 
       watching
       |> assert_has("tr[id='#{first.id}'].opacity-50")
@@ -572,8 +572,8 @@ defmodule ExampleWeb.LivenessScenarioTest do
       |> click_button("#{@modal} button", "Confirm")
       |> refute_has("td", text: "First")
 
-      assert_receive %Broadcast{topic: ^first_topic, payload: %Ash.Notifier.Notification{}}
-      assert_receive %Broadcast{topic: ^second_topic, payload: %Ash.Notifier.Notification{}}
+      assert_receive %Broadcast{topic: ^first_topic, payload: %AshQuick.PubSub.Notice{}}
+      assert_receive %Broadcast{topic: ^second_topic, payload: %AshQuick.PubSub.Notice{}}
     end
 
     # The failure below is `:reprice` refusing an inactive row rather than the
@@ -642,7 +642,7 @@ defmodule ExampleWeb.LivenessScenarioTest do
           |> click_button("#ash-quick-action-modal button", "Confirm")
         end)
 
-      assert_receive %Broadcast{topic: ^unrelated_topic, payload: %Ash.Notifier.Notification{}}
+      assert_receive %Broadcast{topic: ^unrelated_topic, payload: %AshQuick.PubSub.Notice{}}
 
       refute_receive %Broadcast{topic: ^first_topic}
       refute_receive %Broadcast{topic: ^second_topic}
@@ -687,7 +687,7 @@ defmodule ExampleWeb.LivenessScenarioTest do
       refute Ash.reload!(first, authorize?: false).active
       assert Ash.reload!(second, authorize?: false).active
 
-      assert_receive %Broadcast{topic: ^first_topic, payload: %Ash.Notifier.Notification{}}
+      assert_receive %Broadcast{topic: ^first_topic, payload: %AshQuick.PubSub.Notice{}}
       refute_receive %Broadcast{topic: ^second_topic}
     end
   end
@@ -813,7 +813,7 @@ defmodule ExampleWeb.LivenessScenarioTest do
         assert AshQuick.Topics.enabled?(resource)
 
         assert Spark.Dsl.Extension.get_opt(resource, [:pub_sub], :prefix) ==
-                 AshQuick.Topics.collection(resource)
+                 AshQuick.Topics.prefix(resource)
       end
     end
 
@@ -825,7 +825,7 @@ defmodule ExampleWeb.LivenessScenarioTest do
         for domain <- Application.fetch_env!(:example, :ash_domains),
             resource <- Ash.Domain.Info.resources(domain),
             AshQuick.Topics.enabled?(resource) do
-          {AshQuick.Topics.collection(resource), resource}
+          {AshQuick.Topics.prefix(resource), resource}
         end
 
       assert publishing != []
@@ -853,7 +853,7 @@ defmodule ExampleWeb.LivenessScenarioTest do
   # holding that row listens on, derived through `AshQuick.Topics` rather than
   # spelled out, for the reason that module exists.
   defp watch(%resource{id: id}) do
-    topic = AshQuick.Topics.record(resource, id)
+    topic = AshQuick.Topics.record(resource, id, nil)
     :ok = ExampleWeb.Endpoint.subscribe(topic)
     topic
   end

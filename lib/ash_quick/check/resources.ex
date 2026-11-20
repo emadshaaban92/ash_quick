@@ -70,7 +70,7 @@ defmodule AshQuick.Check.Resources do
   defp colliding_prefixes(resources) do
     resources
     |> Enum.filter(&Topics.enabled?/1)
-    |> Enum.group_by(&Topics.collection/1)
+    |> Enum.group_by(&Topics.prefix/1)
     |> Enum.filter(fn {_prefix, sharing} -> length(sharing) > 1 end)
     |> Enum.sort()
     |> Enum.map(fn {prefix, sharing} -> collision(prefix, sharing) end)
