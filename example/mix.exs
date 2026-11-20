@@ -55,7 +55,7 @@ defmodule Example.MixProject do
       {:ecto_sql, "~> 3.14"},
       {:postgrex, ">= 0.0.0"},
       {:picosat_elixir, "~> 0.2"},
-      {:phoenix, "~> 1.8.5"},
+      {:phoenix, "~> 1.8.17"},
       {:phoenix_ecto, "~> 4.7"},
       {:phoenix_html, "~> 4.4"},
       {:phoenix_live_view, "~> 1.2 and >= 1.2.14"},

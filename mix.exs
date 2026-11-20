@@ -58,11 +58,15 @@ defmodule AshQuick.MixProject do
       # with `accessing_from`, as the filter form does. phoenix_live_view sits
       # at 1.2.14 because that release fixed CVE-2026-126334 (a LiveView
       # joined without a url skipped its live_session's on_mount hooks, where
-      # AshQuick and the host check access).
+      # AshQuick and the host check access). phoenix sits at 1.8.17 because
+      # that release fixed CVE-2026-129344 (an unserializable channel message
+      # took down a shared topic) and CVE-2026-128361 (an unsanitized
+      # presence key crashed the Presence tracker AshQuick's browser sessions
+      # use).
       {:ash, "~> 3.37 and >= 3.37.4"},
       {:ash_phoenix, "~> 2.3 and >= 2.3.25"},
       {:spark, "~> 2.7"},
-      {:phoenix, "~> 1.8"},
+      {:phoenix, "~> 1.8 and >= 1.8.17"},
       {:phoenix_live_view, "~> 1.2 and >= 1.2.14"},
       {:phoenix_html, "~> 4.4"},
       {:gettext, "~> 1.0"},
