@@ -98,11 +98,8 @@ defmodule ExampleWeb.PrivateActionsScenarioTest do
     test "by a URL", %{conn: conn, admin: admin, product: product} do
       conn = log_in(conn, admin)
 
-      for url <- [~p"/products/#{product.id}/reindex", ~p"/products/#{product.id}?action=reindex"] do
-        {:ok, view, _html} = live(conn, url)
-
-        assert has_element?(view, "h1", "404")
-      end
+      {:ok, view, _html} = live(conn, ~p"/products/#{product.id}/reindex")
+      assert has_element?(view, "h1", "404")
 
       # The same URL shape still serves the product's public update. The page
       # carries random ids and tokens, so "404" anywhere in it is no signal.

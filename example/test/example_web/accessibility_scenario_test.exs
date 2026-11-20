@@ -98,7 +98,7 @@ defmodule ExampleWeb.AccessibilityScenarioTest do
   describe "a details page" do
     test "names its back link and its More actions button", %{conn: conn, admin: admin} do
       product = product(name: "Named tent", actor: admin)
-      {:ok, view, _html} = conn |> log_in(admin) |> live("/products?id=#{product.id}")
+      {:ok, view, _html} = conn |> log_in(admin) |> live("/products/#{product.id}")
 
       assert names(view, "section a:has(.hero-arrow-left)") == ["Back to list"]
       assert names(view, "#details-more-actions-dropdown [data-menu-trigger]") == ["More actions"]

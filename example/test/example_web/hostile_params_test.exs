@@ -649,7 +649,7 @@ defmodule ExampleWeb.HostileParamsTest do
     test "while the same read still serves a details URL", %{conn: conn, admin: admin} do
       product = product(name: "Four-season tent", actor: admin)
 
-      {:ok, _view, html} = live(conn, ~p"/products/#{product.id}?action=read")
+      {:ok, _view, html} = live(conn, ~p"/products/#{product.id}/read")
 
       assert html =~ "Four-season tent"
     end
@@ -662,8 +662,8 @@ defmodule ExampleWeb.HostileParamsTest do
       product = product(name: "Four-season tent", actor: admin)
 
       for url <- [
-            ~p"/products/#{product.id}?action=create",
-            ~p"/products/#{product.id}?action=quick_add",
+            ~p"/products/#{product.id}/create",
+            ~p"/products/#{product.id}/quick_add",
             ~p"/products?action=destroy",
             ~p"/products/create?action=update"
           ] do
@@ -690,12 +690,9 @@ defmodule ExampleWeb.HostileParamsTest do
       end
     end
 
-    # `?action=` on a details URL names a route that *does* exist, so rewriting
-    # it to `/products/<id>/update` would land somewhere real. It is still left
-    # alone: a path the host linked to deliberately is not this function's to
-    # rewrite, and treating `?action=` the same way everywhere is what makes the
-    # rule statable in one sentence — correct the query, never the path.
-    test "a details URL naming its action in the query is left alone too", %{
+    # Under an id the path names the action, so the query's is dropped like any
+    # other value nothing may say, and the address bar stops saying it.
+    test "a details URL naming its action in the query is the details page", %{
       conn: conn,
       admin: admin
     } do
@@ -703,7 +700,65 @@ defmodule ExampleWeb.HostileParamsTest do
 
       {:ok, view, _html} = live(conn, ~p"/products")
 
-      assert refute_patched(navigate(view, "/products/#{product.id}?action=update")) == :ok
+      assert assert_patch(navigate(view, "/products/#{product.id}?action=update")) ==
+               "/products/#{product.id}"
+
+      assert page_action(view) == :read
+      assert page_id(view) == product.id
+    end
+  end
+
+  # `quick_view/3`'s `:only` and `:except` choose the routes a base path is
+  # served at, and the query is not a way around them.
+  describe "a URL reaching past the routes served" do
+    # The finding: `/price_changes` is routed `except: [:create]`, and the
+    # list's own URL used to open a create form for `?action=create`.
+    test "a create named in the query needs the create route", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/price_changes?action=create")
+
+      assert has_element?(view, "h1", "404")
+      refute has_element?(view, "#ash-quick-action-modal")
+      assert page_action(view) == nil
+    end
+
+    # The negative: the same base path still lists, and a base path serving
+    # `/create` still opens a second create named in its list's query.
+    test "while the list and a served create are still reached", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/price_changes")
+      assert page_action(view) == :index
+
+      {:ok, view, html} = live(conn, ~p"/products?action=quick_add")
+      assert html =~ "Quick Add"
+      assert page_action(view) == :quick_add
+    end
+
+    # An id comes from the path alone. From the query it reached a record, or
+    # an action over one, under a base path served only as a list.
+    test "an id in the query is dropped", %{conn: conn, admin: admin} do
+      product = product(name: "Four-season tent", actor: admin)
+
+      {:ok, view, html} = live(conn, ~p"/products?id=#{product.id}")
+      assert html =~ "Four-season tent"
+      assert page_action(view) == :index
+      assert page_id(view) == nil
+
+      for url <- [
+            ~p"/products?id=#{product.id}&action=update",
+            ~p"/products?id=#{product.id}&action=destroy"
+          ] do
+        {:ok, view, _html} = live(conn, url)
+
+        assert has_element?(view, "h1", "404")
+        refute has_element?(view, "#ash-quick-action-modal")
+      end
+    end
+
+    test "and the address bar stops naming it", %{conn: conn, admin: admin} do
+      product = product(name: "Four-season tent", actor: admin)
+
+      {:ok, view, _html} = live(conn, ~p"/products")
+
+      assert assert_patch(navigate(view, "/products?id=#{product.id}")) == "/products"
     end
   end
 

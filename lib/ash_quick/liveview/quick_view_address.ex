@@ -4,10 +4,18 @@ defmodule AshQuick.LiveView.QuickView.Address do
   # the query string corrected to what the page rendered.
   alias AshQuick.LiveView.URLParams
 
-  def base_path!(socket, %URI{} = uri) do
+  def base_path!(socket, %URI{} = uri), do: route!(socket, uri).base_path
+
+  # The route being served: its base path, which of the four shapes it is, and
+  # which shapes its base path is served at. See `QuickView.route!/2`.
+  def route!(socket, %URI{} = uri) do
     case Phoenix.Router.route_info(socket.router, "GET", uri.path, uri.host) do
-      %{ash_quick: %{base_path: base_path}} ->
-        base_path
+      %{ash_quick: %{base_path: base_path, shape: shape}} ->
+        %{
+          base_path: base_path,
+          shape: shape,
+          served: AshQuick.LiveView.Router.served_shapes(socket.router, base_path)
+        }
 
       _ ->
         raise """

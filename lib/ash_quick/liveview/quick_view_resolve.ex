@@ -6,17 +6,19 @@ defmodule AshQuick.LiveView.QuickView.Resolve do
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.QuickView.Options
 
-  def resolve(url_params, %Options{} = options, live_action) do
+  def resolve(url_params, %Options{} = options, %{shape: shape, served: served}) do
     params =
       url_params
       |> URLParams.from_url_params()
-      |> params_for_shape(live_action)
+      |> params_for_shape(shape)
 
-    action_name = action_from_params(params, options, live_action)
+    action_name = action_from_params(params, options, shape)
 
     action =
       if reachable?(options, action_name),
         do: resolved_action(options.resource, action_name, params)
+
+    action = if action && served?(action, params, served), do: action
 
     params =
       params
@@ -65,14 +67,39 @@ defmodule AshQuick.LiveView.QuickView.Resolve do
       AshQuick.LiveView.Utils.public_action?(options.resource, action_name)
   end
 
-  # `/create` is the only shape `quick_view/3` declares with a `live_action`,
-  # and the only one whose path holds no `:id` — so an `?id=` there names
-  # nothing. Dropped rather than refused, and dropping it is also what carries
-  # it out of the canonicalized URL.
-  defp params_for_shape(%URLParams{} = params, nil), do: params
-
-  defp params_for_shape(%URLParams{} = params, _live_action),
+  # The params a page reads arrive with the path's and the query's merged, the
+  # path's winning, so an `id` or an `action` the route's path does not hold
+  # came from the query. Only the route says which: see the `:shape` that
+  # `quick_view/3` puts on it.
+  #
+  # The id is the path's alone. Nothing writes `?id=`, and read from the query
+  # it reached a record page, or a write action over one, under a base path
+  # served only as a list. `?action=` is read only where no id is, which is
+  # the only place it is written: a second list or a second create has no path
+  # segment to be named in. Under an id the path names the action, so the
+  # query's is a second spelling of a route that may not be served.
+  #
+  # Dropped rather than refused, like any other query value nothing may say,
+  # and dropping them is also what carries them out of the canonicalized URL.
+  defp params_for_shape(%URLParams{} = params, shape) when shape in [:index, :create],
     do: %URLParams{params | id: nil}
+
+  defp params_for_shape(%URLParams{} = params, :show), do: %URLParams{params | action: nil}
+
+  defp params_for_shape(%URLParams{} = params, :action), do: params
+
+  # Whether a route is served for the page `action` renders. An `/:id` or
+  # `/:id/:action` page is only reached on its own route, but `?action=` on an
+  # id-less one names a list or a create, whichever route it arrived on, and
+  # each needs its own: a base path routed `except: [:create]` lists, and opens
+  # no create form for `?action=create`.
+  #
+  # A read under an id is not held to `:show`: `/:id/:action` serves every
+  # action the resource has, reads among them, so on a base path routed
+  # `only: [:index, :action]` `/<id>/<read>` is a route that is served.
+  defp served?(%Actions.Read{}, %URLParams{id: nil}, served), do: :index in served
+  defp served?(%Actions.Create{}, _params, served), do: :create in served
+  defp served?(_action, _params, _served), do: true
 
   # The combinations `QuickView.Page.do_handle_params/4` serves, mirrored: a URL naming
   # any other pairing of shape and action resolves to no action rather than
@@ -104,21 +131,20 @@ defmodule AshQuick.LiveView.QuickView.Resolve do
     ) == :ok
   end
 
-  def action_from_params(%URLParams{action: action}, _config, _live_action)
+  def action_from_params(%URLParams{action: action}, _config, _shape)
       when not is_nil(action) do
     action
   end
 
-  def action_from_params(%URLParams{id: nil}, _config, live_action)
-      when not is_nil(live_action) do
-    live_action
-  end
+  # `/create` names its action by its shape; every other shape that names
+  # none reads the page's default.
+  def action_from_params(%URLParams{id: nil}, _config, :create), do: :create
 
-  def action_from_params(%URLParams{id: nil}, %Options{} = options, nil) do
+  def action_from_params(%URLParams{id: nil}, %Options{} = options, _shape) do
     options.list_default_action
   end
 
-  def action_from_params(%URLParams{action: nil, id: id}, %Options{} = options, nil)
+  def action_from_params(%URLParams{action: nil, id: id}, %Options{} = options, _shape)
       when not is_nil(id) do
     options.details_default_action
   end

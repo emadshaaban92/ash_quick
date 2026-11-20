@@ -235,8 +235,15 @@ defmodule AshQuick.LiveView.QuickView do
 
   The action is resolved from (in priority order):
   1. The `action` URL parameter
-  2. The `live_action` from the router (e.g. `:create`)
+  2. The route: `/create` names the `:create` action
   3. The configured default action (`:index` for lists, `:read` for details)
+
+  The id and, under an id, the action come from the path alone. The query's
+  `?action=` is read only on the list and `/create` URLs, which have no path
+  segment for a second list or a second create to be named in, and is held to
+  the routes `quick_view/3` serves: a create it names needs the `:create`
+  route, and a list the `:index` route. A URL whose page is not served renders
+  not found. A query `?id=`, or `?action=` under an id, is dropped.
 
   ## Actions open in a modal
 
@@ -588,18 +595,16 @@ defmodule AshQuick.LiveView.QuickView do
           # opens over.
           previous = socket.assigns
 
-          {params, ash_action} = QuickView.resolve(params, @options, socket.assigns.live_action)
+          route = QuickView.route!(socket, uri)
+          base_path = route.base_path
 
-          base_path = QuickView.base_path!(socket, uri)
+          {params, ash_action} = QuickView.resolve(params, @options, route)
 
           socket =
             socket
             |> assign(connected?: true)
             |> assign(:base_path, base_path)
-            |> assign(
-              :routed_shapes,
-              AshQuick.LiveView.Router.served_shapes(socket.router, base_path)
-            )
+            |> assign(:routed_shapes, route.served)
             |> assign(:path, uri.path)
             |> assign(:params, params)
             |> assign(:resource, @options.resource)
@@ -722,6 +727,13 @@ defmodule AshQuick.LiveView.QuickView do
   """
   defdelegate base_path!(socket, uri), to: QuickView.Address
 
+  @doc """
+  The route currently being served, as `resolve/3` reads it: a map of its
+  `:base_path`, its `:shape` (which of `AshQuick.LiveView.Router`'s four it
+  is) and `:served`, the shapes its base path is served at.
+  """
+  defdelegate route!(socket, uri), to: QuickView.Address
+
   @doc false
   defdelegate canonicalize_query(socket, uri, base_path, ash_action), to: QuickView.Address
 
@@ -775,13 +787,14 @@ defmodule AshQuick.LiveView.QuickView do
 
   @doc """
   What this page will serve for a URL: the params it renders from, and the
-  action it renders them through.
+  action it renders them through. `route` is what `route!/2` answers for it.
 
   The action is `nil` where the URL named one this page cannot serve, which is
-  what the generated `render/1` renders not found for.
+  what the generated `render/1` renders not found for: a name the resource
+  lacks, or a page whose route its base path is not served at.
   """
-  defdelegate resolve(url_params, options, live_action), to: QuickView.Resolve
+  defdelegate resolve(url_params, options, route), to: QuickView.Resolve
 
   @doc false
-  defdelegate action_from_params(params, options, live_action), to: QuickView.Resolve
+  defdelegate action_from_params(params, options, shape), to: QuickView.Resolve
 end

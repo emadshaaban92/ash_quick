@@ -93,14 +93,14 @@ defmodule AshQuick.LiveView.ExposureTest do
     test "are not reachable from the URL" do
       options = options()
 
-      resolved = fn url_params, live_action ->
-        {_params, action} = QuickView.resolve(url_params, options, live_action)
+      resolved = fn url_params, shape ->
+        {_params, action} = QuickView.resolve(url_params, options, route(shape))
         action && action.name
       end
 
-      assert resolved.(%{"id" => "p", "action" => "update"}, nil) == :update
-      assert resolved.(%{"id" => "p", "action" => "recompute"}, nil) == nil
-      assert resolved.(%{"id" => "p", "action" => "payroll_export"}, nil) == nil
+      assert resolved.(%{"id" => "p", "action" => "update"}, :action) == :update
+      assert resolved.(%{"id" => "p", "action" => "recompute"}, :action) == nil
+      assert resolved.(%{"id" => "p", "action" => "payroll_export"}, :action) == nil
       assert resolved.(%{"action" => "import"}, :create) == nil
       assert resolved.(%{}, :create) == :create
     end
@@ -111,7 +111,7 @@ defmodule AshQuick.LiveView.ExposureTest do
       options = options(details: [fields: @fields, default_action: :payroll_export])
 
       assert {_params, %{name: :payroll_export}} =
-               QuickView.resolve(%{"id" => "p"}, options, nil)
+               QuickView.resolve(%{"id" => "p"}, options, route(:show))
     end
 
     test "are not offered on the details page" do
@@ -232,4 +232,11 @@ defmodule AshQuick.LiveView.ExposureTest do
       refute html =~ "Amount"
     end
   end
+
+  defp route(shape),
+    do: %{
+      base_path: "/payslips",
+      shape: shape,
+      served: MapSet.new([:index, :create, :show, :action])
+    }
 end
