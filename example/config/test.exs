@@ -59,6 +59,7 @@ test_pages = [
   "/test/bulk_guarded",
   "/test/bulk_named",
   "/test/counted_bins",
+  "/test/counted_box_codes",
   "/test/counted_boxes",
   "/test/dated_entries",
   "/test/default_pages",
