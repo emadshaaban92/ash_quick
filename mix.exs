@@ -55,12 +55,15 @@ defmodule AshQuick.MixProject do
       # 3.37.4: 3.37.1 fixed EEF-CVE-2026-114214, 3.37.3 stopped an update
       # that manages a relationship failing on a record whose embed a field
       # policy hides, and 3.37.4 asks a related field's policies in a filter
-      # with `accessing_from`, as the filter form does.
+      # with `accessing_from`, as the filter form does. phoenix_live_view sits
+      # at 1.2.14 because that release fixed CVE-2026-126334 (a LiveView
+      # joined without a url skipped its live_session's on_mount hooks, where
+      # AshQuick and the host check access).
       {:ash, "~> 3.37 and >= 3.37.4"},
       {:ash_phoenix, "~> 2.3 and >= 2.3.25"},
       {:spark, "~> 2.7"},
       {:phoenix, "~> 1.8"},
-      {:phoenix_live_view, "~> 1.2"},
+      {:phoenix_live_view, "~> 1.2 and >= 1.2.14"},
       {:phoenix_html, "~> 4.4"},
       {:gettext, "~> 1.0"},
       {:live_select, "~> 1.7"},
