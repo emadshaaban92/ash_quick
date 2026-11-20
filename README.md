@@ -1335,8 +1335,34 @@ stays offered. Is Empty on such a field keeps a product with no brand, when the
 relationship allows none, and one whose brand its reader may not read: the
 column shows both blank. A list without `filterable:` offers no related field,
 and a link's row on one it does not offer is dropped. Index the relationship's
-source attribute and the related field on a large table. To-many relationships
-and longer paths are refused when the QuickView compiles.
+source attribute and the related field on a large table. A field through a
+to-many relationship, or a longer path, is refused when the QuickView compiles.
+
+#### Filtering by related records
+
+A relationship named alone in `filterable:` filters by the related records
+themselves rather than by one of their fields, so renaming a brand never
+empties a filter on it, and two brands sharing a name are told apart:
+
+```elixir
+list: [
+  filterable: [:sku, :brand, :tags, tags: :group]
+]
+```
+
+`:brand` is a belongs_to, `:tags` a has_many or many_to_many, and
+`tags: :group` a belongs_to of the tags' destination, reached through them: two
+hops at most, the second a belongs_to. The row is Any Of, its records picked in
+a searchable dropdown through the destination's lookup action (the first
+twenty a search matches), and Is Empty / Is Not Empty where the relationship
+can hold none. It keeps a product whose relationship holds any record picked,
+asked as `exists(tags, id in ^ids)`, so the destination's read policies apply.
+The URL names the row `brand` or `tags.group` and holds the picked primary keys,
+and its chip names them, read with the visitor's scope: one they may not read is
+shown as "Unavailable record", never by its name. The destination must be an
+AshQuick resource with one primary key and a lookup action, and a visitor who
+may not read it directly is offered no such row, since its picker could find
+nothing.
 
 To add a related field to the ones the form offers without `filterable:`, name
 `:defaults` among them:

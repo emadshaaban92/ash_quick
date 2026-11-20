@@ -585,7 +585,7 @@ defmodule ExampleWeb.RelatedFilterScenarioTest do
           end)
         )
 
-      assert message =~ "* [owner: [parent: :name]] goes more than one relationship deep"
+      assert message =~ "* [owner: [parent: :name]] goes deeper than the filter reaches"
       assert message =~ "* {:children, :code} is not a field the filter offers through :children"
       assert message =~ "* {:keeper, :name} is not a field the filter offers through :keeper"
 

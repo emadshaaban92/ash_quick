@@ -1174,16 +1174,18 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       assert texts(view, "#value-error-#{uuid}") == ["is invalid"]
       id = picker_id(view, uuid)
       assert attribute(view, "##{id}-wrap", "data-error-id") == ["value-error-#{uuid}"]
-      # Primary, as an input holding picks is drawn, would hide the error.
-      [class] = attribute(view, "##{id} input[type=text]", "class")
+      # The box holding the tags and the input carries the error, and the
+      # primary colour an input holding picks is drawn in, which would hide
+      # it, is never drawn.
+      [class] = attribute(view, "##{id}", "class")
       assert class =~ "input-error"
-      refute class =~ "input-primary"
+      refute attribute(view, "##{id} input[type=text]", "class") |> hd() =~ "input-primary"
       refute_patched(view)
 
       remove_value(view, uuid, "Gone")
       refute has_element?(view, "#value-error-#{uuid}")
       assert attribute(view, "##{id}-wrap", "data-error-id") == []
-      refute attribute(view, "##{id} input[type=text]", "class") |> hd() =~ "input-error"
+      refute attribute(view, "##{id}", "class") |> hd() =~ "input-error"
     end
 
     # LiveSelect tells its options apart by label, so a value outside the set

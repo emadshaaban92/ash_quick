@@ -28,6 +28,10 @@ defmodule AshQuick.LiveView.CustomFilter do
   # And the ones a group joins its rows by.
   @group_operators ~w(and or)
 
+  # The operators a record row compares by: whether its relationship holds
+  # any record picked, none at all, or any.
+  @record_operators ~w(in) ++ @valueless
+
   # The operators a `Money` row compares by, its amount in its currency.
   @money_operators ~w(equals not_equals gt gte lt lte)
 
@@ -36,6 +40,8 @@ defmodule AshQuick.LiveView.CustomFilter do
   @money_type AshMoney.Types.Money
 
   @string_types [Ash.Type.String, Ash.Type.CiString]
+
+  @to_many [:has_many, :many_to_many]
 
   @offered_types [
     Ash.Type.UUID,
@@ -286,6 +292,14 @@ defmodule AshQuick.LiveView.CustomFilter do
   once, where it is first named. Any other name is left out, so a caller
   that refuses one checks it with `filterable_field?/2`. Unsaid, only
   `resource`'s own fields are offered.
+
+  A name can also be a record row's, which picks related records rather
+  than comparing a field of them: `relationship`, a public belongs_to,
+  has_many or many_to_many, or `{relationship, belongs_to}`, a public
+  belongs_to of that relationship's destination. Each relationship has a
+  read to read its destination with, and the last destination is an
+  AshQuick resource with one primary key and a lookup action, which the
+  row searches its records through.
   """
   def filterable_fields(resource, names \\ nil)
 
@@ -308,19 +322,67 @@ defmodule AshQuick.LiveView.CustomFilter do
   defp expand_defaults(name, _own), do: [name]
 
   defp filterable_field(resource, name, by_name) when is_atom(name) do
-    if field = by_name[name], do: FilterField.own(resource, field)
+    case by_name[name] do
+      nil -> record_field(resource, [name])
+      field -> FilterField.own(resource, field)
+    end
   end
 
   defp filterable_field(resource, {relationship, name}, _by_name)
        when is_atom(relationship) and is_atom(name) do
-    with %{} = relationship <- filterable_relationship(resource, relationship),
-         %{} = field <-
-           relationship.destination |> own_fields() |> Enum.find(&(&1.name == name)) do
-      FilterField.through(relationship, field)
+    with %{} = through <- filterable_relationship(resource, relationship),
+         %{} = field <- through.destination |> own_fields() |> Enum.find(&(&1.name == name)) do
+      FilterField.through(through, field)
+    else
+      _ -> record_field(resource, [relationship, name])
     end
   end
 
   defp filterable_field(_resource, _name, _by_name), do: nil
+
+  # A record row asks whether any related record is one picked, inside an
+  # `exists`, so its first hop may be to-many. Its second is a belongs_to,
+  # and there is no third: each hop is a join, and the picked records are of
+  # the last destination, which its picker searches.
+  defp record_field(resource, [name]) do
+    with %{} = relationship <- record_relationship(resource, name, @to_many ++ [:belongs_to]),
+         %{} = key <- record_key(relationship.destination) do
+      FilterField.records([relationship], key)
+    end
+  end
+
+  defp record_field(resource, [first, second]) do
+    with %{} = first <- record_relationship(resource, first, @to_many ++ [:belongs_to]),
+         %{} = second <- record_relationship(first.destination, second, [:belongs_to]),
+         %{} = key <- record_key(second.destination) do
+      FilterField.records([first, second], key)
+    end
+  end
+
+  defp record_relationship(resource, name, types) do
+    case Ash.Resource.Info.public_relationship(resource, name) do
+      %{type: type} = relationship ->
+        if type in types and Map.get(relationship, :filterable?, true) and
+             destination_read(relationship),
+           do: relationship
+
+      nil ->
+        nil
+    end
+  end
+
+  # The records are picked by one value each, held in the URL, and named the
+  # way a relationship dropdown names them, which takes AshQuick's display
+  # label and a lookup action to search them with.
+  defp record_key(destination) do
+    with [key] <- Ash.Resource.Info.primary_key(destination),
+         true <- AshQuick in Spark.extensions(destination),
+         :ok <- AshQuick.Lookup.Contract.check(destination) do
+      Ash.Resource.Info.attribute(destination, key)
+    else
+      _ -> nil
+    end
+  end
 
   # One hop through a belongs_to, and only one: a row compares a product with
   # the one brand it has. A to-many relationship would ask whether any of its
@@ -336,6 +398,11 @@ defmodule AshQuick.LiveView.CustomFilter do
       _ ->
         nil
     end
+  end
+
+  @doc "Whether `name`, as `filterable:` names it, is a record row on `resource`."
+  def record_spec?(resource, name) do
+    match?([%FilterField{record?: true}], filterable_fields(resource, [name]))
   end
 
   defp own_fields(resource) do
@@ -405,10 +472,18 @@ defmodule AshQuick.LiveView.CustomFilter do
   destination the visitor may not read through the relationship at all is
   left out, since a row on one could never match; a read policy that only
   filters the destination leaves its fields offered.
+
+  A record row is asked of every hop, as the `exists` it is built as reads
+  them, and of its destination's lookup action, read directly, as its picker
+  and its chip read the records: a destination the visitor may not read so
+  offers no row, since none could be picked. Its field is the destination's
+  primary key, which a field policy hiding it on every record leaves out.
   """
   def visible(fields, action, scope, opts \\ []) do
+    {records, fields_of} = Enum.split_with(fields, & &1.record?)
+
     visible =
-      for {relationship, group} <- Enum.group_by(fields, & &1.relationship),
+      for {relationship, group} <- Enum.group_by(fields_of, & &1.relationship),
           {resource, read} = read_by(relationship, group, action),
           opts = through(relationship, opts),
           readable?(relationship, resource, read, scope, opts),
@@ -417,7 +492,26 @@ defmodule AshQuick.LiveView.CustomFilter do
           into: MapSet.new(),
           do: by_name[name].name
 
+    visible =
+      for field <- records,
+          records_visible?(field, scope, opts),
+          into: visible,
+          do: field.name
+
     Enum.filter(fields, &MapSet.member?(visible, &1.name))
+  end
+
+  defp records_visible?(%FilterField{hops: hops, resource: resource, field: key}, scope, opts) do
+    last = List.last(hops)
+    lookup = Ash.Resource.Info.action(resource, AshQuick.Info.lookup_action(resource))
+
+    Enum.all?(
+      hops,
+      &readable?(&1, &1.destination, destination_read(&1), scope, through(&1, opts))
+    ) and
+      readable?(last, resource, lookup, scope, context: %{}) and
+      visible_names([key.name], resource, destination_read(last), scope, through(last, opts)) ==
+        [key.name]
   end
 
   defp visible_names(names, _resource, nil, _scope, _opts), do: names
@@ -520,7 +614,7 @@ defmodule AshQuick.LiveView.CustomFilter do
   The fields a row can name on `resource`, as `FilterField`s, by the name a
   row holds them under: every attribute, aggregate and calculation of its
   own, and those of `names`, a list's offered fields as `filterable:` names
-  them, reached through a relationship.
+  them, reached through a relationship, and its record rows.
   """
   def fields_by_name(resource, names \\ nil) do
     own =
@@ -529,10 +623,9 @@ defmodule AshQuick.LiveView.CustomFilter do
       |> Enum.map(&FilterField.own(resource, &1))
 
     paths =
-      names
-      |> List.wrap()
-      |> Enum.filter(&is_tuple/1)
-      |> then(&filterable_fields(resource, &1))
+      resource
+      |> filterable_fields(names |> List.wrap() |> Enum.reject(&(&1 == :defaults)))
+      |> Enum.filter(& &1.relationship)
 
     Map.new(own ++ paths, &{&1.name, &1})
   end
@@ -668,7 +761,9 @@ defmodule AshQuick.LiveView.CustomFilter do
       gives them, and the only ones: a row naming any other filters by
       nothing. Unsaid, a row can name any field. Is Empty on a string also
       keeps one holding `""`, and on a list one holding `[]`, which read as
-      empty in the list, and only a field's type says which it is.
+      empty in the list, and only a field's type says which it is. A record
+      row is read only with its field among them, since only its
+      `FilterField` says it names records.
   """
   def build_ash_filter(filter, opts \\ []) do
     timezone = Keyword.get_lazy(opts, :timezone, &AshQuick.Config.timezone/0)
@@ -688,9 +783,31 @@ defmodule AshQuick.LiveView.CustomFilter do
   # Only an operator the form offers is read, on a field the list offers, as
   # `:fields` names them, with a value that is one value or a list of them.
   defp build(%__MODULE__{} = row, timezone, fields) do
-    if readable_row?(row, fields),
-      do: build_row(row, timezone, if(fields == :any, do: %{}, else: fields))
+    cond do
+      not readable_row?(row, fields) -> nil
+      fields == :any -> build_row(row, timezone, %{})
+      fields[row.field_name].record? -> build_records(row, fields[row.field_name])
+      true -> build_row(row, timezone, fields)
+    end
   end
+
+  # A record row keeps a row whose relationship holds any record picked, by
+  # its primary key, inside an `exists`, as a field through a relationship
+  # is asked: the destination's read policies apply, so a record the reader
+  # may not read is never matched. Is Not Empty is any record at all, which
+  # always has its primary key, and Is Empty none.
+  defp build_records(%__MODULE__{operator: "in", value: value}, %FilterField{} = field) do
+    case value |> List.wrap() |> Enum.filter(&has_value?/1) do
+      [] -> nil
+      ids -> Ash.Query.Exists.new(field.path, %{to_string(field.field.name) => %{"in" => ids}})
+    end
+  end
+
+  defp build_records(%__MODULE__{operator: "is_not_nil"}, %FilterField{} = field),
+    do: Ash.Query.Exists.new(field.path, %{to_string(field.field.name) => %{"is_nil" => false}})
+
+  defp build_records(%__MODULE__{operator: "is_nil"} = row, field),
+    do: %{"not" => build_records(%__MODULE__{row | operator: "is_not_nil"}, field)}
 
   defp readable_row?(%__MODULE__{field_name: name} = row, fields),
     do:
@@ -700,8 +817,13 @@ defmodule AshQuick.LiveView.CustomFilter do
   @doc """
   Whether `row` names a key path exactly when `field`, the `FilterField` it
   names, is a map: a row on a map always holds one, `[]` for any key, and a
-  row on any other field none. A link can pair either with the other.
+  row on any other field none. A link can pair either with the other. A
+  record row holds none, and compares by Any Of, Is Empty or Is Not Empty
+  only.
   """
+  def fits?(%__MODULE__{path: path, operator: operator}, %FilterField{record?: true}),
+    do: is_nil(path) and operator in @record_operators
+
   def fits?(%__MODULE__{path: path}, field), do: is_list(path) == map_field?(field)
 
   @doc """

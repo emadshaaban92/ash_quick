@@ -404,7 +404,8 @@ defmodule AshQuick.LiveView.QuickView.Options do
   # The fields the filter form offers, as `filterable:` names them, in its
   # order: a field's name, or `{relationship, field}` for one reached through a
   # belongs_to, which `[brand: :name]` writes as a keyword and a list as
-  # `sortable:` takes one, or `:defaults`, kept as it is, for the fields the
+  # `sortable:` takes one, a record row's relationship, alone or as
+  # `{relationship, belongs_to}`, or `:defaults`, kept as it is, for the fields the
   # form offers unsaid, which `CustomFilter.filterable_fields/2` reads off the
   # resource. Unsaid, it stays `nil`: the form offers every field of the
   # resource's own it can take, and a link's rows are left to the read.
@@ -427,7 +428,11 @@ defmodule AshQuick.LiveView.QuickView.Options do
       fixed set of values, and no belongs_to relationship's source attribute \
       or `sensitive?` field. A field of a related resource is named through a \
       public belongs_to relationship, one hop away, as `[brand: :name]`, one \
-      with a read of its destination to ask. `:defaults` stands for the \
+      with a read of its destination to ask. A relationship named alone, as \
+      `:brand` or `:tags`, or with a belongs_to of its destination, as \
+      `[tags: :group]`, picks the related records themselves: a public \
+      belongs_to, has_many or many_to_many onto an AshQuick resource with one \
+      primary key and a lookup action. `:defaults` stands for the \
       fields the form offers when the option is not given.
       """
     end
@@ -445,6 +450,10 @@ defmodule AshQuick.LiveView.QuickView.Options do
     end
   end
 
+  @too_deep "goes deeper than the filter reaches: a field one relationship away, as " <>
+              "`[brand: :name]`, or a relationship's records, alone or through a belongs_to " <>
+              "of its destination, as `:tags` or `[tags: :group]`"
+
   defp filterable_name(name) when is_atom(name), do: {:ok, name}
 
   defp filterable_name({relationship, name}) when is_atom(relationship) and is_atom(name),
@@ -454,21 +463,26 @@ defmodule AshQuick.LiveView.QuickView.Options do
     do: {:ok, {relationship, name}}
 
   defp filterable_name({relationship, _nested}) when is_atom(relationship),
-    do: {:error, "goes more than one relationship deep; the filter takes one hop"}
+    do: {:error, @too_deep}
 
   defp filterable_name([{relationship, _nested}]) when is_atom(relationship),
-    do: {:error, "goes more than one relationship deep; the filter takes one hop"}
+    do: {:error, @too_deep}
 
   defp filterable_name(_name), do: {:error, "is not a field name or a relationship path"}
 
-  defp unfilterable(name) when is_atom(name), do: "is not a field the filter offers"
+  defp unfilterable(name) when is_atom(name),
+    do:
+      "is not a field the filter offers, nor a relationship whose records it picks: a " <>
+        "public belongs_to, has_many or many_to_many onto an AshQuick resource with one " <>
+        "primary key and a lookup action"
 
   defp unfilterable({relationship, name}),
     do:
       "is not a field the filter offers through #{inspect(relationship)}, which must be a " <>
         "public belongs_to relationship with a read of its destination to ask, its " <>
         "read_action or the destination's primary read, and #{inspect(name)} a field " <>
-        "the filter offers on that destination"
+        "the filter offers on that destination, nor a public belongs_to of that " <>
+        "destination whose records the filter picks"
 
   defp single_path?(path) when is_atom(path), do: true
   defp single_path?([{relationship, nested}]) when is_atom(relationship), do: single_path?(nested)

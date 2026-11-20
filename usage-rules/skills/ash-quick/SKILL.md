@@ -198,6 +198,18 @@ The URL is not an option here — it is declared in the router with
   and field policies, asked as a read through the relationship
   (`accessing_from` holds; a brand the reader may not read at all offers none
   of its fields); no to-many or longer paths, and none offered unless named.
+  A relationship named alone picks the related records themselves, by
+  primary key: `:brand` (belongs_to), `:tags` (has_many or many_to_many), or
+  `[tags: :group]` (then a belongs_to of the destination, two hops at most).
+  The row is Any Of over records searched in a picker (the destination's
+  lookup action, with the reader's scope), plus Is Empty / Is Not Empty
+  where the relationship can be empty; it keeps a row whose relationship
+  holds any record picked, as `exists(path, id in ids)`, so a rename never
+  breaks it and two records sharing a name stay apart. The URL carries
+  `brand` / `tags.group` with a list of ids; chips name the records, and one
+  the reader may not read shows as "Unavailable record". The destination
+  must be an AshQuick resource with one primary key and a lookup action; a
+  destination the reader may not read directly offers no such row.
   Name the indexed ones on a large table. A link's filter row on any other
   field is dropped, with a flash, and so is one by an operator the form does
   not offer, or holding a JSON object as its value; unset, the fields offered

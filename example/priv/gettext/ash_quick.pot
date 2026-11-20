@@ -807,6 +807,10 @@ msgstr ""
 msgid "Select %{record}"
 msgstr ""
 
+#, elixir-format
+msgid "Unavailable record"
+msgstr ""
+
 msgid "Accepts"
 msgstr ""
 

@@ -859,6 +859,10 @@ msgstr "إخفاء"
 msgid "Select %{record}"
 msgstr "تحديد %{record}"
 
+#, elixir-format
+msgid "Unavailable record"
+msgstr "سجل غير متاح"
+
 msgid "Accepts"
 msgstr ""
 
