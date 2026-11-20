@@ -47,7 +47,8 @@ defmodule AshQuick.LiveView.RouteGate do
   A scope it is asked about gets exactly the routes `routes_for/1` names, and
   nothing else. A host whose own gate let some scopes reach any page, so its
   layout could show them a notice instead, grants those scopes their routes
-  there, or keeps its gate and exempts its pages from `:ungated_quick_view`.
+  there, or keeps its gate and names it to `mix ash_quick.check` as
+  `check: [gates: [...]]` (see `AshQuick.Check`).
 
   ## What a refusal looks like
 

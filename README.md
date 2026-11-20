@@ -533,7 +533,11 @@ every page. A gate that deliberately lets some scopes reach any page, so a
 layout can show them a notice instead (an inactive account, unfinished
 onboarding), is not a drop-in for this one, which answers them with a 403:
 either grant those scopes their routes in `routes_for/1`, or keep the gate and
-exempt the pages from `:ungated_quick_view`.
+name its `on_mount` stage to the check, which then counts it as a gate:
+
+```elixir
+config :ash_quick, check: [gates: [{MyAppWeb.UserAuth, :require_user}]]
+```
 
 QuickView sets no layout of its own; the `live_session` does.
 

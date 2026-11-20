@@ -397,6 +397,16 @@ defmodule AshQuick.Test.Check.SelfGatedLive.Quick do
   on_mount {AshQuick.LiveView.RouteGate, access_control: AshQuick.Test.Check.AccessControl}
 end
 
+defmodule AshQuick.Test.Check.HostGatedLive.Quick do
+  @moduledoc "A QuickView served only in sessions a host's own gate runs in."
+  use AshQuick.LiveView.QuickView, resource: AshQuick.Test.Check.Widget
+end
+
+defmodule AshQuick.Test.Check.HostGate do
+  @moduledoc "A host's own route gate, which the check knows only by name."
+  def on_mount(_stage, _params, _session, socket), do: {:cont, socket}
+end
+
 defmodule AshQuick.Test.Check.GizmoLive.Quick do
   @moduledoc false
   use AshQuick.LiveView.QuickView, resource: AshQuick.Test.Check.Gizmo
@@ -455,6 +465,16 @@ defmodule AshQuick.Test.Check.Router do
     quick_view("/self_gated", AshQuick.Test.Check.SelfGatedLive.Quick)
   end
 
+  # Gated by a host's own stage, which the check counts only when named under
+  # `gates:`: written with its argument, and as a bare module.
+  live_session :host_gated, on_mount: [{AshQuick.Test.Check.HostGate, :require_user}] do
+    quick_view("/host_gated", AshQuick.Test.Check.HostGatedLive.Quick)
+  end
+
+  live_session :host_gated_bare, on_mount: [AshQuick.Test.Check.HostGate] do
+    quick_view("/host_gated_bare", AshQuick.Test.Check.HostGatedLive.Quick)
+  end
+
   # A QuickView with no base path to read.
   live("/hand_routed", AshQuick.Test.Check.WidgetLive.Quick, nil)
 
@@ -501,7 +521,9 @@ defmodule AshQuick.Test.Check.AccessControl do
   def routes_for(_scope), do: all_routes()
 
   @impl true
-  def all_routes, do: ~w(/widgets /twins /my_twins /self_gated /plain /orphan /gone)
+  def all_routes,
+    do:
+      ~w(/widgets /twins /my_twins /self_gated /host_gated /host_gated_bare /plain /orphan /gone)
 end
 
 defmodule AshQuick.Test.Check.SilentAccessControl do

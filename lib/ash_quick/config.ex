@@ -16,9 +16,11 @@ defmodule AshQuick.Config do
     filters through are both declared on it. When `nil`, there is no
     navigation to render.
 
-  * `:check` — Options for `mix ash_quick.check`. Only `:exempt` is read:
-    `[exempt: [tileless_route: ["/"]]]` keeps a divergence the application has
-    decided to live with out of the report. See `AshQuick.Check`.
+  * `:check` — Options for `mix ash_quick.check`. `:exempt` and `:gates` are
+    read: `[exempt: [tileless_route: ["/"]]]` keeps a divergence the
+    application has decided to live with out of the report, and
+    `[gates: [{MyAppWeb.UserAuth, :require_user}]]` names the host's own
+    `on_mount` route gates (see "A gate of your own"). See `AshQuick.Check`.
 
   * `:timezone` — The timezone timestamps are shown in when the reader's scope
     names none (e.g. `"America/New_York"`). Defaults to `"Etc/UTC"`. A scope's
@@ -168,6 +170,15 @@ defmodule AshQuick.Config do
   """
   def check_exemptions do
     :check |> get([]) |> Keyword.get(:exempt, [])
+  end
+
+  @doc """
+  Returns the host's own route gates (`config :ash_quick, check: [gates: ...]`),
+  the `on_mount` stages `mix ash_quick.check` counts as gating a QuickView
+  besides `AshQuick.LiveView.RouteGate`. Defaults to `[]`.
+  """
+  def check_gates do
+    :check |> get([]) |> Keyword.get(:gates, [])
   end
 
   @doc """
