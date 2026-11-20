@@ -328,8 +328,15 @@ URL determines view type:
 
 Action resolved from (priority order):
 1. `action` URL parameter
-2. `live_action` from router (e.g. `:create`)
+2. The route: `/create` names `:create`
 3. Configured default action
+
+The id, and under an id the action, come from the path only (`/products/:id`,
+`/products/:id/:action`). `?action=` is read only on the list and `/create`
+URLs, to name a second list or create (`/products?action=newest_first`,
+`/products/create?action=quick_add`), and the page it names must be served by
+`quick_view/3`'s `:only`/`:except`: a create needs `:create`, a list `:index`,
+or it is not found. `?id=`, and `?action=` under an id, are dropped.
 
 ## Actions open in a modal
 

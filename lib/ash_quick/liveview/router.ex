@@ -32,6 +32,13 @@ defmodule AshQuick.LiveView.Router do
   button for a base path with no `/create` route, whatever the create policy
   says. Passing both `:only` and `:except` is an error.
 
+  A query cannot reach past them. `?action=` names a second list or a second
+  create on the id-less URLs, `/products?action=newest_first` or
+  `/products/create?action=quick_add`, and the page it names needs its own
+  route: a create needs `:create`, a list `:index`, or the URL is not found.
+  The id, and under an id the action, are read from the path alone, so
+  `?id=` and `/products/1?action=update` name nothing.
+
   ## Why the macro is the only supported way to route a QuickView
 
   Each generated route carries its base path as route metadata, and that is
@@ -67,7 +74,7 @@ defmodule AshQuick.LiveView.Router do
 
   defmacro quick_view(path, live_view, opts) when is_binary(path) and is_list(opts) do
     routes =
-      for {route, live_action} <- __routes__(path, opts) do
+      for {shape, route, live_action} <- shaped_routes(path, opts) do
         quote do
           Phoenix.LiveView.Router.live(
             unquote(route),
@@ -79,7 +86,11 @@ defmodule AshQuick.LiveView.Router do
                 # written here: the page builds its links from this, and a base
                 # path missing the prefix points every one of them outside the
                 # scope the route lives in.
-                base_path: Phoenix.Router.scoped_path(__MODULE__, unquote(path))
+                base_path: Phoenix.Router.scoped_path(__MODULE__, unquote(path)),
+                # Which of the four shapes this route is. The params a page
+                # reads arrive with path and query merged, so only the route
+                # can say whether an `id` or an `action` came from the path.
+                shape: unquote(shape)
               }
             }
           )
@@ -126,11 +137,15 @@ defmodule AshQuick.LiveView.Router do
 
   @doc false
   def __routes__(path, opts) do
+    for {_shape, route, live_action} <- shaped_routes(path, opts), do: {route, live_action}
+  end
+
+  defp shaped_routes(path, opts) do
     selected = selected_shapes(opts)
 
     for {name, {suffix, live_action}} <- @shapes,
         name in selected,
-        do: {path <> suffix, live_action}
+        do: {name, path <> suffix, live_action}
   end
 
   defp selected_shapes(opts) do

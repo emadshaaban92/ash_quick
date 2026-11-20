@@ -103,6 +103,21 @@ defmodule AshQuick.LiveView.RouterTest do
                URI.parse("http://localhost/admin/brands/#{Ash.UUID.generate()}")
              ) == "/admin/brands"
     end
+
+    # Path and query params reach the page merged, so the route is the only
+    # thing that can say whether an `id` or an `action` came from the path.
+    test "names its shape, and the shapes its base path is served at" do
+      socket = %Phoenix.LiveView.Socket{router: ScopedRouter, view: BrandLive.Quick}
+      id = Ash.UUID.generate()
+
+      assert %{base_path: "/admin/brands", shape: :index, served: served} =
+               QuickView.route!(socket, URI.parse("http://localhost/admin/brands?id=#{id}"))
+
+      assert served == MapSet.new([:index, :show])
+
+      assert %{shape: :show} =
+               QuickView.route!(socket, URI.parse("http://localhost/admin/brands/#{id}"))
+    end
   end
 
   describe "a QuickView reached through a route the macro did not declare" do
