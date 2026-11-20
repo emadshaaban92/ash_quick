@@ -13,6 +13,7 @@ defmodule AshQuick.CheckTest do
   alias AshQuick.Check.Report
   alias AshQuick.Test.Check.AccessControl
   alias AshQuick.Test.Check.Domain
+  alias AshQuick.Test.Check.HostGate
   alias AshQuick.Test.Check.Nav
 
   # Tower's reporters are passed in rather than read, so this module never
@@ -25,6 +26,7 @@ defmodule AshQuick.CheckTest do
           nav: Nav,
           actor_resource: AshQuick.Test.Check.Twin,
           exempt: [],
+          gates: [{HostGate, :require_user}, HostGate],
           tower_reporters: [Tower.EphemeralReporter]
         ],
         opts
@@ -139,6 +141,31 @@ defmodule AshQuick.CheckTest do
                "/gizmos serves AshQuick.Test.Check.GizmoLive.Quick outside any live session"
 
       assert ungated.message =~ "in the live session :ungated, which does not run"
+    end
+
+    # A host's own gate is known to the check only by the stage it is named as,
+    # so one unnamed, or named with another argument, gates nothing.
+    test "a host's own gate counts once it is named, as on_mount names it" do
+      ungated = fn opts ->
+        for %{check: :ungated_quick_view, subject: subject} <- run(opts).findings, do: subject
+      end
+
+      assert ungated.(gates: []) == ~w(/gizmos /host_gated /host_gated_bare /my_twins)
+
+      assert ungated.(gates: [{HostGate, :other}]) ==
+               ~w(/gizmos /host_gated /host_gated_bare /my_twins)
+
+      assert ungated.(gates: [HostGate]) == ~w(/gizmos /host_gated /my_twins)
+      assert ungated.(gates: [{HostGate, :default}]) == ~w(/gizmos /host_gated /my_twins)
+
+      assert ungated.(gates: [{HostGate, :require_user}]) ==
+               ~w(/gizmos /host_gated_bare /my_twins)
+    end
+
+    test "an ungated QuickView is told how to name a gate of its own" do
+      [finding | _] = for %{check: :ungated_quick_view} = f <- run().findings, do: f
+
+      assert finding.message =~ "check: [gates: [{MyAppWeb.UserAuth, :require_user}]]"
     end
 
     test "nothing is found when there is nothing to check" do

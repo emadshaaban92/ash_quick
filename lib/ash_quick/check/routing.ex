@@ -14,9 +14,11 @@ defmodule AshQuick.Check.Routing do
 
   alias AshQuick.Check.Finding
 
-  def run(nil), do: {[], [{:routing, "no router was given, so no route was read"}]}
+  def run(router, gates \\ [])
 
-  def run(router) do
+  def run(nil, _gates), do: {[], [{:routing, "no router was given, so no route was read"}]}
+
+  def run(router, gates) do
     all = Phoenix.Router.routes(router)
     served = MapSet.new(all, & &1.path)
     live_routes = Enum.filter(all, &(&1.plug == Phoenix.LiveView.Plug))
@@ -26,7 +28,7 @@ defmodule AshQuick.Check.Routing do
         mislabelled(router, live_routes) ++
         stray_base_paths(live_routes) ++
         route_gaps(live_routes, served) ++
-        ungated(live_routes)
+        ungated(live_routes, Enum.map(gates, &hook_id/1))
 
     {findings, []}
   end
@@ -194,13 +196,17 @@ defmodule AshQuick.Check.Routing do
   # the `live_session` its one `quick_view/3` line was written in. A hook the
   # view declares itself with `on_mount` counts the same as one the session
   # runs.
-  defp ungated(routes) do
+  # As `on_mount` reads a stage: a bare module is its `:default` stage.
+  defp hook_id({module, _arg} = id) when is_atom(module), do: id
+  defp hook_id(module) when is_atom(module), do: {module, :default}
+
+  defp ungated(routes, gates) do
     routes
     |> Enum.filter(&(match?(%{ash_quick: %{base_path: _}}, &1.metadata) and quick_view?(&1)))
     |> Enum.group_by(& &1.metadata.ash_quick.base_path)
     |> Enum.sort()
     |> Enum.flat_map(fn {base, routes} ->
-      case Enum.reject(routes, &gated?/1) do
+      case Enum.reject(routes, &gated?(&1, gates)) do
         [] -> []
         [route | _] -> [ungated_quick_view(base, route)]
       end
@@ -226,6 +232,9 @@ defmodule AshQuick.Check.Routing do
               {MyAppWeb.UserAuth, :require_user},
               AshQuick.LiveView.RouteGate
             ] do
+
+      A gate of your own that refuses the same paths is named instead, as \
+      `config :ash_quick, check: [gates: [{MyAppWeb.UserAuth, :require_user}]]`.
       """
     }
   end
@@ -238,10 +247,11 @@ defmodule AshQuick.Check.Routing do
   defp where(%{metadata: %{phoenix_live_view: {_view, _action, _opts, %{name: name}}}}),
     do: "in the live session #{inspect(name)}"
 
-  defp gated?(route), do: Enum.any?(session_hooks(route) ++ view_hooks(route), &gate_hook?/1)
+  defp gated?(route, gates),
+    do: Enum.any?(session_hooks(route) ++ view_hooks(route), &gate_hook?(&1, gates))
 
-  defp gate_hook?(%{id: {AshQuick.LiveView.RouteGate, _arg}}), do: true
-  defp gate_hook?(_hook), do: false
+  defp gate_hook?(%{id: {AshQuick.LiveView.RouteGate, _arg}}, _gates), do: true
+  defp gate_hook?(%{id: id}, gates), do: id in gates
 
   defp session_hooks(%{metadata: %{phoenix_live_view: {_view, _action, _opts, session}}}),
     do: get_in(session, [:extra, :on_mount]) || []

@@ -56,7 +56,9 @@ defmodule AshQuick.Check do
       `on_mount` does not run `AshQuick.LiveView.RouteGate`, and which does not
       declare it itself. The nav hides a route the access control does not
       grant; without the gate the page still serves anybody who types the URL.
-      The subject is the QuickView's base path.
+      The subject is the QuickView's base path. A host that refuses routes with
+      a gate of its own names that stage under `gates:` (see "A gate of your
+      own" below) rather than exempting each page.
 
   Over the resources and the router together:
 
@@ -127,6 +129,22 @@ defmodule AshQuick.Check do
   Exempting is a decision to keep the divergence, so it belongs in the
   application's configuration where it can be read back, rather than in a flag
   on the command that would make it invisible.
+
+  ## A gate of your own
+
+  A host whose refusal is its own to render (a notice its layout shows some
+  scopes at any URL, its own flash) keeps its gate rather than running
+  `AshQuick.LiveView.RouteGate`, and names the `on_mount` stage that runs it:
+
+      config :ash_quick,
+        check: [gates: [{MyAppWeb.UserAuth, :require_user}]]
+
+  A stage is written as it is in `on_mount`: `{module, argument}`, or a bare
+  module for `{module, :default}`. A QuickView whose session, or whose own
+  `on_mount`, runs one of them is not reported as `:ungated_quick_view`; one in
+  a session that runs none still is. The check cannot see what the stage does,
+  so naming it is the host's word that it refuses every path the access control
+  does not grant, matched as `AshQuick.LiveView.RouteGate.allowed?/3` matches.
   """
 
   alias AshQuick.Check.Display
@@ -155,6 +173,8 @@ defmodule AshQuick.Check do
       Defaults to the configured `:actor_resource`.
     * `:exempt` — `[check_name: [subject]]`. Defaults to the configured
       `:check, :exempt`.
+    * `:gates` — the host's own route gates, as `on_mount` stages. Defaults to
+      the configured `:check, :gates`.
     * `:tower_reporters` — the reporters Tower is configured with. Defaults to
       `:tower`'s `:reporters`, read with `:tower` loaded so its own default
       counts.
@@ -167,7 +187,7 @@ defmodule AshQuick.Check do
 
     [
       Resources.run(domains(opts)),
-      Routing.run(router),
+      Routing.run(router, Keyword.get_lazy(opts, :gates, &AshQuick.Config.check_gates/0)),
       Display.run(
         domains(opts),
         router,

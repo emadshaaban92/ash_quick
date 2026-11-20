@@ -1306,6 +1306,9 @@ covers wiring them up.
   `AshQuick.LiveView.RouteGate` **last**, after the stages that assign the
   scope and require a user. Without the gate the nav hides a route and a typed
   URL still opens it; `mix ash_quick.check` reports `:ungated_quick_view`.
+  A host that keeps its own gate (matching with `RouteGate.allowed?/3`) names
+  that stage instead: `config :ash_quick, check: [gates: [{MyAppWeb.UserAuth,
+  :require_user}]]`.
 - In `app.js`: `import {withAshQuick, attachAshQuick} from "ash_quick"`,
   then `new LiveSocket("/live", Socket, withAshQuick({...}))` with the host's
   options unchanged, and `attachAshQuick(liveSocket)`. `withAshQuick` adds the
