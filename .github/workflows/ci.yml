@@ -214,6 +214,13 @@ jobs:
       - name: Compile (warnings as errors)
         run: mix compile --warnings-as-errors
 
+      # Migrations and resource snapshots match the resources and the
+      # installed extensions: a resource change, or a dependency bump that
+      # ships a new Postgres extension version, without its generated
+      # migration fails here rather than at the dev server's codegen check.
+      - name: Generated code is up to date
+        run: mix ash.codegen --check
+
       # The compliance check the library ships, in the job it exists for: this
       # app is the worked example of a host that has reached zero and stays
       # there.
