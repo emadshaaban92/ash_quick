@@ -395,7 +395,7 @@ defmodule AshQuick.LiveView.Utils do
   defp path_loads(resource, name, tenant) when is_atom(name) do
     case Ash.Resource.Info.field(resource, name) do
       %struct{destination: destination} when struct in @relationships ->
-        {name, [{name, label_fields(destination, tenant)}]}
+        {name, [{name, record_fields(destination, tenant)}]}
 
       _field ->
         if loadable?(resource, name, tenant), do: {name, nil}, else: {[], nil}
@@ -430,7 +430,7 @@ defmodule AshQuick.LiveView.Utils do
        when struct in @relationships do
     query
     |> Ash.Query.load(name, opts)
-    |> Ash.Query.load([{name, label_fields(destination, query.tenant)}])
+    |> Ash.Query.load([{name, record_fields(destination, query.tenant)}])
   end
 
   defp maybe_load_field(%{tenant: tenant} = query, %{name: field_name}, opts)
@@ -448,6 +448,19 @@ defmodule AshQuick.LiveView.Utils do
 
   defp maybe_load_field(query, %{name: field_name}, opts) do
     Ash.Query.load(query, field_name, opts)
+  end
+
+  # What a field stopping at a relationship renders the record from: the
+  # record as a plain load brings it, every attribute selected by default,
+  # and its label. The attributes are named rather than left to that load,
+  # because a strict load brings them only while nothing else has narrowed the
+  # destination's select: a field listed earlier reaching one field of the same
+  # record (`[bin: :item_count]` before `:bin`) would otherwise leave a widget
+  # handed the record with `NotLoaded` attributes. Merged, so it widens the
+  # select and never narrows it.
+  defp record_fields(destination, tenant) do
+    Enum.to_list(Ash.Resource.Info.selected_by_default_attribute_names(destination)) ++
+      label_fields(destination, tenant)
   end
 
   defp require_tenant?(_resource, []), do: false

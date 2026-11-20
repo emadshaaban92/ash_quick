@@ -255,3 +255,39 @@ defmodule Example.Test.CountedBoxesLive.Quick do
       ]
     ]
 end
+
+defmodule Example.Test.CountedBoxCodesLive.Quick do
+  @moduledoc """
+  A second page over `Example.Test.CountedLabels.Box`, routed only in the test
+  build, where two fields reach the same bin: one its count, listed first,
+  and one the bin itself, drawn by a widget that reads the bin's code. The
+  widget is handed the whole record, so its code has to be loaded however the
+  count's field narrowed what the bin's read selects.
+  """
+  use AshQuick.LiveView.QuickView,
+    resource: Example.Test.CountedLabels.Box,
+    list: [
+      fields: [
+        :code,
+        {[bin: :item_count], label: "Bin count"},
+        {:bin, label: "Bin code", widget: &__MODULE__.bin_code/1}
+      ]
+    ],
+    details: [
+      fields: [
+        :code,
+        {[parent: [bin: :item_count]], label: "Parent bin count"},
+        {[parent: :bin], label: "Parent bin code", widget: &__MODULE__.bin_code/1}
+      ]
+    ]
+
+  def bin_code(assigns) do
+    ~H"""
+    <span>{code(@value)}</span>
+    """
+  end
+
+  defp code(%{code: code}) when is_binary(code), do: code
+  defp code(nil), do: ""
+  defp code(_bin), do: "not loaded"
+end
