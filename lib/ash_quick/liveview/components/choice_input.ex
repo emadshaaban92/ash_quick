@@ -25,6 +25,7 @@ defmodule AshQuick.LiveView.Components.ChoiceInput do
         update_min_len={0}
         allow_clear={true}
         options={@default_options}
+        value_mapper={@value_mapper}
         phx-target={@myself}
         phx-focus="set-default"
       />
@@ -38,6 +39,7 @@ defmodule AshQuick.LiveView.Components.ChoiceInput do
         container_extra_class="w-full"
         update_min_len={0}
         options={@default_options}
+        value_mapper={@value_mapper}
         allow_clear={true}
         mode={:quick_tags}
         tag_class="badge badge-primary h-auto min-h-6 py-0.5 max-w-full whitespace-normal"
@@ -52,8 +54,24 @@ defmodule AshQuick.LiveView.Components.ChoiceInput do
 
   @impl true
   def update(assigns, socket) do
-    {:ok, assign(socket, assigns) |> set_default_options() |> set_field()}
+    {:ok, assign(socket, assigns) |> set_default_options() |> set_field() |> set_value_mapper()}
   end
+
+  # LiveSelect labels the field's value from the options it holds, and it drops
+  # them once a pick is made. The component drawn at a sub-form's position can
+  # be handed another row's value — a ✕ above it moves every later row up — so
+  # each value is labelled here instead, whatever LiveSelect still holds.
+  defp set_value_mapper(socket) do
+    %{attribute: attribute} = socket.assigns
+    resource = socket.assigns[:resource]
+
+    assign(socket, value_mapper: &value_option(&1, attribute, resource))
+  end
+
+  defp value_option(blank, _attribute, _resource) when blank in [nil, ""], do: blank
+
+  defp value_option(value, attribute, resource),
+    do: %{label: EnumOptions.label(attribute, value, resource), value: value}
 
   defp set_default_options(socket) do
     assign(

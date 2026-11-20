@@ -508,4 +508,22 @@ defmodule AshQuick.LiveView.Utils do
   def field_path({field, label}) when is_binary(label), do: field
   def field_path([field]), do: field_path(field)
   def field_path(field), do: field
+
+  @doc false
+  # Whether a single attachment argument stands for the record's own attachment
+  # attribute of the same name, as in `change set_attribute(:image,
+  # arg(:image))`: it then starts from, and on a save with no upload keeps,
+  # what the record holds. Any other argument, a list among them, starts from
+  # nothing: an append-style action would add the stored files again.
+  def mirrors_attachment_attribute?(resource, %Ash.Resource.Actions.Argument{
+        name: name,
+        type: AshQuick.AshTypes.Attachment
+      }) do
+    match?(
+      %Ash.Resource.Attribute{type: AshQuick.AshTypes.Attachment},
+      Ash.Resource.Info.attribute(resource, name)
+    )
+  end
+
+  def mirrors_attachment_attribute?(_resource, _field), do: false
 end

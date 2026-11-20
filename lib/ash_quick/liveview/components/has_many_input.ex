@@ -4,6 +4,7 @@ defmodule AshQuick.LiveView.Components.HasManyInput do
   import AshQuick.Components
   import AshQuick.LiveView.Components.RecordOption
   require Ash.Query
+  import Ash.Expr, only: [ref: 1]
 
   alias AshQuick.LiveView.Utils
 
@@ -26,6 +27,7 @@ defmodule AshQuick.LiveView.Components.HasManyInput do
         container_extra_class="w-full"
         update_min_len={0}
         options={@default_options}
+        value_mapper={@value_mapper}
         allow_clear={true}
         mode={:quick_tags}
         tag_class="badge badge-primary h-auto min-h-6 py-0.5 max-w-full whitespace-normal"
@@ -43,7 +45,7 @@ defmodule AshQuick.LiveView.Components.HasManyInput do
 
   @impl true
   def update(assigns, socket) do
-    {:ok, assign(socket, assigns) |> set_default_options() |> set_field()}
+    {:ok, assign(socket, assigns) |> set_default_options() |> set_field() |> set_value_options()}
   end
 
   # The parent re-renders this on every keystroke in the form, and LiveSelect
@@ -64,6 +66,55 @@ defmodule AshQuick.LiveView.Components.HasManyInput do
   defp set_field(socket) do
     %{form: form, argument_name: argument_name} = socket.assigns
     assign(socket, field: form[argument_name])
+  end
+
+  # LiveSelect labels the field's values from the options it holds, which a
+  # search narrows. The component drawn at a sub-form's position can be handed
+  # another row's values — a ✕ above it moves every later row up — so each
+  # value's option is kept here, and LiveSelect is handed it whatever it still
+  # holds. Only the values no option here names are read, and each once: a
+  # record the reader may not see stays unlabelled.
+  defp set_value_options(socket) do
+    values =
+      socket.assigns.field.value
+      |> List.wrap()
+      |> Enum.reject(&(&1 in [nil, ""]))
+
+    known =
+      socket.assigns.default_options
+      |> Map.new(&{&1.value, &1})
+      |> Map.merge(socket.assigns[:value_options] || %{})
+
+    known =
+      case Enum.reject(values, &is_map_key(known, &1)) do
+        [] ->
+          known
+
+        missing ->
+          read = read_options(socket, missing)
+          missing |> Map.new(&{&1, Map.get(read, &1)}) |> Map.merge(known)
+      end
+
+    value_options = Map.take(known, values)
+
+    assign(socket,
+      value_options: value_options,
+      value_mapper: &(Map.get(value_options, &1) || &1)
+    )
+  end
+
+  defp read_options(socket, values) do
+    %{relationship: relationship} = socket.assigns
+    key = primary_key(relationship.destination)
+
+    relationship
+    |> option_query(nil, socket.assigns.scope)
+    |> Ash.Query.filter(^ref(key) in ^values)
+    |> Ash.read(page: false)
+    |> case do
+      {:ok, records} -> Map.new(records, &{Map.fetch!(&1, key), Utils.to_option(&1, key)})
+      {:error, _not_readable} -> %{}
+    end
   end
 
   @impl true
@@ -89,17 +140,10 @@ defmodule AshQuick.LiveView.Components.HasManyInput do
     key = primary_key(relationship.destination)
 
     default_options =
-      relationship.destination
-      |> Ash.Query.for_read(
-        Utils.lookup_action!(relationship),
-        Utils.lookup_input(relationship.destination, search),
-        scope: socket.assigns.scope
-      )
+      relationship
+      |> option_query(search, socket.assigns.scope)
       |> Utils.filter_inactive()
       |> maybe_add_relationship_filters(relationship.filters)
-      |> Ash.Query.select(key)
-      |> Utils.load_display_label()
-      |> Utils.load_display_hint()
       |> Ash.Query.page(count: false)
       |> Ash.read!()
 
@@ -118,6 +162,19 @@ defmodule AshQuick.LiveView.Components.HasManyInput do
       end
 
     Enum.map(default_options_with_current, &Utils.to_option(&1, key))
+  end
+
+  # The records the dropdown offers, each with what its option shows.
+  defp option_query(relationship, search, scope) do
+    relationship.destination
+    |> Ash.Query.for_read(
+      Utils.lookup_action!(relationship),
+      Utils.lookup_input(relationship.destination, search),
+      scope: scope
+    )
+    |> Ash.Query.select(primary_key(relationship.destination))
+    |> Utils.load_display_label()
+    |> Utils.load_display_hint()
   end
 
   # An option value is one scalar, so a composite key has nothing to be
