@@ -187,21 +187,26 @@ defmodule AshQuick.LiveView.MapFilter do
   # Exists, but not through a function wrapped around the operator. Bare, it
   # answers `NULL` for a `NULL` column, which drops the row from the read as
   # `false` would. The path is bound as text and cast by Postgres, which
-  # Postgrex has no type of its own for. A `?` in a fragment is a slot, so
-  # the operator's is escaped.
+  # Postgrex has no type of its own for, inside a scalar subselect: under a
+  # generic plan, which Postgres switches a connection to after a few runs
+  # of the same query, a bare cast is evaluated once per row, and a large
+  # table reads several times slower; a subselect is evaluated once. A GIN
+  # index still serves it. A `?` in a fragment is a slot, so the operator's
+  # is escaped.
   #
   # Built as the function itself rather than with `expr(fragment(...))`: a
   # filter's input, which a list's filter is read as so that its fields are
   # asked as a visitor may see them, takes no fragment by name, since a link
   # could otherwise write any SQL. This one is written here, never read from
   # the link, which only gives its path its keys and value.
-  defp matches(name, json_path), do: path_query("(? @\\? (?::text)::jsonpath)", name, json_path)
+  defp matches(name, json_path),
+    do: path_query("(? @\\? (select (?::text)::jsonpath))", name, json_path)
 
   # The same, to sit under a `not`, which would leave the `NULL` it answers
   # for a `NULL` column `NULL`: such a row holds no key and no value, so it
   # reads `false`, and `not` keeps it.
   defp negated(name, json_path),
-    do: path_query("coalesce(? @\\? (?::text)::jsonpath, false)", name, json_path)
+    do: path_query("coalesce(? @\\? (select (?::text)::jsonpath), false)", name, json_path)
 
   defp path_query(sql, name, json_path) do
     {:ok, fragment} = Ash.Query.Function.Fragment.new([sql, ref(name), json_path])

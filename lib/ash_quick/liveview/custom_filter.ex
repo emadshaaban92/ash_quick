@@ -219,6 +219,18 @@ defmodule AshQuick.LiveView.CustomFilter do
   end
 
   @doc """
+  `filter` with only the rows that filter by something, `applied?/1`, and
+  the groups holding one, or `nil` when none does: what Apply writes into
+  the URL, so a row left without a value adds nothing to the link.
+  """
+  def applied_only(%__MODULE__{} = filter), do: if(applied?(filter), do: prune(filter))
+
+  defp prune(%__MODULE__{children: [_ | _] = children} = group),
+    do: %__MODULE__{group | children: children |> Enum.filter(&applied?/1) |> Enum.map(&prune/1)}
+
+  defp prune(%__MODULE__{} = row), do: row
+
+  @doc """
   Whether `filter` filters by anything: a row with a field and a value, or
   with an operator that takes none, as Is Empty, or a group holding one. A row
   left without a value is skipped by `build_ash_filter/2`, and so is a group
@@ -420,7 +432,22 @@ defmodule AshQuick.LiveView.CustomFilter do
     |> Enum.reject(
       &(&1.name in belongs_to_source_attributes or AshQuick.Info.sensitive?(resource, &1.name))
     )
+    |> Enum.map(&built_on/1)
     |> Enum.filter(&(&1.public? and filterable?(&1) and offered_type?(resource, &1)))
+  end
+
+  # A field typed with an `Ash.Type.NewType`, as `AshQuick.AshTypes.Text`
+  # is, read as the type it is built on: offered, compared, typed in and
+  # checked as that type is. Its constraints are already the two types'
+  # together, as Ash initialised them. Ash's filter casts the value by the
+  # field's own type when it reads it. A `Money` is matched through its
+  # NewType by `money?/1`, and kept, as is a list.
+  defp built_on(%{type: type} = field) do
+    type = Ash.Type.get_type(type)
+
+    if is_atom(type) and Ash.Type.NewType.new_type?(type) and not money?(field),
+      do: %{field | type: Ash.Type.get_type(Ash.Type.NewType.subtype_of(type))},
+      else: field
   end
 
   # `filterable? :simple_equality` lets Ash compare a field only once in a
@@ -1140,6 +1167,18 @@ defmodule AshQuick.LiveView.CustomFilter do
     end
   end
 
+  # The most a filter may hold, as a link carries it: its text, its rows,
+  # how deep its groups nest, and the values one row compares with. A list
+  # draws a chip and a form row for each row, and Postgres plans each, so a
+  # filter with no bound costs the page and the read with every row a link
+  # adds, and any visitor can send one over the live socket, where no
+  # request line holds it back. Each is well past what a person builds in
+  # the form or a cell menu adds.
+  @max_encoded_bytes 8_192
+  @max_rows 50
+  @max_depth 5
+  @max_values 100
+
   @doc """
   Decodes what `to_string!/1` wrote, or `nil` for anything else.
 
@@ -1155,6 +1194,59 @@ defmodule AshQuick.LiveView.CustomFilter do
   `:error` for all of them, and still decodes the padding `to_string!/1` writes.
   """
   def from_string(filter_string) when is_binary(filter_string) do
+    case decode(filter_string) do
+      {:ok, filter} -> filter
+      _refused -> nil
+    end
+  end
+
+  @doc """
+  Decodes what `to_string!/1` wrote, as `from_string/1` does, telling a
+  filter past `within_bounds?/1`, `:too_large`, from text that is no filter
+  at all, `:error`.
+  """
+  def decode(filter_string) when is_binary(filter_string) do
+    cond do
+      byte_size(filter_string) > @max_encoded_bytes ->
+        :too_large
+
+      filter = read(filter_string) ->
+        if within_bounds?(filter), do: {:ok, filter}, else: :too_large
+
+      true ->
+        :error
+    end
+  end
+
+  @doc false
+  def bounds,
+    do: %{
+      encoded_bytes: @max_encoded_bytes,
+      rows: @max_rows,
+      depth: @max_depth,
+      values: @max_values
+    }
+
+  @doc """
+  Whether `filter` is within the bounds a list reads a filter in: at most
+  #{@max_rows} rows, groups nested at most #{@max_depth} deep, the root
+  counted, at most #{@max_values} values in one row, and at most
+  #{@max_encoded_bytes} bytes as `to_string!/1` writes it.
+  """
+  def within_bounds?(%__MODULE__{} = filter) do
+    leaves = leaves(filter)
+
+    length(leaves) <= @max_rows and depth(filter) <= @max_depth and
+      Enum.all?(leaves, &(&1.value |> List.wrap() |> length() <= @max_values)) and
+      byte_size(to_string!(filter)) <= @max_encoded_bytes
+  end
+
+  defp depth(%__MODULE__{children: [_ | _] = children}),
+    do: 1 + (children |> Enum.map(&depth/1) |> Enum.max())
+
+  defp depth(%__MODULE__{}), do: 0
+
+  defp read(filter_string) do
     case Base.decode64(filter_string) do
       {:ok, json} -> json |> JSON.decode!() |> from_map() |> root()
       :error -> nil

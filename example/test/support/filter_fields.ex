@@ -53,6 +53,7 @@ defmodule Example.Test.FilterFields do
         :code,
         :stamped_at,
         :salary,
+        :rate,
         :active,
         :stage,
         :ocr_status,
@@ -114,7 +115,10 @@ defmodule Example.Test.FilterFields do
     uuid_v7_primary_key :id
     attribute :code, :string, allow_nil?: false, public?: true
     attribute :stamped_at, :utc_datetime_usec, public?: true
-    attribute :salary, :integer, public?: true
+    # Never negative, so its filter value asks a phone for the number keyboard.
+    attribute :salary, :integer, public?: true, constraints: [min: 0]
+    # Takes a fraction, which a decimal comma can write.
+    attribute :rate, :decimal, public?: true
     attribute :active, :boolean, public?: true
     # An atom with no fixed set, typed in, whose value need not be an atom the
     # VM knows.

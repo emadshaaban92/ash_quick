@@ -115,6 +115,110 @@ defmodule AshQuick.LiveView.CustomFilterTest do
     end
   end
 
+  describe "a field typed with a NewType" do
+    alias AshQuick.Test.Filter.Typed
+
+    defp typed_field(name),
+      do: Typed |> CustomFilter.filterable_fields() |> Enum.find(&(&1.spec == name))
+
+    # Each is offered as the type it is built on, through as many NewTypes
+    # as it takes, with the constraints the two give it together.
+    test "is offered as the type it is built on" do
+      assert Typed |> CustomFilter.filterable_fields() |> Enum.map(& &1.spec) ==
+               [:id, :body, :stage, :count]
+
+      assert typed_field(:body).field.type == Ash.Type.String
+      assert typed_field(:count).field.type == Ash.Type.Integer
+      assert typed_field(:count).field.constraints[:min] == 0
+      assert typed_field(:stage).field.type == Ash.Type.Atom
+    end
+
+    test "compares by what its type built on offers" do
+      assert "contains" in FilterForm.offered_operators(typed_field(:body).field)
+      assert "gt" in FilterForm.offered_operators(typed_field(:count).field)
+      # A fixed set of values, picked rather than typed.
+      assert "in" in FilterForm.offered_operators(typed_field(:stage).field)
+    end
+
+    test "casts a value as its type would" do
+      assert {:ok, 3} = CustomFilter.cast_row_value(typed_field(:count).field, "equals", "3")
+      assert {:error, _} = CustomFilter.cast_row_value(typed_field(:count).field, "equals", "x")
+    end
+  end
+
+  describe "bounds" do
+    defp rows(count), do: for(i <- 1..count, do: %CustomFilter{row("code") | value: "v#{i}"})
+
+    defp nested(0), do: row("code")
+    defp nested(depth), do: group([nested(depth - 1)])
+
+    defp decoded(filter), do: filter |> CustomFilter.to_string!() |> CustomFilter.decode()
+
+    test "reads a filter up to each bound" do
+      %{rows: rows, depth: depth, values: values} = CustomFilter.bounds()
+
+      assert {:ok, _} = decoded(group(rows(rows)))
+      assert {:ok, _} = decoded(nested(depth))
+
+      assert {:ok, _} =
+               decoded(
+                 group([
+                   %CustomFilter{
+                     row("code")
+                     | operator: "in",
+                       value: Enum.map(1..values, &"#{&1}")
+                   }
+                 ])
+               )
+    end
+
+    test "refuses one past any bound as too large" do
+      %{rows: rows, depth: depth, values: values} = CustomFilter.bounds()
+
+      assert decoded(group(rows(rows + 1))) == :too_large
+      assert decoded(nested(depth + 1)) == :too_large
+
+      assert decoded(
+               group([
+                 %CustomFilter{row("code") | operator: "in", value: Enum.map(0..values, &"#{&1}")}
+               ])
+             ) ==
+               :too_large
+
+      long = group([%CustomFilter{row("code") | value: String.duplicate("x", 7_000)}])
+      assert decoded(long) == :too_large
+      assert CustomFilter.from_string(CustomFilter.to_string!(long)) == nil
+    end
+
+    # Never decoded, so text past the bound costs nothing to refuse.
+    test "refuses text past the bound before decoding it" do
+      %{encoded_bytes: bytes} = CustomFilter.bounds()
+      assert CustomFilter.decode(String.duplicate("A", bytes + 4)) == :too_large
+    end
+
+    test "tells text that is no filter from one too large" do
+      assert CustomFilter.decode("not base64!") == :error
+      assert CustomFilter.decode(Base.encode64("[1]")) == :error
+    end
+  end
+
+  describe "applied_only/1" do
+    test "leaves out the rows without a value, and groups left with none" do
+      kept = %CustomFilter{row("code") | value: "x"}
+      empty = %CustomFilter{row("code") | operator: "is_nil"}
+
+      filter = group([row("code"), kept, group([row("name")]), group([row("name"), empty])])
+
+      assert %CustomFilter{children: [^kept, %CustomFilter{children: [^empty]}]} =
+               CustomFilter.applied_only(filter)
+    end
+
+    test "is nil when no row filters by anything" do
+      assert CustomFilter.applied_only(group([row("code"), group([row("name")])])) == nil
+      assert CustomFilter.applied_only(group([])) == nil
+    end
+  end
+
   describe "reject_fields/2" do
     test "drops the rows naming a field, in nested groups too" do
       filter = group([row("salary"), row("code"), group([row("salary"), row("name")])])
@@ -511,6 +615,16 @@ defmodule AshQuick.LiveView.CustomFilterTest do
       assert MapFilter.parse_path("price..to.") == ["price", "to"]
       assert MapFilter.parse_path("") == []
       assert MapFilter.path_text(["price", "to"]) == "price.to"
+    end
+
+    # Under a generic plan, a bare cast of the bound path is evaluated once per
+    # row; a scalar subselect is evaluated once.
+    test "casts its key path once, in a subselect" do
+      for operator <- ["equals", "not_equals"] do
+        built = MapFilter.build(:changes, ["k"], operator, "x")
+        assert inspect(built, limit: :infinity) =~ "(select (?::text)::jsonpath)"
+        refute inspect(built, limit: :infinity) =~ ~r/\? \(\?::text\)::jsonpath/
+      end
     end
 
     test "builds no filter from a row with nothing to compare" do

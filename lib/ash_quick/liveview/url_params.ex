@@ -16,6 +16,9 @@ defmodule AshQuick.LiveView.URLParams do
             sort: nil,
             read_args: %{},
             show_custom_filter: false,
+            # Whether the URL's custom filter was past the bounds a list reads
+            # one in, and so dropped, which the list tells the visitor of.
+            custom_filter_refused?: false,
             limit_given?: false,
             # Unknown until `apply_pagination/2` reads the list's action, which
             # every page does before it writes a path.
@@ -36,6 +39,7 @@ defmodule AshQuick.LiveView.URLParams do
   """
   def from_url_params(params) do
     limit = params |> Map.get("limit") |> parse_limit()
+    {custom_filter, refused?} = params |> Map.get("custom_filter") |> decode_custom_filter()
 
     %__MODULE__{
       id: params |> Map.get("id") |> parse_id(),
@@ -45,7 +49,8 @@ defmodule AshQuick.LiveView.URLParams do
       page: params |> Map.get("page") |> parse_page(),
       search: params |> Map.get("search") |> parse_search(),
       selected_filters: params |> Map.get("selected_filters") |> parse_selected_filters(),
-      custom_filter: params |> Map.get("custom_filter") |> decode_custom_filter(),
+      custom_filter: custom_filter,
+      custom_filter_refused?: refused?,
       sort: params |> Map.get("sort") |> parse_sort(),
       read_args: params |> get_read_args(),
       show_custom_filter: Map.has_key?(params, "show_custom_filter")
@@ -419,11 +424,19 @@ defmodule AshQuick.LiveView.URLParams do
   # ways for a truncated copy-paste — or somebody's guess at the encoding — to
   # be undecodable. All three mean the same thing to the page: it has not been
   # told what to filter by, which is the unfiltered list rather than no list.
+  #
+  # A filter past `CustomFilter.within_bounds?/1` is read as none too, but
+  # the page says so: it decoded, so whoever sent it meant a filter, and the
+  # list they get is not the one they asked for.
   defp decode_custom_filter(custom_filter) when is_binary(custom_filter) do
-    CustomFilter.from_string(custom_filter)
+    case CustomFilter.decode(custom_filter) do
+      {:ok, filter} -> {filter, false}
+      :too_large -> {nil, true}
+      :error -> {nil, false}
+    end
   end
 
-  defp decode_custom_filter(_), do: nil
+  defp decode_custom_filter(_), do: {nil, false}
 
   defp maybe_put_read_args(params_for_path, %{read_args: read_args}) when read_args == %{},
     do: params_for_path

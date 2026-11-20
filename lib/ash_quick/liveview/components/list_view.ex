@@ -121,6 +121,7 @@ defmodule AshQuick.LiveView.Components.ListView do
                 columns={@fields}
                 filterable={@params.filterable}
                 flash={assigns[:flash] || %{}}
+                held_filter={assigns[:held_filter]}
               />
 
               <div class="flex items-center w-full space-x-2">
@@ -549,6 +550,9 @@ defmodule AshQuick.LiveView.Components.ListView do
   # changed on every render, and the filter form, handed it again, would go
   # back to the URL's filter and drop what was typed, as a flash dismissed
   # in the modal re-renders it.
+  #
+  # `held_filter` is one the list read without, as too slow to read with,
+  # which the form opens holding to be narrowed.
   defp custom_filter_modal(assigns) do
     ~H"""
     <ActionModal.action_modal
@@ -565,7 +569,7 @@ defmodule AshQuick.LiveView.Components.ListView do
         action={@action}
         filterable={@filterable}
         scope={@scope}
-        custom_filter={@params.custom_filter}
+        custom_filter={@params.custom_filter || @held_filter}
         labels={FilterChips.column_labels(@columns)}
         close={URLParams.full_path(@path, URLParams.toggle_show_custom_filter(@params))}
       />
