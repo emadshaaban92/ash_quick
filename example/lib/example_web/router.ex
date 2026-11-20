@@ -112,6 +112,8 @@ defmodule ExampleWeb.Router do
         quick_view "/brand_record_filter", Example.Test.BrandRecordFilterLive.Quick
         quick_view "/bulk_guarded", Example.Test.BulkGuardedLive.Quick
         quick_view "/bulk_named", Example.Test.BulkNamedLive.Quick
+        quick_view "/counted_bins", Example.Test.CountedBinsLive.Quick
+        quick_view "/counted_boxes", Example.Test.CountedBoxesLive.Quick
         quick_view "/dated_entries", Example.Test.DatedEntriesLive.Quick
         quick_view "/default_pages", Example.Test.DefaultPagesLive.Quick
         quick_view "/digits_only", Example.Test.DigitsOnlyLive.Quick

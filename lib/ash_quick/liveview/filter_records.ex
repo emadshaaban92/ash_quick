@@ -102,10 +102,10 @@ defmodule AshQuick.LiveView.FilterRecords do
       scope: scope
     )
     |> Ash.Query.select(key.name)
-    # Loaded by the list's column rule, so an aggregate label needing a
-    # tenant the reader has not got is skipped rather than failing the read,
-    # and the record is named by its key, as a list row's checkbox is.
-    |> Utils.load_fields([AshQuick.Info.display_label(resource)], strict?: true)
+    # An aggregate label needing a tenant the reader has not got is skipped
+    # rather than failing the read, and the record is named by its key, as a
+    # list row's checkbox is.
+    |> Utils.load_display_label()
     |> Utils.load_display_hint()
   end
 

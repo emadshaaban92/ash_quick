@@ -30,10 +30,10 @@ defmodule AshQuick.LiveView.ListRead do
     |> Utils.load_fields(options.list_fields, strict?: true)
     |> Ash.Query.load(options.load ++ options.list_load, strict?: true)
     # Not drawn as a column unless listed, but every row's checkbox is named
-    # after it. Loaded by the column rule, so an aggregate label needing a
-    # tenant the reader has not got is skipped, not failing the whole read,
-    # and those rows' checkboxes are named by id.
-    |> Utils.load_fields([AshQuick.Info.display_label(options.resource)], strict?: true)
+    # after it. An aggregate label needing a tenant the reader has not got is
+    # skipped, not failing the whole read, and those rows' checkboxes are
+    # named by id.
+    |> Utils.load_display_label()
     |> then(
       &Ash.Query.load(
         &1,

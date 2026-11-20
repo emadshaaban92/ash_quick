@@ -846,7 +846,11 @@ end
 ```
 
 `label` names an attribute, calculation or aggregate — a composed label belongs
-in a calculation.
+in a calculation. An aggregate over records held per tenant (multitenant and
+not `global?`) can only be counted by a reader with a tenant: for a reader
+with none it is left unloaded, so the page still opens and names the record by
+its id instead. A field reaching the label by an explicit path
+(`[bin: :item_count]`) draws the label itself, so it is blank there.
 
 Keep the label short, since it is what a dropdown option shows. Where two
 records can share one, `hint` names the field that tells them apart, and `path`

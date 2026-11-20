@@ -62,10 +62,8 @@ defmodule AshQuick.LiveView.PrintUtils do
   end
 
   defp render!(template, [%resource{} | _] = records, scope) do
-    records =
-      Ash.load!(records, [AshQuick.Info.display_label(resource) | template.load_opts()],
-        scope: scope
-      )
+    label = AshQuick.LiveView.Utils.label_fields(resource, AshQuick.Scope.tenant(scope))
+    records = Ash.load!(records, label ++ template.load_opts(), scope: scope)
 
     {filename(template, resource, records, AshQuick.Scope.timezone(scope)),
      AshQuick.Config.pdf_renderer().render(template.render(records))}
