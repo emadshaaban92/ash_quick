@@ -167,23 +167,32 @@ defmodule AshQuick.LiveView.ListRows do
     assign(socket, selected_rows: selected, row_actions: row_actions)
   end
 
-  # A notification is noted before the refetch it may defer, so a coalesced
-  # refetch still knows everything that woke it. One heard on the resource's
-  # bare topic names its record: on screen, it refreshes that row; off screen,
-  # or shown as "No longer available", a create or an update makes it a
-  # candidate for the bar — a row edited back into the search comes back
-  # through Reload. A destroy off screen adds nothing. One heard on a record's
-  # own topic is a record a row shows, whatever its resource: the list holds no
-  # row's own topic, and a category's parent arrives on both, where the bare
-  # topic's copy alone would only make it a candidate.
-  def note_notification(socket, topic, %Ash.Notifier.Notification{} = notification, options) do
+  # A notice is noted before the refetch it may defer, so a coalesced refetch
+  # still knows everything that woke it. One heard on the resource's own
+  # collection topic (in the tenant the list reads in) names its record: on
+  # screen, it refreshes that row; off screen, or shown as "No longer
+  # available", a create or an update makes it a candidate for the bar — a row
+  # edited back into the search comes back through Reload. A destroy off screen
+  # adds nothing. One heard on a record's own topic is a record a row shows,
+  # whatever its resource: the list holds no row's own topic, and a category's
+  # parent arrives on both, where the collection topic's copy alone would only
+  # make it a candidate.
+  def note_notice(socket, topic, %AshQuick.PubSub.Notice{} = notice, options) do
     current = socket.assigns.list_pending
 
+    tenant =
+      AshQuick.LiveView.Liveness.listen_tenant(
+        options.resource,
+        options.resource,
+        AshQuick.Scope.tenant(socket.assigns.scope),
+        socket.assigns.ash_action
+      )
+
     pending =
-      case notification do
-        %{resource: resource, data: %{id: id}} when resource == options.resource ->
-          if topic == AshQuick.Topics.collection(resource),
-            do: note_own(current, id, notification, socket.assigns),
+      case notice do
+        %{resource: resource, id: id} when resource == options.resource ->
+          if topic == AshQuick.Topics.collection(resource, tenant),
+            do: note_own(current, id, notice, socket.assigns),
             else: %{current | refresh?: true}
 
         _related ->
@@ -197,15 +206,15 @@ defmodule AshQuick.LiveView.ListRows do
       else: {:ok, assign(socket, :list_pending, pending)}
   end
 
-  defp note_own(pending, id, notification, %{row_order: order, gone_rows: gone} = assigns) do
+  defp note_own(pending, id, notice, %{row_order: order, gone_rows: gone} = assigns) do
     cond do
       id in order and not MapSet.member?(gone, id) -> %{pending | refresh?: true}
       assigns.list_news -> pending
-      true -> note_candidate(pending, id, notification)
+      true -> note_candidate(pending, id, notice)
     end
   end
 
-  defp note_candidate(pending, id, %{action: %{type: type}}) when type in [:create, :update],
+  defp note_candidate(pending, id, %{type: type}) when type in [:create, :update],
     do: %{pending | candidates: Map.update(pending.candidates, id, type, &max_kind(&1, type))}
 
   defp note_candidate(pending, _id, _destroy), do: pending

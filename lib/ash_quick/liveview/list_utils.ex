@@ -66,7 +66,11 @@ defmodule AshQuick.LiveView.ListUtils do
         results: :lose,
         after_fetch: &ListRows.after_refetch(&1, &2, params, options)
       ] ++
-        Liveness.list_options(options)
+        Liveness.list_options(
+          options,
+          AshQuick.Scope.tenant(socket.assigns.scope),
+          socket.assigns.ash_action
+        )
     )
   end
 
@@ -217,7 +221,7 @@ defmodule AshQuick.LiveView.ListUtils do
   end
 
   defp handle_list_info(
-         %{topic: topic, payload: %Ash.Notifier.Notification{} = notification},
+         %{topic: topic, payload: %AshQuick.PubSub.Notice{} = notice},
          socket,
          options
        ) do
@@ -229,7 +233,7 @@ defmodule AshQuick.LiveView.ListUtils do
         topics -> topic in topics
       end
 
-    case subscribed? and ListRows.note_notification(socket, topic, notification, options) do
+    case subscribed? and ListRows.note_notice(socket, topic, notice, options) do
       {:ok, socket} -> {:halt, AshPhoenix.LiveView.handle_live(socket, topic, :data)}
       _ignored -> {:halt, socket}
     end

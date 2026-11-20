@@ -32,7 +32,7 @@ defmodule AshQuick.PubSub.Transformer do
     |> set_default([:pub_sub], :module, AshQuick.Config.endpoint())
     |> set_default([:pub_sub], :broadcast_type, :notification)
     |> set_default([:pub_sub], :delimiter, AshQuick.Topics.delimiter())
-    |> Transformer.set_option([:pub_sub], :prefix, AshQuick.Topics.collection(dsl_state))
+    |> Transformer.set_option([:pub_sub], :prefix, AshQuick.Topics.prefix(dsl_state))
   end
 
   defp set_default(dsl_state, path, option, value) do
@@ -52,26 +52,59 @@ defmodule AshQuick.PubSub.Transformer do
   # `nil` alternative drops the id segment. One publication feeds both a
   # row-scoped and a collection-wide subscriber.
   #
+  # A multitenant resource publishes inside its tenant instead,
+  # `["tenant", <tenant>, [:id, nil]]`, and one some reader may read across
+  # tenants on the bare topics as well; see `AshQuick.Topics`. An attribute tenant is read off the record
+  # as written. Not off the record as it was too (`previous_values?`): that
+  # needs the original row, which a fully atomic update does not read, so
+  # every `require_atomic?` update of the resource would refuse to run.
+  #
+  # Each one sends an `AshQuick.PubSub.Notice`, never the notification: every
+  # subscriber on a topic gets the same message, and the record, changeset and
+  # actor in a notification are not every subscriber's to read.
+  #
   # The update publication carries `AshQuick.PubSub.Filter`, so a quiet update
   # that changes nothing publishes nothing; see there. Creates and destroys
   # always change something, and the resource's own publications are not
   # filtered.
   defp put_publications(dsl_state) do
-    Enum.reduce(@types, dsl_state, fn type, dsl_state ->
-      {:ok, publication} =
-        Transformer.build_entity(
-          Ash.Notifier.PubSub,
-          [:pub_sub],
-          :publish_all,
-          [type: type, topic: [[:id, nil]]] ++ filter(type)
-        )
+    for type <- @types, {topic, filter} <- topics(dsl_state), reduce: dsl_state do
+      dsl_state ->
+        {:ok, publication} =
+          Transformer.build_entity(
+            Ash.Notifier.PubSub,
+            [:pub_sub],
+            :publish_all,
+            [type: type, transform: &AshQuick.PubSub.Notice.from_notification/1] ++
+              topic ++ filter(type, filter)
+          )
 
-      Transformer.add_entity(dsl_state, [:pub_sub], publication, type: :append)
-    end)
+        Transformer.add_entity(dsl_state, [:pub_sub], publication, type: :append)
+    end
   end
 
-  defp filter(:update), do: [filter: &AshQuick.PubSub.Filter.publish?/1]
-  defp filter(_type), do: []
+  defp topics(dsl_state) do
+    bare = {[topic: [[:id, nil]]], :bare}
+
+    case AshQuick.Topics.tenant_template(dsl_state) do
+      nil ->
+        [bare]
+
+      tenant ->
+        tenanted = {[topic: [AshQuick.Topics.tenant_segment(), tenant, [:id, nil]]], :tenanted}
+
+        if AshQuick.Topics.publishes_bare?(dsl_state),
+          do: [tenanted, bare],
+          else: [tenanted]
+    end
+  end
+
+  # A tenanted publication also refuses a tenant whose value contains the
+  # delimiter, which would land on another tenant's record topic.
+  defp filter(:update, :bare), do: [filter: &AshQuick.PubSub.Filter.publish?/1]
+  defp filter(:update, :tenanted), do: [filter: &AshQuick.PubSub.Filter.publish_tenanted?/1]
+  defp filter(_type, :tenanted), do: [filter: &AshQuick.Topics.nameable?/1]
+  defp filter(_type, :bare), do: []
 
   # `notifiers:` is an extension list, which a transformer cannot add to — but
   # `Ash.Resource.Info.notifiers/1` reads `:simple_notifiers` alongside it, and

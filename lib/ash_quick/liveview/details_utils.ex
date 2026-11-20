@@ -36,7 +36,12 @@ defmodule AshQuick.LiveView.DetailsUtils do
     |> AshPhoenix.LiveView.keep_live(
       :record,
       &load_record!(&1, params, options),
-      Liveness.details_options(options, params)
+      Liveness.details_options(
+        options,
+        params,
+        AshQuick.Scope.tenant(socket.assigns.scope),
+        socket.assigns.ash_action
+      )
     )
     |> set_title(options)
   end
@@ -136,7 +141,7 @@ defmodule AshQuick.LiveView.DetailsUtils do
     socket |> assign(page_title: title)
   end
 
-  defp handle_details_info(%{topic: topic, payload: %Ash.Notifier.Notification{}}, socket, _) do
+  defp handle_details_info(%{topic: topic, payload: %AshQuick.PubSub.Notice{}}, socket, _) do
     {:halt, AshPhoenix.LiveView.handle_live(socket, topic, :record)}
   end
 

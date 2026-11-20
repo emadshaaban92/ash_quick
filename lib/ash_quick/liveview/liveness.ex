@@ -12,9 +12,13 @@ defmodule AshQuick.LiveView.Liveness do
   `AshPhoenix.LiveView.keep_live/4` options for a list assign.
 
   Empty for a resource that publishes nothing — the page is simply not live.
+
+  `tenant` is the reader's, off its scope, and `action` the read the page
+  runs: on a multitenant resource the page listens inside the tenant it reads
+  in (see `listen_tenant/4`).
   """
-  def list_options(%Options{} = options) do
-    build(options, :collection)
+  def list_options(%Options{} = options, tenant, action) do
+    build(options, :collection, tenant, action)
   end
 
   @doc """
@@ -29,14 +33,19 @@ defmodule AshQuick.LiveView.Liveness do
   topic nothing publishes to. An id that does not cast names no record, and
   listens on nothing.
   """
-  def details_options(%Options{resource: resource} = options, %URLParams{id: id}) do
+  def details_options(%Options{resource: resource} = options, %URLParams{id: id}, tenant, action) do
     # Cast once, and only for a page that will listen at all.
     url_ids = if AshQuick.Topics.enabled?(resource), do: url_ids(resource, id), else: []
 
-    build(options, fn
-      nil -> url_ids
-      result -> record_ids(result)
-    end)
+    build(
+      options,
+      fn
+        nil -> url_ids
+        result -> record_ids(result)
+      end,
+      tenant,
+      action
+    )
   end
 
   # A resource without the extension may have no `:id` at all, and then the URL
@@ -53,9 +62,9 @@ defmodule AshQuick.LiveView.Liveness do
   # Whether a view is live is the resource's call, not the view's: the
   # `ash_quick.liveness` block decides who publishes, and a QuickView listens
   # exactly when there is something to hear. `liveness_options` only tunes it.
-  defp build(%Options{resource: resource} = options, ids_fun) do
+  defp build(%Options{resource: resource} = options, ids_fun, tenant, action) do
     case AshQuick.Topics.enabled?(resource) do
-      true -> live_options(options, ids_fun)
+      true -> live_options(options, ids_fun, listening(resource, tenant, action))
       false -> []
     end
   end
@@ -75,7 +84,13 @@ defmodule AshQuick.LiveView.Liveness do
   # topics are published — Ash expands `publish_all [[:id, nil]]` into both
   # "product:<id>" and the bare "product", the `nil` alternative dropping the id
   # segment.
-  defp live_options(%Options{resource: resource, liveness_options: liveness}, ids_fun) do
+  #
+  # Every topic is in the tenant the page reads in, per resource (`tenant` is
+  # `listen_tenant/4` over the page's tenant and read action): a related
+  # record of a multitenant resource is watched inside it, and one of a
+  # resource without multitenancy on its bare topic. A tenant that names no
+  # topic leaves that resource's records unwatched.
+  defp live_options(%Options{resource: resource, liveness_options: liveness}, ids_fun, tenant) do
     {recursive?, liveness} = Keyword.pop(liveness, :recursive?, true)
     {extra_records, liveness} = Keyword.pop(liveness, :extra_records, nil)
     liveness = Keyword.put_new(liveness, :refetch_window, Config.refetch_window())
@@ -88,25 +103,27 @@ defmodule AshQuick.LiveView.Liveness do
         Keyword.put(
           liveness,
           :subscribe,
-          &topics(&1, recursive?, resource, ids_fun, extra_records)
+          &topics(&1, recursive?, resource, ids_fun, extra_records, tenant)
         )
     end
   end
 
-  defp topics(result, recursive?, resource, ids_fun, extra_records) do
-    own = own_topics(result, recursive?, resource, ids_fun)
+  defp topics(result, recursive?, resource, ids_fun, extra_records, tenant) do
+    own = own_topics(result, recursive?, resource, ids_fun, tenant)
 
-    Enum.uniq(own ++ extra_record_topics(result, extra_records))
+    (own ++ extra_record_topics(result, extra_records, tenant))
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
   end
 
-  # A list listens on the resource's bare topic instead of one per row: it has
-  # to hear about records it is not showing (a create, a row edited into its
-  # filter) to know when to offer a Reload, and that topic carries every row
-  # it is showing too. What its rows show is still watched record by record,
-  # a related record of the list's own resource (a category's parent) among
-  # it: on the bare topic alone it would read as a record off screen, and the
-  # row showing it would never follow its rename.
-  defp own_topics(result, recursive?, resource, :collection) do
+  # A list listens on the resource's collection topic instead of one per row:
+  # it has to hear about records it is not showing (a create, a row edited
+  # into its filter) to know when to offer a Reload, and that topic carries
+  # every row it is showing too. What its rows show is still watched record by
+  # record, a related record of the list's own resource (a category's parent)
+  # among it: on the collection topic alone it would read as a record off
+  # screen, and the row showing it would never follow its rename.
+  defp own_topics(result, recursive?, resource, :collection, tenant) do
     rows = MapSet.new(rows(result), & &1.id)
 
     related =
@@ -121,21 +138,53 @@ defmodule AshQuick.LiveView.Liveness do
       end
 
     [
-      AshQuick.Topics.collection(resource)
-      | for({res, id} <- related, do: AshQuick.Topics.record(res, id))
+      AshQuick.Topics.collection(resource, tenant.(resource))
+      | for({res, id} <- related, do: AshQuick.Topics.record(res, id, tenant.(res)))
     ]
   end
 
-  defp own_topics(result, false, resource, ids_fun),
-    do: for(id <- ids_fun.(result), do: AshQuick.Topics.record(resource, id))
+  defp own_topics(result, false, resource, ids_fun, tenant),
+    do: for(id <- ids_fun.(result), do: AshQuick.Topics.record(resource, id, tenant.(resource)))
 
   # A details page whose record read back nil offers no graph to walk, but the
   # id in the URL names the record the page is about either way, so the page
   # still wakes up if the record becomes readable.
-  defp own_topics(result, true, resource, ids_fun) do
+  defp own_topics(result, true, resource, ids_fun, tenant) do
     case Graph.walk(result) do
-      {[], _skipped} -> own_topics(result, false, resource, ids_fun)
-      {watchable, _skipped} -> for {res, id} <- watchable, do: AshQuick.Topics.record(res, id)
+      {[], _skipped} ->
+        own_topics(result, false, resource, ids_fun, tenant)
+
+      {watchable, _skipped} ->
+        for {res, id} <- watchable, do: AshQuick.Topics.record(res, id, tenant.(res))
+    end
+  end
+
+  defp listening(resource, tenant, action),
+    do: &listen_tenant(&1, resource, tenant, action)
+
+  @doc """
+  The tenant a page reading `own` through `action` in `tenant` listens in for
+  records of `resource`.
+
+  The reader's tenant, unless the read crosses tenants: a `:bypass` or
+  `:bypass_all` read action shows every tenant's records of its own resource,
+  so the page listens on its bare topics, which such a resource publishes on
+  (`AshQuick.Topics`). `:bypass_all` does the same for the related records it
+  loads, where their resource publishes on the bare topics too.
+  """
+  def listen_tenant(resource, own, tenant, action) do
+    case action do
+      %{multitenancy: :bypass} when resource == own ->
+        nil
+
+      %{multitenancy: :bypass_all} when resource == own ->
+        nil
+
+      %{multitenancy: :bypass_all} ->
+        if AshQuick.Topics.publishes_bare?(resource), do: nil, else: tenant
+
+      _ ->
+        tenant
     end
   end
 
@@ -145,15 +194,15 @@ defmodule AshQuick.LiveView.Liveness do
 
   # The hook hands back records or `{resource, id}` pairs, never topics, so the
   # one function that spells a topic out stays `AshQuick.Topics`.
-  defp extra_record_topics(_result, nil), do: []
+  defp extra_record_topics(_result, nil, _tenant), do: []
 
-  defp extra_record_topics(result, fun) do
+  defp extra_record_topics(result, fun, tenant) do
     result
     |> fun.()
     |> List.wrap()
     |> Enum.map(fn
-      {resource, id} -> AshQuick.Topics.record(resource, id)
-      %resource{id: id} -> AshQuick.Topics.record(resource, id)
+      {resource, id} -> AshQuick.Topics.record(resource, id, tenant.(resource))
+      %resource{id: id} -> AshQuick.Topics.record(resource, id, tenant.(resource))
     end)
   end
 

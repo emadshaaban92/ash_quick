@@ -147,7 +147,7 @@ defmodule ExampleWeb.QuietWritesScenarioTest do
 
     test "still fires a publication the resource declares itself", %{admin: admin} do
       record = quiet_write(admin)
-      own = "#{AshQuick.Topics.collection(QuietWrites)}:pinged:#{record.id}"
+      own = "#{AshQuick.Topics.prefix(QuietWrites)}:pinged:#{record.id}"
       listen(record)
       ExampleWeb.Endpoint.subscribe(own)
 
@@ -209,8 +209,8 @@ defmodule ExampleWeb.QuietWritesScenarioTest do
         actor: admin
       )
 
-      changed_topic = AshQuick.Topics.record(QuietWrites, changed.id)
-      unchanged_topic = AshQuick.Topics.record(QuietWrites, unchanged.id)
+      changed_topic = AshQuick.Topics.record(QuietWrites, changed.id, nil)
+      unchanged_topic = AshQuick.Topics.record(QuietWrites, unchanged.id, nil)
 
       assert_receive %Broadcast{topic: ^changed_topic}
       refute_receive %Broadcast{topic: ^unchanged_topic}
@@ -271,21 +271,21 @@ defmodule ExampleWeb.QuietWritesScenarioTest do
   end
 
   defp listen(record) do
-    ExampleWeb.Endpoint.subscribe(AshQuick.Topics.record(QuietWrites, record.id))
-    ExampleWeb.Endpoint.subscribe(AshQuick.Topics.collection(QuietWrites))
+    ExampleWeb.Endpoint.subscribe(AshQuick.Topics.record(QuietWrites, record.id, nil))
+    ExampleWeb.Endpoint.subscribe(AshQuick.Topics.collection(QuietWrites, nil))
   end
 
   defp assert_broadcast(record) do
-    record_topic = AshQuick.Topics.record(QuietWrites, record.id)
-    collection_topic = AshQuick.Topics.collection(QuietWrites)
+    record_topic = AshQuick.Topics.record(QuietWrites, record.id, nil)
+    collection_topic = AshQuick.Topics.collection(QuietWrites, nil)
 
-    assert_receive %Broadcast{topic: ^record_topic, payload: %Ash.Notifier.Notification{}}
-    assert_receive %Broadcast{topic: ^collection_topic, payload: %Ash.Notifier.Notification{}}
+    assert_receive %Broadcast{topic: ^record_topic, payload: %AshQuick.PubSub.Notice{}}
+    assert_receive %Broadcast{topic: ^collection_topic, payload: %AshQuick.PubSub.Notice{}}
   end
 
   defp refute_broadcast(record) do
-    record_topic = AshQuick.Topics.record(QuietWrites, record.id)
-    collection_topic = AshQuick.Topics.collection(QuietWrites)
+    record_topic = AshQuick.Topics.record(QuietWrites, record.id, nil)
+    collection_topic = AshQuick.Topics.collection(QuietWrites, nil)
 
     refute_receive %Broadcast{topic: ^record_topic}
     refute_receive %Broadcast{topic: ^collection_topic}

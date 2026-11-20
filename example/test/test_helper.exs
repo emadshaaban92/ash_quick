@@ -32,6 +32,8 @@ for resource <- [
       Example.Test.ShelvedCrates.Item,
       Example.Test.ShelvedCrates.Shelf,
       Example.Test.SmallPages,
+      Example.Test.TenantBroadcasts.Bin,
+      Example.Test.TenantBroadcasts.Crate,
       Example.Test.TwoFileRows,
       Example.Test.WideOffsetPages,
       Example.Test.WordedPolicy

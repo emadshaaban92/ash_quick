@@ -22,14 +22,16 @@ defmodule AshQuick.LiveView.LivenessTest do
   }
 
   defp subscribed(id) do
-    subscribe = Keyword.fetch!(Liveness.details_options(@options, %URLParams{id: id}), :subscribe)
+    subscribe =
+      Keyword.fetch!(Liveness.details_options(@options, %URLParams{id: id}, nil, nil), :subscribe)
+
     subscribe.(nil)
   end
 
   test "an upper-cased UUID listens on the topic its record publishes" do
     id = Ash.UUID.generate()
 
-    assert subscribed(String.upcase(id)) == [AshQuick.Topics.record(Product, id)]
+    assert subscribed(String.upcase(id)) == [AshQuick.Topics.record(Product, id, nil)]
   end
 
   test "an id that does not cast names no record, and listens on nothing" do
@@ -54,6 +56,6 @@ defmodule AshQuick.LiveView.LivenessTest do
   test "a resource with no :id is not live, and does not raise" do
     options = %Options{@options | resource: Keyless}
 
-    assert Liveness.details_options(options, %URLParams{id: Ash.UUID.generate()}) == []
+    assert Liveness.details_options(options, %URLParams{id: Ash.UUID.generate()}, nil, nil) == []
   end
 end

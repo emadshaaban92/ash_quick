@@ -11,6 +11,14 @@ defmodule AshQuick do
   subscribes to from the same functions, so a page cannot listen on a topic the
   resource does not publish.
 
+  A multitenant resource publishes inside its tenant instead
+  (`"product:tenant:<t>"`), and one some reader may read across tenants on the
+  bare topics as well, so
+  a page hears only the writes of the tenant it reads in. What is published is
+  an `AshQuick.PubSub.Notice`, naming the record and the kind of write and
+  carrying none of its data: the page reads the record again under its own
+  reader's scope. See `AshQuick.Topics`.
+
   An update is published even when it changes no attribute of its record,
   because it may have done its work in a hook: created or updated records a
   calculation or aggregate on this one reads. Those records' own broadcasts
