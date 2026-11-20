@@ -1272,3 +1272,322 @@ defmodule AshQuick.Test.Report do
   def bytes("bin"), do: <<0xFF, 0xFE, 0x00>> <> "zq-report-body"
   def bytes(_format), do: "zq-report-body"
 end
+
+defmodule AshQuick.Test.CardIssuer do
+  @moduledoc """
+  The embed inside `AshQuick.Test.PaymentCard`, holding a secret of its own.
+  It derives an encoder, which must not keep Ash's bookkeeping in a row.
+  """
+  use Ash.Resource, data_layer: :embedded
+
+  @derive {Jason.Encoder, except: [:__meta__]}
+
+  attributes do
+    attribute :name, :string, public?: true
+    attribute :api_secret, :string, public?: true, sensitive?: true
+  end
+end
+
+defmodule AshQuick.Test.PaymentCard do
+  @moduledoc """
+  An embedded card with a `sensitive?` code. `:issuer` nests a second level.
+  """
+  use Ash.Resource, data_layer: :embedded
+
+  attributes do
+    uuid_primary_key :id
+    attribute :holder, :string, public?: true
+    attribute :cvv, :string, public?: true, sensitive?: true
+    attribute :issuer, AshQuick.Test.CardIssuer, public?: true
+  end
+end
+
+defmodule AshQuick.Test.BoxedCard do
+  @moduledoc """
+  A union member stored `:map_with_tag` under the tag `:type`, with an
+  attribute named `:value`: as stored it has the shape of a
+  `:type_and_value` union, and must still be read by its tag.
+  """
+  use Ash.Resource, data_layer: :embedded
+
+  attributes do
+    attribute :type, :string, public?: true
+    attribute :value, :string, public?: true
+    attribute :cvv, :string, public?: true, sensitive?: true
+  end
+end
+
+defmodule AshQuick.Test.ChargeInput do
+  @moduledoc """
+  The embedded input `AshQuick.Test.Wallet.add_typed_charges` declares for
+  its managed argument. Its `amount` is `sensitive?` here and not on
+  `AshQuick.Test.WalletCharge`, so only the argument's own type redacts it.
+  """
+  use Ash.Resource, data_layer: :embedded
+
+  attributes do
+    attribute :amount, :integer, public?: true, sensitive?: true
+    attribute :pin, :string, public?: true
+  end
+end
+
+defmodule AshQuick.Test.JsonWallet do
+  @moduledoc """
+  A union holding an embedded card, recorded into
+  `AshQuick.Test.JsonAuditStore`, which refuses a row no `jsonb` column would
+  take.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.AuditDomain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshQuick]
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true
+
+    attribute :payment, :union,
+      public?: true,
+      constraints: [types: [card: [type: AshQuick.Test.PaymentCard], note: [type: :string]]]
+  end
+
+  actions do
+    default_accept [:name, :payment]
+    defaults [:create]
+  end
+
+  ash_quick do
+    audit do
+      store AshQuick.Test.JsonAuditStore
+    end
+
+    display do
+      label :name
+    end
+
+    liveness do
+      enabled? false
+    end
+
+    versioning do
+      enabled? false
+    end
+
+    bookkeeping do
+      inserted_at false
+      updated_at false
+      inserted_by false
+      updated_by false
+    end
+  end
+end
+
+defmodule AshQuick.Test.WalletCharge do
+  @moduledoc """
+  What `AshQuick.Test.Wallet` creates through `manage_relationship`: a
+  `sensitive?` attribute, and a `sensitive?` argument on its create action.
+  """
+  use Ash.Resource, domain: AshQuick.Test.AuditDomain, data_layer: Ash.DataLayer.Ets
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :amount, :integer, public?: true
+    attribute :pin, :string, public?: true, sensitive?: true
+    attribute :wallet_id, :uuid, public?: true
+  end
+
+  actions do
+    defaults [:read, :destroy]
+
+    create :create do
+      primary? true
+      accept [:amount, :pin, :wallet_id]
+      argument :otp, :string, sensitive?: true
+    end
+  end
+end
+
+defmodule AshQuick.Test.CardSet do
+  @moduledoc """
+  A keyword list and a tuple typed field by field, each holding a
+  `AshQuick.Test.PaymentCard`. Apart from `AshQuick.Test.Wallet` because
+  Ash cannot read a `:keyword` attribute holding an embed back through a
+  read action, and only the write is recorded here.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.AuditDomain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshQuick]
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true
+
+    attribute :options, :keyword,
+      public?: true,
+      constraints: [fields: [card: [type: AshQuick.Test.PaymentCard, allow_nil?: true]]]
+
+    attribute :pair, :tuple,
+      public?: true,
+      constraints: [
+        fields: [
+          label: [type: :string],
+          card: [type: AshQuick.Test.PaymentCard, allow_nil?: true]
+        ]
+      ]
+  end
+
+  actions do
+    default_accept [:name, :options, :pair]
+    defaults [:create]
+  end
+
+  ash_quick do
+    display do
+      label :name
+    end
+
+    liveness do
+      enabled? false
+    end
+
+    versioning do
+      enabled? false
+    end
+
+    bookkeeping do
+      inserted_at false
+      updated_at false
+      inserted_by false
+      updated_by false
+    end
+  end
+end
+
+defmodule AshQuick.Test.Wallet do
+  @moduledoc """
+  An audited resource whose secrets sit inside its values rather than in
+  attributes of its own: an embedded card, a list of them, a union that can hold
+  one, a `:map_with_tag` union tagged `:type`, a map typed field by field, and
+  an argument and a read argument that take a card. `:charge` pins a card's code
+  into another attribute's expression. `:add_charges` creates
+  `AshQuick.Test.WalletCharge` records through `manage_relationship`, from plain
+  maps and, in `:add_typed_charges`, from an embedded input type with a secret
+  of its own. `record_sensitive` lists `:cvv`, which names no attribute or
+  argument of this resource, so it keeps no nested code.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.AuditDomain,
+    data_layer: Ash.DataLayer.Ets,
+    extensions: [AshQuick]
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true
+    attribute :card, AshQuick.Test.PaymentCard, public?: true
+    attribute :spare_cards, {:array, AshQuick.Test.PaymentCard}, public?: true
+
+    attribute :payment, :union,
+      public?: true,
+      constraints: [
+        types: [
+          card: [type: AshQuick.Test.PaymentCard],
+          note: [type: :string]
+        ]
+      ]
+
+    attribute :boxed, :union,
+      public?: true,
+      constraints: [
+        storage: :map_with_tag,
+        types: [
+          box: [type: AshQuick.Test.BoxedCard, tag: :type, tag_value: "box"]
+        ]
+      ]
+
+    attribute :details, :map,
+      public?: true,
+      constraints: [fields: [card: [type: AshQuick.Test.PaymentCard, allow_nil?: true]]]
+  end
+
+  actions do
+    default_accept [:name, :card, :spare_cards, :payment, :boxed, :details]
+    defaults [:read, :create, :update]
+
+    read :open do
+      get? true
+      argument :card, AshQuick.Test.PaymentCard
+    end
+
+    update :reissue do
+      require_atomic? false
+      argument :card, AshQuick.Test.PaymentCard
+      change set_attribute(:card, arg(:card))
+    end
+
+    update :add_charges do
+      require_atomic? false
+      argument :charges, {:array, :map}
+      change manage_relationship(:charges, type: :create)
+    end
+
+    update :add_typed_charges do
+      require_atomic? false
+      argument :charges, {:array, AshQuick.Test.ChargeInput}
+      change manage_relationship(:charges, type: :create)
+    end
+
+    update :charge do
+      accept []
+      argument :card, AshQuick.Test.PaymentCard
+
+      change atomic_update(:name, expr(name <> get_path(^arg(:card), [:cvv])))
+    end
+  end
+
+  relationships do
+    has_many :charges, AshQuick.Test.WalletCharge, public?: true
+  end
+
+  ash_quick do
+    audit do
+      read_actions [:open]
+      record_sensitive [:cvv]
+    end
+
+    display do
+      label :name
+    end
+
+    liveness do
+      enabled? false
+    end
+
+    versioning do
+      enabled? false
+    end
+
+    bookkeeping do
+      inserted_at false
+      updated_at false
+      inserted_by false
+      updated_by false
+    end
+  end
+end

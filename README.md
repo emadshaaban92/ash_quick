@@ -749,11 +749,23 @@ Six things to know about what it holds:
 * **`has_many` and `many_to_many` changes are not in `changes`.** They are
   writes to the other resource: they show up in `arguments` as the input this
   action was given, and in that resource's own audit rows. An embedded resource
-  is an attribute and is recorded whole on both sides.
+  is an attribute and is recorded whole on both sides. In `attributes` and
+  `arguments` too, an embedded value is its attributes only, without Ash's
+  bookkeeping fields, and a union is its value.
 * **A sensitive attribute is `"**redacted**"` on both sides**, and in its
   `expr`, unless it is named in `record_sensitive`. Whether it changed is still
   decided on the real values, so one that did not change is left out rather
   than shown as a change between two redactions.
+* **A sensitive field nested in a value is redacted too**, in `attributes`,
+  `arguments` and `changes`: one inside an embedded resource, a list of them, a
+  union member, or a map, keyword list or tuple typed by its `fields`
+  constraint, at any depth, whatever `record_sensitive` lists. An embed whose
+  only change is a nested secret still gets its entry, with both sides reading
+  the same. An argument holding one counts as a sensitive argument for `expr`.
+  An argument a `manage_relationship` change reads is walked by its own type,
+  then as input to the related resource: its `sensitive?` attributes, and the
+  `sensitive?` arguments of its actions, are redacted in each item, one level
+  deep.
 
 ### Auditing reads, for the actions you list
 

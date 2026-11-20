@@ -144,10 +144,13 @@ defmodule AshQuick.Audit.Change do
   Only attributes appear. A `has_many` or `many_to_many` change is not one — it
   is a write to the other resource, recorded in that resource's own entries, and
   visible here in `arguments` as the input the action was given. An embedded
-  resource *is* an attribute, and is recorded whole on both sides.
+  resource *is* an attribute, and is recorded whole on both sides, with its
+  sensitive fields redacted (see "Secrets" below).
 
   Values are dumped the way the store would hold them, so a `Money` or an array
   of embedded resources reads back as JSON rather than as an inspected struct.
+  In `attributes` and `arguments` an embedded value, or any resource's record,
+  is likewise its attributes only, without Ash's bookkeeping fields.
 
   ## Secrets
 
@@ -196,8 +199,30 @@ defmodule AshQuick.Audit.Change do
   records `expr: ~s[name <> ("/" <> **redacted**)]` and a `to` holding the pin,
   because `name` is not sensitive and redaction is by attribute.
 
-  Redaction is flat. A sensitive attribute nested inside an embedded resource,
-  or inside a managed relationship's params, is not reached.
+  A `sensitive?` field nested in a value is redacted the same way, at any depth:
+  one of an embedded resource, of each item of a list of them, of a union's
+  member, or of a map, struct, keyword list or tuple whose `fields` constraint
+  types it. It is redacted in `attributes`, `arguments`, `params` and `atomics`,
+  and in `changes`, where it reads `"**redacted**"` inside the dumped value, so
+  the rest of the embed still reads as the store holds it. Whether the attribute
+  changed is asked of the real values first, so an embed whose only change is a
+  nested secret still gets its entry, with `from` and `to` reading the same. A
+  nested secret counts for expressions as a whole one does: one inside an
+  argument redacts every value in them, and one inside an attribute is matched
+  like that attribute's. A union is read by its `storage`, and one whose member
+  cannot be told, such as raw input in `params`, is walked as every member it
+  could be, so a field sensitive in any of them is redacted.
+
+  An argument a `manage_relationship` change reads is walked by the type it
+  declares, like any other, and then as input to the related resource: its
+  `sensitive?` attributes, and the `sensitive?` arguments of any of its
+  actions, are redacted in each item — `arguments.lines` keeps each line but
+  not its secret. One level deep: the related resource's own managed arguments
+  are not followed.
+
+  A union in `attributes` and `arguments` is stored as its value, which is
+  what its own JSON encoder writes, so an embed inside one is reduced to its
+  attributes like any other.
 
   A value the host wants recorded despite the flag is named in
   `record_sensitive`, which is per resource:
@@ -205,6 +230,10 @@ defmodule AshQuick.Audit.Change do
       audit do
         record_sensitive [:masked_card_number]
       end
+
+  It names the resource's own attributes and arguments, so a nested field is
+  redacted whatever it lists: an embedded resource carries no AshQuick
+  extension to list its own.
   """
 
   use Ash.Resource.Change
@@ -213,6 +242,7 @@ defmodule AshQuick.Audit.Change do
 
   alias AshQuick.Audit.Declaration
   alias AshQuick.Audit.Expression
+  alias AshQuick.Audit.Redaction
   alias AshQuick.Audit.Row
   alias AshQuick.Audit.Store
 
@@ -259,8 +289,13 @@ defmodule AshQuick.Audit.Change do
   defp log([{changeset, _record} | _] = changes, actor) do
     {attributes, arguments} = to_redact(changeset)
 
+    fields = %{
+      attributes: Ash.Resource.Info.attributes(changeset.resource),
+      arguments: Redaction.arguments(changeset.resource, changeset.action)
+    }
+
     changes
-    |> Enum.map(&entry(&1, attributes, arguments))
+    |> Enum.map(&entry(&1, attributes, arguments, fields))
     |> Store.write(actor)
   end
 
@@ -275,10 +310,10 @@ defmodule AshQuick.Audit.Change do
   # sensitive one is `"**redacted**"` every one of them looks like a value. So
   # the changeset handed on holds all of it in `attributes`, whichever path the
   # write took — see `AshQuick.Audit.Row.given/2`.
-  defp entry({changeset, record}, attributes, arguments) do
+  defp entry({changeset, record}, attributes, arguments, fields) do
     given = Row.given(changeset, record)
 
-    {redact(%{changeset | attributes: given}, attributes, arguments), record,
+    {redact_changeset(%{changeset | attributes: given}, attributes, arguments, fields), record,
      Row.changes(changeset, record, attributes, arguments)}
   end
 
@@ -286,18 +321,43 @@ defmodule AshQuick.Audit.Change do
   # accepted there is as much in the changeset as one in `attributes`, and an
   # expression may carry one pinned inside it — as may the copies of those
   # expressions kept in the context.
-  defp redact(%Ash.Changeset{} = changeset, attributes, arguments) do
+  #
+  # Each is redacted by name first and then field by field inside what is left,
+  # for a `sensitive?` field nested in an embedded resource, a union or a typed
+  # map — see `AshQuick.Audit.Redaction`.
+  #
+  # `fields` is the resource's attributes and the action's arguments, as
+  # `AshQuick.Audit.Redaction.arguments/2` types them, worked out once per
+  # batch in `log/2`.
+  defp redact_changeset(%Ash.Changeset{} = changeset, attributes, arguments, %{
+         attributes: fields,
+         arguments: action_arguments
+       }) do
     %{
       Expression.forget(changeset)
-      | attributes: redact(changeset.attributes, attributes),
-        atomics: redact_atomics(changeset.atomics, attributes),
-        arguments: redact(changeset.arguments, arguments),
-        params: redact(changeset.params, param_keys(attributes ++ arguments))
+      | attributes: redact(changeset.attributes, attributes, fields),
+        atomics: redact_atomics(changeset.atomics, attributes, fields),
+        arguments: redact(changeset.arguments, arguments, action_arguments),
+        params:
+          changeset.params
+          |> redact(param_keys(attributes ++ arguments))
+          |> redact_nested(fields ++ action_arguments, &[&1, to_string(&1)])
     }
   end
 
-  defp redact_atomics(atomics, names),
-    do: Enum.reduce(names, atomics, &Keyword.replace(&2, &1, @redacted))
+  # An expression is left to `AshQuick.Audit.Expression`, which redacts what it
+  # renders: a value it holds is not a field of the attribute's type.
+  defp redact_atomics(atomics, names, fields) do
+    for {name, value} <- Enum.reduce(names, atomics, &Keyword.replace(&2, &1, @redacted)),
+        do: {name, redact_atomic(value, Enum.find(fields, &(&1.name == name)))}
+  end
+
+  defp redact_atomic(@redacted, _field), do: @redacted
+  defp redact_atomic(value, nil), do: value
+
+  defp redact_atomic(value, %{type: type, constraints: constraints}) do
+    if Ash.Expr.expr?(value), do: value, else: Redaction.redact(value, type, constraints)
+  end
 
   # Params are the raw input, so a name arrives under whichever key kind the
   # caller used — a form submits strings, a code interface submits atoms — and
@@ -320,7 +380,32 @@ defmodule AshQuick.Audit.Change do
   end
 
   @doc false
+  # `names` redacted whole, then every `sensitive?` field nested inside the
+  # value of each of `fields` — the attributes or arguments `values` is keyed
+  # by. A write's changeset and an audited read's query arguments both go
+  # through here.
+  def redact(values, names, fields) do
+    values
+    |> redact(names)
+    |> redact_nested(fields, &[&1])
+  end
+
   # `Map.replace/3` leaves a name the changeset never set alone, so the entry
   # says nothing about a field the action did not touch.
-  def redact(values, names), do: Enum.reduce(names, values, &Map.replace(&2, &1, @redacted))
+  defp redact(values, names), do: Enum.reduce(names, values, &Map.replace(&2, &1, @redacted))
+
+  defp redact_nested(values, fields, keys) do
+    for %{name: name, type: type, constraints: constraints} <- fields,
+        key <- keys.(name),
+        reduce: values do
+      values ->
+        case Map.fetch(values, key) do
+          {:ok, value} when value != @redacted ->
+            Map.put(values, key, Redaction.redact(value, type, constraints))
+
+          _other ->
+            values
+        end
+    end
+  end
 end

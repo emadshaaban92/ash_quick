@@ -66,6 +66,7 @@ defmodule AshQuick.Audit.Preparation do
   require Ash.Tracer
 
   alias AshQuick.Audit.Change
+  alias AshQuick.Audit.Redaction
   alias AshQuick.Audit.Store
 
   # The writer has to be the last `after_action` hook to run, because another
@@ -107,6 +108,7 @@ defmodule AshQuick.Audit.Preparation do
 
   defp redact(query) do
     {_attributes, arguments} = Change.to_redact(query)
-    %{query | arguments: Change.redact(query.arguments, arguments)}
+    fields = Redaction.arguments(query.resource, query.action)
+    %{query | arguments: Change.redact(query.arguments, arguments, fields)}
   end
 end
