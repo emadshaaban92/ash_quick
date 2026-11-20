@@ -1,0 +1,116 @@
+defmodule <%= inspect @module %> do
+  @moduledoc """
+  The layout the QuickViews are served in.
+
+  `<%= inspect @router %>` names it in the live session that serves them. It
+  draws the top bar, with the impersonation banner and the apps grid, the
+  sidebar, and the flash. The sidebar and the grid are two renderings of
+  `<%= inspect @nav %>`, filtered through what the scope may reach. A
+  QuickView opts out of the sidebar with `sidebar: false`.
+
+  Until the socket connects it draws a spinner where the page goes: the tab's
+  impersonation rides the connect params, so the render before it cannot know
+  who this tab is, and a QuickView loads nothing until then.
+
+  Written in daisyUI classes, as AshQuick's own components are. Make it yours.
+  """
+
+  use Phoenix.Component
+
+  import AshQuick.Components, only: [icon: 1]
+  import AshQuick.LiveView.Components.ImpersonationBanner
+  import AshQuick.LiveView.Components.NavGrid
+  import AshQuick.LiveView.Components.Sidebar
+
+  alias Phoenix.LiveView.JS
+
+  def app(assigns) do
+    ~H"""
+    <div>
+      <nav class={[
+        "print:hidden navbar shadow-sm border-b border-base-300 px-4 sm:px-6 fixed inset-x-0 top-0 z-50 h-16 sm:h-20",
+        if(@scope.impersonating, do: "bg-error", else: "bg-base-100")
+      ]}>
+        <div class="flex justify-between items-center h-full w-full gap-4">
+          <a href="/" class="font-semibold text-lg"><%= @title %></a>
+
+          <.impersonation_banner scope={@scope} class="max-sm:hidden text-error-content" />
+
+          <div :if={@connected? and apps?(@scope)} class="dropdown dropdown-end">
+            <div tabindex="0" role="button" class="btn btn-ghost btn-sm btn-circle">
+              <span class="sr-only">Apps</span>
+              <.icon name="hero-squares-2x2" class="w-5 h-5" />
+            </div>
+            <div
+              tabindex="0"
+              class="dropdown-content z-50 mt-3 w-96 max-w-[calc(100vw-2rem)] bg-base-200 rounded-box shadow-lg border border-base-300 overflow-y-auto max-h-[calc(100vh-7rem)]"
+            >
+              <.nav_grid scope={@scope} />
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <main class="p-0 h-screen pt-16 sm:pt-20 print:pt-1">
+        <div id="flash-group" aria-live="polite" class="toast toast-top toast-end z-50">
+          <.flash :for={kind <- [:info, :error]} kind={kind} flash={@flash} />
+        </div>
+
+        <%%= if @connected? do %>
+          <.sidebar
+            :if={sidebar?(assigns)}
+            scope={@scope}
+            current_path={@current_path}
+            params={assigns[:params]}
+          />
+          <div class={["h-full", sidebar?(assigns) && "lg:ms-64"]}>
+            {@inner_content}
+          </div>
+        <%% else %>
+          <div class="flex flex-col h-full items-center justify-center p-8">
+            <span class="loading loading-spinner loading-xl text-primary"></span>
+          </div>
+        <%% end %>
+      </main>
+    </div>
+    """
+  end
+
+  # The apps grid has a tile per nav group the scope reaches, and the menu is
+  # offered only once there is one: a nav that declares no group has none.
+  defp apps?(scope) do
+    scope.current_user != nil and
+      scope |> AshQuick.Nav.Info.sections() |> Enum.any?(& &1.group)
+  end
+
+  # A signed-in reader gets the sidebar unless the page said otherwise.
+  defp sidebar?(assigns) do
+    assigns[:current_path] != nil and assigns.scope.current_user != nil and
+      assigns[:sidebar] != false
+  end
+
+  attr :kind, :atom, required: true
+  attr :flash, :map, required: true
+
+  defp flash(assigns) do
+    ~H"""
+    <div
+      :if={message = Phoenix.Flash.get(@flash, @kind)}
+      id={"flash-#{@kind}"}
+      role="alert"
+      class={["alert w-80 sm:w-96 max-w-[calc(100vw-2rem)] text-wrap", alert_class(@kind)]}
+      phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> JS.hide(to: "#flash-#{@kind}")}
+    >
+      <.icon :if={@kind == :info} name="hero-information-circle" class="w-5 h-5 shrink-0" />
+      <.icon :if={@kind == :error} name="hero-exclamation-circle" class="w-5 h-5 shrink-0" />
+      <p class="flex-1">{message}</p>
+      <button type="button" class="cursor-pointer" aria-label="close">
+        <.icon name="hero-x-mark" class="w-5 h-5 opacity-40 hover:opacity-70" />
+      </button>
+    </div>
+    """
+  end
+
+  defp alert_class(:info), do: "alert-info"
+  defp alert_class(:error), do: "alert-error"
+end

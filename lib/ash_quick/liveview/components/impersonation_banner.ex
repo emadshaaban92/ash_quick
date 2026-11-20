@@ -1,18 +1,23 @@
 defmodule AshQuick.LiveView.Components.ImpersonationBanner do
-  @moduledoc false
-  # Says out loud that this tab is somebody else, and offers the way back.
-  #
-  # This is an interlock, not decoration. Impersonation is accountable because
-  # `AshQuick.Impersonation.Verifier` refuses an actor resource whose
-  # `:impersonate` is not audited — but an audit trail nobody can see while
-  # they are acting is only half of that. Without this, a tab standing in for
-  # another person is indistinguishable from an ordinary session, and every
-  # write it makes is attributed to somebody who is not at the keyboard.
-  #
-  # It renders nothing when there is nothing to say, so a host places it once
-  # and forgets it. It carries its own end control for the same reason the
-  # notice exists: whoever reads it has to be able to act on it without going
-  # looking for a menu.
+  @moduledoc """
+  Says out loud that this tab is somebody else, and offers the way back.
+
+  This is an interlock, not decoration. Impersonation is accountable because
+  `AshQuick.Impersonation.Verifier` refuses an actor resource whose
+  `:impersonate` is not audited — but an audit trail nobody can see while
+  they are acting is only half of that. Without this, a tab standing in for
+  another person is indistinguishable from an ordinary session, and every
+  write it makes is attributed to somebody who is not at the keyboard.
+
+  It renders nothing when there is nothing to say, so a host places it once
+  and forgets it. It carries its own end control for the same reason the
+  notice exists: whoever reads it has to be able to act on it without going
+  looking for a menu.
+
+  The layout `mix igniter.install ash_quick` generates puts it in the top bar:
+
+      <.impersonation_banner scope={@scope} class="text-error-content" />
+  """
   use Phoenix.Component
   use Gettext, backend: AshQuick.Gettext
 
@@ -31,6 +36,7 @@ defmodule AshQuick.LiveView.Components.ImpersonationBanner do
     default: nil,
     doc: "Text of the control that ends the impersonation."
 
+  @doc "Names who the tab stands in for, with a control that ends it."
   def impersonation_banner(assigns) do
     assigns =
       assigns
