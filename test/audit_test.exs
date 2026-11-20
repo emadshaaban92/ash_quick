@@ -33,16 +33,20 @@ defmodule AshQuick.AuditTest do
   require Ash.Query
 
   alias AshQuick.Audit.Expression
+  alias AshQuick.Audit.Redaction
   alias AshQuick.Audit.Row
   alias AshQuick.Test.Actor
   alias AshQuick.Test.AuditLog
   alias AshQuick.Test.Credential
+  alias AshQuick.Test.CardSet
   alias AshQuick.Test.CaseFile
   alias AshQuick.Test.CaseFolder
   alias AshQuick.Test.JsonAuditStore
+  alias AshQuick.Test.JsonWallet
   alias AshQuick.Test.LegacyAuditStore
   alias AshQuick.Test.LegacyCredential
   alias AshQuick.Test.NumberedCredential
+  alias AshQuick.Test.PaymentCard
   alias AshQuick.Test.RefusedCaseFile
   alias AshQuick.Test.Report
   alias AshQuick.Test.Scopes.FullScope
@@ -50,6 +54,8 @@ defmodule AshQuick.AuditTest do
   alias AshQuick.Test.Tally
   alias AshQuick.Test.TextKeyAuditStore
   alias AshQuick.Test.VersionedTally
+  alias AshQuick.Test.Wallet
+  alias AshQuick.Test.WalletCharge
 
   setup do
     actor =
@@ -1307,6 +1313,271 @@ defmodule AshQuick.AuditTest do
       assert {:ok, exported} = export(report, reader)
       assert exported.__metadata__.ash_quick_download.filename == "report.csv"
       assert Ash.get!(Report, report.id).version == edited.version
+    end
+  end
+
+  describe "a secret nested in a value" do
+    # A `sensitive?` field of an embedded resource is a secret wherever the
+    # embed sits: an attribute of its own, a list of them, a union member, a
+    # typed map's field, an argument. Each card's code below is different, so
+    # a leak names the place it came from.
+    defp card(cvv, extra \\ %{}) do
+      Map.merge(
+        %{holder: "Holder", cvv: cvv, issuer: nil},
+        extra
+      )
+    end
+
+    defp create_wallet(actor) do
+      Wallet
+      |> Ash.Changeset.for_create(
+        :create,
+        %{
+          name: "Wallet",
+          card: card("cvv-zq-one", %{issuer: %{name: "Bank", api_secret: "issuer-zq-key"}}),
+          spare_cards: [card("cvv-zq-two"), card("cvv-zq-three")],
+          payment: %Ash.Union{type: :card, value: card("cvv-zq-four")},
+          details: %{card: card("cvv-zq-five")},
+          boxed: %{type: "box", value: "v", cvv: "cvv-zq-box"}
+        },
+        actor: actor
+      )
+      |> Ash.create!()
+    end
+
+    test "is redacted in the attributes and in changes, at every depth", %{actor: actor} do
+      wallet = create_wallet(actor)
+      assert [entry] = entries(wallet)
+
+      text = inspect(entry, limit: :infinity, printable_limit: :infinity)
+
+      for secret <-
+            ~w(cvv-zq-one issuer-zq-key cvv-zq-two cvv-zq-three cvv-zq-four cvv-zq-five) ++
+              ~w(cvv-zq-box) do
+        refute text =~ secret
+      end
+
+      # Its attributes only, as in `changes`: none of Ash's bookkeeping.
+      assert %{
+               holder: "Holder",
+               cvv: "**redacted**",
+               issuer: %{name: "Bank", api_secret: "**redacted**"}
+             } = Map.delete(entry.attributes.card, :id)
+
+      assert map_size(Map.delete(entry.attributes.card, :id)) == 3
+      assert entry.attributes.card.issuer == %{name: "Bank", api_secret: "**redacted**"}
+      assert entry.attributes.card.issuer.name == "Bank"
+      assert Enum.map(entry.attributes.spare_cards, & &1.cvv) == ["**redacted**", "**redacted**"]
+      # A union is stored as its value, as its encoder writes it.
+      assert entry.attributes.payment.cvv == "**redacted**"
+      assert entry.attributes.details.card.cvv == "**redacted**"
+
+      assert %{
+               holder: "Holder",
+               cvv: "**redacted**",
+               issuer: %{name: "Bank", api_secret: "**redacted**"}
+             } = entry.changes.card.to
+
+      assert Enum.map(entry.changes.spare_cards.to, & &1.cvv) == ["**redacted**", "**redacted**"]
+      assert %{"type" => :card, "value" => %{cvv: "**redacted**"}} = entry.changes.payment.to
+      assert entry.changes.details.to.card.cvv == "**redacted**"
+
+      # Stored by its tag, which here is `type`, beside an attribute `value`.
+      assert %{cvv: "**redacted**", value: "v"} = entry.attributes.boxed
+
+      assert %{"type" => "box", "value" => "v", "cvv" => "**redacted**"} =
+               Map.new(entry.changes.boxed.to, fn {key, value} -> {to_string(key), value} end)
+    end
+
+    # Cast, a keyword list holds its fields by name and a tuple by position;
+    # dumped, each is a map. A row stores both as lists, as any tuple.
+    test "is redacted in a keyword list and a tuple typed field by field", %{actor: actor} do
+      set =
+        CardSet
+        |> Ash.Changeset.for_create(
+          :create,
+          %{
+            name: "Set",
+            options: [card: card("cvv-zq-kw")],
+            pair: {"label", card("cvv-zq-tuple")}
+          },
+          actor: actor
+        )
+        |> Ash.create!()
+
+      assert [entry] = entries(set)
+      text = inspect(entry, limit: :infinity, printable_limit: :infinity)
+      refute text =~ "cvv-zq-kw"
+      refute text =~ "cvv-zq-tuple"
+
+      assert [[:card, %{cvv: "**redacted**", holder: "Holder"}]] = entry.attributes.options
+      assert entry.changes.options.to.card.cvv == "**redacted**"
+      assert ["label", %{cvv: "**redacted**"}] = entry.attributes.pair
+      assert entry.changes.pair.to.card.cvv == "**redacted**"
+    end
+
+    test "that alone changed still leaves an entry, which does not say to what",
+         %{actor: actor} do
+      wallet = create_wallet(actor)
+
+      wallet
+      |> Ash.Changeset.for_update(
+        :update,
+        %{card: card("cvv-zq-six", %{issuer: %{name: "Bank", api_secret: "issuer-zq-key"}})},
+        actor: actor
+      )
+      |> Ash.update!()
+
+      assert [_created, entry] = entries(wallet)
+      # A replaced embed gets a new id; nothing else about the card reads
+      # differently, because only its code changed.
+      assert Map.delete(entry.changes.card.from, :id) == Map.delete(entry.changes.card.to, :id)
+      assert entry.changes.card.to.cvv == "**redacted**"
+      refute inspect(entry, limit: :infinity) =~ "cvv-zq-six"
+    end
+
+    test "is redacted in an argument", %{actor: actor} do
+      wallet = create_wallet(actor)
+
+      wallet
+      |> Ash.Changeset.for_update(:reissue, %{card: card("cvv-zq-seven")}, actor: actor)
+      |> Ash.update!()
+
+      assert [_created, entry] = entries(wallet)
+      assert entry.arguments.card.cvv == "**redacted**"
+      assert entry.arguments.card.holder == "Holder"
+      assert entry.attributes.card.cvv == "**redacted**"
+      refute inspect(entry, limit: :infinity, printable_limit: :infinity) =~ "cvv-zq-seven"
+    end
+
+    test "is redacted in an expression it was pinned into", %{actor: actor} do
+      wallet = create_wallet(actor)
+
+      wallet
+      |> Ash.Changeset.for_update(:charge, %{card: card("cvv-zq-eight")}, actor: actor)
+      |> Ash.update!()
+
+      assert [_created, entry] = entries(wallet)
+      assert entry.changes.name.expr == "name <> **redacted**"
+      assert entry.arguments.card.cvv == "**redacted**"
+    end
+
+    test "is redacted in an audited read's arguments", %{actor: actor} do
+      wallet = create_wallet(actor)
+
+      Wallet
+      |> Ash.Query.for_read(:open, %{card: card("cvv-zq-nine")}, actor: actor)
+      |> Ash.Query.filter(id == ^wallet.id)
+      |> Ash.read_one!()
+
+      assert [_created, entry] = entries(wallet)
+      assert entry.action_name == :open
+      assert entry.arguments.card.cvv == "**redacted**"
+      refute inspect(entry, limit: :infinity, printable_limit: :infinity) =~ "cvv-zq-nine"
+    end
+
+    test "is redacted in managed relationship input", %{actor: actor} do
+      wallet = create_wallet(actor)
+
+      wallet
+      |> Ash.Changeset.for_update(
+        :add_charges,
+        %{charges: [%{amount: 5, pin: "pin-zq-one", otp: "otp-zq-one"}]},
+        actor: actor
+      )
+      |> Ash.update!()
+
+      assert [_created, entry] = entries(wallet)
+      assert [%{amount: 5, pin: "**redacted**", otp: "**redacted**"}] = entry.arguments.charges
+      text = inspect(entry, limit: :infinity, printable_limit: :infinity)
+      refute text =~ "pin-zq-one"
+      refute text =~ "otp-zq-one"
+    end
+
+    test "is redacted by a managed argument's own type", %{actor: actor} do
+      wallet = create_wallet(actor)
+
+      wallet
+      |> Ash.Changeset.for_update(
+        :add_typed_charges,
+        %{charges: [%{amount: 987_654_321, pin: "pin-zq-two"}]},
+        actor: actor
+      )
+      |> Ash.update!()
+
+      assert [_created, entry] = entries(wallet)
+      # `amount` is sensitive on the input type only, `pin` on the record only.
+      assert [%{amount: "**redacted**", pin: "**redacted**"}] = entry.arguments.charges
+      text = inspect(entry, limit: :infinity, printable_limit: :infinity)
+      refute text =~ "987654321"
+      refute text =~ "pin-zq-two"
+    end
+
+    test "inside a union reaches a store holding JSON, as the embed's attributes",
+         %{actor: actor} do
+      wallet =
+        JsonWallet
+        |> Ash.Changeset.for_create(
+          :create,
+          %{name: "W", payment: %Ash.Union{type: :card, value: card("cvv-zq-json")}},
+          actor: actor
+        )
+        |> Ash.create!()
+
+      assert [entry] =
+               JsonAuditStore
+               |> Ash.Query.filter(resource_id == ^wallet.id)
+               |> Ash.read!()
+
+      assert %{holder: "Holder", cvv: "**redacted**", issuer: nil} =
+               Map.delete(entry.attributes.payment, :id)
+
+      assert map_size(Map.delete(entry.attributes.payment, :id)) == 3
+      refute inspect(entry, limit: :infinity, printable_limit: :infinity) =~ "cvv-zq-json"
+    end
+
+    # The params are the raw input, so a value reaches them as a form submits
+    # it: string keys, a list as a map keyed by index, a union as its tagged
+    # input. A dumped union, in `changes`, names its member under "type".
+    test "is found in raw input and in a dumped value" do
+      list = {:array, PaymentCard}
+
+      assert %{"0" => %{"cvv" => "**redacted**", "holder" => "H"}} =
+               Redaction.redact(%{"0" => %{"cvv" => "x", "holder" => "H"}}, list, [])
+
+      assert [%{"cvv" => "**redacted**"}] = Redaction.redact([%{"cvv" => "x"}], list, [])
+
+      union = Ash.Resource.Info.attribute(Wallet, :payment)
+
+      assert %{"type" => "card", "value" => %{"cvv" => "**redacted**"}} =
+               Redaction.redact(
+                 %{"type" => "card", "value" => %{"cvv" => "x"}},
+                 union.type,
+                 union.constraints
+               )
+
+      # Input naming no member is walked as every member.
+      assert %{"_union_type" => "card", "cvv" => "**redacted**"} =
+               Redaction.redact(
+                 %{"_union_type" => "card", "cvv" => "x"},
+                 union.type,
+                 union.constraints
+               )
+
+      assert Redaction.redact("x", union.type, union.constraints) == "x"
+
+      managed = {:managed, WalletCharge}
+
+      assert %{"0" => %{"amount" => "5", "pin" => "**redacted**", "otp" => "**redacted**"}} =
+               Redaction.redact(
+                 %{"0" => %{"amount" => "5", "pin" => "x", "otp" => "y"}},
+                 managed,
+                 []
+               )
+
+      assert %{"pin" => "**redacted**"} = Redaction.redact(%{"pin" => "x"}, managed, [])
+      assert Redaction.redact(["an-id"], managed, []) == ["an-id"]
+      assert Redaction.secrets(%{"0" => %{"cvv" => "x"}}, list, []) == ["x"]
     end
   end
 end

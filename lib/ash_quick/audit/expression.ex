@@ -26,6 +26,8 @@ defmodule AshQuick.Audit.Expression do
   alias Ash.Query.Function.Type
   alias Ash.Query.Operator.Eq
 
+  alias AshQuick.Audit.Redaction
+
   defmodule Redacted do
     @moduledoc false
     # Stands in for a secret inside an expression and renders as the marker the
@@ -126,7 +128,31 @@ defmodule AshQuick.Audit.Expression do
           not Ash.Expr.expr?(value),
           do: value
 
-    %{given: given, held: held}
+    %{given: given ++ nested(changeset, :given), held: held ++ nested(changeset, :held)}
+  end
+
+  # A `sensitive?` field nested inside an argument or an attribute — see
+  # `AshQuick.Audit.Redaction` — is a secret the way a whole sensitive one is:
+  # a nested argument counts as given, a nested attribute as held.
+  defp nested(changeset, :given) do
+    for %{name: name, type: type, constraints: constraints} <-
+          Redaction.arguments(changeset.resource, changeset.action),
+        value <- [Map.get(changeset.arguments, name)],
+        secret <- Redaction.secrets(value, type, constraints),
+        do: secret
+  end
+
+  defp nested(changeset, :held) do
+    atomics = Map.new(changeset.atomics)
+
+    for %{name: name, type: type, constraints: constraints} <-
+          Ash.Resource.Info.attributes(changeset.resource),
+        source <- [changeset.data, changeset.attributes, atomics],
+        value = Map.get(source, name),
+        not is_struct(value, Ash.NotLoaded),
+        not Ash.Expr.expr?(value),
+        secret <- Redaction.secrets(value, type, constraints),
+        do: secret
   end
 
   @doc """

@@ -21,6 +21,7 @@ defmodule AshQuick.Audit.Row do
 
   alias AshQuick.Audit.Declaration
   alias AshQuick.Audit.Expression
+  alias AshQuick.Audit.Redaction
 
   # Ash's own marker for a value it will not print (`Ash.Helpers.redact/1`), so
   # a redacted before/after reads the same as a redacted changeset.
@@ -332,8 +333,16 @@ defmodule AshQuick.Audit.Row do
   # Redaction happens after the comparison and instead of the dump: a secret is
   # not a value to be recorded in any form, and the entry says only that it
   # changed.
+  #
+  # A `sensitive?` field nested inside the value is redacted in what was dumped,
+  # so the rest of an embedded record still reads as the store holds it. Whether
+  # the attribute changed is asked before that, so an entry can read the same on
+  # both sides when only a nested secret changed: it says the attribute changed,
+  # and not to what.
   defp value(%{name: name} = attribute, value, redacted) do
-    if name in redacted, do: @redacted, else: dump(attribute, value)
+    if name in redacted,
+      do: @redacted,
+      else: Redaction.redact(dump(attribute, value), attribute.type, attribute.constraints)
   end
 
   # The value as the store would hold it, applied identically to both sides so
@@ -374,21 +383,38 @@ defmodule AshQuick.Audit.Row do
   # than failing the write it describes. The rest are terms that only mean
   # anything in the process that made them.
   #
-  # A struct is kept whole when it knows how to encode itself — a `Money`, a
-  # `DateTime`, a resource record — and flattened to its fields when it does
-  # not, which is what `@derive Jason.Encoder` would have written. An argument
-  # holding a plain struct is ordinary Elixir, and the entry describing the
-  # write must not be what fails it.
+  # A struct other than a resource's record is kept whole when it knows how to
+  # encode itself — a `Money`, a `DateTime` — and flattened to its fields when
+  # it does not, which is what `@derive Jason.Encoder` would have written. An
+  # argument holding a plain struct is ordinary Elixir, and the entry
+  # describing the write must not be what fails it.
   #
-  # `__meta__` goes with the struct it came off: an `Ecto.Schema.Metadata` is
-  # the one field `@derive Jason.Encoder` refuses outright rather than encodes,
-  # and an embedded resource in `changeset.attributes` — an attachment, a line
-  # item — carries one.
-  defp storable(%_struct{} = value) do
-    if Jason.Encoder.impl_for(value) == Jason.Encoder.Any do
-      value |> Map.from_struct() |> Map.delete(:__meta__) |> storable()
-    else
-      value
+  # A resource's record — an embedded value, most often: an attachment, a line
+  # item — keeps only its attributes, the way `changes` dumps it, whether or
+  # not it derives an encoder of its own. The rest of the struct is Ash's own
+  # bookkeeping (`__metadata__`, `calculations`, `aggregates`, `__meta__`),
+  # which says nothing about the write, and `__meta__`, an
+  # `Ecto.Schema.Metadata`, is the one field `@derive Jason.Encoder` refuses
+  # outright rather than encodes. Any other struct carrying one loses it for
+  # the same reason.
+  #
+  # A union is stored as its value, which is what its own encoder writes: the
+  # member inside it, an embedded record most often, still goes through here,
+  # so a store holding JSON is not handed a struct it cannot encode.
+  defp storable(%Ash.Union{value: value}), do: storable(value)
+
+  defp storable(%struct{} = value) do
+    cond do
+      Ash.Resource.Info.resource?(struct) ->
+        value
+        |> Map.take(Enum.to_list(Ash.Resource.Info.attribute_names(struct)))
+        |> storable()
+
+      Jason.Encoder.impl_for(value) != Jason.Encoder.Any ->
+        value
+
+      true ->
+        value |> Map.from_struct() |> Map.delete(:__meta__) |> storable()
     end
   end
 
