@@ -851,7 +851,7 @@ defmodule AshQuick.Components do
     # The form's submit lock refuses the click and Space. The pointer-events
     # variant holds the mouse off for a host that has not imported the hook.
     ~H"""
-    <div>
+    <div class="sm:col-span-2">
       <label class="flex items-center gap-4 text-sm leading-6 cursor-pointer phx-submit-loading:pointer-events-none">
         <input type="hidden" name={@name} value="false" />
         <input
