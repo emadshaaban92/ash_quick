@@ -16,6 +16,7 @@ defmodule AshQuick.LiveView.BulkForm do
   # required one present. What depends on a record is the run's to refuse.
 
   alias Ash.Error.Changes.Required
+  alias AshQuick.LiveView.FormParams
   alias AshQuick.LiveView.Utils
 
   @doc """
@@ -69,6 +70,7 @@ defmodule AshQuick.LiveView.BulkForm do
 
   @doc "`form` with `params` posted to it."
   def validate(form, params, action) do
+    params = FormParams.normalize_digits(params, form.resource, action.name)
     form |> AshPhoenix.Form.validate(params) |> check_inputs(action)
   end
 

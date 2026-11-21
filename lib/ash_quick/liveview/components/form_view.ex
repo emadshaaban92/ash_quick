@@ -14,6 +14,7 @@ defmodule AshQuick.LiveView.Components.FormView do
   alias AshQuick.LiveView.AttachmentUpload
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.FieldErrors
+  alias AshQuick.LiveView.FormInputs
   alias AshQuick.LiveView.Utils
   alias AshQuick.LiveView.URLParams
 
@@ -660,15 +661,17 @@ defmodule AshQuick.LiveView.Components.FormView do
     """
   end
 
+  # Typed from the field's Ash type: a number pad, a date or time picker, a
+  # length limit. See `AshQuick.LiveView.FormInputs`.
   defp field_input(%{field: %{}} = assigns) do
     ~H"""
     <.input
       required={not @field.allow_nil?}
       field={@phx_field}
-      type="text"
       autocomplete="on"
       label={Labels.name(@field.name, @resource)}
       phx-debounce="blur"
+      {FormInputs.attrs(@field, @phx_field.value)}
     />
     """
   end

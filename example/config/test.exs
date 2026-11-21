@@ -106,6 +106,7 @@ test_pages = [
   "/test/sorted_rows_named",
   "/test/stored_map_lists",
   "/test/two_file_rows",
+  "/test/typed_inputs",
   "/test/uncounted_pages",
   "/test/vault_filter",
   "/test/wide_offset_pages",
