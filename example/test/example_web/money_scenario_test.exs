@@ -37,6 +37,10 @@ defmodule ExampleWeb.MoneyScenarioTest do
     |> assert_has("td", text: @pound)
     |> assert_has("td", text: "460,000.00")
     |> refute_has("td", text: "EGP")
+    # Lined up against the column's right edge, as a number column is,
+    # on a right-to-left page too.
+    |> assert_has("th.text-right", text: "Price")
+    |> assert_has("td.text-right.tabular-nums", text: "460,000.00")
     |> visit(~p"/products/#{product.id}")
     |> assert_has(~s([data-field="price"] dd), text: @pound)
     |> refute_has(~s([data-field="price"] dd), text: "EGP")
