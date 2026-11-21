@@ -187,6 +187,26 @@ defmodule ExampleWeb.TypedInputsScenarioTest do
     end
   end
 
+  describe "the list" do
+    test "lines a number column up against its right edge", %{conn: conn} do
+      record = typed_input(quantity: 987)
+
+      conn
+      |> visit(~p"/test/typed_inputs?search=#{record.code}")
+      |> assert_has("th.text-right", text: "Quantity")
+      |> assert_has("th.text-right", text: "Stock")
+      |> refute_has("th.text-right", text: "Code")
+      |> refute_has("th.text-right", text: "Due On")
+      |> assert_has("td.text-right.tabular-nums", text: "987")
+      |> assert_has("td.text-right.tabular-nums", text: "5")
+      |> refute_has("td.text-right", text: record.code)
+      |> visit(~p"/test/typed_inputs/#{record.id}")
+      # The details page shows each value alone on its row.
+      |> refute_has(".text-right", text: "987")
+      |> refute_has(".tabular-nums")
+    end
+  end
+
   describe "the update form" do
     test "shows each held value as its input reads it", %{conn: conn} do
       record = typed_input(logged_at: ~N[2026-03-04 05:06:07], opens_at: ~T[08:15:30])
