@@ -450,15 +450,7 @@ defmodule AshQuick.LiveView.FormUtils do
       end)
       |> FormAttachments.flash_failed_uploads(refused)
 
-    result =
-      form
-      |> put_stage(AshQuick.form_submit_stage())
-      |> AshPhoenix.Form.submit(
-        params: upload_params,
-        before_submit:
-          &FormAttachments.reference_attachments(&1, Map.get(socket.assigns, :scope)),
-        action_opts: action_opts(form)
-      )
+    result = submit(form, upload_params, socket)
 
     socket = socket |> PrintUtils.print(result) |> DownloadUtils.deliver(result)
 
@@ -496,6 +488,34 @@ defmodule AshQuick.LiveView.FormUtils do
             {:halt, assign(socket, form: put_stage(form, AshQuick.form_validate_stage()))}
         end
     end
+  end
+
+  # Timed as `[:ash_quick, :form, :submit]` (see `AshQuick.Telemetry`).
+  defp submit(form, upload_params, socket) do
+    scope = Map.get(socket.assigns, :scope)
+
+    AshQuick.Telemetry.span(
+      [:form, :submit],
+      %{
+        quick_view: socket.view,
+        resource: form.resource,
+        action: form.action,
+        type: form.type,
+        scope: scope
+      },
+      fn ->
+        result =
+          form
+          |> put_stage(AshQuick.form_submit_stage())
+          |> AshPhoenix.Form.submit(
+            params: upload_params,
+            before_submit: &FormAttachments.reference_attachments(&1, scope),
+            action_opts: action_opts(form)
+          )
+
+        {result, %{result: if(match?({:ok, _}, result), do: :ok, else: :error)}}
+      end
+    )
   end
 
   # A destroy hands back the record it destroyed only when asked to, and

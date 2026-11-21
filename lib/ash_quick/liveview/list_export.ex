@@ -32,6 +32,12 @@ defmodule AshQuick.LiveView.ListExport do
       when not is_nil(loading),
       do: {:halt, socket}
 
+  # A format the modal does not offer is a forged event, left unanswered
+  # before anything runs: a span would carry whatever string it named.
+  def handle_list_events("export", %{"format" => format}, socket, _options)
+      when format not in ["csv", "xlsx"],
+      do: {:halt, socket}
+
   def handle_list_events("export", %{"format" => format}, socket, options) do
     selection = export_selection(socket)
 
@@ -58,6 +64,15 @@ defmodule AshQuick.LiveView.ListExport do
     locale = AshQuick.Scope.locale(socket.assigns.scope)
     timezone = AshQuick.Scope.timezone(socket.assigns.scope)
 
+    # Read here: the task has no socket.
+    metadata = %{
+      quick_view: socket.view,
+      resource: options.resource,
+      format: String.to_existing_atom(format),
+      selection: if(selection == :all, do: :all, else: :selected),
+      scope: socket.assigns.scope
+    }
+
     socket =
       case Ash.Scope.ToOpts.get_actor(socket.assigns.scope) do
         {:ok, actor} when not is_nil(actor) ->
@@ -67,7 +82,7 @@ defmodule AshQuick.LiveView.ListExport do
           |> assign_async(:export_data, fn ->
             Gettext.put_locale(locale)
 
-            run_export(export_query, actor, options, format, timezone)
+            run_export(export_query, actor, options, metadata, timezone)
           end)
 
         _ ->
@@ -109,18 +124,24 @@ defmodule AshQuick.LiveView.ListExport do
     end
   end
 
-  defp run_export(query, actor, options, format, timezone) do
-    case AshQuick.LiveView.ExportUtils.generate_export_url(
-           query,
-           actor,
-           options,
-           String.to_existing_atom(format),
-           timezone
-         ) do
-      {:ok, url} -> {:ok, %{export_data: %{url: url}}}
-      # A refusal, not a failure: the modal words it and offers no Retry,
-      # since the same list would be refused again.
-      {:error, {:too_many_rows, _max}} = refused -> refused
-    end
+  # Timed as `[:ash_quick, :export]` (see `AshQuick.Telemetry`).
+  defp run_export(query, actor, options, metadata, timezone) do
+    AshQuick.Telemetry.span([:export], metadata, fn ->
+      case AshQuick.LiveView.ExportUtils.generate_export_url(
+             query,
+             actor,
+             options,
+             metadata.format,
+             timezone
+           ) do
+        {:ok, url} ->
+          {{:ok, %{export_data: %{url: url}}}, %{result: :ok}}
+
+        # A refusal, not a failure: the modal words it and offers no Retry,
+        # since the same list would be refused again.
+        {:error, {:too_many_rows, _max}} = refused ->
+          {refused, %{result: :too_many_rows}}
+      end
+    end)
   end
 end

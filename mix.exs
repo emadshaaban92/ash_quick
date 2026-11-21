@@ -72,6 +72,9 @@ defmodule AshQuick.MixProject do
       {:gettext, "~> 1.0"},
       {:live_select, "~> 1.7"},
       {:jason, "~> 1.4"},
+      # The events `AshQuick.Telemetry` lists. Ash and Phoenix require it
+      # already; named here because AshQuick calls it itself.
+      {:telemetry, "~> 1.4"},
 
       # Where an error a page could not explain is reported. Required rather
       # than optional so that report has one destination, which
