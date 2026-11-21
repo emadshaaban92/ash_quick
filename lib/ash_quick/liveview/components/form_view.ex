@@ -276,6 +276,7 @@ defmodule AshQuick.LiveView.Components.FormView do
           uploads={@uploads}
           form_key_type={@form.form_keys[field.name][:type]}
           widget={Map.get(@widgets, field.name)}
+          form_input={AshQuick.FormInput.module(field)}
           choice={EnumOptions.kind(field)}
           help={Labels.help(field, @form.resource)}
         />
@@ -318,6 +319,13 @@ defmodule AshQuick.LiveView.Components.FormView do
       phx-debounce="blur"
     />
     """
+  end
+
+  # The input `config :ash_quick, form_inputs:` names for the field's type, or
+  # AshQuick's own for it (`AshQuick.FormInput`). Unlike a widget it reaches
+  # every form, sub-forms included: a type names no field, so nothing collides.
+  defp field_input(%{form_input: form_input} = assigns) when not is_nil(form_input) do
+    form_input.render(assigns)
   end
 
   # The dropdowns below are live components, so each id has to be unique on

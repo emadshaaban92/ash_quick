@@ -202,6 +202,10 @@ defmodule AshQuick.LiveView.QuickView do
       (`:brand_id`). Only the action's own fields are matched: fields inside an
       embedded sub-form render through the built-in inputs.
 
+      A widget wins over everything else, including the input
+      `config :ash_quick, form_inputs:` names for the field's type, which
+      reaches every form, sub-forms too (`AshQuick.FormInput`).
+
       Widgets may push their own events. Form events run through an
       `attach_hook` whose unmatched clause returns `{:cont, socket}`, so an event
       name QuickView does not handle reaches the QuickView module's own

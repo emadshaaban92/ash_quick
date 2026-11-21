@@ -84,6 +84,15 @@ defmodule AshQuick.Config do
     bake their publications from it), so it belongs in `config.exs`, not
     `runtime.exs`.
 
+  * `:form_inputs` — The input a form draws for every field of an Ash type,
+    as a map of type to a module implementing `AshQuick.FormInput`, or to
+    `false`, which turns off AshQuick's own input for the type (the amount
+    and currency of an `AshMoney.Types.Money`):
+    `%{MyApp.Types.Phone => MyAppWeb.PhoneInput}`. A NewType gets the input of
+    the type under it unless the map names it. A QuickView's
+    `form: [widgets: ...]` entry for a field wins over it. Defaults to `%{}`.
+    A QuickView reads it as it compiles too, so it belongs in `config.exs`.
+
   * `:refetch_window` — The default minimum time (in ms) between QuickView
     refetches, including those caused by a PubSub notification. Defaults to
     5 seconds.

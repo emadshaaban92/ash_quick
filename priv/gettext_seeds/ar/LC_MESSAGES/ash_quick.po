@@ -1079,3 +1079,8 @@ msgstr "استغرقت قراءة القائمة بهذا البحث وقتًا 
 #, elixir-autogen, elixir-format
 msgid "That filter is too large to apply. Remove some conditions or values and try again."
 msgstr "هذا البحث أكبر من أن يُطبَّق. احذف بعض الشروط أو القيم ثم حاول مرة أخرى."
+
+#: lib/ash_quick/form_input/money.ex
+#, elixir-autogen, elixir-format
+msgid "%{field} currency"
+msgstr "عملة %{field}"

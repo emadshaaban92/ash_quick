@@ -823,6 +823,10 @@ msgstr ""
 msgid "That filter is too large to apply. Remove some conditions or values and try again."
 msgstr ""
 
+#, elixir-format
+msgid "%{field} currency"
+msgstr ""
+
 msgid "Accepts"
 msgstr ""
 

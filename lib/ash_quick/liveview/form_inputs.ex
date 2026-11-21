@@ -26,12 +26,14 @@ defmodule AshQuick.LiveView.FormInputs do
   end
 
   # `:integer` or `:fraction` for a field that holds a number, whose posted
-  # value `FormParams.normalize_digits/3` reads as Ash reads one, else nil.
+  # value `FormParams.normalize_digits/3` reads as Ash reads one, `:money` for
+  # a `Money`, whose posted amount it reads as a fraction, else nil.
   @doc false
   def number_kind(%{type: type, constraints: constraints}) do
     case base(type, constraints) do
       {Ash.Type.Integer, _constraints} -> :integer
       {type, _constraints} when type in [Ash.Type.Float, Ash.Type.Decimal] -> :fraction
+      {AshMoney.Types.Money, _constraints} -> :money
       _ -> nil
     end
   end

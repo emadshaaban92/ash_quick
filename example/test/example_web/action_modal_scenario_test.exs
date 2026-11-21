@@ -46,7 +46,7 @@ defmodule ExampleWeb.ActionModalScenarioTest do
     assert has_element?(view, "[inert] tr", product.name)
 
     view
-    |> form("#{@modal} form[phx-submit=save]", %{"form" => %{"price" => "149.00"}})
+    |> form("#{@modal} form[phx-submit=save]", %{"form" => %{"price" => %{"amount" => "149.00"}}})
     |> render_submit()
 
     assert_patch(view, ~p"/products?search=#{search}")
@@ -128,7 +128,7 @@ defmodule ExampleWeb.ActionModalScenarioTest do
 
     view
     |> form("#{@modal} form[phx-submit=save]", %{
-      "form" => %{"sku" => sku, "name" => unique("Hammock "), "price" => "40.00"}
+      "form" => %{"sku" => sku, "name" => unique("Hammock "), "price" => %{"amount" => "40.00"}}
     })
     |> render_submit(%{"form" => %{"brand_id" => brand.id, "category_id" => category.id}})
 
