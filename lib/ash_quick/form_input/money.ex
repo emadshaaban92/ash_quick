@@ -25,8 +25,8 @@ defmodule AshQuick.FormInput.Money do
 
   @behaviour AshQuick.FormInput
 
-  # Localize is an optional dependency of ex_money's, as ex_money is of
-  # AshQuick's: every call checks it is loaded first.
+  # ex_money, optional to AshQuick, depends on Localize, so a form drawing a
+  # Money always has it; a build without either only needs the warning off.
   @compile {:no_warn_undefined, Localize.Currency}
 
   use Phoenix.Component
@@ -223,12 +223,11 @@ defmodule AshQuick.FormInput.Money do
   defp code?(code), do: to_string(code) =~ ~r/\A[A-Z]{3}\z/
 
   defp filtered(only, except) do
-    with true <- Code.ensure_loaded?(Localize.Currency),
-         {:ok, all} <- Localize.Currency.currencies_for_locale(:en),
+    with {:ok, all} <- Localize.Currency.currencies_for_locale(:en),
          %{} = currencies <- Localize.Currency.currency_filter(all, only, except) do
       currencies |> Map.keys() |> Enum.map(&to_string/1) |> Enum.sort()
     else
-      _no_localize -> []
+      _no_currencies -> []
     end
   end
 
@@ -240,8 +239,7 @@ defmodule AshQuick.FormInput.Money do
   end
 
   defp locale_currency(currencies) do
-    with true <- Code.ensure_loaded?(Localize.Currency),
-         {:ok, currency} <- Localize.Currency.currency_from_locale(AshQuick.Locale.current()),
+    with {:ok, currency} <- Localize.Currency.currency_from_locale(AshQuick.Locale.current()),
          currency = to_string(currency),
          true <- currency in currencies do
       currency

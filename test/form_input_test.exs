@@ -122,6 +122,18 @@ defmodule AshQuick.FormInputTest do
     assert FormInput.module(%Ash.Resource.Relationships.BelongsTo{name: :owner}) == nil
   end
 
+  test "a key that is no Ash type is refused, naming it" do
+    for key <- [:mony, NotAType.Here, Enum, {:array, :mony}, "string"] do
+      configure(%{key => false})
+
+      assert_raise ArgumentError,
+                   ~r/names #{Regex.escape(inspect(key))}, which is no Ash type/,
+                   fn ->
+                     FormInput.module(attribute(Phone))
+                   end
+    end
+  end
+
   test "a value that is no input is refused, naming it" do
     configure(%{Phone => Enum})
 
