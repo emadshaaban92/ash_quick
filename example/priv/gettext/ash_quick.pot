@@ -960,6 +960,9 @@ msgstr ""
 msgid "Changes"
 msgstr ""
 
+msgid "Changing it breaks the labels already printed."
+msgstr ""
+
 msgid "Children"
 msgstr ""
 
@@ -1146,6 +1149,9 @@ msgstr ""
 msgid "Tenant"
 msgstr ""
 
+msgid "The new price, before tax."
+msgstr ""
+
 msgid "To Price"
 msgstr ""
 
@@ -1183,9 +1189,6 @@ msgid "Viewer"
 msgstr ""
 
 msgid "Who makes it, as printed on the box."
-msgstr ""
-
-msgid "Your own stock code. Unique within a store."
 msgstr ""
 
 msgid "العربية"

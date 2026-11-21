@@ -4,8 +4,9 @@ defmodule AshQuick.Labels.Verifier do
   # relationship, action or argument of the resource, one labelling a value
   # its field does not offer, or a name or value labelled twice. A label that
   # names nothing is a typo, and would leave the humanized name drawn with no
-  # sign of why. A `help` naming nothing a form draws, or a name helped twice,
-  # is refused for the same reason.
+  # sign of why. A `help` naming nothing a form draws, scoped to an action
+  # that is not there or draws no such input, or given twice for one name and
+  # action, is refused for the same reason.
 
   use Spark.Dsl.Verifier
 
@@ -40,17 +41,25 @@ defmodule AshQuick.Labels.Verifier do
   end
 
   # Help is drawn under a form input, so it has to name something a form
-  # draws one for: an attribute, a relationship or an action argument.
-  # Blank help would draw an empty line the input still points at: `false` is
-  # how a resource says "none".
-  defp help_problem(dsl_state, %{name: name, help: help}) do
-    if is_binary(help) and String.trim(help) == "" do
-      """
-      `help #{inspect(name)}` is blank. Write `help #{inspect(name)}, false` \
-      to draw no help under its input.
-      """
-    else
-      unknown_help(dsl_state, name)
+  # draws one for: an attribute, a relationship or an action argument, and,
+  # scoped to an action, one that action's form draws. Blank help would draw
+  # an empty line the input still points at.
+  defp help_problem(dsl_state, %{name: name, help: help, action: action}) do
+    cond do
+      String.trim(help) == "" ->
+        """
+        `help #{inspect(name)}` is blank. Leave the entry out to draw no \
+        help under its input.
+        """
+
+      problem = unknown_help(dsl_state, name) ->
+        problem
+
+      action ->
+        action_problem(dsl_state, name, action)
+
+      true ->
+        nil
     end
   end
 
@@ -71,11 +80,54 @@ defmodule AshQuick.Labels.Verifier do
     end
   end
 
+  defp action_problem(dsl_state, name, action_name) do
+    case Enum.find(actions(dsl_state), &(&1.name == action_name)) do
+      nil ->
+        """
+        `help #{inspect(name)}, action: #{inspect(action_name)}` names no \
+        action of this resource.
+        """
+
+      action ->
+        if name not in form_inputs(dsl_state, action) do
+          """
+          `help #{inspect(name)}, action: #{inspect(action_name)}`: the \
+          #{inspect(action_name)} form draws no input #{inspect(name)}. \
+          Only a create, update or destroy action's accepted attributes, \
+          their `belongs_to` relationships, and its arguments are drawn.
+          """
+        end
+    end
+  end
+
+  # What the form of `action` draws an input for, as `Utils.action_fields/2`
+  # walks it: the accepted attributes, a `belongs_to` in place of its source
+  # attribute (either name takes the help), and the arguments.
+  defp form_inputs(dsl_state, %{type: type} = action) when type in [:create, :update, :destroy] do
+    accepted = List.wrap(Map.get(action, :accept))
+
+    belongs_to =
+      for %{type: :belongs_to, source_attribute: attribute, name: name} <-
+            relationships(dsl_state),
+          attribute in accepted,
+          do: name
+
+    accepted ++ belongs_to ++ Enum.map(action.arguments, & &1.name)
+  end
+
+  defp form_inputs(_dsl_state, _action), do: []
+
   defp help_duplicates(helps) do
     helps
-    |> Enum.frequencies_by(& &1.name)
-    |> Enum.filter(fn {_name, count} -> count > 1 end)
-    |> Enum.map(fn {name, _count} -> "`#{inspect(name)}` has more than one `help`." end)
+    |> Enum.frequencies_by(&{&1.name, &1.action})
+    |> Enum.filter(fn {_key, count} -> count > 1 end)
+    |> Enum.map(fn
+      {{name, nil}, _count} ->
+        "`#{inspect(name)}` has more than one `help` without `action:`."
+
+      {{name, action}, _count} ->
+        "`#{inspect(name)}` has more than one `help` for `action: #{inspect(action)}`."
+    end)
   end
 
   defp problem(dsl_state, %{name: name, value: nil}) do

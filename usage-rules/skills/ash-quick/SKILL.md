@@ -1212,15 +1212,19 @@ is used, unless the resource labels that value, and a translation in the
 catalogue rewords any label, English included
 (`priv/gettext/en/LC_MESSAGES/ash_quick.po`).
 
-A form draws a field's Ash `description` (an attribute's, an action
-argument's, or a `belongs_to`'s) under its input as help text, which the
-input's `aria-describedby` names. In the same `labels` section,
-`help :price, "Before tax"` replaces it and `help :internal_code, false`
-hides it; the name has to be an attribute, relationship or action argument.
-Help is English, translated under the resource's context like a label, and
-listed by `mix ash_quick.gen.gettext`. Write descriptions for the person
-filling the form, or override them; a form widget gets the text as `@help`
-and passes it on with `<.input help={@help} />`.
+A form draws help text under an input only from a `help` in the same
+`labels` section, which the input's `aria-describedby` names:
+`help :price, "Before tax"` on every form that draws the field, and
+`help :plate_number, "…", action: :inspect` on that action's form only, where
+it wins over the unscoped entry. A field's Ash `description` is never drawn on
+a form (it is API documentation). The name has to be an attribute,
+relationship or action argument, and an `action:` has to name a create,
+update or destroy whose form draws it; blank text, `false`, or two entries for
+one name and action do not compile. Help is English, translated under the
+resource's context like a label, and listed by `mix ash_quick.gen.gettext`. A
+form widget gets the text as `@help` and passes it on with
+`<.input help={@help} />`; a custom template reads it with
+`AshQuick.Labels.help(field, resource, action)`.
 
 A custom template drawing a resource's labels itself calls `AshQuick.Labels`,
 passing the resource: `name/2` (the resource's label or the humanized name,

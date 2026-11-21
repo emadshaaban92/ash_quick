@@ -12,7 +12,7 @@ defmodule Mix.Tasks.AshQuick.Gen.Gettext do
 
   Labels (field, action and value names, or the labels their resource declares
   for them, `label:` options, nav entries, page titles) and the help text under
-  form inputs (a resource's `help` entries, or the fields' descriptions) are
+  form inputs (a resource's `help` entries, never a field's description) are
   not `gettext` call sites, so `mix gettext.extract` cannot find them. This
   reads them off the nav and the QuickViews its router serves, together with
   the resources they reach. A label it cannot read, such as the

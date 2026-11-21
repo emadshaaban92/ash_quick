@@ -193,7 +193,7 @@ defmodule AshQuick.LiveView.QuickView do
       inputs get: `@field` (the Ash attribute, argument or relationship),
       `@phx_field` (the `Phoenix.HTML.FormField`), `@form` (the
       `AshPhoenix.Form`), `@uploads`, `@scope`, `@resource` and `@help` (the
-      field's help text, `AshQuick.Labels.help/2`, or nil). It is responsible
+      field's help text, `AshQuick.Labels.help/3`, or nil). It is responsible
       for rendering its own inputs, help and errors: `<.input help={@help} />`
       draws the help and points the input's `aria-describedby` at it.
 

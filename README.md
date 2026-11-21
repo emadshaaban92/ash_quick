@@ -285,18 +285,24 @@ leave the ones your language does not need empty. Two resources sharing a
 short name share their contexts. Labels with no resource behind them, a nav
 entry or a page title, have none.
 
-A form draws each field's Ash `description` under its input as help text,
-translated like a label and listed by the same task. A `help` in the same
-`labels` section replaces it, or hides it with `false`:
+A form draws help text under an input only where a `help` in the same
+`labels` section declares it, translated like a label and listed by the same
+task. `action:` scopes an entry to one action's form, where it wins over the
+entry without one:
 
 ```elixir
 ash_quick do
   labels do
     help :price, "Before tax"
-    help :internal_code, false
+    help :plate_number, "As on the vehicle's registration"
+    help :plate_number, "As read off the plate itself", action: :inspect
   end
 end
 ```
+
+A field's Ash `description` is never drawn on a form: it is API documentation
+for developers (AshJsonApi and AshGraphql publish it), not text for the person
+filling the form.
 
 The template being complete does not make a locale's translation complete: an
 entry left with an empty `msgstr` is drawn in English. To hear about those in

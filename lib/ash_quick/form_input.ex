@@ -43,7 +43,7 @@ defmodule AshQuick.FormInput do
   do: `@field` (the Ash attribute or argument), `@phx_field` (the
   `Phoenix.HTML.FormField`), `@form` (the `AshPhoenix.Form`), `@resource`,
   `@scope`, `@uploads`, and `@help` (the field's help text,
-  `AshQuick.Labels.help/2`, or nil). It draws the field's label, help and
+  `AshQuick.Labels.help/3`, or nil). It draws the field's label, help and
   errors itself; `<.input help={@help} />` from `AshQuick.Components` draws
   all three. The form's grid has four columns; `sm:col-span-2` is half.
   The callback is `render/1` rather than `input/1` so that the module can

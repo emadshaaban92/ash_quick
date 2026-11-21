@@ -203,32 +203,38 @@ defmodule AshQuick do
 
   ### Help text
 
-  A form draws a field's Ash `description` under its input, as help text: an
-  attribute's, an action argument's, or a `belongs_to` relationship's (its
-  source attribute's when the relationship has none). Where the description
-  is not what a reader filling the form should see, the resource says so in
-  the same section:
+  A form draws help text under an input only where the resource declares it,
+  in the same section:
 
       ash_quick do
         labels do
           help :price, "Before tax"
-          help :internal_code, false
+          help :plate_number, "As on the vehicle's registration"
+          help :plate_number, "As read off the plate itself", action: :inspect
         end
       end
 
-  `help name, text` draws `text` in place of the description, and
-  `help name, false` draws none. `name` is an attribute or relationship, or an
-  argument of one of the resource's actions; one name takes one help text on
-  every form that draws it. A name the resource does not have, or one given
-  two, does not compile. A `belongs_to` takes its help under its own name or
-  its source attribute's.
+  `name` is an attribute or relationship, or an argument of one of the
+  resource's actions. `help name, text` draws `text` under that input on
+  every form that draws it. With `action:`, only that action's form draws it,
+  and there it wins over the entry without `action:`: one argument name often
+  asks for something else in each action that takes it. A field with no
+  `help` draws none. An Ash `description` is never drawn on a form: it
+  documents the field for developers and API readers (AshJsonApi and
+  AshGraphql publish it), not for the person filling the form.
+
+  None of these compile: a name the resource does not have, blank text,
+  `false` as the text, an `action:` naming no action of the resource, or one
+  whose form draws no input `name`, and two entries for the same name and
+  action (or two without one). A `belongs_to` takes its help under its own
+  name or its source attribute's.
 
   Help text is English, and translated the way labels are, under the same
-  context: `mix ash_quick.gen.gettext` lists each help text a form can draw,
-  declared or read from a description. It is plain text, drawn under the
-  input with an id the input's `aria-describedby` names beside its errors,
-  so a screen reader reads it with the input. A placeholder is never help: it
-  is gone once the reader starts typing.
+  context: `mix ash_quick.gen.gettext` lists each `help` text a form can
+  draw. It is plain text, drawn under the input with an id the input's
+  `aria-describedby` names beside its errors, so a screen reader reads it
+  with the input. A placeholder is never help: it is gone once the reader
+  starts typing.
 
   ## Forms
 
@@ -951,12 +957,12 @@ defmodule AshQuick do
   @help %Spark.Dsl.Entity{
     name: :help,
     describe:
-      "The help text drawn under a field's form input in place of its `description`, or `false` for none.",
+      "The help text drawn under a field's form input: on every form that draws the field, or only on one action's.",
     target: AshQuick.Labels.Help,
     args: [:name, :help],
     examples: [
       ~s(help :price, "Before tax"),
-      ~s(help :internal_code, false)
+      ~s(help :plate_number, "As on the vehicle's registration", action: :inspect)
     ],
     schema: [
       name: [
@@ -966,10 +972,14 @@ defmodule AshQuick do
           "An attribute or relationship, or an argument of one of the resource's actions: something a form draws an input for."
       ],
       help: [
-        type: {:or, [:string, {:literal, false}]},
+        type: {:custom, AshQuick.Labels.Help, :text, []},
         required: true,
+        doc: "The help text, in English: the msgid it is translated under."
+      ],
+      action: [
+        type: :atom,
         doc:
-          "The help text, in English: the msgid it is translated under. `false` draws none, whatever the field's `description` says."
+          "The create, update or destroy action whose form alone draws this help, in place of an entry without `action:`. Left out, every form that draws the field draws it."
       ]
     ]
   }
