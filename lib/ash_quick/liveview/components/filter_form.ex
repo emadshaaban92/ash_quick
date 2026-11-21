@@ -396,8 +396,9 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       type="text"
       name={"value-#{@filter.uuid}"}
       value={typed_list(@filter.value, @field, @timezone)}
-      class={["input input-sm min-w-0 flex-1", @error && "input-error"]}
+      class={["input input-sm min-w-0 flex-1", @error && "input-error", number_class(@field)]}
       aria-label={gettext("Value")}
+      {number_dir(@field)}
       {invalid_attrs(@filter, @error)}
     />
     """
@@ -473,8 +474,9 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       inputmode={@inputmode}
       name={"value-#{@filter.uuid}"}
       value={typed_list(@filter.value, @field, @timezone)}
-      class={["input input-sm min-w-0 flex-1", @error && "input-error"]}
+      class={["input input-sm min-w-0 flex-1", @error && "input-error", number_class(@field)]}
       aria-label={gettext("Value")}
+      {number_dir(@field)}
       {invalid_attrs(@filter, @error)}
     />
     """
@@ -490,6 +492,15 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   end
 
   def number_inputmode(_field), do: nil
+
+  # A number is typed left to right on a right-to-left page too, as a form's
+  # number input is (`AshQuick.LiveView.FormInputs`): a minus typed first
+  # would otherwise show after the digits. It still lines up on the right.
+  defp number_dir(%{type: type}) when type in @number_types, do: [dir: "ltr"]
+  defp number_dir(_field), do: []
+
+  defp number_class(%{type: type}) when type in @number_types, do: "rtl:text-right"
+  defp number_class(_field), do: nil
 
   defp non_negative?(constraints) do
     case constraints[:min] do

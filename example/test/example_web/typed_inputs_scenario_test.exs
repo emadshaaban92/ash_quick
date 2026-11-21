@@ -30,6 +30,10 @@ defmodule ExampleWeb.TypedInputsScenarioTest do
       |> assert_has("input[name='form[quantity]'][type='text'][dir='ltr']")
       |> refute_has("input[name='form[quantity]'][inputmode]")
       |> assert_has("input[name='form[stock]'][type='text'][inputmode='numeric'][dir='ltr']")
+      # Typed left to right, but lined up with the other inputs on a
+      # right-to-left page.
+      |> assert_has("input[name='form[quantity]'].rtl\\:text-right")
+      |> refute_has("input[name='form[code]'].rtl\\:text-right")
       |> assert_has("input[name='form[boxes]'][type='text'][inputmode='numeric']")
       |> assert_has("input[name='form[weight]'][type='text'][inputmode='decimal']")
       |> assert_has("input[name='form[ratio]'][type='text'][inputmode='decimal']")

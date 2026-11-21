@@ -250,6 +250,24 @@ defmodule ExampleWeb.CustomFilterGuardScenarioTest do
 
       assert attribute(view, "input[name='value-#{uuid}']", "inputmode") == []
     end
+
+    # A minus typed first stays in front of the digits on a right-to-left
+    # page, as it does in a form's number input.
+    test "types a number left to right", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      [uuid] = filter_uuids(view)
+
+      filter_change(view, "field_name-#{uuid}", "salary")
+      filter_change(view, "operator-#{uuid}", "equals")
+      assert attribute(view, "input[name='value-#{uuid}']", "dir") == ["ltr"]
+
+      filter_change(view, "operator-#{uuid}", "in")
+      assert attribute(view, "input[name='value-#{uuid}']", "dir") == ["ltr"]
+
+      filter_change(view, "field_name-#{uuid}", "code")
+      filter_change(view, "operator-#{uuid}", "equals")
+      assert attribute(view, "input[name='value-#{uuid}']", "dir") == []
+    end
   end
 
   # `AshQuick.AshTypes.Text` is a NewType built on a string, and was never

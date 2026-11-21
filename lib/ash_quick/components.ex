@@ -817,6 +817,11 @@ defmodule AshQuick.Components do
     doc:
       "help text drawn under the input, which its `aria-describedby` names (`AshQuick.Labels.help/2`)"
 
+  attr :class, :any,
+    default: nil,
+    doc:
+      "classes added to the input's own, on every type: a number's alignment from `AshQuick.LiveView.FormInputs`, say"
+
   attr :checked, :boolean, doc: "the checked flag for checkbox inputs"
   attr :prompt, :string, default: nil, doc: "the prompt for select inputs"
   attr :options, :list, doc: "the options to pass to Phoenix.HTML.Form.options_for_select/2"
@@ -853,7 +858,7 @@ defmodule AshQuick.Components do
           name={@name}
           value="true"
           checked={@checked}
-          class="checkbox checkbox-primary checkbox-sm"
+          class={["checkbox checkbox-primary checkbox-sm", @class]}
           {FieldHelp.describe_attrs(@id, @help, @errors)}
           {@rest}
         />
@@ -877,7 +882,8 @@ defmodule AshQuick.Components do
         name={@name}
         class={[
           "select w-full phx-submit-loading:pointer-events-none",
-          @errors != [] && "select-error"
+          @errors != [] && "select-error",
+          @class
         ]}
         multiple={@multiple}
         {FieldHelp.describe_attrs(@id, @help, @errors)}
@@ -904,7 +910,8 @@ defmodule AshQuick.Components do
         name={@name}
         class={[
           "textarea w-full",
-          @errors != [] && "textarea-error"
+          @errors != [] && "textarea-error",
+          @class
         ]}
         {FieldHelp.describe_attrs(@id, @help, @errors)}
         {@rest}
@@ -929,7 +936,8 @@ defmodule AshQuick.Components do
         value={Phoenix.HTML.Form.normalize_value(@type, @value)}
         class={[
           "input w-full phx-submit-loading:pointer-events-none",
-          @errors != [] && "input-error"
+          @errors != [] && "input-error",
+          @class
         ]}
         {FieldHelp.describe_attrs(@id, @help, @errors)}
         {@rest}
