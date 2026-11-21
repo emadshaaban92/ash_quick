@@ -54,7 +54,9 @@ defmodule AshQuick.LiveView.RouteGate do
 
   It raises `AshQuick.LiveView.RouteGate.NotAllowedError`, which Plug answers
   with a 403, so reaching past a missing sidebar link is a visible refusal
-  rather than an empty page.
+  rather than an empty page. Each refusal also emits
+  `[:ash_quick, :route_gate, :refused]` (see `AshQuick.Telemetry`), for a host
+  to count or alert on.
 
   A tab standing in for somebody else (`AshQuick.LiveView.Mount.actor/1`) is
   sent to the fallback path with a flash instead. Its first render ran as the
@@ -148,6 +150,8 @@ defmodule AshQuick.LiveView.RouteGate do
         {:cont, socket}
 
       Mount.actor(socket) != nil and not same_path?(path, fallback) ->
+        refused(socket, path, :redirected)
+
         {:halt,
          socket
          |> LiveView.put_flash(
@@ -157,8 +161,22 @@ defmodule AshQuick.LiveView.RouteGate do
          |> LiveView.push_navigate(to: fallback)}
 
       true ->
+        refused(socket, path, :forbidden)
         raise NotAllowedError, path: path, actor: AshQuick.Scope.actor(scope)
     end
+  end
+
+  # Counted as `[:ash_quick, :route_gate, :refused]` (see `AshQuick.Telemetry`).
+  defp refused(socket, path, outcome) do
+    scope = socket.assigns[:scope]
+
+    AshQuick.Telemetry.event([:route_gate, :refused], %{
+      path: path,
+      quick_view: socket.view,
+      scope: scope,
+      actor: AshQuick.Scope.actor(scope),
+      outcome: outcome
+    })
   end
 
   # Compared as the router reads both, so `fallback: "/dash?tab=1"` or

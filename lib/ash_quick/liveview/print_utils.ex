@@ -44,7 +44,7 @@ defmodule AshQuick.LiveView.PrintUtils do
   end
 
   defp deliver(socket, print, records) do
-    {filename, pdf} = render!(print.template, records, socket.assigns.scope)
+    {filename, pdf} = timed_render!(print.template, records, socket.assigns.scope)
 
     push_event(socket, "ash_quick:pdf", %{data: pdf, filename: filename, delivery: print.delivery})
   rescue
@@ -59,6 +59,15 @@ defmodule AshQuick.LiveView.PrintUtils do
         :error,
         gettext("It was recorded, but its PDF could not be produced. Print it again.")
       )
+  end
+
+  # Timed as `[:ash_quick, :print]` (see `AshQuick.Telemetry`).
+  defp timed_render!(template, [%resource{} | _] = records, scope) do
+    AshQuick.Telemetry.span(
+      [:print],
+      %{resource: resource, template: template, scope: scope, records: length(records)},
+      fn -> {render!(template, records, scope), %{}} end
+    )
   end
 
   defp render!(template, [%resource{} | _] = records, scope) do

@@ -16,15 +16,42 @@ defmodule AshQuick.LiveView.ListRead do
   alias AshQuick.LiveView.Utils
   alias AshQuick.LiveView.QuickView.Options
 
+  # Timed as `[:ash_quick, :list, :read]` (see `AshQuick.Telemetry`), the
+  # query's building with it: loading the fields is part of what a read costs.
   def load_data!(socket, %URLParams{} = params, %Options{} = options) do
     limit = params.limit
     offset = get_offset(params.page, limit)
 
-    socket
-    |> list_query(params, options)
-    |> Ash.Query.page(limit: limit, offset: offset, count: countable?(socket.assigns.ash_action))
-    |> Ash.read!()
+    AshQuick.Telemetry.span(
+      [:list, :read],
+      %{
+        quick_view: Map.get(socket, :view),
+        resource: options.resource,
+        action: socket.assigns.ash_action.name,
+        scope: socket.assigns[:scope],
+        page_number: params.page || 1,
+        limit: limit,
+        search?: params.search not in [nil, ""],
+        custom_filter?: params.custom_filter != nil
+      },
+      fn ->
+        page =
+          socket
+          |> list_query(params, options)
+          |> Ash.Query.page(
+            limit: limit,
+            offset: offset,
+            count: countable?(socket.assigns.ash_action)
+          )
+          |> Ash.read!()
+
+        {page, %{rows: rows(page)}, %{}}
+      end
+    )
   end
+
+  defp rows(%{results: results}) when is_list(results), do: length(results)
+  defp rows(results) when is_list(results), do: length(results)
 
   def list_query(socket, %URLParams{} = params, %Options{} = options) do
     socket

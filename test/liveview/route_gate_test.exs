@@ -125,6 +125,18 @@ defmodule AshQuick.LiveView.RouteGateTest do
       assert Plug.Exception.status(error) == 403
     end
 
+    test "refused is reported as `[:ash_quick, :route_gate, :refused]`" do
+      ref = :telemetry_test.attach_event_handlers(self(), [[:ash_quick, :route_gate, :refused]])
+      on_exit(fn -> :telemetry.detach(ref) end)
+      scope = scope([:catalog])
+      socket = %{scope: scope} |> socket() |> mount()
+
+      assert_raise NotAllowedError, fn -> navigate(socket, "http://localhost/scan?q=1") end
+
+      assert_received {[:ash_quick, :route_gate, :refused], ^ref, %{system_time: _},
+                       %{path: "/scan", scope: ^scope, outcome: :forbidden}}
+    end
+
     test "to a doubled slash is refused as the path the router serves" do
       socket = %{scope: %{}} |> socket() |> mount(access_control: HomeOnly)
 
@@ -164,6 +176,17 @@ defmodule AshQuick.LiveView.RouteGateTest do
       assert {:halt, socket} = navigate(socket, "http://localhost/scan")
       assert socket.redirected == {:live, :redirect, %{kind: :push, to: "/"}}
       assert socket.assigns.flash["error"] =~ "/scan"
+    end
+
+    test "refused is reported as sent away" do
+      ref = :telemetry_test.attach_event_handlers(self(), [[:ash_quick, :route_gate, :refused]])
+      on_exit(fn -> :telemetry.detach(ref) end)
+      socket = [:catalog] |> impersonating() |> mount()
+
+      assert {:halt, _socket} = navigate(socket, "http://localhost/scan")
+
+      assert_received {[:ash_quick, :route_gate, :refused], ^ref, _,
+                       %{path: "/scan", outcome: :redirected}}
     end
 
     test "is sent where `fallback:` says" do

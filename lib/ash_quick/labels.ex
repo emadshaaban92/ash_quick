@@ -37,7 +37,8 @@ defmodule AshQuick.Labels do
   it gives none: a language whose words agree with the noun they describe
   translates "Cancelled" one way for a loan and another for an approval, and
   every other label needs no context. A label translated neither way reaches
-  the backend's `handle_missing_translation/5` with its context.
+  the backend's `handle_missing_translation/5` with its context, and is
+  emitted as `[:ash_quick, :translation, :missing]` (see `AshQuick.Telemetry`).
 
   Anything but a string is drawn as it is: `nil`, or markup a `label:` option
   holds.
@@ -80,7 +81,12 @@ defmodule AshQuick.Labels do
   defp lookup(backend, locale, context, label) do
     msgctxt = if context, do: msgctxt(backend, locale, context, label)
 
-    case backend.lgettext(locale, "ash_quick", msgctxt, label, %{}) do
+    answer =
+      locale
+      |> backend.lgettext("ash_quick", msgctxt, label, %{})
+      |> AshQuick.Gettext.missed(backend, locale, "ash_quick", msgctxt, label, nil)
+
+    case answer do
       {:missing_bindings, drawn, _bindings} -> drawn
       {_found_or_default, drawn} -> drawn
     end
