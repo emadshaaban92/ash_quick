@@ -102,6 +102,7 @@ test_pages = [
   "/test/required_picks",
   "/test/second_lists",
   "/test/secrets",
+  "/test/shaped_orders",
   "/test/shelved_crates",
   "/test/small_pages",
   "/test/sorted_rows",
