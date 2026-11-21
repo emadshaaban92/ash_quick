@@ -20,11 +20,13 @@ defmodule AshQuick.LiveView.FormParams do
   # `params` with the numbers typed into the inputs of `action` that hold one
   # read the way Ash reads a number: trimmed, the digits an Arabic or Persian
   # keyboard types and its separators as ASCII (`Digits.normalize/1`), and,
-  # on a field that takes a fraction, a decimal comma as a point. A phone's
+  # on a field that takes a fraction or a `Money`'s amount
+  # (`AshQuick.FormInput.Money`), a decimal comma as a point. A phone's
   # decimal pad in a comma locale offers only ",". The comma is read so only
   # where it is the only separator and is not followed by exactly three
-  # digits: `1,000` could be a thousand, and is left for Ash to refuse rather
-  # than read as one. Other inputs keep what was typed.
+  # digits: `1,000` could be a thousand, and is left as typed rather than
+  # read as one point nought. Ash refuses it for a float or decimal; ex_money
+  # reads a Money's as the thousand. Other inputs keep what was typed.
   @doc false
   def normalize_digits(params, resource, action) when is_map(params) do
     case action && action(resource, action) do
@@ -48,8 +50,14 @@ defmodule AshQuick.LiveView.FormParams do
 
   defp normalize_digits_at({name, kind}, params) do
     case Map.fetch(params, name) do
-      {:ok, value} when is_binary(value) -> Map.put(params, name, typed_number(value, kind))
-      _ -> params
+      {:ok, %{"amount" => amount} = money} when kind == :money and is_binary(amount) ->
+        Map.put(params, name, Map.put(money, "amount", typed_number(amount, :fraction)))
+
+      {:ok, value} when is_binary(value) and kind != :money ->
+        Map.put(params, name, typed_number(value, kind))
+
+      _ ->
+        params
     end
   end
 

@@ -622,7 +622,7 @@ defmodule ExampleWeb.BulkActionScenarioTest do
       |> refute_has("#{@modal} p.text-error")
       |> click_button("#{@modal} button", "Save")
       |> assert_has("#flash-error", text: "Only an active product can be repriced.")
-      |> assert_has("#{@modal} input[name='form[price]'][value*='75']")
+      |> assert_has("#{@modal} input[name='form[price][amount]'][value*='75']")
       |> assert_has("input[name='#{first.id}'][checked]")
 
       assert Money.to_string!(Ash.reload!(first, authorize?: false).price) =~ "100"
@@ -691,7 +691,7 @@ defmodule ExampleWeb.BulkActionScenarioTest do
       |> log_in(admin)
       |> visit(~p"/products")
       |> tick_rows([first.id])
-      |> force_bulk_save(%{"price" => "1.00"})
+      |> force_bulk_save(%{"price" => %{"amount" => "1.00", "currency" => "USD"}})
       |> assert_has("#flash-error", text: AshQuick.LiveView.ActionErrors.forbidden_message())
 
       assert Money.to_string!(Ash.reload!(first, authorize?: false).price) =~ "100"

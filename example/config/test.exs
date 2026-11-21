@@ -74,6 +74,7 @@ test_pages = [
   "/test/filter_fields_named",
   "/test/filter_fields_none",
   "/test/filter_fields_salary",
+  "/test/form_inputs",
   "/test/form_stages",
   "/test/hidden_address",
   "/test/hidden_fields",
@@ -131,3 +132,13 @@ config :ash_quick,
 # (`Example.Test.Printable`), so only it names a renderer: elsewhere
 # `AshQuick.Print.Verifier` would refuse a print as its resource compiles.
 config :ash_quick, pdf_renderer: Example.Test.PdfRendererDouble
+
+# A type of the host's drawn by an input of its own, as a scalar and as a
+# list, and a `Money` NewType given the plain text input rather than
+# AshQuick's own. See `Example.Test.FormInputs`.
+config :ash_quick,
+  form_inputs: %{
+    Example.Test.FormInputs.Phone => Example.Test.FormInputs.PhoneInput,
+    {:array, Example.Test.FormInputs.Phone} => Example.Test.FormInputs.PhonesInput,
+    Example.Test.FormInputs.PlainPrice => false
+  }

@@ -1046,6 +1046,36 @@ short without a word, at a count Ash, trimming first, does not make, and
 Ash's error under the input says when a value is too long. Each is a hint for
 the browser; Ash still casts and validates what is posted.
 
+An AshMoney `Money` gets an amount box beside a currency select, posted as
+`form[price][amount]` and `form[price][currency]`, the map AshMoney casts. The
+select offers the currencies `ex_money_opts: [only: ..., except: ...]` allows
+(codes, or currency types such as `:tender`), and always the one the field
+holds; with one to offer, the code is fixed text. With no `only` it offers
+every current currency but the metals and units (some 165), so name the ones
+the field takes. It starts at the held currency, else `:default_currency`, else
+the currency of the reader's locale. The amount is typed as a decimal is, its
+`min` deciding the number pad.
+
+A type of your own can get an input of your own, in every form AshQuick draws,
+sub-forms and bulk forms too, named by type in the config. A NewType gets the
+input of the type under it unless the map names it, and `false` turns off
+AshQuick's own input for a type, so the field gets the plain text input:
+
+```elixir
+config :ash_quick,
+  form_inputs: %{
+    MyApp.Types.Phone => MyAppWeb.PhoneInput,
+    {:array, MyApp.Types.Phone} => MyAppWeb.PhonesInput
+  }
+```
+
+The module implements `AshQuick.FormInput`: `render/1` is a function component
+given the assigns a form widget gets (`@field`, `@phx_field`, `@form`,
+`@scope`, `@help`, ...), and draws its own label, help and errors. A page's
+form widget for a field wins over it, and a `sensitive?` field keeps its
+password input. A list a configured input renders is one the page counts as
+saveable.
+
 ## Routing
 
 A QuickView is routed through `AshQuick.LiveView.Router.quick_view/3` and

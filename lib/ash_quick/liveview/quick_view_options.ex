@@ -199,13 +199,16 @@ defmodule AshQuick.LiveView.QuickView.Options do
   end
 
   # The fields this page's built-in inputs render on the public actions of
-  # `types`: a field a widget renders is the host's, and is never asked about.
+  # `types`: a field a widget or a type's form input (`AshQuick.FormInput`)
+  # renders is the host's, and is never asked about. The form inputs are read
+  # from the config as this page compiles.
   defp form_fields(%__MODULE__{resource: resource} = options, types) do
     for action <- Ash.Resource.Info.public_actions(resource),
         action.type in types,
         field <- Utils.action_fields(resource, action.name),
         not is_nil(field),
         not Map.has_key?(options.form_widgets, field.name),
+        not AshQuick.FormInput.named?(field),
         do: {action, field}
   end
 

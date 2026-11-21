@@ -1027,3 +1027,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "That filter is too large to apply. Remove some conditions or values and try again."
 msgstr ""
+
+#: lib/ash_quick/form_input/money.ex
+#, elixir-autogen, elixir-format
+msgid "%{field} currency"
+msgstr ""

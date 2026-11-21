@@ -895,8 +895,9 @@ and what to write.
   lists every such field. Name its values with
   `constraints: [items: [one_of: [...]]]`, type it with an `Ash.Type.Enum`,
   render it with a form widget that posts a list
-  (`form: [widgets: %{tags: &__MODULE__.tags_input/1}]`), or leave it out of
-  the action.
+  (`form: [widgets: %{tags: &__MODULE__.tags_input/1}]`) or a configured
+  input for its list type (`form_inputs: %{{:array, MyType} => MyInput}`), or
+  leave it out of the action.
 - **Typed inputs** — A date, a time held to the second and a naive datetime
   get the browser's pickers. A number stays `type="text"` (match it as such in
   tests), with `dir="ltr"`, and gets `inputmode` for a phone's number pad
@@ -906,6 +907,17 @@ and what to write.
   `12,5` as 12.5 (not `1,000`). A string's `min_length` becomes `minlength`
   where the browser counts no stricter than Ash; `max_length` sets no
   `maxlength` (a browser would cut a pasted value short), Ash's error says it.
+- **Money and per-type inputs** — An AshMoney `Money` field posts as
+  `form[price][amount]` and `form[price][currency]` (an amount box and a
+  currency select over `ex_money_opts[:only]`, or fixed text for one
+  currency); in tests post `%{"price" => %{"amount" => "10", "currency" =>
+  "USD"}}`. `config :ash_quick, form_inputs: %{MyApp.Types.Phone =>
+  MyAppWeb.PhoneInput}` gives every field of a type (and its NewTypes) an
+  input of the host's in every form, sub-forms too; the module implements
+  `AshQuick.FormInput` (`render/1`, a function component with a widget's
+  assigns). `false` turns AshQuick's own off (`AshMoney.Types.Money => false`).
+  Precedence: `form: [widgets: ...]`, then `sensitive?`, then the config, then
+  the built-ins. Set it in `config.exs`: a QuickView reads it as it compiles.
 - **Activation** — Optional, and declared rather than detected: a resource opting in
   with `ash_quick do activation do enabled? true end end` gets an `:active` attribute,
   `:activate`/`:deactivate` actions, dimmed rows for its inactive records, activate/deactivate

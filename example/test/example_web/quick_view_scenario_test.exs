@@ -66,7 +66,7 @@ defmodule ExampleWeb.QuickViewScenarioTest do
         "sku" => sku,
         "name" => "Four-season tent",
         "description" => "Holds up in weather.",
-        "price" => "199.00"
+        "price" => %{"amount" => "199.00", "currency" => "USD"}
       }
     })
     |> render_submit(%{"form" => %{"brand_id" => brand.id, "category_id" => category.id}})
@@ -107,7 +107,7 @@ defmodule ExampleWeb.QuickViewScenarioTest do
     refute html =~ "form[sku]"
 
     reprice_view
-    |> form("##{created.id}-form", %{"form" => %{"price" => "149.00"}})
+    |> form("##{created.id}-form", %{"form" => %{"price" => %{"amount" => "149.00"}}})
     |> render_submit()
 
     repriced = Ash.get!(Product, created.id, load: [:price_changes], authorize?: false)

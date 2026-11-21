@@ -214,9 +214,10 @@ defmodule ExampleWeb.FormScenarioTest do
         # the surface — a `:string` field beside it is a one-line input.
         |> assert_has("textarea[name='form[description]']")
         |> assert_has("input[type='text'][name='form[name]']")
-        # `:money` keeps the currency it was stored with, formatted rather than
-        # rendered as the decimal underneath.
-        |> assert_has("input[name='form[price]'][value='$10.00']")
+        # `:money` is its amount, as the decimal underneath, beside the
+        # currency it was stored with.
+        |> assert_has("input[name='form[price][amount]'][value='10.00']")
+        |> assert_has("select[name='form[price][currency]'] option[selected]", text: "USD")
 
       # An array of atoms offers exactly the values its `one_of` constraint
       # names, humanized — nothing spells them out on the view or the form.
@@ -272,7 +273,7 @@ defmodule ExampleWeb.FormScenarioTest do
       |> unwrap(fn view ->
         view
         |> form("form[id='#{product.id}-form']", %{"form" => %{"name" => "Forged"}})
-        |> render_submit(%{"form" => %{"price" => "1.00"}})
+        |> render_submit(%{"form" => %{"price" => %{"amount" => "1.00", "currency" => "USD"}}})
       end)
 
       saved = Ash.reload!(product, authorize?: false)
