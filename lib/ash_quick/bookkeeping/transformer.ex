@@ -63,12 +63,11 @@ defmodule AshQuick.Bookkeeping.Transformer do
   # column is not meaningful, so the stamp never replaces it, and nothing
   # re-stamps `inserted_by` after the create.
   #
-  # Refused here rather than in `AshQuick.Bookkeeping.Verifier`: Spark reports
-  # a verifier's error as a compile warning, and this one has to fail the build
-  # whatever the host compiles with. Only the column is checked: a writable
-  # relationship is reached only through an argument the host manages onto it
-  # by name, which is a choice and not an accident. A relationship pointing
-  # elsewhere is the verifier's to report, and is not stamped.
+  # Refused here, before any stamp is put on top of the column. Only the
+  # column is checked: a writable relationship is reached only through an
+  # argument the host manages onto it by name, which is a choice and not an
+  # accident. A relationship pointing elsewhere is the verifier's to report,
+  # and is not stamped.
   defp refuse_writable_actor_columns(dsl_state) do
     case Enum.flat_map(Declaration.actors(), &writable_actor_column(dsl_state, &1)) do
       [] -> :ok
