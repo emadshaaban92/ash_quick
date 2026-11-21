@@ -226,6 +226,23 @@ defmodule ExampleWeb.TypedInputsScenarioTest do
     end
   end
 
+  describe "the list and the details page" do
+    # Grouped in the reader's locale, left to right on a right-to-left page,
+    # and with every fractional digit the value holds.
+    test "write a number in the reader's locale", %{conn: conn, admin: admin} do
+      arabic = Ash.update!(admin, %{locale: :ar}, actor: admin)
+      record = typed_input(quantity: -12_345, weight: Decimal.new("1234.50"))
+
+      conn
+      |> log_in(arabic)
+      |> visit(~p"/test/typed_inputs")
+      |> assert_has("td span[dir='ltr']", text: "-12,345")
+      |> visit(~p"/test/typed_inputs/#{record.id}")
+      |> assert_has(~s([data-field="quantity"] dd span[dir="ltr"]), text: "-12,345")
+      |> assert_has(~s([data-field="weight"] dd span[dir="ltr"]), text: "1,234.50")
+    end
+  end
+
   describe "the bulk form" do
     test "reads Arabic-Indic digits too", %{conn: conn} do
       first = typed_input([])

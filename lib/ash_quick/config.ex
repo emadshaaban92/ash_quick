@@ -441,6 +441,61 @@ defmodule AshQuick.Config do
     localized(Money, value, [], fn -> to_string(value) end)
   end
 
+  @doc """
+  Formats a number for display, in the reader's locale
+  (`AshQuick.Locale.current/0`): its digit grouping, decimal separator and
+  digits.
+
+  A locale Localize holds no data for reads as Elixir prints the number:
+  Localize would fall back to English, and a German reader would take its
+  `1,234.5` for a number near one; `1234.5` cannot be misread.
+
+  Every fractional digit the value holds is kept, where Localize's own
+  pattern would round to three places: a decimal keeps its scale, so
+  `10.50` shows two places, and a float its shortest form. Without Localize,
+  or for a locale it cannot parse, the number reads as Elixir prints it.
+  """
+  def format_number(value) when is_integer(value) do
+    number(value, [fractional_digits: 0], fn -> Integer.to_string(value) end)
+  end
+
+  def format_number(value) when is_float(value),
+    do: format_decimal(Decimal.from_float(value), fn -> Float.to_string(value) end)
+
+  def format_number(%Decimal{} = value),
+    do: format_decimal(value, fn -> Decimal.to_string(value, :normal) end)
+
+  defp format_decimal(%Decimal{coef: coef} = value, fallback) when is_integer(coef) do
+    number(value, [fractional_digits: max(-value.exp, 0)], fallback)
+  end
+
+  # Infinity and NaN, which have no digits to group.
+  defp format_decimal(_value, fallback), do: fallback.()
+
+  defp number(value, opts, fallback) do
+    if number_data?(AshQuick.Locale.current()),
+      do: localized(Localize.Number, value, opts, fallback),
+      else: fallback.()
+  end
+
+  # Whether Localize formats in the locale's own language, rather than in the
+  # English it falls back to for a locale it has no data for.
+  # `Localize.Locale.data_locale_id/1` names the locale whose data was loaded
+  # in its place: a parent, or `:en`.
+  defp number_data?(locale) do
+    with true <- Code.ensure_loaded?(Localize),
+         {:ok, tag} <- Localize.validate_locale(locale) do
+      data_language = tag |> Localize.Locale.data_locale_id() |> language()
+      data_language == language(tag.language)
+    else
+      _no_localize -> false
+    end
+  rescue
+    _cannot_load -> false
+  end
+
+  defp language(locale_id), do: locale_id |> to_string() |> String.split("-") |> hd()
+
   # Localize keeps a locale of its own that nothing sets, so the reader's is
   # passed. A locale Localize has no data for falls back inside Localize; one it
   # cannot parse at all is an error, which reads as no Localize.

@@ -172,7 +172,7 @@ defmodule AshQuick.LiveView.Components.FieldValueTest do
     # Read left to right on a right-to-left page too, so a minus sign stays
     # in front of the digits instead of landing after them.
     for {label, type, value, shown} <- [
-          {"an integer", Ash.Type.Integer, quote(do: -12_345), "-12345"},
+          {"an integer", Ash.Type.Integer, quote(do: -12_345), "-12,345"},
           {"a float", Ash.Type.Float, quote(do: -2.5), "-2.5"},
           {"a decimal", Ash.Type.Decimal, quote(do: Decimal.new("-10.50")), "-10.50"}
         ] do
