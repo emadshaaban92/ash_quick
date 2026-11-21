@@ -20,7 +20,8 @@ defmodule AshQuick.FormInput do
   first, then each type under it, and the first one the map names wins. So a
   `MyApp.Types.Price` built on `AshMoney.Types.Money` gets the money input
   unless the map names `MyApp.Types.Price` itself. A list matches only a key
-  that is a list, `{:array, MyApp.Types.Phone}`.
+  that is a list, `{:array, MyApp.Types.Phone}`. A key naming no Ash type is
+  refused with an `ArgumentError`, as a QuickView compiles or a form draws.
 
   A value is a module implementing this behaviour, or `false`, which turns off
   AshQuick's own input for the type so the field gets the plain text input.
@@ -48,9 +49,11 @@ defmodule AshQuick.FormInput do
   The callback is `render/1` rather than `input/1` so that the module can
   import `AshQuick.Components.input/1` to draw with.
 
-  It posts what the type casts. AshQuick reads nothing in between, so an
-  input posting a nested map (`form[phone][number]`) posts it to Ash as a
-  map.
+  It posts what the type casts, and Ash receives it as posted: an input
+  posting a nested map (`form[phone][number]`) posts it to Ash as a map. The
+  one exception is a field holding a `Money`, or any NewType of it: whatever
+  input draws it, a posted `amount` has its digits read as a number's are
+  (Arabic-Indic and Persian digits as 0-9, a decimal comma as a point).
 
   The map is read each time a form draws. A QuickView also reads it when it
   compiles, to know which lists its forms can save, so set it in
@@ -112,13 +115,28 @@ defmodule AshQuick.FormInput do
   defp configured do
     case Application.get_env(:ash_quick, :form_inputs, %{}) do
       inputs when is_map(inputs) ->
-        Map.new(inputs, fn {type, input} -> {key(type), validate!(type, input)} end)
+        Map.new(inputs, fn {type, input} -> {key!(type), validate!(type, input)} end)
 
       other ->
         raise ArgumentError,
               "config :ash_quick, form_inputs: must be a map of Ash type => module or false, " <>
                 "got: #{inspect(other)}"
     end
+  end
+
+  # A key naming no type would match no field, so a misspelt one would leave
+  # the input it was meant to replace or turn off silently in place. A
+  # built-in's key is taken without its type loaded, as it is named.
+  defp key!(type) do
+    key = key(type)
+
+    if Map.has_key?(@built_in, key) or Ash.Type.ash_type?(key),
+      do: key,
+      else:
+        raise(ArgumentError, """
+        config :ash_quick, form_inputs: names #{inspect(type)}, which is no Ash type. \
+        A key is an Ash type: a module, a short name Ash resolves, or a list of one.
+        """)
   end
 
   defp key({:array, type}), do: {:array, key(type)}
