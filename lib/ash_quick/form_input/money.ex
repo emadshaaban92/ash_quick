@@ -62,7 +62,8 @@ defmodule AshQuick.FormInput.Money do
         currency_name: phx_field.name <> "[currency]",
         errors: FieldErrors.for_field(phx_field, used?(phx_field, pick?)),
         label_text: Labels.name(field.name, assigns.resource),
-        number_attrs: number_attrs(field)
+        number_attrs: Keyword.delete(number_attrs(field), :class),
+        number_class: Keyword.get(number_attrs(field), :class)
       )
 
     ~H"""
@@ -80,7 +81,8 @@ defmodule AshQuick.FormInput.Money do
           phx-debounce="blur"
           class={[
             "input join-item min-w-0 flex-1 phx-submit-loading:pointer-events-none",
-            @errors != [] && "input-error"
+            @errors != [] && "input-error",
+            @number_class
           ]}
           {amount_describe_attrs(@id, @help, @errors, @pick?)}
           {@number_attrs}
@@ -180,14 +182,15 @@ defmodule AshQuick.FormInput.Money do
     end
   end
 
-  # Typed as a decimal is (`AshQuick.LiveView.FormInputs`): left to right, and
-  # a phone's number pad only when `min` rules out a minus.
+  # Typed as a decimal is (`AshQuick.LiveView.FormInputs`): left to right but
+  # lined up with the page's other inputs, and a phone's number pad only when
+  # `min` rules out a minus. Its `class` joins the amount box's own.
   defp number_attrs(%{constraints: constraints}) do
     min = if is_list(constraints), do: constraints[:min]
     FormInputs.attrs(%{type: Ash.Type.Decimal, constraints: [min: min]}, nil)
   end
 
-  defp number_attrs(_field), do: [dir: "ltr"]
+  defp number_attrs(_field), do: [dir: "ltr", class: "rtl:text-right"]
 
   defp ex_money_opts(%{constraints: constraints}) when is_list(constraints),
     do: Keyword.get(constraints, :ex_money_opts, [])

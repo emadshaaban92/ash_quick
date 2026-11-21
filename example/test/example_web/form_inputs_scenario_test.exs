@@ -22,6 +22,9 @@ defmodule ExampleWeb.FormInputsScenarioTest do
       |> visit(~p"/test/form_inputs/create")
       # No `only`: the current currencies, starting at the reader's locale's.
       |> assert_has("input[name='form[price][amount]'][type='text'][dir='ltr']")
+      # Lined up with the other inputs on a right-to-left page, its class
+      # joining the box's own rather than standing as a second attribute.
+      |> assert_has("input[name='form[price][amount]'].input.rtl\\:text-right")
       |> refute_has("input[name='form[price][amount]'][inputmode]")
       |> assert_has("select[name='form[price][currency]'] option[selected]", text: "USD")
       |> assert_has("select[name='form[price][currency]'] option", text: "EGP")

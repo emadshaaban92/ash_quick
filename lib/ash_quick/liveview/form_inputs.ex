@@ -72,11 +72,11 @@ defmodule AshQuick.LiveView.FormInputs do
   defp attrs(_type, _constraints, _value), do: []
 
   # Digits and a sign read left to right inside a right-to-left page too: a
-  # bare minus would otherwise land after the number.
+  # bare minus would otherwise land after the number. The value still lines
+  # up with the page's other inputs, on the right of a right-to-left page.
   defp number(constraints, mode) do
-    if negative_allowed?(constraints),
-      do: [dir: "ltr"],
-      else: [inputmode: mode, dir: "ltr"]
+    rtl = [dir: "ltr", class: "rtl:text-right"]
+    if negative_allowed?(constraints), do: rtl, else: [inputmode: mode] ++ rtl
   end
 
   defp negative_allowed?(constraints) do

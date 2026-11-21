@@ -168,6 +168,38 @@ defmodule AshQuick.LiveView.Components.FieldValueTest do
     end
   end
 
+  describe "field_value/1 on numbers" do
+    # Read left to right on a right-to-left page too, so a minus sign stays
+    # in front of the digits instead of landing after them.
+    for {label, type, value, shown} <- [
+          {"an integer", Ash.Type.Integer, quote(do: -12_345), "-12345"},
+          {"a float", Ash.Type.Float, quote(do: -2.5), "-2.5"},
+          {"a decimal", Ash.Type.Decimal, quote(do: Decimal.new("-10.50")), "-10.50"}
+        ] do
+      test "isolates #{label} left to right" do
+        html =
+          render_component(&FieldValue.field_value/1,
+            value: unquote(value),
+            path: [],
+            ash_field: %{type: unquote(type)}
+          )
+
+        assert html =~ ~s(<span dir="ltr">#{unquote(shown)}</span>)
+      end
+    end
+
+    test "leaves a string of digits to the page's direction" do
+      html =
+        render_component(&FieldValue.field_value/1,
+          value: "-12345",
+          path: [],
+          ash_field: %{type: Ash.Type.String}
+        )
+
+      refute html =~ "dir="
+    end
+  end
+
   describe "a sensitive field" do
     # Asked before any clause that would format the value, so a date, a number
     # or a list reads as redacted as a string does.

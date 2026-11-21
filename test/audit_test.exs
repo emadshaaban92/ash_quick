@@ -721,7 +721,9 @@ defmodule AshQuick.AuditTest do
                version: %{from: bumped.version, to: scrambled.version}
              }
 
-      refute inspect(scramble) =~ "-0000"
+      # Not the ids: a UUID can hold "-0000" by chance.
+      leakable = Map.drop(scramble, [:id, :resource_id, :actor_id, :real_actor_id, :__meta__])
+      refute inspect(leakable) =~ "-0000"
     end
 
     test "an update default keeps no expression", %{actor: actor} do

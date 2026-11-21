@@ -286,6 +286,16 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     """
   end
 
+  # A number reads left to right on a right-to-left page too. Left to the
+  # page's direction, the minus sign of `-12345` lands after the digits, as
+  # `12345-`. Isolated, the number still sits where the page's text starts.
+  def field_value(%{path: [], value: value} = assigns)
+      when is_number(value) or is_struct(value, Decimal) do
+    ~H"""
+    <span dir="ltr">{number_text(@value)}</span>
+    """
+  end
+
   def field_value(%{path: [], ash_field: %{type: AshQuick.AshTypes.Text}} = assigns) do
     ~H"""
     <p class="w-11/12 pe-4 overflow-x-auto text-wrap">{@value}</p>
@@ -536,4 +546,9 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     <AshQuick.Components.attachment_img value={@value} states={@states} class="max-w-36" />
     """
   end
+
+  # As `phoenix_ecto` prints one, which a host without it has no
+  # `Phoenix.HTML.Safe` for.
+  defp number_text(%Decimal{} = value), do: Decimal.to_string(value, :normal)
+  defp number_text(value), do: value
 end
