@@ -1016,6 +1016,9 @@ msgstr ""
 msgid "Changes"
 msgstr ""
 
+msgid "Changing it breaks the labels already printed."
+msgstr "تغييره يُبطل الملصقات المطبوعة من قبل."
+
 msgid "Children"
 msgstr ""
 
@@ -1202,6 +1205,9 @@ msgstr ""
 msgid "Tenant"
 msgstr ""
 
+msgid "The new price, before tax."
+msgstr "السعر الجديد، قبل الضريبة."
+
 msgid "To Price"
 msgstr ""
 
@@ -1240,9 +1246,6 @@ msgstr ""
 
 msgid "Who makes it, as printed on the box."
 msgstr "الجهة المصنّعة، كما هي مطبوعة على العلبة."
-
-msgid "Your own stock code. Unique within a store."
-msgstr "رمز المخزون الخاص بك. لا يتكرر داخل المتجر الواحد."
 
 msgid "العربية"
 msgstr ""

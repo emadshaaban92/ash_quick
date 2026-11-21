@@ -12,10 +12,36 @@ end
 
 defmodule AshQuick.Test.Nav.Logo do
   @moduledoc "An embed a brand holds a list of, drawn as a sub-form."
-  use Ash.Resource, data_layer: :embedded
+  use Ash.Resource, data_layer: :embedded, extensions: [AshQuick]
+
+  ash_quick do
+    display do
+      label :alt_text
+    end
+
+    labels do
+      help :alt_text, "Read aloud in its place"
+    end
+
+    bookkeeping do
+      inserted_at false
+      updated_at false
+      inserted_by false
+      updated_by false
+    end
+
+    liveness do
+      enabled? false
+    end
+
+    versioning do
+      enabled? false
+    end
+  end
 
   attributes do
-    attribute :alt_text, :string, public?: true, description: "Read aloud in its place"
+    uuid_primary_key :id
+    attribute :alt_text, :string, public?: true, description: "The img tag's alt attribute"
   end
 end
 
@@ -43,8 +69,8 @@ defmodule AshQuick.Test.Nav.Brand do
   attributes do
     uuid_primary_key :id
 
-    # Its description is the help under its input, for
-    # `mix ash_quick.gen.gettext` to list.
+    # Its description is API documentation, which `mix ash_quick.gen.gettext`
+    # never lists: no form draws it.
     attribute :name, :string, public?: true, description: "The name on the label"
 
     # Labelled by the resource, for `mix ash_quick.gen.gettext`: the template
@@ -89,6 +115,7 @@ defmodule AshQuick.Test.Nav.Brand do
       label :vat_no, "VAT Number"
       label :tier, :premium, "Premium Partner"
       help :vat_no, "As printed on invoices"
+      help :vat_no, "As printed on the new invoices", action: :update
     end
 
     liveness do

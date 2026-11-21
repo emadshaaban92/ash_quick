@@ -278,7 +278,7 @@ defmodule AshQuick.LiveView.Components.FormView do
           widget={Map.get(@widgets, field.name)}
           form_input={AshQuick.FormInput.module(field)}
           choice={EnumOptions.kind(field)}
-          help={Labels.help(field, @form.resource)}
+          help={Labels.help(field, @form.resource, @form.action)}
         />
       </div>
     </section>

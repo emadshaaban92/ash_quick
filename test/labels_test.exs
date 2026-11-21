@@ -135,34 +135,49 @@ defmodule AshQuick.LabelsTest do
 
     defp attribute(name), do: Ash.Resource.Info.attribute(Loan, name)
 
-    test "is its description, translated" do
-      assert Labels.help(attribute(:name), Loan) == "اسم القرض كما يظهر"
-    end
-
-    test "is the help the resource declares in its place, under its context" do
-      assert Labels.help(attribute(:borrower_national_id), Loan) == "كما في بطاقة المقترض"
-
-      assert Labels.english_help(attribute(:borrower_national_id), Loan) ==
-               "As on the borrower's ID card"
-    end
-
-    test "is nothing where the resource declares false, or the description is blank" do
-      assert Labels.help(attribute(:kind), Loan) == nil
-      assert Labels.help(attribute(:status), Loan) == nil
+    test "is never its description" do
+      # Described, with help on another action's form only.
+      assert Labels.help(attribute(:name), Loan) == nil
+      assert Labels.help(attribute(:name), Loan, :issue_bill_of_sale) == nil
+      # Described, with no help at all.
+      assert Labels.help(attribute(:kind), Loan, :create) == nil
+      assert Labels.help(attribute(:status), Loan, :create) == nil
       assert Labels.help(attribute(:id), Loan) == nil
     end
 
-    test "reads a relationship's and an argument's description" do
+    test "is the help the resource declares for every form, under its context" do
+      assert Labels.help(attribute(:borrower_national_id), Loan) == "كما في بطاقة المقترض"
+
+      assert Labels.help(attribute(:borrower_national_id), Loan, :create) ==
+               "كما في بطاقة المقترض"
+
+      assert Labels.english_help(attribute(:borrower_national_id), Loan, :create) ==
+               "As on the borrower's ID card"
+    end
+
+    test "is the help declared for the action, on that action's form only" do
+      assert Labels.help(attribute(:name), Loan, :create) == "اسم القرض كما يظهر"
+
+      create = Ash.Resource.Info.action(Loan, :create)
+      assert Labels.help(attribute(:name), Loan, create) == "اسم القرض كما يظهر"
+    end
+
+    test "declared for the action, wins over the help for every form there" do
+      assert Labels.help(attribute(:borrower_national_id), Loan, :issue_bill_of_sale) ==
+               "كما في عقد البيع"
+    end
+
+    test "reads a relationship's and an argument's help" do
       borrower = Ash.Resource.Info.relationship(Loan, :borrower)
       [reason] = Ash.Resource.Info.action(Loan, :issue_bill_of_sale).arguments
 
-      assert Labels.help(borrower, Loan) == "Who the loan is to"
-      assert Labels.help(reason, Loan) == "Why the bill is issued"
+      assert Labels.help(borrower, Loan, :create) == "Who the loan is to"
+      assert Labels.help(reason, Loan, :issue_bill_of_sale) == "Why the bill is issued"
+      assert Labels.help(reason, Loan) == nil
     end
 
-    test "is the description as it is, without a resource that declares any" do
-      assert Labels.help(attribute(:borrower_national_id), nil) ==
-               "Synced nightly from the registry"
+    test "is nothing without a resource that declares any" do
+      assert Labels.help(attribute(:borrower_national_id), nil) == nil
     end
   end
 

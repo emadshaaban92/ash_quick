@@ -817,7 +817,7 @@ defmodule AshQuick.Components do
   attr :help, :string,
     default: nil,
     doc:
-      "help text drawn under the input, which its `aria-describedby` names (`AshQuick.Labels.help/2`)"
+      "help text drawn under the input, which its `aria-describedby` names (`AshQuick.Labels.help/3`)"
 
   attr :class, :any,
     default: nil,

@@ -173,8 +173,14 @@ defmodule Example.Catalog.Product do
   end
 
   ash_quick do
+    # Help under form inputs. `:sku`'s description is for the API's readers
+    # and is never drawn: only the update form, where the code is already on
+    # printed labels, says anything under it.
     labels do
       help :price, "Before tax."
+      help :price, "The new price, before tax.", action: :reprice
+      help :sku, "Changing it breaks the labels already printed.", action: :update
+      help :brand, "Who makes it, as printed on the box."
     end
 
     activation do
@@ -208,7 +214,7 @@ defmodule Example.Catalog.Product do
   attributes do
     uuid_v7_primary_key :id
 
-    # A description is the help text under the field's form input.
+    # Written for the API's readers; no form draws it.
     attribute :sku, :string,
       allow_nil?: false,
       public?: true,
@@ -220,7 +226,8 @@ defmodule Example.Catalog.Product do
     # the difference between it and `:string` is entirely about the surface.
     attribute :description, :text, allow_nil?: true, public?: true
 
-    # Written for the API's readers; the `help` below says it for a form's.
+    # Written for the API's readers; the `help` entries above say it for a
+    # form's.
     attribute :price, :money do
       allow_nil? false
       public? true
@@ -244,7 +251,6 @@ defmodule Example.Catalog.Product do
     belongs_to :brand, Example.Catalog.Brand do
       public? true
       allow_nil? false
-      description "Who makes it, as printed on the box."
     end
 
     belongs_to :category, Example.Catalog.Category do

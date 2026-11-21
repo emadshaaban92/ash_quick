@@ -52,6 +52,10 @@ defmodule Example.Test.CheckboxWidths do
       label :code
     end
 
+    labels do
+      help :active, "Shown to readers."
+    end
+
     versioning do
       enabled? false
     end
@@ -71,7 +75,7 @@ defmodule Example.Test.CheckboxWidths do
   attributes do
     uuid_v7_primary_key :id
     attribute :code, :string, allow_nil?: false, public?: true
-    attribute :active, :boolean, public?: true, description: "Shown to readers."
+    attribute :active, :boolean, public?: true
     attribute :note, :string, public?: true
     attribute :settings, Example.Test.CheckboxWidths.Settings, public?: true
   end

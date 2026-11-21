@@ -36,3 +36,7 @@ msgstr "اسم القرض كما يظهر"
 msgctxt "loan"
 msgid "As on the borrower's ID card"
 msgstr "كما في بطاقة المقترض"
+
+msgctxt "loan"
+msgid "As on the bill of sale"
+msgstr "كما في عقد البيع"

@@ -55,11 +55,13 @@ defmodule AshQuick.GettextTemplateTest do
       assert "Standard" in labels
     end
 
-    test "reads the help under each form input, declared or described" do
+    test "reads each help entry a form draws, and no description" do
       labels = Template.labels(@nav)
 
       assert "As printed on invoices" in labels
-      assert "The name on the label" in labels
+      assert "As printed on the new invoices" in labels
+      refute "The name on the label" in labels
+      refute "The img tag's alt attribute" in labels
     end
 
     test "reads the fields and help of an embed's sub-form" do
@@ -88,7 +90,9 @@ defmodule AshQuick.GettextTemplateTest do
       assert {"brand", "Maker"} in contexted
       assert {"brand", "Delete"} in contexted
       assert {"brand", "As printed on invoices"} in contexted
-      assert {"brand", "The name on the label"} in contexted
+      assert {"brand", "As printed on the new invoices"} in contexted
+      assert {"logo", "Read aloud in its place"} in contexted
+      refute Enum.any?(contexted, &match?({_context, "The name on the label"}, &1))
       assert {"brand.tier", "Premium Partner"} in contexted
       assert {"brand.tier", "Standard"} in contexted
       # Two hops away, under its own resource.

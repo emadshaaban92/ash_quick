@@ -60,7 +60,8 @@ defmodule AshQuick.Test.Labels.Loan do
   A resource declaring a label for each kind of thing it names: an
   attribute, a relationship, an action, an action's argument, a value of an
   `Ash.Type.Enum` and a value of an atom's `one_of`. Its descriptions are
-  help text on its forms: drawn as they are, replaced by a `help`, or hidden.
+  API documentation no form draws; its `help` entries are the help on its
+  forms, on every form or on one action's.
   """
   use Ash.Resource,
     domain: AshQuick.Test.Labels.Domain,
@@ -73,7 +74,7 @@ defmodule AshQuick.Test.Labels.Loan do
 
   attributes do
     uuid_primary_key :id
-    attribute :name, :string, public?: true, description: "What the loan is called"
+    attribute :name, :string, public?: true, description: "Display name, 80 chars max"
 
     attribute :borrower_national_id, :string,
       public?: true,
@@ -97,11 +98,11 @@ defmodule AshQuick.Test.Labels.Loan do
     defaults [:read, :destroy]
 
     create :create do
-      accept [:name, :borrower_national_id, :status, :kind]
+      accept [:name, :borrower_national_id, :status, :kind, :borrower_id]
     end
 
     update :issue_bill_of_sale do
-      accept []
+      accept [:borrower_national_id]
       require_atomic? false
       argument :reason_code, :string, description: "Why the bill is issued"
     end
@@ -116,7 +117,10 @@ defmodule AshQuick.Test.Labels.Loan do
       label :status, :paid_off, "Paid Off in Full"
       label :kind, :business, "Business Loan"
       help :borrower_national_id, "As on the borrower's ID card"
-      help :kind, false
+      help :borrower_national_id, "As on the bill of sale", action: :issue_bill_of_sale
+      help :name, "What the loan is called", action: :create
+      help :borrower, "Who the loan is to"
+      help :reason_code, "Why the bill is issued", action: :issue_bill_of_sale
     end
 
     liveness do

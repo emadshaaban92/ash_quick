@@ -250,14 +250,12 @@ defmodule AshQuick.Gettext.Template do
     ]
   end
 
-  # The help text each input of a public action is drawn with: declared, or
-  # read from a description.
+  # The `help` text each input of a public action's form is drawn with.
   defp helps(resource) do
-    resource
-    |> Ash.Resource.Info.public_actions()
-    |> Enum.flat_map(&Utils.action_fields(resource, &1.name))
-    |> Enum.map(&Labels.english_help(&1, resource))
-    |> Enum.reject(&is_nil/1)
+    for action <- Ash.Resource.Info.public_actions(resource),
+        field <- Utils.action_fields(resource, action.name),
+        help = Labels.english_help(field, resource, action),
+        do: help
   end
 
   # What has values (fields and action inputs), and everything with a name:

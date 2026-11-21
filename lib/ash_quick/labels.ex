@@ -161,35 +161,41 @@ defmodule AshQuick.Labels do
 
   @doc """
   The help text drawn under the form input of `field`, an attribute, action
-  argument or relationship of `resource`, in the reader's language: the help
-  the resource declares for it (`help :price, "Before tax"`), else the
-  field's Ash `description`, translated under the resource's context. `nil`
-  when there is none, or the resource declares `help name, false`.
+  argument or relationship of `resource`, on the form of `action` (its name,
+  or the action), in the reader's language: the `help` the resource declares
+  for it on that action (`help :plate_number, "…", action: :inspect`), else
+  the one it declares for every form (`help :price, "Before tax"`), translated
+  under the resource's context. `nil` when it declares none. A field's Ash
+  `description` is never help.
 
-  A `belongs_to` relationship reads its own declaration and description
-  first, and its source attribute's after.
+  Without an action, only an entry declared for every form is read.
 
-      Labels.help(Ash.Resource.Info.attribute(MyApp.Product, :price), MyApp.Product)
+  A `belongs_to` relationship reads the entries under its own name first,
+  and its source attribute's after.
+
+      Labels.help(Ash.Resource.Info.attribute(MyApp.Product, :price), MyApp.Product, :create)
   """
-  def help(field, resource) do
-    case english_help(field, resource) do
+  def help(field, resource, action \\ nil) do
+    case english_help(field, resource, action) do
       nil -> nil
       text -> translate(text, context(resource))
     end
   end
 
   @doc false
-  # The English help text of `field` on `resource`, before translating: the
-  # msgid, or nil.
-  def english_help(field, resource) do
+  # The English help text of `field` on `resource`'s `action` form, before
+  # translating: the msgid, or nil.
+  def english_help(field, resource, action \\ nil) do
     declared = declared_help(resource)
-    fields = help_fields(field, resource)
+    names = Enum.map(help_fields(field, resource), & &1.name)
 
-    case Enum.find(fields, &Map.has_key?(declared, &1.name)) do
-      nil -> Enum.find_value(fields, &description/1)
-      %{name: name} -> declared |> Map.fetch!(name) |> text()
-    end
+    [action_name(action), nil]
+    |> Enum.uniq()
+    |> Enum.find_value(fn action -> Enum.find_value(names, &declared[{&1, action}]) end)
   end
+
+  defp action_name(%{name: name}), do: name
+  defp action_name(name) when is_atom(name), do: name
 
   # A relationship is drawn in place of the attribute it sets, so either
   # one's help is the input's.
@@ -202,12 +208,6 @@ defmodule AshQuick.Labels do
   end
 
   defp help_fields(field, _resource), do: [field]
-
-  defp description(field), do: field |> Map.get(:description) |> text()
-
-  # Trimmed, and nothing when blank (or `false`).
-  defp text(text) when is_binary(text), do: if(String.trim(text) != "", do: String.trim(text))
-  defp text(_none), do: nil
 
   defp declared_help(nil), do: %{}
   defp declared_help(%resource{}), do: declared_help(resource)

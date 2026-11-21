@@ -1,6 +1,6 @@
 defmodule AshQuick.LiveView.Components.FieldHelp do
   @moduledoc false
-  # The help text under a form input (`AshQuick.Labels.help/2`), and the
+  # The help text under a form input (`AshQuick.Labels.help/3`), and the
   # `aria-describedby` that has a screen reader read it, and the input's
   # errors, with the input. Kept out of `AshQuick.Components`, which a host's
   # QuickView imports whole.
