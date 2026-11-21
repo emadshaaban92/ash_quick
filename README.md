@@ -326,6 +326,11 @@ end
 
 Keep it to dev (the example app gates it on a `compile_env` flag).
 
+AshQuick also emits `[:ash_quick, :translation, :missing]` for each of its own
+messages and labels your backend has no translation for, with the locale,
+context and msgid, so a handler or a test can hear about its gaps without the
+override (see `AshQuick.Telemetry`).
+
 A custom template that draws a resource's labels itself calls `AshQuick.Labels`
 with the resource (`name/2` for a field, action or argument, `value/3` for a
 value, `field/2` for a `:fields` entry, `translate/2` for an English string
@@ -417,6 +422,24 @@ The installer writes `reporters: [Tower.EphemeralReporter]` here as a
 placeholder, and `mix ash_quick.check` reports `unconfigured_error_reporter`
 until it is replaced. `reporters: []` is taken as a decision (a test
 environment, say) and is not reported.
+
+### Telemetry
+
+AshQuick emits `:telemetry` events for what its pages do, so a host can time
+and count them with the tools it already uses (`Telemetry.Metrics`, a
+reporter, a log handler): page loads, list reads, form saves, bulk runs,
+exports, prints, audit writes and storage calls as spans, and route-gate
+refusals and missing translations as single events. `AshQuick.Telemetry`
+lists each event with its measurements and metadata.
+
+```elixir
+# in MyAppWeb.Telemetry's metrics/0
+summary("ash_quick.list.read.stop.duration",
+  unit: {:native, :millisecond},
+  tags: [:resource]
+),
+counter("ash_quick.route_gate.refused.system_time", tags: [:outcome])
+```
 
 ### Assets
 

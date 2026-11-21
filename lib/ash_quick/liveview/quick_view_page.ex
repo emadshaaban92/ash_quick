@@ -28,9 +28,28 @@ defmodule AshQuick.LiveView.QuickView.Page do
   def do_handle_params(socket, params, ash_action, %Options{} = options) do
     socket
     |> assign(:ash_quick_bulk, nil)
-    |> load_params(params, ash_action, options)
+    |> load_page(params, ash_action, options)
     |> prepare_assigns(ash_action, options)
   end
+
+  # Timed as `[:ash_quick, :page, :load]` (see `AshQuick.Telemetry`).
+  defp load_page(socket, params, ash_action, %Options{} = options) do
+    AshQuick.Telemetry.span(
+      [:page, :load],
+      %{
+        quick_view: socket.view,
+        resource: options.resource,
+        action: ash_action.name,
+        page: page(params, ash_action),
+        scope: socket.assigns[:scope]
+      },
+      fn -> {load_params(socket, params, ash_action, options), %{}} end
+    )
+  end
+
+  defp page(%{id: nil}, %Actions.Read{get?: false}), do: :list
+  defp page(_params, %Actions.Read{}), do: :details
+  defp page(_params, %{type: type}), do: type
 
   defp load_params(
          socket,

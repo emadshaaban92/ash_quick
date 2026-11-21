@@ -70,6 +70,20 @@ defmodule AshQuick.Audit.Store do
     resource = subject.resource
     store = Declaration.store(resource)
 
+    # Timed as `[:ash_quick, :audit, :write]` (see `AshQuick.Telemetry`).
+    AshQuick.Telemetry.span(
+      [:audit, :write],
+      %{
+        resource: resource,
+        store: store,
+        action_type: subject.action.type,
+        rows: length(changes)
+      },
+      fn -> {do_write(changes, actor, resource, store, subject), %{}} end
+    )
+  end
+
+  defp do_write(changes, actor, resource, store, subject) do
     changes
     |> Enum.map(&Row.build(&1, actor))
     # `rollback_on_error?: false` so the refusal comes back as a result rather

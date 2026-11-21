@@ -509,8 +509,10 @@ defmodule AshQuick.Storage do
 
   @doc "See `c:put_file/3`."
   @spec put_file(key(), Path.t(), keyword()) :: :ok | {:error, term()}
-  def put_file(key, path, opts \\ []) when is_binary(key) and is_binary(path),
-    do: impl().put_file(key, path, opts)
+  def put_file(key, path, opts \\ []) when is_binary(key) and is_binary(path) do
+    impl = impl()
+    call(impl, :put_file, fn -> impl.put_file(key, path, opts) end)
+  end
 
   @exports_prefix "exports"
 
@@ -527,7 +529,7 @@ defmodule AshQuick.Storage do
 
     with retention when is_integer(retention) <- AshQuick.Config.export_retention(),
          true <- Code.ensure_loaded?(impl) and function_exported?(impl, :delete_expired, 3) do
-      impl.delete_expired(@exports_prefix, retention, opts)
+      call(impl, :delete_expired, fn -> impl.delete_expired(@exports_prefix, retention, opts) end)
     else
       _nothing_to_sweep -> {:ok, 0}
     end
@@ -567,7 +569,7 @@ defmodule AshQuick.Storage do
     impl = impl()
 
     if Code.ensure_loaded?(impl) and function_exported?(impl, callback, length(args)),
-      do: apply(impl, callback, args),
+      do: call(impl, callback, fn -> apply(impl, callback, args) end),
       else: passthrough
   end
 
@@ -580,14 +582,23 @@ defmodule AshQuick.Storage do
 
     cond do
       function_exported?(impl, callback, length(args) + 1) ->
-        apply(impl, callback, args ++ [opts])
+        call(impl, callback, fn -> apply(impl, callback, args ++ [opts]) end)
 
       function_exported?(impl, callback, length(args)) ->
-        apply(impl, callback, args)
+        call(impl, callback, fn -> apply(impl, callback, args) end)
 
       true ->
         passthrough
     end
+  end
+
+  # A call that may reach the storage itself, timed as
+  # `[:ash_quick, :storage, :call]` (see `AshQuick.Telemetry`).
+  defp call(impl, operation, fun) do
+    AshQuick.Telemetry.span([:storage, :call], %{operation: operation, storage: impl}, fn ->
+      answer = fun.()
+      {answer, %{result: if(match?({:error, _}, answer), do: :error, else: :ok)}}
+    end)
   end
 
   defmodule S3 do
