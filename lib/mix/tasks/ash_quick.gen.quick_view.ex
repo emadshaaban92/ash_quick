@@ -517,13 +517,35 @@ if Code.ensure_loaded?(Igniter) do
       end
     end
 
+    # The gated session first: a sign-in page's session runs the mount too,
+    # and a QuickView routed there would be served to anyone.
     defp in_live_session(zipper) do
-      with {:ok, session} <- Igniter.Code.Common.move_to(zipper, &ash_quick_live_session?/1),
+      gated? = &AshQuick.Igniter.LiveSessions.runs?(&1, AshQuick.LiveView.RouteGate)
+
+      with {:ok, session} <-
+             first_ok([
+               fn ->
+                 Igniter.Code.Common.move_to(
+                   zipper,
+                   &(ash_quick_live_session?(&1) and gated?.(&1))
+                 )
+               end,
+               fn -> Igniter.Code.Common.move_to(zipper, &ash_quick_live_session?/1) end
+             ]),
            {:ok, body} <- Igniter.Code.Common.move_to_do_block(session) do
         {body, placement: :after}
       else
         _other -> nil
       end
+    end
+
+    defp first_ok(attempts) do
+      Enum.find_value(attempts, :error, fn attempt ->
+        case attempt.() do
+          {:ok, _found} = found -> found
+          :error -> nil
+        end
+      end)
     end
 
     # `scope "/", MyAppWeb` prefixes every module written inside it, so a route
@@ -574,9 +596,11 @@ if Code.ensure_loaded?(Igniter) do
       Igniter.Code.Function.function_call?(zipper, :quick_view, [2, 3])
     end
 
+    # AshAuthentication's own live session is one too: it hands its stages to
+    # Phoenix's, behind the one that puts the signed-in user on the socket. The
+    # mount is matched however the router spells it, an alias included.
     defp ash_quick_live_session?(zipper) do
-      Igniter.Code.Function.function_call?(zipper, :live_session, [2, 3]) and
-        zipper |> Zipper.node() |> Sourceror.to_string() =~ "AshQuick.LiveView.Mount"
+      AshQuick.Igniter.LiveSessions.runs?(zipper, AshQuick.LiveView.Mount)
     end
 
     # The route is served either way; what this decides is whether anyone may

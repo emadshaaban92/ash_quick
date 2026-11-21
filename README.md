@@ -24,11 +24,36 @@ $ mix igniter.install ash_quick
 ```
 
 That writes everything the rest of this section describes: the configuration
-block, a placeholder for Tower's reporter, the audit store with its domain and migration, a starter nav and access
-control, the router import, the formatter entries, the supervised presence, and
-the Tailwind source line. It states the one step it will not guess at — the
-client half of `app.js`, which is a rewrite rather than a line to append — and
-running it again changes only what is missing.
+block, a placeholder for Tower's reporter, the audit store with its domain and
+migration, a starter nav and access control, the router import, the formatter
+entries, the supervised `AshQuick`, the Tailwind source line and the LiveSocket
+wiring in `app.js`. It also writes the shell the QuickViews are served in: a
+scope module (`MyApp.Scope`), the live session's stages
+(`MyAppWeb.QuickSession`), a layout with the top bar, the apps grid, the
+sidebar and the impersonation banner (`MyAppWeb.QuickLayouts`), and a live
+session `:ash_quick` in the router that runs `AshQuick.LiveView.Mount` first
+and `AshQuick.LiveView.RouteGate` last. A router that already serves QuickViews
+from a live session that runs the mount keeps its own, and only gets the gate
+added where it has none. A session that runs the mount and routes no QuickView,
+such as a sign-in page's, is left ungated: no route is granted to a signed-out
+visitor, so a gate there would answer every one with a 403. A session whose
+`on_mount` is a module attribute, a variable or a call cannot be read, and is
+named in a warning instead. Running it again changes only what is missing.
+
+The live session is an `ash_authentication_live_session` when the router uses
+AshAuthentication, which puts the signed-in user on the socket ahead of the
+mount, and a signed-out reader is sent to its `/sign-in`. When the actor
+resource is not `User`, the installer sets `config :ash_quick, actor_assign:`
+to the assign AshAuthentication fills (`:current_account` for `Account`). Any
+other router needs a stage of its own that assigns `@current_user` first, and
+a sign-in page outside the live session at the generated stages'
+`@sign_in_path`; until it has the stage, every QuickView sends its reader to
+sign in.
+
+AshQuick's components are written in [daisyUI](https://daisyui.com) 5 classes,
+and a stylesheet without the plugin renders every QuickView unstyled, with no
+error. An application `mix phx.new` 1.8 generated loads it already; the
+installer warns when `app.css` does not.
 
 The audit store and the access control it writes both refuse until told
 otherwise. The store's policies forbid every create and read except AshQuick's
@@ -382,10 +407,24 @@ environment, say) and is not reported.
 
 ### Assets
 
-The `@source` line below, so QuickViews are styled, and two calls in `app.js`
-further down, so each browser tab carries its own session. Without the
-`@source` line every QuickView renders unstyled — the library's classes live in
-its own `lib/`, which the host's Tailwind build does not scan by default.
+daisyUI 5, the `@source` line below, so QuickViews are styled, and two calls
+in `app.js` further down, so each browser tab carries its own session. Every
+component AshQuick draws is written in daisyUI classes (`btn`, `menu`,
+`modal`, `bg-base-100`), loaded the way `mix phx.new` 1.8 loads it, from a
+`:daisyui` dependency (`sparse: "packages/bundle"`) that esbuild and Tailwind
+find through `NODE_PATH`:
+
+```css
+/* assets/css/app.css */
+@plugin "daisyui/packages/bundle/daisyui";
+```
+
+An app that vendors `daisyui.js` into `assets/vendor` writes
+`@plugin "../vendor/daisyui";` instead.
+
+Without the `@source` line every QuickView renders unstyled too: the library's
+classes live in its own `lib/`, which the host's Tailwind build does not scan
+by default.
 
 ```css
 /* assets/css/app.css */
@@ -539,7 +578,12 @@ name its `on_mount` stage to the check, which then counts it as a gate:
 config :ash_quick, check: [gates: [{MyAppWeb.UserAuth, :require_user}]]
 ```
 
-QuickView sets no layout of its own; the `live_session` does.
+QuickView sets no layout of its own; the `live_session` does. The installer's
+is `MyAppWeb.QuickLayouts`, drawn from three components a layout of your own
+can place too: `AshQuick.LiveView.Components.Sidebar`, `NavGrid` and
+`ImpersonationBanner`. They read `@scope`, and the sidebar `@current_path`,
+which the generated `MyAppWeb.QuickSession` keeps current with a
+`handle_params` hook.
 
 A QuickView has no dead render of its own: until the socket connects it draws
 a spinner inside the layout, and every page, list or details, is drawn by the

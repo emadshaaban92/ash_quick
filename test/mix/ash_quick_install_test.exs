@@ -43,6 +43,7 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
     scope "/", TestWeb do
       live_session :authenticated, on_mount: [AshQuick.LiveView.Mount] do
         live "/", HomeLive, :index
+        quick_view "/things", ThingLive.Quick
       end
     end
   end
@@ -640,7 +641,7 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
           """
         })
 
-      assert_unchanged(igniter, "lib/test_web/router.ex")
+      refute diff(igniter, only: "lib/test_web/router.ex") =~ ~r/\+ \|\s+import AshQuick/
     end
 
     test "says where to put the macro when there is no router" do
@@ -804,11 +805,673 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
 
       assert_has_warning(igniter, &(&1 =~ "assets/css/app.css"))
     end
+  end
 
-    # Which live_session serves the QuickViews is the host's to say.
-    test "states where the mount and the gate go instead of patching them" do
-      assert_has_notice(install(), &(&1 =~ "AshQuick.LiveView.Mount"))
-      assert_has_notice(install(), &(&1 =~ "AshQuick.LiveView.RouteGate"))
+  # `mod:` named, so the tree is found where it is rather than created, and
+  # the run can be written out.
+  @mix_exs_with_mod """
+  defmodule Test.MixProject do
+    use Mix.Project
+
+    def project, do: [app: :test, version: "0.1.0", elixir: "~> 1.19"]
+
+    def application, do: [mod: {Test.Application, []}, extra_applications: [:logger]]
+  end
+  """
+
+  describe "daisyUI" do
+    # Every component is written in its classes, and a stylesheet without the
+    # plugin draws them unstyled with no error anywhere.
+    test "warns when the stylesheet loads no daisyUI plugin" do
+      assert_has_warning(
+        install(),
+        &(&1 =~ "daisyUI" and &1 =~ ~s|@plugin "daisyui/packages/bundle/daisyui"|)
+      )
+    end
+
+    test "says nothing when the stylesheet loads it the way Phoenix 1.8 does" do
+      igniter =
+        install(%{
+          "assets/css/app.css" => """
+          @import "tailwindcss";
+          @plugin "../vendor/daisyui" {
+            themes: false;
+          }
+          """
+        })
+
+      refute_warning(igniter, "daisyUI")
+    end
+
+    test "says nothing when a Tailwind 3 config requires it" do
+      igniter =
+        install(%{
+          "assets/tailwind.config.js" => """
+          module.exports = {plugins: [require("daisyui")]}
+          """
+        })
+
+      refute_warning(igniter, "daisyUI")
+    end
+
+    test "says nothing when it is loaded from the dependency mix phx.new adds" do
+      igniter =
+        install(%{
+          "assets/css/app.css" => """
+          @import "tailwindcss";
+          @plugin "daisyui/packages/bundle/daisyui" {
+            themes: false;
+          }
+          """
+        })
+
+      refute_warning(igniter, "daisyUI")
+    end
+
+    test "the bundle's theme plugin alone is not the plugin" do
+      igniter =
+        install(%{
+          "assets/css/app.css" => """
+          @import "tailwindcss";
+          @plugin "daisyui/packages/bundle/daisyui-theme" {
+            name: "light";
+          }
+          """
+        })
+
+      assert_has_warning(igniter, &(&1 =~ "daisyUI"))
+    end
+
+    test "says nothing when it is loaded from a vendored daisyui.js" do
+      igniter =
+        install(%{
+          "assets/css/app.css" => """
+          @import "tailwindcss";
+          @plugin "../vendor/daisyui.js";
+          """
+        })
+
+      refute_warning(igniter, "daisyUI")
+    end
+
+    test "a plugin commented out is not loaded" do
+      igniter =
+        install(%{
+          "assets/css/app.css" => """
+          @import "tailwindcss";
+          /* @plugin "../vendor/daisyui"; */
+          """
+        })
+
+      assert_has_warning(igniter, &(&1 =~ "daisyUI"))
+    end
+
+    test "the theme plugin alone is not the plugin" do
+      igniter =
+        install(%{
+          "assets/css/app.css" => """
+          @import "tailwindcss";
+          @plugin "../vendor/daisyui-theme" {
+            name: "light";
+          }
+          """
+        })
+
+      assert_has_warning(igniter, &(&1 =~ "daisyUI"))
+    end
+  end
+
+  describe "a live session that already runs the mount" do
+    test "gets the route gate, last" do
+      assert_has_patch(install(), "lib/test_web/router.ex", """
+      + |    live_session :authenticated,
+      + |      on_mount: [AshQuick.LiveView.Mount, AshQuick.LiveView.RouteGate] do
+      """)
+    end
+
+    test "and nothing else: the project's own shell stays as it is" do
+      igniter = install()
+
+      refute_creates(igniter, "lib/test/scope.ex")
+      refute_creates(igniter, "lib/test_web/quick_session.ex")
+      refute_creates(igniter, "lib/test_web/quick_layouts.ex")
+      refute diff(igniter) =~ "live_session :ash_quick"
+    end
+
+    test "is left alone when it has a gate already" do
+      igniter =
+        install(%{
+          "lib/test_web/router.ex" => """
+          defmodule TestWeb.Router do
+            use TestWeb, :router
+            import AshQuick.LiveView.Router
+
+            scope "/", TestWeb do
+              live_session :authenticated,
+                on_mount: [AshQuick.LiveView.Mount, AshQuick.LiveView.RouteGate] do
+                live "/", HomeLive, :index
+                quick_view "/things", ThingLive.Quick
+              end
+            end
+          end
+          """
+        })
+
+      refute diff(igniter, only: "lib/test_web/router.ex") =~ "RouteGate,"
+    end
+
+    test "is found through an alias, and gated" do
+      igniter =
+        install(%{
+          "lib/test_web/router.ex" => """
+          defmodule TestWeb.Router do
+            use TestWeb, :router
+            import AshQuick.LiveView.Router
+            alias AshQuick.LiveView.Mount
+
+            scope "/", TestWeb do
+              live_session :authenticated, on_mount: [Mount, {TestWeb.UserAuth, :assign_scope}] do
+                live "/", HomeLive, :index
+                quick_view "/things", ThingLive.Quick
+              end
+            end
+          end
+          """
+        })
+
+      assert diff(igniter, only: "lib/test_web/router.ex") =~
+               ~r/\+ \|.*AshQuick\.LiveView\.RouteGate/
+
+      refute_creates(igniter, "lib/test_web/quick_session.ex")
+      refute_warning(igniter, "is already there")
+    end
+
+    test "is not gated twice when it names the gate through an alias" do
+      igniter =
+        install(%{
+          "lib/test_web/router.ex" => """
+          defmodule TestWeb.Router do
+            use TestWeb, :router
+            import AshQuick.LiveView.Router
+            alias AshQuick.LiveView.RouteGate
+
+            scope "/", TestWeb do
+              live_session :authenticated, on_mount: [AshQuick.LiveView.Mount, RouteGate] do
+                live "/", HomeLive, :index
+                quick_view "/things", ThingLive.Quick
+              end
+            end
+          end
+          """
+        })
+
+      refute diff(igniter, only: "lib/test_web/router.ex") =~ "AshQuick.LiveView.RouteGate"
+    end
+
+    # A router `use`s its web module, which Igniter's own alias expansion stops
+    # at; `Phoenix.Router` is a compiled module, as a real web module is.
+    test "is found through an alias in a router that uses a compiled module" do
+      igniter =
+        install(%{
+          "lib/test_web/router.ex" => """
+          defmodule TestWeb.Router do
+            use Phoenix.Router
+            import AshQuick.LiveView.Router
+            alias AshQuick.LiveView.{Mount, RouteGate}
+
+            scope "/", TestWeb do
+              live_session :authenticated, on_mount: [Mount] do
+                live "/", HomeLive, :index
+                quick_view "/things", ThingLive.Quick
+              end
+
+              live_session :gated, on_mount: [Mount, RouteGate] do
+                live "/other", OtherLive, :index
+              end
+            end
+          end
+          """
+        })
+
+      router = diff(igniter, only: "lib/test_web/router.ex")
+
+      assert router =~ ~r/\+ \|.*on_mount: \[Mount, AshQuick\.LiveView\.RouteGate\]/
+      refute router =~ ~r/RouteGate, AshQuick\.LiveView\.RouteGate/
+      refute_creates(igniter, "lib/test_web/quick_session.ex")
+      refute_warning(igniter, "is already there")
+    end
+
+    test "is found through an alias with `as:`" do
+      igniter =
+        install(%{
+          "lib/test_web/router.ex" => """
+          defmodule TestWeb.Router do
+            use Phoenix.Router
+            import AshQuick.LiveView.Router
+            alias AshQuick.LiveView.Mount, as: QuickMount
+
+            scope "/", TestWeb do
+              live_session :authenticated, on_mount: [{QuickMount, :default}] do
+                live "/", HomeLive, :index
+                quick_view "/things", ThingLive.Quick
+              end
+            end
+          end
+          """
+        })
+
+      assert diff(igniter, only: "lib/test_web/router.ex") =~
+               ~r/\+ \|.*AshQuick\.LiveView\.RouteGate/
+
+      refute_creates(igniter, "lib/test_web/quick_session.ex")
+    end
+
+    # Only a literal list can be appended to; anything else is named instead.
+    test "is named in a warning when its stages are not a list" do
+      igniter =
+        install(%{
+          "lib/test_web/router.ex" => """
+          defmodule TestWeb.Router do
+            use TestWeb, :router
+            import AshQuick.LiveView.Router
+
+            scope "/", TestWeb do
+              live_session :single, on_mount: {AshQuick.LiveView.Mount, :default} do
+                live "/", HomeLive, :index
+                quick_view "/things", ThingLive.Quick
+              end
+            end
+          end
+          """
+        })
+
+      assert_has_warning(
+        igniter,
+        &(&1 =~ ":single" and &1 =~ "AshQuick.LiveView.RouteGate")
+      )
+
+      refute diff(igniter, only: "lib/test_web/router.ex") =~ "RouteGate"
+      refute_creates(igniter, "lib/test_web/quick_session.ex")
+    end
+
+    # The mount belongs on a sign-in page too, and a gate there would answer
+    # every signed-out visitor, whom no route is granted to, with a 403.
+    test "leaves a session that routes no QuickView, such as the sign-in page's, ungated" do
+      igniter =
+        install(%{
+          "lib/test_web/router.ex" => """
+          defmodule TestWeb.Router do
+            use Phoenix.Router
+            import AshQuick.LiveView.Router
+
+            scope "/", TestWeb do
+              live_session :no_user,
+                on_mount: [AshQuick.LiveView.Mount, {TestWeb.UserAuth, :live_no_user}] do
+                live "/login", LoginLive, :index
+              end
+
+              live_session :authenticated, on_mount: [AshQuick.LiveView.Mount] do
+                quick_view "/things", ThingLive.Quick
+              end
+            end
+          end
+          """
+        })
+
+      router = diff(igniter, only: "lib/test_web/router.ex")
+
+      assert router =~ "on_mount: [AshQuick.LiveView.Mount, AshQuick.LiveView.RouteGate] do"
+      refute router =~ "live_no_user}, AshQuick.LiveView.RouteGate"
+    end
+
+    test "is told apart from a sign-in session that is the only one running the mount" do
+      igniter =
+        install(%{
+          "mix.exs" => @mix_exs_with_mod,
+          "lib/test_web/router.ex" => """
+          defmodule TestWeb.Router do
+            use Phoenix.Router
+            import AshQuick.LiveView.Router
+
+            scope "/", TestWeb do
+              live_session :no_user, on_mount: [AshQuick.LiveView.Mount] do
+                live "/login", LoginLive, :index
+              end
+            end
+          end
+          """
+        })
+
+      diff = diff(igniter, only: "lib/test_web/router.ex")
+
+      assert diff =~ "live_session :ash_quick"
+      refute diff =~ ~r/no_user[^\n]*RouteGate/
+    end
+
+    # Igniter cannot see inside a module attribute, a variable or a call, so
+    # such a session may be the QuickViews' own: neither gated nor doubled.
+    test "is named in a warning, with no shell beside it, when its stages cannot be read" do
+      igniter =
+        install(%{
+          "lib/test_web/router.ex" => """
+          defmodule TestWeb.Router do
+            use Phoenix.Router
+            import AshQuick.LiveView.Router
+
+            @stages [AshQuick.LiveView.Mount, {TestWeb.UserAuth, :assign_scope}]
+
+            scope "/", TestWeb do
+              live_session :authenticated, on_mount: @stages do
+                live "/a", ALive, :index
+              end
+            end
+          end
+          """
+        })
+
+      assert_has_warning(
+        igniter,
+        &(&1 =~ ":authenticated" and &1 =~ "@stages" and &1 =~ "cannot read")
+      )
+
+      refute diff(igniter, only: "lib/test_web/router.ex") =~ "live_session :ash_quick"
+      refute_creates(igniter, "lib/test_web/quick_session.ex")
+    end
+
+    # An alias in one scope says nothing about the name in another.
+    test "reads an alias only where it is in scope" do
+      igniter =
+        install(%{
+          "lib/test_web/router.ex" => """
+          defmodule TestWeb.Router do
+            use Phoenix.Router
+            import AshQuick.LiveView.Router
+
+            scope "/", TestWeb do
+              alias AshQuick.LiveView.Mount
+
+              live_session :authenticated, on_mount: [Mount] do
+                quick_view "/things", ThingLive.Quick
+              end
+            end
+
+            scope "/other", TestWeb do
+              alias TestWeb.Mount
+
+              live_session :other, on_mount: [Mount] do
+                quick_view "/others", OtherLive.Quick
+              end
+            end
+          end
+          """
+        })
+
+      router = diff(igniter, only: "lib/test_web/router.ex")
+
+      assert router =~
+               ~r/live_session :authenticated,\s+on_mount: \[Mount, AshQuick\.LiveView\.RouteGate\]/
+
+      refute router =~ ~r/live_session :other,\s+on_mount: \[Mount, AshQuick/
+      refute router =~ "live_session :ash_quick"
+    end
+
+    test "is not thrown by an alias it cannot spell out" do
+      igniter =
+        install(%{
+          "lib/test_web/router.ex" => """
+          defmodule TestWeb.Router do
+            use Phoenix.Router
+            import AshQuick.LiveView.Router
+            alias __MODULE__.Stages
+
+            scope "/", TestWeb do
+              live_session :authenticated, on_mount: [AshQuick.LiveView.Mount, Stages] do
+                quick_view "/things", ThingLive.Quick
+              end
+            end
+          end
+          """
+        })
+
+      assert diff(igniter, only: "lib/test_web/router.ex") =~ "AshQuick.LiveView.RouteGate"
+    end
+
+    # A gate of the project's own, named to the check, is the gate: a second one
+    # would answer with a 403 the scopes it lets through on purpose.
+    test "is left alone when the project names a gate of its own" do
+      igniter =
+        install(%{
+          "config/config.exs" => """
+          import Config
+
+          config :ash_quick, check: [gates: [{TestWeb.UserAuth, :require_user}]]
+          """
+        })
+
+      refute diff(igniter, only: "lib/test_web/router.ex") =~ "RouteGate"
+    end
+  end
+
+  describe "a router that runs the mount nowhere" do
+    @plain_router """
+    defmodule TestWeb.Router do
+      use TestWeb, :router
+
+      pipeline :browser do
+        plug :accepts, ["html"]
+      end
+
+      scope "/", TestWeb do
+        pipe_through :browser
+
+        get "/", PageController, :home
+      end
+    end
+    """
+
+    @ash_authentication_router """
+    defmodule TestWeb.Router do
+      use TestWeb, :router
+      use AshAuthentication.Phoenix.Router
+
+      pipeline :browser do
+        plug :accepts, ["html"]
+      end
+
+      scope "/", TestWeb do
+        pipe_through :browser
+
+        get "/", PageController, :home
+      end
+    end
+    """
+
+    @account """
+    defmodule Test.Accounts.Account do
+      use Ash.Resource, domain: Test.Accounts
+
+      attributes do
+        uuid_primary_key :id
+      end
+    end
+    """
+
+    defp install_account do
+      %{
+        "lib/test_web/router.ex" => @ash_authentication_router,
+        "mix.exs" => @mix_exs_with_mod,
+        "lib/test/accounts/account.ex" => @account
+      }
+      |> install(["--actor-resource", "Test.Accounts.Account"])
+    end
+
+    defp shell(router \\ @plain_router, extra \\ %{}) do
+      extra
+      |> Map.merge(%{"lib/test_web/router.ex" => router, "mix.exs" => @mix_exs_with_mod})
+      |> install()
+    end
+
+    test "gets a live session with the mount first and the gate last" do
+      assert_has_patch(shell(), "lib/test_web/router.ex", """
+      + |    live_session :ash_quick,
+      + |      layout: {TestWeb.QuickLayouts, :app},
+      + |      on_mount: [
+      + |        AshQuick.LiveView.Mount,
+      + |        {TestWeb.QuickSession, :assign_scope},
+      + |        {TestWeb.QuickSession, :require_user},
+      + |        AshQuick.LiveView.RouteGate
+      + |      ] do
+      + |    end
+      """)
+    end
+
+    test "in the scope its browser pipeline serves" do
+      router = shell() |> Igniter.Test.apply_igniter!() |> source("lib/test_web/router.ex")
+
+      assert router =~
+               ~r/pipe_through\(?:browser\)?\s+get\(?"\/", PageController, :home\)?\s+live_session :ash_quick/
+    end
+
+    test "generates the scope, the session's stages and the layout" do
+      igniter = shell()
+
+      assert_creates(igniter, "lib/test/scope.ex")
+      assert_creates(igniter, "lib/test_web/quick_session.ex")
+      assert_creates(igniter, "lib/test_web/quick_layouts.ex")
+
+      assert created(igniter, "lib/test/scope.ex") =~ "use AshQuick.Scope"
+      assert created(igniter, "lib/test_web/quick_session.ex") =~ "Test.Scope.new("
+      assert created(igniter, "lib/test_web/quick_layouts.ex") =~ "<.sidebar"
+    end
+
+    # Igniter moves a created file to its module's mapped path when it writes.
+    test "where they stay once written" do
+      files =
+        shell()
+        |> Igniter.Test.apply_igniter!()
+        |> Map.fetch!(:assigns)
+        |> Map.fetch!(:test_files)
+
+      assert Map.has_key?(files, "lib/test/scope.ex")
+      assert Map.has_key?(files, "lib/test_web/quick_session.ex")
+      assert Map.has_key?(files, "lib/test_web/quick_layouts.ex")
+    end
+
+    test "the three compile" do
+      igniter = shell()
+      namespace = "ShellProbe#{:erlang.unique_integer([:positive])}"
+
+      source =
+        ["lib/test/scope.ex", "lib/test_web/quick_session.ex", "lib/test_web/quick_layouts.ex"]
+        |> Enum.map_join("\n", &created(igniter, &1))
+        |> String.replace(~r/\bTest(Web)?\./, "#{namespace}\\1.")
+
+      output = capture_io(:stderr, fn -> Code.compile_string(source) end)
+
+      refute output =~ "warning", output
+      refute output =~ "error", output
+    end
+
+    test "says the signed-in user has to reach the socket ahead of the mount" do
+      assert_has_notice(shell(), &(&1 =~ "@current_user" and &1 =~ "@sign_in_path"))
+      assert created(shell(), "lib/test_web/quick_session.ex") =~ ~s|@sign_in_path "/sign-in"|
+    end
+
+    test "is AshAuthentication's live session when the router uses it" do
+      igniter = shell(@ash_authentication_router)
+
+      assert diff(igniter) =~ "ash_authentication_live_session :ash_quick,"
+      assert created(igniter, "lib/test_web/quick_session.ex") =~ ~s|@sign_in_path "/sign-in"|
+      refute_notice(igniter, "@sign_in_path")
+    end
+
+    # AshAuthentication assigns `current_<subject>`, the resource's short name.
+    test "names the actor's assign when AshAuthentication's subject is not a user" do
+      igniter = install_account()
+
+      assert diff(igniter, only: "config/config.exs") =~ "actor_assign: :current_account"
+    end
+
+    test "writes the AshAuthentication session into the instructions it gives instead" do
+      igniter =
+        shell(@ash_authentication_router, %{
+          "lib/test/scope.ex" => """
+          defmodule Test.Scope do
+            defstruct [:user]
+          end
+          """
+        })
+
+      assert_has_warning(igniter, &(&1 =~ "ash_authentication_live_session :ash_quick"))
+    end
+
+    test "uses no :browser pipeline the router does not have" do
+      igniter =
+        shell("""
+        defmodule TestWeb.Router do
+          use TestWeb, :router
+        end
+        """)
+
+      refute diff(igniter) =~ "pipe_through"
+      assert diff(igniter) =~ "live_session :ash_quick"
+    end
+
+    # The stages would have to call its own constructor, whose options only the
+    # project knows.
+    test "is told how to write the session when the project has a scope already" do
+      igniter =
+        shell(@plain_router, %{
+          "lib/test/web_scope.ex" => """
+          defmodule Test.WebScope do
+            use AshQuick.Scope, actor: :user
+
+            defstruct [:user]
+          end
+          """
+        })
+
+      assert_has_warning(
+        igniter,
+        &(&1 =~ "Test.WebScope" and &1 =~ "AshQuick.LiveView.RouteGate")
+      )
+
+      refute_creates(igniter, "lib/test_web/quick_session.ex")
+      refute diff(igniter) =~ "live_session :ash_quick"
+    end
+
+    test "and when a module already has the scope's name" do
+      igniter =
+        shell(@plain_router, %{
+          "lib/test/scope.ex" => """
+          defmodule Test.Scope do
+            defstruct [:user]
+          end
+          """
+        })
+
+      assert_has_warning(igniter, &(&1 =~ "Test.Scope"))
+      refute diff(igniter) =~ "live_session :ash_quick"
+    end
+
+    test "changes nothing more on a second run" do
+      installed = shell() |> Igniter.Test.apply_igniter!()
+      router = source(installed, "lib/test_web/router.ex")
+
+      again =
+        router
+        |> shell(%{
+          "lib/test/scope.ex" => source(installed, "lib/test/scope.ex"),
+          "lib/test_web/quick_session.ex" => source(installed, "lib/test_web/quick_session.ex"),
+          "lib/test_web/quick_layouts.ex" => source(installed, "lib/test_web/quick_layouts.ex")
+        })
+
+      assert_unchanged(again, [
+        "lib/test_web/router.ex",
+        "lib/test/scope.ex",
+        "lib/test_web/quick_session.ex",
+        "lib/test_web/quick_layouts.ex"
+      ])
     end
   end
 
@@ -871,6 +1534,12 @@ defmodule Mix.Tasks.AshQuick.InstallTest do
   defp refute_notice(igniter, text) do
     refute Enum.any?(igniter.notices, &(&1 =~ text)), "unexpected notice containing #{text}"
   end
+
+  defp refute_warning(igniter, text) do
+    refute Enum.any?(igniter.warnings, &(&1 =~ text)), "unexpected warning containing #{text}"
+  end
+
+  defp source(igniter, path), do: Map.fetch!(igniter.assigns.test_files, path)
 
   defp created(igniter, path) do
     igniter.rewrite |> Rewrite.source!(path) |> Rewrite.Source.get(:content)

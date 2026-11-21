@@ -2,7 +2,7 @@ if Code.ensure_loaded?(Igniter) do
   defmodule Mix.Tasks.AshQuick.Install do
     @example "mix igniter.install ash_quick"
 
-    @shortdoc "Configures AshQuick and generates the audit store, the nav and the access control"
+    @shortdoc "Configures AshQuick and generates the audit store, the nav, the access control and the shell"
 
     @moduledoc """
     Wires AshQuick into a Phoenix application.
@@ -35,6 +35,31 @@ if Code.ensure_loaded?(Igniter) do
       * Imports `AshQuick.LiveView.Router` into the router, since a QuickView
         reached through a plain `live/3` has no base path and says so at request
         time.
+      * Generates the shell the QuickViews are served in, when no live session
+        in the router serves QuickViews with `AshQuick.LiveView.Mount` yet: a
+        scope module
+        (`MyApp.Scope`, over `AshQuick.Scope`), the live session's stages
+        (`MyAppWeb.QuickSession`: build the scope, send a signed-out reader to
+        sign in), a layout (`MyAppWeb.QuickLayouts`: top bar, apps grid,
+        sidebar, impersonation banner, flash), and a live session `:ash_quick`
+        in the router's `scope "/"` that runs the mount first and
+        `AshQuick.LiveView.RouteGate` last. It is an
+        `ash_authentication_live_session` when the router uses
+        AshAuthentication, which puts the signed-in user on the socket ahead
+        of the mount, and an actor resource other than `User` gets its assign
+        named in `config :ash_quick, actor_assign:`; any other router is told
+        to put a stage that does first.
+        A project that already has a scope over `AshQuick.Scope`, or a module
+        at `MyApp.Scope`, is told how to write the session instead, since the
+        stages would have to call its own constructor.
+      * Adds `AshQuick.LiveView.RouteGate` last to a live session that runs
+        the mount, routes QuickViews and has no gate, unless `config
+        :ash_quick, check: [gates: ...]` names a gate of the project's own. A
+        session that runs the mount and routes no QuickView, such as a sign-in
+        page's, is left ungated, since a gate would refuse its signed-out
+        visitors. One whose `on_mount` cannot be read (a module attribute, a
+        variable, a call) is named in a warning, and no shell is generated
+        beside it.
       * Adds `:ash_quick` to `import_deps` and to Spark's `section_order`.
       * Adds `AshQuick` to the application's supervision tree, after the
         PubSub server, or puts it in place of `AshQuick.BrowserSessionPresence`
@@ -42,6 +67,9 @@ if Code.ensure_loaded?(Igniter) do
         the library's own classes.
       * Adds the `phx-submit-loading` Tailwind variant when `app.css` lacks it,
         which the action modal's spinner and lock hang on.
+      * Warns when `app.css` loads no daisyUI plugin (nor a Tailwind 3
+        `tailwind.config.js` requires it): every component is written in
+        daisyUI 5 classes, and without it every page renders unstyled.
       * Passes the LiveSocket's options in `app.js` through `withAshQuick`
         (the library's hooks, its `S3` client uploader and the tab's session
         params) and attaches the socket with `attachAshQuick` (its listeners
@@ -70,6 +98,8 @@ if Code.ensure_loaded?(Igniter) do
     """
 
     use Igniter.Mix.Task
+
+    alias AshQuick.Igniter.LiveSessions
 
     # The order the library's own resources are formatted in. `:ash_quick`
     # sorts after `:policies` and before `:pub_sub`: the extension writes the
@@ -110,6 +140,7 @@ if Code.ensure_loaded?(Igniter) do
     @css_path "assets/css/app.css"
     @css_source ~s|@source "../../deps/ash_quick/lib/**/*.*ex";|
     @css_submit_loading ~s|@custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);|
+    @daisyui_major 5
     @js_path "assets/js/app.js"
     @js_import ~s|import {withAshQuick, attachAshQuick} from "ash_quick"|
 
@@ -161,11 +192,13 @@ if Code.ensure_loaded?(Igniter) do
       |> configure_section_order()
       |> configure_error_reporting()
       |> import_router_macro(router)
+      |> serve_quick_views(router, web_module, nav, access_control, actor_resource)
       |> supervise_library()
       |> source_library_classes()
+      |> require_daisyui()
       |> import_library_live_socket()
       |> Ash.Igniter.codegen("install_ash_quick")
-      |> Igniter.add_notice(mount_notice())
+      |> Igniter.add_notice(refusals_notice(access_control, audit_resource))
     end
 
     # The store is generated rather than shipped, because a project will add
@@ -495,6 +528,290 @@ if Code.ensure_loaded?(Igniter) do
       end
     end
 
+    @mount AshQuick.LiveView.Mount
+    @route_gate AshQuick.LiveView.RouteGate
+    @session_name :ash_quick
+
+    # The live session the QuickViews are served from: the stages that build
+    # the scope, the gate that refuses an ungranted path, and the layout the
+    # nav is drawn in. A router that already runs AshQuick's mount somewhere
+    # has a session of its own, which only gets the gate, and only when it has
+    # none and the project names no gate of its own to the check.
+    defp serve_quick_views(igniter, nil, _web_module, _nav, _access_control, _actor), do: igniter
+
+    defp serve_quick_views(igniter, router, web_module, nav, access_control, actor_resource) do
+      {igniter, sessions} = live_sessions(igniter, router)
+
+      quick = Enum.filter(sessions, &quick_view_session?/1)
+      unreadable = Enum.filter(sessions, &(LiveSessions.shape(&1) == :unknown))
+
+      # With a QuickView session found, only those of the unreadable ones that
+      # route QuickViews matter; without one, any of them might be it, and a
+      # shell generated beside it would be a second one.
+      unreadable =
+        if quick == [],
+          do: unreadable,
+          else: Enum.filter(unreadable, &LiveSessions.serves_quick_views?/1)
+
+      igniter = warn_unreadable(igniter, router, unreadable)
+
+      cond do
+        quick != [] -> gate_sessions(igniter, router, quick)
+        unreadable != [] -> igniter
+        true -> generate_shell(igniter, router, web_module, nav, access_control, actor_resource)
+      end
+    end
+
+    defp generate_shell(igniter, router, web_module, nav, access_control, actor_resource) do
+      scope = Igniter.Project.Module.module_name(igniter, "Scope")
+      session = Module.concat(web_module, QuickSession)
+      layouts = Module.concat(web_module, QuickLayouts)
+      {igniter, ash_authentication?} = ash_authentication?(igniter, router)
+
+      case scope_conflict(igniter, scope) do
+        {igniter, nil} ->
+          igniter
+          |> generate_module(scope, "scope.ex.eex", module: scope, session: session)
+          |> generate_module(session, "session.ex.eex",
+            module: session,
+            scope: scope,
+            router: router,
+            access_control: access_control,
+            ash_authentication?: ash_authentication?
+          )
+          |> generate_module(layouts, "layouts.ex.eex",
+            module: layouts,
+            router: router,
+            nav: nav,
+            title: inspect(Igniter.Project.Module.module_name_prefix(igniter))
+          )
+          |> add_session(router, web_module, session, layouts, ash_authentication?)
+          |> name_actor_assign(ash_authentication?, actor_resource)
+          |> Igniter.add_notice(shell_notice(router, session, layouts, ash_authentication?))
+
+        {igniter, existing} ->
+          Igniter.add_warning(
+            igniter,
+            scope_instructions(existing, session_code(nil, nil, ash_authentication?))
+          )
+      end
+    end
+
+    # AshAuthentication puts the signed-in actor in `current_<subject name>`,
+    # the resource's short name unless its `authentication` block names
+    # another; `:current_user` is AshQuick's default. Another actor resource
+    # gets its assign named, which the mount and the generated stages read.
+    defp name_actor_assign(igniter, true, actor_resource) when not is_nil(actor_resource) do
+      assign = "current_" <> Macro.underscore(List.last(Module.split(actor_resource)))
+
+      if assign == "current_user" or
+           Igniter.Project.Config.configures_key?(
+             igniter,
+             "config.exs",
+             :ash_quick,
+             :actor_assign
+           ) do
+        igniter
+      else
+        igniter
+        |> Igniter.Project.Config.configure(
+          "config.exs",
+          :ash_quick,
+          [:actor_assign],
+          {:code, Sourceror.parse_string!(":" <> assign)}
+        )
+        |> Igniter.add_notice("""
+        AshAuthentication puts the signed-in #{inspect(actor_resource)} in \
+        `@#{assign}`, so `config :ash_quick, actor_assign: :#{assign}` was \
+        written. Change it if its `authentication` block names another subject.
+        """)
+      end
+    end
+
+    defp name_actor_assign(igniter, _ash_authentication?, _actor_resource), do: igniter
+
+    # A scope the project already has is built by its own `new/1`, whose
+    # options the generated stages cannot know. So is a module at the name the
+    # generated one would take.
+    defp scope_conflict(igniter, scope) do
+      {igniter, scopes} =
+        Igniter.Project.Module.find_all_matching_modules(igniter, fn _module, zipper ->
+          match?({:ok, _zipper}, Igniter.Code.Module.move_to_use(zipper, AshQuick.Scope))
+        end)
+
+      case scopes do
+        [existing | _] ->
+          {igniter, existing}
+
+        [] ->
+          case Igniter.Project.Module.module_exists(igniter, scope) do
+            {true, igniter} -> {igniter, scope}
+            {false, igniter} -> {igniter, nil}
+          end
+      end
+    end
+
+    # `ash_authentication_live_session` puts the signed-in user on the socket
+    # in a stage of its own, ahead of the ones it is given. Only usable where
+    # the router brings the macro in.
+    defp ash_authentication?(igniter, router) do
+      case Igniter.Project.Module.find_module(igniter, router) do
+        {:ok, {igniter, source, _zipper}} ->
+          {igniter, Rewrite.Source.get(source, :content) =~ "AshAuthentication.Phoenix.Router"}
+
+        {:error, igniter} ->
+          {igniter, false}
+      end
+    end
+
+    defp add_session(igniter, router, web_module, session, layouts, ash_authentication?) do
+      {igniter, browser?} = Igniter.Libs.Phoenix.has_pipeline(igniter, router, :browser)
+
+      Igniter.Libs.Phoenix.append_to_scope(
+        igniter,
+        "/",
+        session_code(session, layouts, ash_authentication?),
+        router: router,
+        arg2: web_module,
+        with_pipelines: if(browser?, do: [:browser]),
+        placement: :after
+      )
+    end
+
+    defp session_code(session, layouts, ash_authentication?) do
+      macro = if ash_authentication?, do: "ash_authentication_live_session", else: "live_session"
+      session = if session, do: inspect(session), else: "MyAppWeb.QuickSession"
+      layouts = if layouts, do: inspect(layouts), else: "MyAppWeb.QuickLayouts"
+
+      """
+      #{macro} #{inspect(@session_name)},
+        layout: {#{layouts}, :app},
+        on_mount: [
+          #{inspect(@mount)},
+          {#{session}, :assign_scope},
+          {#{session}, :require_user},
+          #{inspect(@route_gate)}
+        ] do
+      end
+      """
+    end
+
+    # Every live session in the router whose stages name AshQuick's mount,
+    # however the router spells it.
+    defp live_sessions(igniter, router) do
+      case Igniter.Project.Module.find_module(igniter, router) do
+        {:ok, {igniter, _source, zipper}} ->
+          {igniter, Igniter.Code.Common.find_all(zipper, &LiveSessions.live_session?/1)}
+
+        {:error, igniter} ->
+          {igniter, []}
+      end
+    end
+
+    # A session running the mount that routes QuickViews, or is gated already.
+    # One running the mount for neither is a sign-in page's or another page's
+    # of the host's own: the mount reads the address there too, and a gate
+    # would answer a signed-out visitor, whom no route is granted to, with a
+    # 403.
+    defp quick_view_session?(session) do
+      LiveSessions.runs?(session, @mount) and
+        (LiveSessions.serves_quick_views?(session) or LiveSessions.runs?(session, @route_gate))
+    end
+
+    defp ungated?(session),
+      do: quick_view_session?(session) and not LiveSessions.runs?(session, @route_gate)
+
+    # A project that gates with a stage of its own says so to the check, and
+    # that stage is the gate: a second one would answer with a 403 the scopes
+    # it lets through on purpose.
+    defp gate_sessions(igniter, router, sessions) do
+      ungated = Enum.filter(sessions, &ungated?/1)
+
+      cond do
+        ungated == [] ->
+          igniter
+
+        Igniter.Project.Config.configures_key?(igniter, "config.exs", :ash_quick, [:check, :gates]) ->
+          igniter
+
+        true ->
+          {listed, single} = Enum.split_with(ungated, &listed_stages?/1)
+
+          igniter
+          |> append_gate(router, listed)
+          |> warn_ungated(router, single)
+      end
+    end
+
+    defp listed_stages?(session), do: LiveSessions.shape(session) == :list
+
+    defp append_gate(igniter, _router, []), do: igniter
+
+    defp append_gate(igniter, router, _sessions) do
+      Igniter.Project.Module.find_and_update_module!(igniter, router, fn zipper ->
+        Igniter.Code.Common.update_all_matches(
+          zipper,
+          &(ungated?(&1) and listed_stages?(&1)),
+          &gate_session/1
+        )
+      end)
+    end
+
+    # Last, after whatever builds the scope and sends a signed-out reader to
+    # sign in.
+    defp gate_session(session) do
+      Igniter.Code.Common.within(session, fn session ->
+        {:ok, stages} = LiveSessions.stages(session)
+
+        Igniter.Code.List.append_to_list(stages, @route_gate)
+      end)
+    end
+
+    # A single stage, written as a module or a tuple, is not a list to append
+    # to.
+    defp warn_ungated(igniter, router, sessions) do
+      Enum.reduce(sessions, igniter, fn session, igniter ->
+        Igniter.add_warning(igniter, """
+        The live session #{LiveSessions.name(session)} in #{inspect(router)} runs \
+        `AshQuick.LiveView.Mount` but has no `AshQuick.LiveView.RouteGate`, and \
+        its `on_mount` is not a list the installer can append to. Add the gate \
+        last, after the stages that assign the scope and require a user:
+
+            on_mount: [
+              AshQuick.LiveView.Mount,
+              # your scope and sign-in stages
+              AshQuick.LiveView.RouteGate
+            ]
+
+        Without it a typed URL opens every QuickView that session serves.
+        """)
+      end)
+    end
+
+    # Stages kept in a module attribute, a variable or a call cannot be read,
+    # so the installer cannot tell whether the session runs the mount, and
+    # neither gates it nor generates a shell beside it.
+    defp warn_unreadable(igniter, router, sessions) do
+      Enum.reduce(sessions, igniter, fn session, igniter ->
+        Igniter.add_warning(igniter, """
+        The live session #{LiveSessions.name(session)} in #{inspect(router)} takes \
+        its `on_mount` from `#{LiveSessions.stages_source(session)}`, which the \
+        installer cannot read, so it neither gated it nor generated a live \
+        session for the QuickViews beside it. If it serves QuickViews, its \
+        stages should run `AshQuick.LiveView.Mount` first and \
+        `AshQuick.LiveView.RouteGate` last:
+
+            on_mount: [
+              AshQuick.LiveView.Mount,
+              # your scope and sign-in stages
+              AshQuick.LiveView.RouteGate
+            ]
+
+        Write them out as a list and run the installer again to have it do so.
+        """)
+      end)
+    end
+
     # Without this every QuickView renders unstyled: the library's classes live
     # in its own `lib/`, which a host's Tailwind build does not scan.
     defp source_library_classes(igniter) do
@@ -510,6 +827,70 @@ if Code.ensure_loaded?(Igniter) do
             #{@css_submit_loading}
         """)
       end
+    end
+
+    # Every component is written in daisyUI classes (`btn`, `menu`, `modal`,
+    # `bg-base-100`), and without the plugin they are class names nothing
+    # styles: no error, only unstyled pages. `mix phx.new` 1.8 loads it as
+    # `daisyui/packages/bundle/daisyui` from a dependency, an older app from
+    # `../vendor/daisyui`: any `@plugin` whose last segment is `daisyui` counts
+    # (with or without `.js`; `daisyui-theme` alone does not), and so does a
+    # Tailwind 3 config that requires it.
+    @daisyui_plugin ~r/@plugin\s+["'](?:[^"']*\/)?daisyui(?:\.js)?["']/
+    @tailwind_config "assets/tailwind.config.js"
+
+    defp require_daisyui(igniter) do
+      if daisyui?(igniter, @css_path, @daisyui_plugin) or
+           daisyui?(igniter, @tailwind_config, ~r/\bdaisyui\b/) do
+        igniter
+      else
+        Igniter.add_warning(igniter, daisyui_instructions())
+      end
+    end
+
+    # A plugin commented out loads nothing. CSS has block comments only; a
+    # Tailwind 3 config's line comments go too.
+    defp uncommented(content) do
+      content
+      |> String.replace(~r{/\*.*?\*/}s, "")
+      |> String.replace(~r{^\s*//.*$}m, "")
+    end
+
+    defp daisyui?(igniter, path, pattern) do
+      igniter =
+        if Igniter.exists?(igniter, path),
+          do: Igniter.include_existing_file(igniter, path),
+          else: igniter
+
+      case Rewrite.source(igniter.rewrite, path) do
+        {:ok, source} -> Regex.match?(pattern, uncommented(Rewrite.Source.get(source, :content)))
+        _missing -> false
+      end
+    end
+
+    defp daisyui_instructions do
+      """
+      No daisyUI plugin was found in #{@css_path}. AshQuick's components are \
+      written in daisyUI #{@daisyui_major} classes (btn, menu, modal, \
+      bg-base-100), so without it every QuickView renders unstyled, with no \
+      error to say why. Load it the way `mix phx.new` 1.8 does, from a \
+      dependency esbuild and Tailwind find through NODE_PATH:
+
+          # mix.exs
+          {:daisyui,
+           github: "saadeghi/daisyui",
+           tag: "v5.5.20",
+           sparse: "packages/bundle",
+           app: false,
+           compile: false,
+           depth: 1}
+
+          /* #{@css_path} */
+          @plugin "daisyui/packages/bundle/daisyui";
+
+      or from daisyui.js downloaded into assets/vendor, with \
+      `@plugin "../vendor/daisyui";` (https://daisyui.com/docs/install/).
+      """
     end
 
     defp append_source(source) do
@@ -890,24 +1271,58 @@ if Code.ensure_loaded?(Igniter) do
       """
     end
 
-    defp mount_notice do
-      """
-      Put `AshQuick.LiveView.Mount` first in the `on_mount` of the
-      live_session serving the QuickViews, and `AshQuick.LiveView.RouteGate`
-      last, after the stages that assign the scope and require a user. The gate
-      is what refuses a route the access control does not grant. Then route a
-      QuickView with
+    defp shell_notice(router, session, layouts, ash_authentication?) do
+      served = """
+      #{inspect(router)} now serves QuickViews from the live session
+      `#{inspect(@session_name)}`: `AshQuick.LiveView.Mount` first, the scope
+      and sign-in stages of #{inspect(session)}, and
+      `AshQuick.LiveView.RouteGate` last, drawn in #{inspect(layouts)}. Route
+      a QuickView into it with
       `mix ash_quick.gen.quick_view MyApp.Catalog.Product --grant-to admin`.
+      """
 
-      The generated access control grants no route until its `role/1` reads a
-      role off your scope, and the audit store lets nobody read the trail until
-      its `:read` policy says who.
+      if ash_authentication? do
+        served
+      else
+        served <>
+          """
+
+          Nothing puts the signed-in user in `@current_user` ahead of
+          `AshQuick.LiveView.Mount` yet, so every QuickView sends its reader to
+          sign in. Put the stage that does first in the session's `on_mount`,
+          and set `@sign_in_path` in #{inspect(session)}, outside this live
+          session.
+          """
+      end
+    end
+
+    defp scope_instructions(existing, session_code) do
+      """
+      #{inspect(existing)} is already there, so no scope, live session or \
+      layout was generated for the QuickViews: the stages that build a scope \
+      have to call its own constructor. Serve them from a live session that \
+      runs `AshQuick.LiveView.Mount` first and `AshQuick.LiveView.RouteGate` \
+      last, with a stage between them that assigns `@scope`:
+
+      #{String.replace(session_code, ~r/^/m, "    ")}
+      """
+    end
+
+    defp refusals_notice(access_control, audit_resource) do
+      """
+      What the installer leaves refusing until you decide:
+
+        * #{inspect(access_control)} grants no route until its `role/1`
+          reads a role off your scope, so the route gate answers every
+          QuickView with a 403.
+        * #{inspect(audit_resource)} lets nobody read the trail until its
+          `:read` policy says who.
       """
     end
   end
 else
   defmodule Mix.Tasks.AshQuick.Install do
-    @shortdoc "Configures AshQuick and generates the audit store, the nav and the access control"
+    @shortdoc "Configures AshQuick and generates the audit store, the nav, the access control and the shell"
 
     @moduledoc @shortdoc
 

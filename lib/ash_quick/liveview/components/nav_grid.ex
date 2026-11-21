@@ -1,18 +1,29 @@
 defmodule AshQuick.LiveView.Components.NavGrid do
-  @moduledoc false
-  # The nav registry rendered as a grid of tiles: one per group the viewer can
-  # reach, linking to the first path in it they are allowed to navigate to.
-  #
-  # A group with nothing reachable in it has no tile at all, so the grid is a
-  # picture of what this user can do rather than of what the application has.
+  @moduledoc """
+  The nav registry rendered as a grid of tiles: one per group the viewer can
+  reach, linking to the first path in it they are allowed to navigate to.
+
+  A group with nothing reachable in it has no tile at all, so the grid is a
+  picture of what this user can do rather than of what the application has.
+
+  Placed by the host, wherever its apps menu or home page is: the layout
+  `mix igniter.install ash_quick` generates puts it in a dropdown of the top
+  bar. It sizes itself off its own box, so it fits a dropdown, a drawer and a
+  full page alike.
+
+      <.nav_grid scope={@scope} />
+  """
   use Phoenix.Component
 
   import AshQuick.Components
 
   alias AshQuick.Nav
 
-  attr :scope, :any, required: true
+  attr :scope, :any,
+    required: true,
+    doc: "The page's scope. Only the groups its access control grants are drawn."
 
+  @doc "The nav's groups the scope can reach, as tiles."
   def nav_grid(assigns) do
     tiles =
       assigns.scope

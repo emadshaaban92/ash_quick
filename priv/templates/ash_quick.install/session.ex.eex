@@ -1,0 +1,78 @@
+defmodule <%= inspect @module %> do
+  @moduledoc """
+  The stages of the live session the QuickViews are served from.
+
+  `<%= inspect @router %>` runs them in this order, and each one depends on the
+  one before it:
+
+      on_mount: [
+        AshQuick.LiveView.Mount,
+        {<%= inspect @module %>, :assign_scope},
+        {<%= inspect @module %>, :require_user},
+        AshQuick.LiveView.RouteGate
+      ]
+
+  The signed-in user arrives before any of them, in the assign
+  `config :ash_quick, actor_assign:` names (`@current_user` unless set), from
+  <%= if @ash_authentication? do %>`ash_authentication_live_session`, which puts its own stage first.<% else %>whatever authenticates this application. Nothing does yet: put the
+  stage that assigns it ahead of `AshQuick.LiveView.Mount`, which reads it.
+  Until then nobody is signed in and every page sends the reader to sign in.<% end %>
+
+  `AshQuick.LiveView.Mount` turns the tab's impersonation token into an actor
+  and reads the address the tab connected from. `:assign_scope` builds
+  `<%= inspect @scope %>` out of both. `:require_user` sends a signed-out
+  reader to sign in. `AshQuick.LiveView.RouteGate` goes last and refuses any
+  path `<%= inspect @access_control %>` does not grant the scope.
+  """
+
+  import Phoenix.Component, only: [assign: 3]
+
+  alias AshQuick.LiveView.Mount
+
+  # Where a signed-out reader is sent: <%= if @ash_authentication? do %>AshAuthentication's sign-in page.<% else %>the application's sign-in page,
+  # which must not be served from this live session.<% end %>
+  @sign_in_path "/sign-in"
+
+  def on_mount(:assign_scope, _params, _session, socket) do
+    scope =
+      <%= inspect @scope %>.new(
+        actor: socket.assigns[AshQuick.Config.actor_assign()],
+        impersonating: Mount.actor(socket),
+        ip: Mount.ip(socket),
+        timezone: browser_timezone(socket)
+      )
+
+    {:cont,
+     socket
+     |> assign(:scope, scope)
+     |> assign(:connected?, Phoenix.LiveView.connected?(socket))
+     |> Phoenix.LiveView.attach_hook(:current_path, :handle_params, &assign_current_path/3)}
+  end
+
+  def on_mount(:require_user, _params, _session, socket) do
+    if socket.assigns.scope.real_user do
+      {:cont, socket}
+    else
+      {:halt, Phoenix.LiveView.redirect(socket, to: @sign_in_path)}
+    end
+  end
+
+  # The layout marks the sidebar entry the page is under by it.
+  defp assign_current_path(_params, uri, socket) do
+    {:cont, assign(socket, :current_path, URI.parse(uri).path)}
+  end
+
+  # The zone the reader's browser reports, when `assets/js/app.js` sends one in
+  # the connect params:
+  #
+  #     params: {_csrf_token: csrfToken, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone}
+  #
+  # Without it, or on the render before the socket connects, times read in
+  # `config :ash_quick, timezone:`.
+  defp browser_timezone(socket) do
+    case Phoenix.LiveView.get_connect_params(socket) do
+      %{"timezone" => timezone} when is_binary(timezone) -> timezone
+      _no_zone -> nil
+    end
+  end
+end

@@ -442,6 +442,110 @@ defmodule Mix.Tasks.AshQuick.Gen.QuickViewTest do
                ~s|quick_view "/ledger_entries", LedgerLive.Quick, except: [:create]|
     end
 
+    # The session `mix igniter.install ash_quick` writes has no route in it yet.
+    test "goes into the installer's live session while it is still empty" do
+      igniter =
+        widget(%{
+          "lib/test_web/router.ex" => """
+          defmodule TestWeb.Router do
+            use TestWeb, :router
+
+            import AshQuick.LiveView.Router
+
+            scope "/", TestWeb do
+              live_session :ash_quick,
+                layout: {TestWeb.QuickLayouts, :app},
+                on_mount: [
+                  AshQuick.LiveView.Mount,
+                  {TestWeb.QuickSession, :assign_scope},
+                  {TestWeb.QuickSession, :require_user},
+                  AshQuick.LiveView.RouteGate
+                ] do
+              end
+            end
+          end
+          """
+        })
+
+      assert_has_patch(igniter, "lib/test_web/router.ex", """
+      + |      quick_view "/widgets", WidgetLive.Quick
+      """)
+    end
+
+    test "goes into AshAuthentication's live session when that runs the mount" do
+      igniter =
+        widget(%{
+          "lib/test_web/router.ex" => """
+          defmodule TestWeb.Router do
+            use TestWeb, :router
+            use AshAuthentication.Phoenix.Router
+
+            import AshQuick.LiveView.Router
+
+            scope "/", TestWeb do
+              ash_authentication_live_session :ash_quick,
+                on_mount: [AshQuick.LiveView.Mount, AshQuick.LiveView.RouteGate] do
+              end
+            end
+          end
+          """
+        })
+
+      assert_has_patch(igniter, "lib/test_web/router.ex", """
+      + |      quick_view "/widgets", WidgetLive.Quick
+      """)
+    end
+
+    test "finds the live session that names the mount through an alias" do
+      igniter =
+        widget(%{
+          "lib/test_web/router.ex" => """
+          defmodule TestWeb.Router do
+            use Phoenix.Router
+
+            import AshQuick.LiveView.Router
+            alias AshQuick.LiveView.Mount
+
+            scope "/", TestWeb do
+              live_session :authenticated, on_mount: [Mount] do
+                live "/", HomeLive, :index
+              end
+            end
+          end
+          """
+        })
+
+      assert diff(igniter, only: "lib/test_web/router.ex") =~
+               ~s|quick_view "/widgets", WidgetLive.Quick|
+    end
+
+    # A sign-in page's session runs the mount too, ungated.
+    test "goes into the gated live session over another that runs the mount" do
+      igniter =
+        widget(%{
+          "lib/test_web/router.ex" => """
+          defmodule TestWeb.Router do
+            use Phoenix.Router
+
+            import AshQuick.LiveView.Router
+
+            scope "/", TestWeb do
+              live_session :no_user, on_mount: [AshQuick.LiveView.Mount] do
+                live "/login", LoginLive, :index
+              end
+
+              live_session :ash_quick,
+                on_mount: [AshQuick.LiveView.Mount, AshQuick.LiveView.RouteGate] do
+              end
+            end
+          end
+          """
+        })
+
+      assert diff(igniter, only: "lib/test_web/router.ex") =~
+               ~r/RouteGate\] do\n.*quick_view[( ]"\/widgets"/
+    end
+
     test "goes next to the QuickViews already routed" do
       igniter =
         widget(%{

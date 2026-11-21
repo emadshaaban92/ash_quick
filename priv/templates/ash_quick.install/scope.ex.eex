@@ -1,0 +1,48 @@
+defmodule <%= inspect @module %> do
+  @moduledoc """
+  The scope every action a page runs is passed.
+
+  `use AshQuick.Scope` generates `Ash.Scope.ToOpts` and the provenance AshQuick
+  records on an audit row from the field names below: the actor an action runs
+  as, the person really at the keyboard when the tab is impersonating somebody,
+  the address the request came from, and the reader's timezone. Add a
+  `:tenant` field and name it there when the application is multitenant.
+
+  `<%= inspect @session %>` builds it on every mount, out of what
+  `AshQuick.LiveView.Mount` found on the connection.
+  """
+
+  use AshQuick.Scope,
+    actor: :current_user,
+    real_actor: :real_user,
+    impersonating?: :impersonating,
+    ip: :ip,
+    timezone: :timezone
+
+  defstruct [:current_user, :real_user, :ip, :timezone, impersonating: false]
+
+  @doc """
+  Builds a scope.
+
+    * `:actor` - whoever is signed in.
+    * `:impersonating` - whoever the tab stands in for, if anyone. Only
+      `AshQuick.LiveView.Mount.actor/1` should ever be passed here: it comes
+      from the browser tab, which is why an impersonation in one tab leaves
+      another tab its real user.
+    * `:ip` - the address the request came from.
+    * `:timezone` - the zone the reader reads times in. Without one,
+      `config :ash_quick, timezone:` applies.
+  """
+  def new(opts \\ []) do
+    real_user = Keyword.get(opts, :actor)
+    impersonated = if real_user, do: Keyword.get(opts, :impersonating)
+
+    %__MODULE__{
+      current_user: impersonated || real_user,
+      real_user: real_user,
+      impersonating: not is_nil(impersonated),
+      ip: Keyword.get(opts, :ip),
+      timezone: Keyword.get(opts, :timezone)
+    }
+  end
+end

@@ -535,7 +535,9 @@ defmodule AshQuick.LiveView.QuickView do
     * `phoenix` and `phoenix_live_view` — Phoenix LiveView
     * `live_select` — Used for searchable dropdown and multi-select inputs
       in forms (BelongsTo, HasMany, Atom, and ArrayOfAtom fields)
-    * Tailwind CSS — All components use Tailwind utility classes
+    * Tailwind CSS 4 and daisyUI 5 — All components use Tailwind utility
+      classes and daisyUI's (`btn`, `menu`, `modal`, `bg-base-100`); without
+      the daisyUI plugin they render unstyled
 
   Optional dependencies (features are hidden when not available):
 

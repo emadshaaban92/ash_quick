@@ -1,25 +1,34 @@
 defmodule AshQuick.LiveView.Components.Sidebar do
-  @moduledoc false
-  # The nav registry rendered as a sidebar: one heading per group the viewer
-  # can reach, the entries under it, and the page they are on marked.
-  #
-  # It knows nothing about resources or domains — a path is a path, so a scan
-  # page and a dashboard sit beside a QuickView, and a group spans as many
-  # domains as it likes. `AshQuick.LiveView.Components.NavGrid` renders the
-  # same sections as tiles.
-  #
-  # A group of one path is a tile in the grid and nothing in a sidebar: the
-  # heading says what its single link already says. It is dropped on what the
-  # group *declares*, never on what survives filtering — a role who can reach
-  # one page of Settings still needs to be told it is Settings, and a sidebar
-  # whose shape moves with the viewer is harder to learn, not easier.
-  #
-  # It is rendered by the host's layout, not by a view, because every page a
-  # user can reach needs the same nav — a scan screen is not less navigable
-  # than a list. It therefore asks only for the path being served, and marks
-  # the entry that path falls under by the prefix rule the whole registry
-  # matches on, so `/products/123` marks Products without knowing what a
-  # QuickView is.
+  @moduledoc """
+  The nav registry rendered as a sidebar: one heading per group the viewer
+  can reach, the entries under it, and the page they are on marked.
+
+  It knows nothing about resources or domains — a path is a path, so a scan
+  page and a dashboard sit beside a QuickView, and a group spans as many
+  domains as it likes. `AshQuick.LiveView.Components.NavGrid` renders the
+  same sections as tiles.
+
+  A group of one path is a tile in the grid and nothing in a sidebar: the
+  heading says what its single link already says. It is dropped on what the
+  group *declares*, never on what survives filtering — a role who can reach
+  one page of Settings still needs to be told it is Settings, and a sidebar
+  whose shape moves with the viewer is harder to learn, not easier.
+
+  It is rendered by the host's layout, not by a view, because every page a
+  user can reach needs the same nav — a scan screen is not less navigable
+  than a list. It therefore asks only for the path being served, and marks
+  the entry that path falls under by the prefix rule the whole registry
+  matches on, so `/products/123` marks Products without knowing what a
+  QuickView is.
+
+  The layout `mix igniter.install ash_quick` generates draws it beside every
+  page but one that sets `sidebar: false`, and offsets the page by its width
+  from the `lg` breakpoint up, where it stays open; below that a toggle opens
+  it as a drawer. It sits below a fixed top bar as tall as that layout's.
+
+      <.sidebar scope={@scope} current_path={@current_path} params={assigns[:params]} />
+      <div class="h-full lg:ms-64">{@inner_content}</div>
+  """
   use Phoenix.Component
   use Gettext, backend: AshQuick.Gettext
 
@@ -29,8 +38,16 @@ defmodule AshQuick.LiveView.Components.Sidebar do
   alias AshQuick.Nav
   alias Phoenix.LiveView.JS
 
-  attr :scope, :any, required: true
-  attr :current_path, :string, required: true
+  attr :scope, :any,
+    required: true,
+    doc: "The page's scope. Only the entries its access control grants are drawn."
+
+  attr :current_path, :string,
+    required: true,
+    doc: """
+    The path being served, which marks the entry it falls under. The layout
+    reads it off an assign a `handle_params` hook keeps current.
+    """
 
   attr :params, :any,
     default: nil,
@@ -40,6 +57,7 @@ defmodule AshQuick.LiveView.Components.Sidebar do
     records keeps the filters. A page with no list state passes nothing.
     """
 
+  @doc "The nav as a sidebar, with the entry the page is under marked."
   def sidebar(assigns) do
     assigns =
       assigns
