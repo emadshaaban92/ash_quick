@@ -54,7 +54,8 @@ defmodule AshQuick.Telemetry do
       save, in a modal or on its own page. Metadata: `:quick_view`,
       `:resource`, `:action`, `:type` (`:create`, `:update` or `:destroy`) and
       `:scope`. `:stop` adds `:result`, `:ok` or `:error`: an error is the
-      action refusing the input, which the form then shows.
+      action refusing the input, or a field the form state requires
+      (`AshQuick.FormState.require/3`) left blank, which the form then shows.
 
     * `[:ash_quick, :bulk, :run, :start | :stop | :exception]`: an action run
       over the rows selected on a list. Metadata: `:quick_view`, `:resource`,

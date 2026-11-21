@@ -42,10 +42,13 @@ defmodule AshQuick.FormInput do
   `c:render/1` is a function component. It receives what AshQuick's own inputs
   do: `@field` (the Ash attribute or argument), `@phx_field` (the
   `Phoenix.HTML.FormField`), `@form` (the `AshPhoenix.Form`), `@resource`,
-  `@scope`, `@uploads`, and `@help` (the field's help text,
-  `AshQuick.Labels.help/3`, or nil). It draws the field's label, help and
-  errors itself; `<.input help={@help} />` from `AshQuick.Components` draws
-  all three. The form's grid has four columns; `sm:col-span-2` is half.
+  `@scope`, `@uploads`, `@label` and `@help` (the field's label and help
+  text, as the form's `AshQuick.FormState` holds them), `@required` (whether
+  the field is marked required) and `@attrs` (extra HTML attributes for its
+  input, from `AshQuick.FormState.put_attrs/3`). It draws the field's label,
+  help and errors itself; `<.input help={@help} />` from
+  `AshQuick.Components` draws all three. The form's grid has four columns;
+  `sm:col-span-2` is half.
   The callback is `render/1` rather than `input/1` so that the module can
   import `AshQuick.Components.input/1` to draw with.
 

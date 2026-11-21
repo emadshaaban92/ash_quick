@@ -7,6 +7,7 @@ defmodule AshQuick.LiveView.Components.FormView do
   alias Ash.Resource.Relationships.BelongsTo
   alias Ash.Resource.Actions.Argument
   alias Ash.Type
+  alias AshQuick.FormState
   alias AshQuick.Labels
   alias Phoenix.LiveView.JS
 
@@ -14,6 +15,7 @@ defmodule AshQuick.LiveView.Components.FormView do
   alias AshQuick.LiveView.AttachmentUpload
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.Components.FieldHelp
+  alias AshQuick.LiveView.Components.MapValue
   alias AshQuick.LiveView.FieldErrors
   alias AshQuick.LiveView.FormInputs
   alias AshQuick.LiveView.Utils
@@ -47,6 +49,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       >
         <.form_fields
           form={@form}
+          state={assigns[:ash_quick_form_state]}
           scope={@scope}
           uploads={@uploads}
           widgets={@options.form_widgets}
@@ -251,13 +254,29 @@ defmodule AshQuick.LiveView.Components.FormView do
     end
   end
 
+  # The root form is drawn from the state its page holds, which the
+  # QuickView's `adjust_form/2` has been through. A sub-form or a bulk form is
+  # drawn from a state built here, as the form would be without a hook.
   def form_fields(%{form: form, scope: scope} = assigns) do
     assigns =
       assigns
-      |> assign(:fields, Utils.form_fields(form, scope))
-      |> assign(:phx_form, form |> to_form())
       |> assign_new(:widgets, fn -> %{} end)
       |> assign_new(:help, fn -> nil end)
+
+    state =
+      case assigns[:state] do
+        %FormState{form: %{name: name}} = state when name == form.name ->
+          state
+
+        _none ->
+          FormState.new(form, :build, scope: scope, widgets: assigns.widgets)
+      end
+
+    assigns =
+      assigns
+      |> assign(:state, state)
+      |> assign(:fields, FormState.visible_fields(state))
+      |> assign(:phx_form, form |> to_form())
 
     ~H"""
     <section class="sm:col-span-4 card card-border border-base-300 shadow-lg bg-base-200/30 p-5 my-3">
@@ -266,29 +285,119 @@ defmodule AshQuick.LiveView.Components.FormView do
       </h3>
       <FieldHelp.help text={@help} class="-mt-2 mb-3" />
       <div class="grid gap-4 sm:grid-cols-4 sm:gap-6">
-        <.field_input
-          :for={field <- @fields}
-          form={@form}
-          field={field}
-          phx_field={@phx_form[field.name]}
-          resource={@form.resource}
-          scope={@scope}
-          uploads={@uploads}
-          form_key_type={@form.form_keys[field.name][:type]}
-          widget={Map.get(@widgets, field.name)}
-          form_input={AshQuick.FormInput.module(field)}
-          choice={EnumOptions.kind(field)}
-          help={Labels.help(field, @form.resource, @form.action)}
-        />
+        <%= for state_field <- @fields do %>
+          <.disabled_field
+            :if={state_field.disabled?}
+            state={@state}
+            state_field={state_field}
+            scope={@scope}
+          />
+          <.field_input
+            :if={not state_field.disabled?}
+            form={@form}
+            field={state_field.source}
+            state_field={state_field}
+            label={state_field.label}
+            required={state_field.required?}
+            attrs={state_field.attrs}
+            phx_field={@phx_form[state_field.name]}
+            resource={@form.resource}
+            scope={@scope}
+            uploads={@uploads}
+            form_key_type={@form.form_keys[state_field.name][:type]}
+            widget={Map.get(@widgets, state_field.name)}
+            form_input={AshQuick.FormInput.module(state_field.source)}
+            choice={EnumOptions.kind(state_field.source)}
+            help={state_field.help}
+          />
+        <% end %>
       </div>
     </section>
     """
   end
 
+  # A disabled field shows its value, read-only, the way the details page
+  # shows it, and posts nothing: the server drops its params anyway. On an
+  # update an attribute or relationship reads off the record, which is the
+  # value it keeps. Anything else reads the value the form holds.
+  defp disabled_field(assigns) do
+    %{state: state, state_field: field} = assigns
+    id = "#{state.form.id}_#{field.name}_disabled"
+
+    {value, path, ash_field} =
+      case {state.record, field.source} do
+        {%_{}, %Argument{}} -> {FormState.value(state, field.name), [], field.source}
+        {%_{} = record, _field} -> {record, field.name, nil}
+        {nil, source} -> {FormState.value(state, field.name), [], source}
+      end
+
+    assigns =
+      assigns
+      |> assign(:id, id)
+      |> assign(:value, value)
+      |> assign(:path, path)
+      |> assign(:ash_field, ash_field)
+      |> assign(:wide?, field.kind in [:long_text, :nested, :attachments])
+      |> assign(:rows, if(field.kind == :nested, do: nested_rows(state, field)))
+
+    ~H"""
+    <div
+      class={if @wide?, do: "sm:col-span-4", else: "sm:col-span-2"}
+      role="group"
+      aria-labelledby={"#{@id}_label"}
+      data-disabled-field={@state_field.name}
+    >
+      <span id={"#{@id}_label"} class="label text-sm font-medium">{@state_field.label}</span>
+      <div class="min-h-10 mt-1 px-3 py-2 rounded-field border border-base-300 bg-base-200 text-base-content/80 break-words">
+        <ul :if={@rows} class="flex flex-col gap-1">
+          <li :for={row <- @rows}><MapValue.cell value={row} /></li>
+        </ul>
+        <AshQuick.LiveView.Components.FieldValue.field_value
+          :if={!@rows}
+          value={@value}
+          path={@path}
+          ash_field={@ash_field}
+          resource={@state.resource}
+          scope={@scope}
+          view={:details}
+        />
+      </div>
+      <FieldHelp.help id={@id} text={@state_field.help} />
+    </div>
+    """
+  end
+
+  # A field drawn as sub-forms reads as its rows, each the public fields of
+  # the embed or map it holds, the way a stored map's cell reads.
+  defp nested_rows(state, field) do
+    value =
+      case {state.record, field.source} do
+        {%_{} = record, %Ash.Resource.Attribute{}} -> Map.get(record, field.name)
+        _ -> FormState.value(state, field.name)
+      end
+
+    value |> List.wrap() |> Enum.map(&row_pairs/1)
+  end
+
+  defp row_pairs(%resource{} = row) do
+    if Ash.Resource.Info.resource?(resource) do
+      resource
+      |> Ash.Resource.Info.public_attributes()
+      |> Map.new(&{to_string(&1.name), Map.get(row, &1.name)})
+    else
+      Map.from_struct(row)
+    end
+  end
+
+  defp row_pairs(row) when is_map(row), do: row
+  defp row_pairs(row), do: %{"value" => row}
+
   # A configured widget replaces this field's input entirely. It receives the
   # same assigns the built-in clauses do — `@field`, `@phx_field`, `@form`,
   # `@uploads`, `@scope`, and `@help`, the field's help text or nil — so it
-  # can render its own controls over the same `AshPhoenix.Form`. Only the
+  # can render its own controls over the same `AshPhoenix.Form` — and
+  # `@state_field`, the field's `AshQuick.FormState.Field`, whose flags it can
+  # follow (a hidden or disabled field never reaches it). Only the
   # top-level fields of the action are matched: nested embed sub-forms render
   # through `form_fields/1` without a widget map, since the key is a bare
   # field name and would otherwise collide with a same-named field one level
@@ -308,15 +417,16 @@ defmodule AshQuick.LiveView.Components.FormView do
 
     ~H"""
     <.input
-      required={not @field.allow_nil? and not @update?}
+      required={@required}
       field={@phx_field}
       value={@typed}
       type="password"
       autocomplete="one-time-code"
       placeholder={if @update?, do: gettext("Leave blank to keep it")}
-      label={Labels.name(@field.name, @resource)}
+      label={@label}
       help={@help}
       phx-debounce="blur"
+      {@attrs}
     />
     """
   end
@@ -341,10 +451,10 @@ defmodule AshQuick.LiveView.Components.FormView do
         ~H"""
         <.live_component
           :if={@relationship}
-          required={not @field.allow_nil?}
+          required={@required}
           id={"select-#{@phx_field.id}"}
           module={AshQuick.LiveView.Components.HasManyInput}
-          label={Labels.name(@relationship.name, @resource)}
+          label={@label}
           help={@help}
           relationship={@relationship}
           scope={@scope}
@@ -362,9 +472,9 @@ defmodule AshQuick.LiveView.Components.FormView do
     ~H"""
     <.live_component
       id={"select-#{@phx_field.id}"}
-      required={not @field.allow_nil?}
+      required={@required}
       module={AshQuick.LiveView.Components.BelongsToInput}
-      label={Labels.name(@field.name, @resource)}
+      label={@label}
       help={@help}
       relationship={@field}
       scope={@scope}
@@ -379,10 +489,10 @@ defmodule AshQuick.LiveView.Components.FormView do
     ~H"""
     <.live_component
       id={"select-#{@phx_field.id}"}
-      required={not @field.allow_nil?}
+      required={@required}
       module={AshQuick.LiveView.Components.ChoiceInput}
       multiple={@choice == :array}
-      label={Labels.name(@field.name, @resource)}
+      label={@label}
       help={@help}
       attribute={@field}
       resource={@resource}
@@ -408,7 +518,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       |> Enum.with_index()
       |> Enum.filter(&match?({%AshQuick.AshTypes.Attachment.Value{}, _}, &1))
 
-    name = assigns.field.name |> Labels.name(assigns.resource) |> String.downcase()
+    name = String.downcase(assigns.label)
 
     prompt =
       if rows == [],
@@ -440,7 +550,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       data-attachment-field={@field.name}
       class="flex flex-col gap-2 sm:col-span-4 card bg-base-100 p-5 my-3 phx-submit-loading:pointer-events-none"
     >
-      <h3 class="font-semibold">{Labels.name(@field.name, @resource)}</h3>
+      <h3 class="font-semibold">{@label}</h3>
       <FieldHelp.help text={@help} class={nil} />
       <ul :if={@rows != []} class="divide-y divide-base-300">
         <.attachment_row
@@ -495,7 +605,7 @@ defmodule AshQuick.LiveView.Components.FormView do
     >
       <div class="flex justify-between">
         <label for={@uploads[@upload_name].ref}>
-          {if @field.name != :attachment, do: Labels.name(@field.name, @resource)}
+          {if @field.name != :attachment, do: @label}
         </label>
         <div :if={@uploads[@upload_name].entries |> Enum.empty?()} class="flex flex-wrap gap-2">
           <AshQuick.LiveView.Components.FieldValue.attachment_preview
@@ -592,10 +702,10 @@ defmodule AshQuick.LiveView.Components.FormView do
        when field_type in [Ash.Type.DateTime, Ash.Type.UtcDatetimeUsec, Ash.Type.UtcDatetime] do
     ~H"""
     <.zoned_datetime_input
-      required={not @field.allow_nil?}
+      required={@required}
       field={@phx_field}
       timezone={AshQuick.Scope.timezone(@scope)}
-      label={Labels.name(@field.name, @resource)}
+      label={@label}
       help={@help}
       phx-debounce="blur"
     />
@@ -608,7 +718,7 @@ defmodule AshQuick.LiveView.Components.FormView do
     ~H"""
     <section class="sm:col-span-4 card bg-base-100 p-5 my-3">
       <h3 class="text-lg font-semibold mb-3">
-        {Labels.name(@field.name, @resource)}
+        {@label}
       </h3>
       <FieldHelp.help text={@help} class="-mt-2 mb-3" />
 
@@ -656,7 +766,7 @@ defmodule AshQuick.LiveView.Components.FormView do
         form={nested_phx_form.source}
         scope={@scope}
         uploads={@uploads}
-        title={Labels.name(@field.name, @resource)}
+        title={@label}
         help={@help}
       />
       <.error :for={msg <- @errors}>{msg}</.error>
@@ -668,12 +778,13 @@ defmodule AshQuick.LiveView.Components.FormView do
     ~H"""
     <div class="sm:col-span-4">
       <.input
-        required={not @field.allow_nil?}
+        required={@required}
         field={@phx_field}
         type="textarea"
-        label={Labels.name(@field.name, @resource)}
+        label={@label}
         help={@help}
         phx-debounce="blur"
+        {@attrs}
       />
     </div>
     """
@@ -684,7 +795,7 @@ defmodule AshQuick.LiveView.Components.FormView do
     <.input
       field={@phx_field}
       type="checkbox"
-      label={Labels.name(@field.name, @resource)}
+      label={@label}
       help={@help}
     />
     """
@@ -695,13 +806,13 @@ defmodule AshQuick.LiveView.Components.FormView do
   defp field_input(%{field: %{}} = assigns) do
     ~H"""
     <.input
-      required={not @field.allow_nil?}
+      required={@required}
       field={@phx_field}
       autocomplete="on"
-      label={Labels.name(@field.name, @resource)}
+      label={@label}
       help={@help}
       phx-debounce="blur"
-      {FormInputs.attrs(@field, @phx_field.value)}
+      {Keyword.merge(FormInputs.attrs(@field, @phx_field.value), @attrs)}
     />
     """
   end

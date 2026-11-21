@@ -385,6 +385,10 @@ defmodule AshQuick.LiveView.QuickView do
   The template has access to all socket assigns including `@record`, `@resource`,
   `@params`, `@scope`, and `@options`. It also has `AshQuick.Components`
   imported (for `<.icon>`, `<.button>`, etc.) and `Phoenix.LiveView.JS` aliased.
+  A form's template also has `@ash_quick_form_state`, the form's
+  `AshQuick.FormState`, whose `visible_fields/1` it can draw from. The server
+  drops what that state hides and enforces what it requires whatever the
+  template draws.
 
   A timestamp a template takes is drawn with
   `AshQuick.Components.zoned_datetime_input/1`, which shows it in the reader's
@@ -427,7 +431,8 @@ defmodule AshQuick.LiveView.QuickView do
 
   ## Lifecycle hooks
 
-  Two overridable hooks are available for customization:
+  Two overridable hooks are available for customization (and a third for
+  forms, `adjust_form/2`: see "Form state" below):
 
     * `after_mount(socket, options)` — Called after the default mount logic.
       Use it to add custom assigns.
@@ -448,6 +453,38 @@ defmodule AshQuick.LiveView.QuickView do
 
         defp after_handle_params(socket, _options), do: socket
       end
+
+  ## Form state
+
+  A form whose shape follows what is typed into it, a field shown only for
+  one kind of record or required only then, is written in one overridable
+  callback, `adjust_form(state, options)`. It takes an `AshQuick.FormState`
+  and returns it changed:
+
+      defmodule MyAppWeb.OrderLive.Quick do
+        use AshQuick.LiveView.QuickView, resource: MyApp.Sales.Order
+
+        alias AshQuick.FormState
+
+        defp adjust_form(%{action: %{name: action}} = state, _options)
+             when action in [:create, :update] do
+          discount? = FormState.value(state, :kind) == :discount
+
+          state
+          |> FormState.hide(:discount_reason, not discount?)
+          |> FormState.require(:discount_reason, discount?)
+        end
+
+        defp adjust_form(state, _options), do: state
+      end
+
+  The state is built again from the form on every event and goes through the
+  callback every time, so the callback states the whole rule each time and
+  never skips one. A field it hides is not drawn and its params are dropped
+  on the server; a field it disables shows its value read-only and is
+  dropped the same way; a field it requires refuses a blank save. It can only
+  narrow what Ash allows.
+  See `AshQuick.FormState` for the functions and the rules.
 
   ## Sidebar
 
@@ -647,10 +684,16 @@ defmodule AshQuick.LiveView.QuickView do
 
       defp after_handle_params(socket, _options), do: socket
 
+      @doc false
+      def __ash_quick_adjust_form__(state, options), do: adjust_form(state, options)
+
+      defp adjust_form(state, _options), do: state
+
       defoverridable mount: 3
       defoverridable after_mount: 2
       defoverridable handle_params: 3
       defoverridable after_handle_params: 2
+      defoverridable adjust_form: 2
     end
   end
 
