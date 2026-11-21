@@ -19,6 +19,7 @@ defmodule AshQuick.LiveView.FormUtils do
   alias AshQuick.LiveView.FormAttachments
   alias AshQuick.LiveView.FormParams
   alias AshQuick.LiveView.FormSaveErrors
+  alias AshQuick.LiveView.FormStateFlow
   alias AshQuick.LiveView.FormUploads
   alias AshQuick.LiveView.DownloadUtils
   alias AshQuick.LiveView.PrintUtils
@@ -56,6 +57,7 @@ defmodule AshQuick.LiveView.FormUtils do
     |> set_title(action_name, options)
     |> set_record!(action_type, action_name, params, options)
     |> set_form(action_type, options)
+    |> FormStateFlow.store(:build)
     |> then(&FormUploads.allow_image_upload(&1, &1.assigns.form))
     |> then(&assign(&1, ash_quick_refusal: FormView.refusal(&1.assigns)))
   end
@@ -331,6 +333,7 @@ defmodule AshQuick.LiveView.FormUtils do
     {:halt,
      socket
      |> assign(form: form)
+     |> FormStateFlow.store(:validate)
      |> FormUploads.allow_image_upload(form)
      |> FormAttachments.clear_form_flash()}
   end
@@ -343,6 +346,7 @@ defmodule AshQuick.LiveView.FormUtils do
      socket
      |> FormUploads.follow_removed_sub_form(held, form, path)
      |> assign(form: form)
+     |> FormStateFlow.store(:validate)
      |> FormAttachments.clear_form_flash()}
   end
 
@@ -406,9 +410,19 @@ defmodule AshQuick.LiveView.FormUtils do
       |> FormAttachments.carry_uploaded_attachments(socket.assigns.form)
       |> FormParams.maybe_put_has_many(socket.assigns.form)
 
-    case AttachmentKeys.validate_issued(socket.assigns.form, params, socket) do
-      {_params, form} ->
-        {:halt, socket |> assign(form: form) |> FormAttachments.clear_form_flash()}
+    held = socket.assigns.form
+
+    # What the state hides is dropped from the params just posted, never from
+    # the page drawn last: a hand-made post can name a hidden field.
+    case AttachmentKeys.validate_issued(held, params, socket) do
+      {params, form} ->
+        {_params, form, state} = FormStateFlow.settle(held, params, form, :validate, socket)
+
+        {:halt,
+         socket
+         |> assign(form: form)
+         |> assign(ash_quick_form_state: state)
+         |> FormAttachments.clear_form_flash()}
 
       :refused ->
         {:halt, socket}
@@ -430,6 +444,11 @@ defmodule AshQuick.LiveView.FormUtils do
   defp handle_open_form_events(_, _, socket, _options), do: {:cont, socket}
 
   defp submit_form(form, params, socket) do
+    # What this post hides takes no upload: the state it builds is what the
+    # save consults before it stores any file.
+    socket =
+      assign(socket, ash_quick_form_state: FormStateFlow.build(form, :submit, socket))
+
     # A socket upload the store refuses at save is left out and the save goes
     # on, as it would had the file never been picked; the flash says so, so an
     # update keeping its old file is not read as the new one saved.
@@ -450,6 +469,32 @@ defmodule AshQuick.LiveView.FormUtils do
       end)
       |> FormAttachments.flash_failed_uploads(refused)
 
+    # The post the save runs is the one just made, less what the state built
+    # from it hides, and a field the state requires is held to it here: Ash
+    # knows nothing of either.
+    {upload_params, checked, state} =
+      FormStateFlow.settle(
+        form,
+        upload_params,
+        AshPhoenix.Form.validate(form, upload_params, errors: false),
+        :submit,
+        socket,
+        errors: false
+      )
+
+    case FormStateFlow.enforce(state, checked) do
+      :ok ->
+        run_submit(checked, params, upload_params, socket)
+
+      {:error, refused} ->
+        {:halt,
+         socket
+         |> assign(form: put_stage(refused, AshQuick.form_validate_stage()))
+         |> FormStateFlow.store(:validate)}
+    end
+  end
+
+  defp run_submit(form, params, upload_params, socket) do
     result =
       form
       |> put_stage(AshQuick.form_submit_stage())
@@ -493,7 +538,10 @@ defmodule AshQuick.LiveView.FormUtils do
             socket =
               FormSaveErrors.flash_unplaced_errors(socket, form, Map.get(socket.assigns, :scope))
 
-            {:halt, assign(socket, form: put_stage(form, AshQuick.form_validate_stage()))}
+            {:halt,
+             socket
+             |> assign(form: put_stage(form, AshQuick.form_validate_stage()))
+             |> FormStateFlow.store(:validate)}
         end
     end
   end

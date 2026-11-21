@@ -7,6 +7,7 @@ defmodule AshQuick.LiveView.FormUploads do
   import Phoenix.Component, only: [assign: 3]
   alias AshQuick.LiveView.AttachmentUpload
   alias AshQuick.LiveView.FormAttachments
+  alias AshQuick.LiveView.FormStateFlow
   alias AshQuick.LiveView.Utils
   alias AshQuick.Storage
 
@@ -62,7 +63,7 @@ defmodule AshQuick.LiveView.FormUploads do
             auto_upload: true,
             validator: &AttachmentUpload.validate_attachment_entry(&1, constraints),
             progress: upload_progress_handler(upload_name, field, constraints, root?)
-          ] ++ upload_transport(constraints)
+          ] ++ upload_transport(form, field, constraints)
         )
 
       _ ->
@@ -234,12 +235,17 @@ defmodule AshQuick.LiveView.FormUploads do
   # A storage module that names an upload target has the browser write to it;
   # one that does not takes the bytes over the socket (`AshQuick.Storage`,
   # "Browser uploads").
-  defp upload_transport(constraints) do
+  #
+  # A field the root form's state hides or disables gets no upload target: its
+  # params would be dropped, and the object would sit in the store unused.
+  defp upload_transport(form, field, constraints) do
     case Storage.upload_mode() do
       :external ->
         [
           external: fn entry, socket ->
-            AttachmentUpload.presign_attachment_upload(entry, socket, constraints)
+            if FormStateFlow.takes_upload?(socket, form, field),
+              do: AttachmentUpload.presign_attachment_upload(entry, socket, constraints),
+              else: {:error, %{error: "not_accepted"}, socket}
           end
         ]
 
@@ -260,10 +266,24 @@ defmodule AshQuick.LiveView.FormUploads do
   # as soon as they land, so a field the action folds into an attribute (an
   # `add_*` argument over an embedded array, say) shows its images straight
   # away rather than only after a save.
+  #
+  # A field the form's state hides or disables takes nothing: what was pushed
+  # for it is cancelled rather than stored.
   defp upload_progress_handler(upload_name, field, constraints, true) do
     fn _name, _entry, socket ->
-      {:noreply,
-       FormAttachments.consume_completed_upload(socket, upload_name, field, constraints)}
+      if FormStateFlow.takes_upload?(socket, socket.assigns.form, field) do
+        {:noreply,
+         FormAttachments.consume_completed_upload(socket, upload_name, field, constraints)}
+      else
+        {:noreply, cancel_entries(socket, upload_name)}
+      end
+    end
+  end
+
+  defp cancel_entries(socket, name) do
+    case socket.assigns[:uploads][name] do
+      %{entries: entries} -> Enum.reduce(entries, socket, &cancel_upload(&2, name, &1.ref))
+      nil -> socket
     end
   end
 end

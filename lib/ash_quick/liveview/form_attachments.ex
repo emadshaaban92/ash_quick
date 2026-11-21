@@ -13,6 +13,7 @@ defmodule AshQuick.LiveView.FormAttachments do
   alias AshQuick.LiveView.AttachmentKeys
   alias AshQuick.LiveView.AttachmentUpload
   alias AshQuick.LiveView.FormParams
+  alias AshQuick.LiveView.FormStateFlow
   alias AshQuick.LiveView.FormUploads
   alias AshQuick.LiveView.Utils
   alias AshQuick.Storage
@@ -56,15 +57,27 @@ defmodule AshQuick.LiveView.FormAttachments do
     # not survive into the re-seed as well — they would be applied a second time.
     carried = raw_params |> Map.delete(key) |> FormParams.carry_embedded_params(form)
 
-    form =
-      form
-      |> AshPhoenix.Form.validate(Map.put(carried, key, value))
-      |> FormParams.prefill_changed_embedded_forms(carried)
+    params = Map.put(carried, key, value)
+
+    # A field the form's state hides takes nothing from here either.
+    {carried, validated, _state} =
+      FormStateFlow.settle(
+        form,
+        params,
+        AshPhoenix.Form.validate(form, params),
+        :validate,
+        socket
+      )
+
+    form = FormParams.prefill_changed_embedded_forms(validated, Map.delete(carried, key))
 
     # Folding the values in can create sub-forms — an embedded array grows a
     # form per image — and each one's own attachment field needs its upload
     # registered before a save goes looking for it.
-    socket |> assign(form: form) |> FormUploads.allow_image_upload(form)
+    socket
+    |> assign(form: form)
+    |> FormStateFlow.store(:validate)
+    |> FormUploads.allow_image_upload(form)
   end
 
   # This batch consumed its entries, so from here the field's params are the
@@ -276,6 +289,31 @@ defmodule AshQuick.LiveView.FormAttachments do
               AshQuick.AshTypes.Attachment,
               {:array, AshQuick.AshTypes.Attachment}
             ] do
+    if FormStateFlow.takes_upload?(socket, form, field),
+      do: upload_image(field, params, socket, form),
+      else: {params, @no_uploads}
+  end
+
+  defp maybe_upload_image(%{name: field_name} = field, params, socket, form)
+       when is_map_key(form.forms, field_name) do
+    if FormStateFlow.takes_upload?(socket, form, field),
+      do: upload_nested_images(field_name, params, socket, form),
+      else: {params, @no_uploads}
+  end
+
+  defp maybe_upload_image(_field, params, _socket, _form), do: {params, @no_uploads}
+
+  defp upload_nested_images(field_name, params, socket, form) do
+    nested_form = form.forms[field_name]
+
+    {nested_params, tally} =
+      Map.get(params, field_name |> to_string())
+      |> upload_images(socket, nested_form)
+
+    {Map.put(params, field_name |> to_string(), nested_params), tally}
+  end
+
+  defp upload_image(field, params, socket, form) do
     constraints = AttachmentUpload.attachment_constraints(field)
     upload_name = FormUploads.upload_name(socket.assigns, form, field)
     params = drop_blank_attachment_param(params, field)
@@ -301,19 +339,6 @@ defmodule AshQuick.LiveView.FormAttachments do
 
     {params, {refused, Enum.map(uploaded_values, &{&1["key"], upload_name})}}
   end
-
-  defp maybe_upload_image(%{name: field_name}, params, socket, form)
-       when is_map_key(form.forms, field_name) do
-    nested_form = form.forms[field_name]
-
-    {nested_params, tally} =
-      Map.get(params, field_name |> to_string())
-      |> upload_images(socket, nested_form)
-
-    {Map.put(params, field_name |> to_string(), nested_params), tally}
-  end
-
-  defp maybe_upload_image(_field, params, _socket, _form), do: {params, @no_uploads}
 
   # What a save's unconsumed entries land after. For an array attribute that is
   # the list the params hold — carried from the server by
