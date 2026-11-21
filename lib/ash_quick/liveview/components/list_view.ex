@@ -86,6 +86,12 @@ defmodule AshQuick.LiveView.Components.ListView do
       "each column whose cells offer to filter the list by their value, by `QuickField.data_field/1`, as `CellFilter.columns/4` gives it"
   )
 
+  attr(:number_columns, :list,
+    default: [],
+    doc:
+      "the columns holding numbers, by `QuickField.data_field/1`, drawn against the column's right edge, as `NumberColumns.columns/2` gives them"
+  )
+
   attr(:row_actions, :map,
     default: nil,
     doc: "`%{id: record_id, actions: [action]}` for the row whose menu was last opened"
@@ -189,6 +195,7 @@ defmodule AshQuick.LiveView.Components.ListView do
                     <th
                       :for={field <- @fields}
                       aria-sort={aria_sort(@params, QuickField.data_field(field))}
+                      class={QuickField.data_field(field) in @number_columns && "text-right"}
                     >
                       <.sort_header
                         :if={QuickField.data_field(field) in @sortable}
@@ -238,9 +245,11 @@ defmodule AshQuick.LiveView.Components.ListView do
                       </td>
                       <td
                         :for={{field, column} <- Enum.with_index(@fields)}
-                        class={
-                          @cell_filters[QuickField.data_field(field)] && "group/cell relative pe-7"
-                        }
+                        class={[
+                          @cell_filters[QuickField.data_field(field)] && "group/cell relative pe-7",
+                          QuickField.data_field(field) in @number_columns &&
+                            "text-right tabular-nums"
+                        ]}
                         tabindex={@cell_filters[QuickField.data_field(field)] && "-1"}
                       >
                         <.render_field

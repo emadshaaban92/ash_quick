@@ -10,6 +10,7 @@ defmodule AshQuick.LiveView.QuickView.Page do
   alias AshQuick.LiveView.QuickView.Options
   alias AshQuick.LiveView.ListUtils
   alias AshQuick.LiveView.CellFilterMenu
+  alias AshQuick.LiveView.NumberColumns
   alias AshQuick.LiveView.DetailsUtils
   alias AshQuick.LiveView.FormUtils
 
@@ -93,6 +94,8 @@ defmodule AshQuick.LiveView.QuickView.Page do
     |> assign(:fields, fields)
     # The columns whose cells offer to filter the list by their value.
     |> assign(:cell_filters, CellFilterMenu.cell_filters(socket, fields, action, options))
+    # The columns holding numbers, drawn against the column's right edge.
+    |> assign(:number_columns, NumberColumns.columns(fields, options.resource))
     |> assign(:sortable, options.list_sortable)
     |> assign(:filterable, options.list_filterable)
     |> assign(:new_action_label, options.new_action_label)
