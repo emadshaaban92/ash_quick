@@ -58,6 +58,7 @@ test_pages = [
   "/test/brand_record_filter",
   "/test/bulk_guarded",
   "/test/bulk_named",
+  "/test/checkbox_widths",
   "/test/counted_bins",
   "/test/counted_box_codes",
   "/test/counted_boxes",
