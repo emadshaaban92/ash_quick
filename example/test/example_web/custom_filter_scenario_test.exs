@@ -815,7 +815,7 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
 
       assert row.code in texts(view, "td")
-      assert chips(view) == ["Code = #{code}", "Salary is any of 1000, 2000"]
+      assert chips(view) == ["Code = #{code}", "Salary is any of 1,000; 2,000"]
     end
 
     test "says when any one row is enough", %{conn: conn} do
@@ -1306,7 +1306,7 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       cells = texts(view, "td")
       assert kept.code in cells
       refute dropped.code in cells
-      assert chips(view) == ["Code starts with #{code}", "Salary is any of 2000, 3000"]
+      assert chips(view) == ["Code starts with #{code}", "Salary is any of 2,000; 3,000"]
     end
 
     # Picking Any Of after = keeps the value picked as the list's one value,

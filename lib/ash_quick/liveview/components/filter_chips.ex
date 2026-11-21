@@ -278,7 +278,9 @@ defmodule AshQuick.LiveView.Components.FilterChips do
   end
 
   # Any Of and Has Any Of read their values one after another, each as its
-  # field renders one.
+  # field renders one. Numbers are kept apart by a semicolon: a comma is
+  # the digit grouping or the decimal mark of some locale, so `1,000, 2,000`
+  # could be read as more or fewer numbers than there are.
   defp chip_value(
          %{field: %{type: type} = field, leaf: %{operator: operator, value: value}} = assigns
        )
@@ -291,10 +293,14 @@ defmodule AshQuick.LiveView.Components.FilterChips do
          ) do
       {:ok, cast} when cast not in [nil, []] ->
         items = if CustomFilter.value_shape(operator) == :list, do: cast, else: [cast]
-        assigns = assign(assigns, :items, items)
+
+        assigns =
+          assigns
+          |> assign(:items, items)
+          |> assign(:separator, if(Enum.any?(items, &number?/1), do: "; ", else: ", "))
 
         ~H"""
-        <span class="font-semibold"><span :for={{item, i} <- Enum.with_index(@items)}><span :if={i != 0}>, </span><FieldValue.field_value
+        <span class="font-semibold"><span :for={{item, i} <- Enum.with_index(@items)}><span :if={i != 0}>{@separator}</span><FieldValue.field_value
           value={item}
           path={[]}
           ash_field={@field}
@@ -313,4 +319,6 @@ defmodule AshQuick.LiveView.Components.FilterChips do
     <span class="font-semibold">{CustomFilter.as_written(@leaf.value)}</span>
     """
   end
+
+  defp number?(value), do: is_number(value) or is_struct(value, Decimal)
 end
