@@ -15,6 +15,11 @@ defmodule AshQuick.Gettext do
   from the template `mix ash_quick.gen.gettext` writes. With no backend
   configured, everything is drawn in English.
 
+  A message the host's backend has no translation for either is emitted as
+  `[:ash_quick, :translation, :missing]` (see `AshQuick.Telemetry`), after
+  the backend's own `handle_missing_translation/5` has answered, so a host
+  can log or test for the gaps in its `ash_quick.po` without overriding it.
+
   ## Translating
 
   From this repository:
@@ -38,12 +43,20 @@ defmodule AshQuick.Gettext do
     default_domain: "ash_quick"
 
   # The host's own lookup, in its own locale, so its answer comes back as it
-  # gave it: `:default` when it has no translation either.
+  # gave it: `:default` when it has no translation either, which is also
+  # emitted as `[:ash_quick, :translation, :missing]`.
   @impl Gettext.Backend
   def handle_missing_translation(locale, domain, msgctxt, msgid, bindings) do
     case AshQuick.Config.gettext() do
-      nil -> super(locale, domain, msgctxt, msgid, bindings)
-      host -> host.lgettext(Gettext.get_locale(host), domain, msgctxt, msgid, bindings)
+      nil ->
+        super(locale, domain, msgctxt, msgid, bindings)
+
+      host ->
+        host_locale = Gettext.get_locale(host)
+
+        host_locale
+        |> host.lgettext(domain, msgctxt, msgid, bindings)
+        |> missed(host, host_locale, domain, msgctxt, msgid, nil)
     end
   end
 
@@ -54,8 +67,31 @@ defmodule AshQuick.Gettext do
         super(locale, domain, msgctxt, msgid, plural, n, bindings)
 
       host ->
+        host_locale = Gettext.get_locale(host)
         bindings = Map.put(bindings, :count, n)
-        host.lngettext(Gettext.get_locale(host), domain, msgctxt, msgid, plural, n, bindings)
+
+        host_locale
+        |> host.lngettext(domain, msgctxt, msgid, plural, n, bindings)
+        |> missed(host, host_locale, domain, msgctxt, msgid, plural)
     end
+  end
+
+  @doc false
+  # Emits `[:ash_quick, :translation, :missing]` when the host's answer is
+  # `:default`, a lookup it had no translation for, and hands the answer back
+  # as it came. `AshQuick.Labels` reports its own lookups through it.
+  def missed(answer, backend, locale, domain, msgctxt, msgid, msgid_plural) do
+    if elem(answer, 0) == :default do
+      AshQuick.Telemetry.event([:translation, :missing], %{
+        backend: backend,
+        locale: locale,
+        domain: domain,
+        msgctxt: msgctxt,
+        msgid: msgid,
+        msgid_plural: msgid_plural
+      })
+    end
+
+    answer
   end
 end

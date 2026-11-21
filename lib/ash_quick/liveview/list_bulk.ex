@@ -125,7 +125,9 @@ defmodule AshQuick.LiveView.ListBulk do
     selected = ListUtils.selected_ids(socket)
     records = ListUtils.selected_records(socket)
 
-    result = records |> bulk_run(action, input, socket) |> in_selection_order(records)
+    result =
+      records |> timed_bulk_run(action, input, socket, options) |> in_selection_order(records)
+
     socket = socket |> PrintUtils.print(result) |> DownloadUtils.deliver(result)
 
     case result do
@@ -173,6 +175,30 @@ defmodule AshQuick.LiveView.ListBulk do
   end
 
   defp bulk_error_message(_no_errors, _resource), do: ActionErrors.generic_message()
+
+  # Timed as `[:ash_quick, :bulk, :run]` (see `AshQuick.Telemetry`).
+  defp timed_bulk_run(records, action, input, socket, options) do
+    AshQuick.Telemetry.span(
+      [:bulk, :run],
+      %{
+        quick_view: socket.view,
+        resource: options.resource,
+        action: action.name,
+        type: action.type,
+        scope: socket.assigns.scope,
+        selected: length(records)
+      },
+      fn ->
+        result = bulk_run(records, action, input, socket)
+        {result, %{written: written(result)}, %{status: result.status}}
+      end
+    )
+  end
+
+  # `transaction: :all` rolls a run that did not succeed back whole, so it
+  # wrote nothing, whatever records it hands back.
+  defp written(%Ash.BulkResult{status: :success, records: records}), do: length(records || [])
+  defp written(_rolled_back), do: 0
 
   # Stamped as every other run is, whatever surface offered it: a policy scoped
   # to `:ash_quick_list_bulk` decides what the menu shows, not what runs.
