@@ -1084,3 +1084,64 @@ msgstr "هذا البحث أكبر من أن يُطبَّق. احذف بعض ا�
 #, elixir-autogen, elixir-format
 msgid "%{field} currency"
 msgstr "عملة %{field}"
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "%{count} result"
+msgid_plural "%{count} results"
+msgstr[0] "لا نتائج"
+msgstr[1] "نتيجة واحدة"
+msgstr[2] "نتيجتان"
+msgstr[3] "%{count} نتائج"
+msgstr[4] "%{count} نتيجة"
+msgstr[5] "%{count} نتيجة"
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "Add \"%{text}\""
+msgstr "إضافة \"%{text}\""
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "Clear"
+msgstr "مسح"
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "Keep typing to narrow the list"
+msgstr "تابع الكتابة لتضييق القائمة"
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "No matches"
+msgstr "لا توجد نتائج مطابقة"
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "No matches. You can add \"%{text}\"."
+msgstr "لا توجد نتائج مطابقة. يمكنك إضافة \"%{text}\"."
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "Remove %{label}"
+msgstr "إزالة %{label}"
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "Remove %{label} (%{hint})"
+msgstr "إزالة %{label} (%{hint})"
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "Searching…"
+msgstr "جارٍ البحث…"
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "Unavailable"
+msgstr "غير متاح"
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "new"
+msgstr "جديد"

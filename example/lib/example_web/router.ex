@@ -98,6 +98,16 @@ defmodule ExampleWeb.Router do
       forward "/proxied_files", AshQuick.Storage.S3.Proxy.Plug
     end
 
+    # The picker on its own, under a policy that allows no inline script or
+    # style. Its page reads no record, so it needs no sign-in.
+    scope "/test", alias: false do
+      pipe_through [:browser, ExampleWeb.StrictCsp]
+
+      live_session :test_picker do
+        live "/picker", Example.Test.PickerLive
+      end
+    end
+
     scope "/test", alias: false do
       pipe_through [:browser, :user_required]
 

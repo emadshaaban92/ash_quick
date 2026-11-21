@@ -827,6 +827,52 @@ msgstr ""
 msgid "%{field} currency"
 msgstr ""
 
+#, elixir-format
+msgid "%{count} result"
+msgid_plural "%{count} results"
+msgstr[0] ""
+msgstr[1] ""
+
+#, elixir-format
+msgid "Add \"%{text}\""
+msgstr ""
+
+#, elixir-format
+msgid "Clear"
+msgstr ""
+
+#, elixir-format
+msgid "Keep typing to narrow the list"
+msgstr ""
+
+#, elixir-format
+msgid "No matches"
+msgstr ""
+
+#, elixir-format
+msgid "No matches. You can add \"%{text}\"."
+msgstr ""
+
+#, elixir-format
+msgid "Remove %{label}"
+msgstr ""
+
+#, elixir-format
+msgid "Remove %{label} (%{hint})"
+msgstr ""
+
+#, elixir-format
+msgid "Searching…"
+msgstr ""
+
+#, elixir-format
+msgid "Unavailable"
+msgstr ""
+
+#, elixir-format
+msgid "new"
+msgstr ""
+
 msgid "Accepts"
 msgstr ""
 
