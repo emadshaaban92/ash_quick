@@ -859,7 +859,13 @@ msgstr ""
 msgid "Admin"
 msgstr ""
 
+msgid "Alt"
+msgstr ""
+
 msgid "Arguments"
+msgstr ""
+
+msgid "Attachment"
 msgstr ""
 
 msgid "Attributes"
@@ -872,6 +878,9 @@ msgid "Audit Log"
 msgstr ""
 
 msgid "Audit Logs"
+msgstr ""
+
+msgid "Before tax."
 msgstr ""
 
 msgid "Brand"
@@ -941,6 +950,9 @@ msgid "Email"
 msgstr ""
 
 msgid "English"
+msgstr ""
+
+msgid "Featured"
 msgstr ""
 
 msgid "File Object"
@@ -1118,6 +1130,12 @@ msgid "Video"
 msgstr ""
 
 msgid "Viewer"
+msgstr ""
+
+msgid "Who makes it, as printed on the box."
+msgstr ""
+
+msgid "Your own stock code. Unique within a store."
 msgstr ""
 
 msgid "العربية"

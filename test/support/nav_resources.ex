@@ -10,6 +10,15 @@ defmodule AshQuick.Test.Nav.Domain do
   end
 end
 
+defmodule AshQuick.Test.Nav.Logo do
+  @moduledoc "An embed a brand holds a list of, drawn as a sub-form."
+  use Ash.Resource, data_layer: :embedded
+
+  attributes do
+    attribute :alt_text, :string, public?: true, description: "Read aloud in its place"
+  end
+end
+
 defmodule AshQuick.Test.Nav.Brand do
   @moduledoc """
   The resource behind the fixture QuickView.
@@ -33,12 +42,19 @@ defmodule AshQuick.Test.Nav.Brand do
 
   attributes do
     uuid_primary_key :id
-    attribute :name, :string, public?: true
+
+    # Its description is the help under its input, for
+    # `mix ash_quick.gen.gettext` to list.
+    attribute :name, :string, public?: true, description: "The name on the label"
 
     # Labelled by the resource, for `mix ash_quick.gen.gettext`: the template
     # lists the declared label, not the humanized name.
     attribute :vat_no, :string, public?: true
     attribute :tier, :atom, public?: true, constraints: [one_of: [:standard, :premium]]
+
+    # An embed's sub-form draws its own fields, help included, for
+    # `mix ash_quick.gen.gettext` to list.
+    attribute :logos, {:array, AshQuick.Test.Nav.Logo}, public?: true
   end
 
   # Two hops to a value set, for `mix ash_quick.gen.gettext`: a label can be
@@ -48,7 +64,7 @@ defmodule AshQuick.Test.Nav.Brand do
   end
 
   actions do
-    default_accept [:name]
+    default_accept [:name, :vat_no]
     defaults [:read, :create, :update, :destroy]
 
     # The searchable read every QuickView is required to reach through.
@@ -72,6 +88,7 @@ defmodule AshQuick.Test.Nav.Brand do
     labels do
       label :vat_no, "VAT Number"
       label :tier, :premium, "Premium Partner"
+      help :vat_no, "As printed on invoices"
     end
 
     liveness do

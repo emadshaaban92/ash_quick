@@ -12,6 +12,8 @@ spark_locals_without_parens = [
   full_page: 1,
   group: 2,
   group: 3,
+  help: 2,
+  help: 3,
   hint: 1,
   icon: 1,
   inserted_at: 1,

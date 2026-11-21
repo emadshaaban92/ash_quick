@@ -29,3 +29,10 @@ msgstr "اسم القرض"
 msgctxt "loan"
 msgid "Borrower National ID"
 msgstr ""
+
+msgid "What the loan is called"
+msgstr "اسم القرض كما يظهر"
+
+msgctxt "loan"
+msgid "As on the borrower's ID card"
+msgstr "كما في بطاقة المقترض"

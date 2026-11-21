@@ -159,6 +159,65 @@ defmodule AshQuick.Labels do
     end
   end
 
+  @doc """
+  The help text drawn under the form input of `field`, an attribute, action
+  argument or relationship of `resource`, in the reader's language: the help
+  the resource declares for it (`help :price, "Before tax"`), else the
+  field's Ash `description`, translated under the resource's context. `nil`
+  when there is none, or the resource declares `help name, false`.
+
+  A `belongs_to` relationship reads its own declaration and description
+  first, and its source attribute's after.
+
+      Labels.help(Ash.Resource.Info.attribute(MyApp.Product, :price), MyApp.Product)
+  """
+  def help(field, resource) do
+    case english_help(field, resource) do
+      nil -> nil
+      text -> translate(text, context(resource))
+    end
+  end
+
+  @doc false
+  # The English help text of `field` on `resource`, before translating: the
+  # msgid, or nil.
+  def english_help(field, resource) do
+    declared = declared_help(resource)
+    fields = help_fields(field, resource)
+
+    case Enum.find(fields, &Map.has_key?(declared, &1.name)) do
+      nil -> Enum.find_value(fields, &description/1)
+      %{name: name} -> declared |> Map.fetch!(name) |> text()
+    end
+  end
+
+  # A relationship is drawn in place of the attribute it sets, so either
+  # one's help is the input's.
+  defp help_fields(%Ash.Resource.Relationships.BelongsTo{} = relationship, resource) do
+    attribute =
+      Ash.Resource.Info.resource?(resource) &&
+        Ash.Resource.Info.attribute(resource, relationship.source_attribute)
+
+    Enum.reject([relationship, attribute], &(&1 in [nil, false]))
+  end
+
+  defp help_fields(field, _resource), do: [field]
+
+  defp description(field), do: field |> Map.get(:description) |> text()
+
+  # Trimmed, and nothing when blank (or `false`).
+  defp text(text) when is_binary(text), do: if(String.trim(text) != "", do: String.trim(text))
+  defp text(_none), do: nil
+
+  defp declared_help(nil), do: %{}
+  defp declared_help(%resource{}), do: declared_help(resource)
+
+  defp declared_help(resource) when is_atom(resource) do
+    if Ash.Resource.Info.resource?(resource),
+      do: Spark.Dsl.Extension.get_persisted(resource, :ash_quick_help, %{}),
+      else: %{}
+  end
+
   @doc false
   # The English label of `name` on `resource`, before translating: the msgid.
   def english(name, resource \\ nil) do

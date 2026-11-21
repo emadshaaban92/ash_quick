@@ -201,6 +201,35 @@ defmodule AshQuick do
   and the msgid it is translated under: `mix ash_quick.gen.gettext` lists it
   in place of the humanized name.
 
+  ### Help text
+
+  A form draws a field's Ash `description` under its input, as help text: an
+  attribute's, an action argument's, or a `belongs_to` relationship's (its
+  source attribute's when the relationship has none). Where the description
+  is not what a reader filling the form should see, the resource says so in
+  the same section:
+
+      ash_quick do
+        labels do
+          help :price, "Before tax"
+          help :internal_code, false
+        end
+      end
+
+  `help name, text` draws `text` in place of the description, and
+  `help name, false` draws none. `name` is an attribute or relationship, or an
+  argument of one of the resource's actions; one name takes one help text on
+  every form that draws it. A name the resource does not have, or one given
+  two, does not compile. A `belongs_to` takes its help under its own name or
+  its source attribute's.
+
+  Help text is English, and translated the way labels are, under the same
+  context: `mix ash_quick.gen.gettext` lists each help text a form can draw,
+  declared or read from a description. It is plain text, drawn under the
+  input with an id the input's `aria-describedby` names beside its errors,
+  so a screen reader reads it with the input. A placeholder is never help: it
+  is gone once the reader starts typing.
+
   ## Forms
 
   A create, an update or a destroy opens in a modal over the page it was
@@ -921,11 +950,37 @@ defmodule AshQuick do
     ]
   }
 
+  @help %Spark.Dsl.Entity{
+    name: :help,
+    describe:
+      "The help text drawn under a field's form input in place of its `description`, or `false` for none.",
+    target: AshQuick.Labels.Help,
+    args: [:name, :help],
+    examples: [
+      ~s(help :price, "Before tax"),
+      ~s(help :internal_code, false)
+    ],
+    schema: [
+      name: [
+        type: :atom,
+        required: true,
+        doc:
+          "An attribute or relationship, or an argument of one of the resource's actions: something a form draws an input for."
+      ],
+      help: [
+        type: {:or, [:string, {:literal, false}]},
+        required: true,
+        doc:
+          "The help text, in English: the msgid it is translated under. `false` draws none, whatever the field's `description` says."
+      ]
+    ]
+  }
+
   @labels %Spark.Dsl.Section{
     name: :labels,
     describe:
-      "Declare the labels this resource's fields, actions and values are drawn with, on every page.",
-    entities: [@label]
+      "Declare the labels this resource's fields, actions and values are drawn with, on every page, and the help text under its form inputs.",
+    entities: [@label, @help]
   }
 
   @activation %Spark.Dsl.Section{
