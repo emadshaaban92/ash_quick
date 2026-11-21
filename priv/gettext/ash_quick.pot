@@ -1032,3 +1032,60 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "%{field} currency"
 msgstr ""
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "%{count} result"
+msgid_plural "%{count} results"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "Add \"%{text}\""
+msgstr ""
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "Clear"
+msgstr ""
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "Keep typing to narrow the list"
+msgstr ""
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "No matches"
+msgstr ""
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "No matches. You can add \"%{text}\"."
+msgstr ""
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "Remove %{label}"
+msgstr ""
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "Remove %{label} (%{hint})"
+msgstr ""
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "Searching…"
+msgstr ""
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "Unavailable"
+msgstr ""
+
+#: lib/ash_quick/liveview/picker.ex
+#, elixir-autogen, elixir-format
+msgid "new"
+msgstr ""
