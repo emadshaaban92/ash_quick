@@ -10,8 +10,6 @@ defmodule AshQuick.PrintVerifierTest do
   """
   use ExUnit.Case, async: false
 
-  require Spark.Test
-
   defmodule Domain do
     @moduledoc false
     use Ash.Domain, validate_config_inclusion?: false
@@ -66,11 +64,9 @@ defmodule AshQuick.PrintVerifierTest do
     end
     """
 
-    module = Module.concat([name])
+    error = assert_raise Spark.Error.DslError, fn -> Code.compile_string(source) end
 
-    assert [{^module, [%Spark.Error.DslError{} = error]}] =
-             Spark.Test.dsl_errors(do: Code.compile_string(source))
-
+    assert Exception.message(error) =~ "[#{name}]"
     assert Exception.message(error) =~ ~s({:chromic_pdf, "~> 1.17"})
   end
 end

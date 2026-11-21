@@ -80,8 +80,8 @@ defmodule AshQuick.BookkeepingVerifierTest do
   # The errors the compiler would have raised for that probe.
   defp verifier_errors(body), do: VerifierErrors.errors(probe(body))
 
-  # A writable actor column fails the build itself, from the transformer:
-  # Spark reports a verifier's error only as a warning.
+  # A writable actor column is refused by the transformer, which raises while
+  # the probe compiles.
   defp refusal(body) do
     error = assert_raise Spark.Error.DslError, fn -> probe(body) end
     Exception.message(error)

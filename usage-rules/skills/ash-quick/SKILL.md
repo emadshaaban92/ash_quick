@@ -794,8 +794,9 @@ bookkeeping and auditing.
 ## Resource conventions
 
 Most of these are compile-time refusals, not degradations — the extension's
-verifiers run while the resource compiles, and the error names the resource
-and what to write.
+verifiers run while the resource compiles and fail `mix compile` whatever
+flags the host compiles with, and the error names the resource and what to
+write.
 
 - **`extensions: [AshQuick]`** — Wires the PubSub publications liveness needs.
   The topic defaults to the resource's `short_name`; override it (and turn

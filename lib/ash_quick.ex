@@ -532,12 +532,10 @@ defmodule AshQuick do
   generated — without it a hand-written timestamp would quietly lack it and the
   header would work everywhere but there.
 
-  The verifier's errors reach the host as compile warnings. An actor
-  `belongs_to` whose column is writable is refused by the transformer instead,
-  so it fails the build whatever the host compiles with. A hand-written one
-  adds `writable?: false` to the `belongs_to` (and drops any
-  `attribute_writable? true`), or to the attribute under a `define_attribute?
-  false` one.
+  An actor `belongs_to` whose column is writable is refused by the
+  transformer. A hand-written one adds `writable?: false` to the `belongs_to`
+  (and drops any `attribute_writable? true`), or to the attribute under a
+  `define_attribute? false` one.
 
   Between them, add-if-absent and the verifier are why this could replace ~35
   resources' hand-written blocks without a single schema change: anything the
@@ -1172,20 +1170,8 @@ defmodule AshQuick do
       AshQuick.Display.Transformer,
       AshQuick.Labels.Transformer,
       AshQuick.ReadOnlyFields.Transformer,
-      AshQuick.PubSub.Transformer
-    ],
-    verifiers: [
-      AshQuick.Identity.Verifier,
-      AshQuick.Versioning.Verifier,
-      AshQuick.Bookkeeping.Verifier,
-      AshQuick.Audit.Verifier,
-      AshQuick.Impersonation.Verifier,
-      AshQuick.Lookup.Verifier,
-      AshQuick.Print.Verifier,
-      AshQuick.Labels.Verifier,
-      AshQuick.Forms.Verifier,
-      AshQuick.ReadOnlyFields.Verifier,
-      AshQuick.PubSub.Verifier
+      AshQuick.PubSub.Transformer,
+      AshQuick.Verify.Transformer
     ]
 
   @doc """

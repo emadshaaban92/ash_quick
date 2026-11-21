@@ -696,6 +696,11 @@ attribute or the relationship keeps exactly what it wrote, and
 with the fields in either direction. Generate the migration and read it before
 running it.
 
+A declaration any AshQuick verifier refuses fails `mix compile` with the
+verifier's message, whatever flags the host compiles with. It is an error, not
+a warning that `--warnings-as-errors` alone would turn into one. Other
+extensions' verifiers, Ash's own among them, report through Spark as warnings.
+
 It also attaches the audit change to every create, update and destroy, and
 wires the resource's PubSub publications. See the `AshQuick` moduledoc for each
 section: `liveness`, `display`, `labels`, `forms`, `lookup`, `activation`,
