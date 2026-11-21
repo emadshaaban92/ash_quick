@@ -57,14 +57,16 @@ defmodule AshQuick.LiveView.CellFilterMenu do
          %CellFilter.Choice{} = picked <- Enum.at(choices, index),
          ^picked <- Enum.at(shown, index) do
       row = CellFilter.row(picked, filter_field)
+      filter = CustomFilter.and_also(socket.assigns.params.custom_filter, row)
 
-      params =
-        URLParams.change_custom_filter(
-          socket.assigns.params,
-          CustomFilter.and_also(socket.assigns.params.custom_filter, row)
-        )
-
-      {:halt, push_patch(socket, to: URLParams.full_path(socket.assigns.path, params))}
+      # A row past the bounds a list reads a filter in would have the list
+      # refuse the whole filter; the page keeps the one it has instead.
+      if CustomFilter.within_bounds?(filter) do
+        params = URLParams.change_custom_filter(socket.assigns.params, filter)
+        {:halt, push_patch(socket, to: URLParams.full_path(socket.assigns.path, params))}
+      else
+        {:halt, put_flash(socket, :error, ListFilterGuard.too_large_message())}
+      end
     else
       _ -> {:halt, put_flash(socket, :error, ListFilterGuard.refused_filter_message())}
     end

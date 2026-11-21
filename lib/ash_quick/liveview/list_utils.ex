@@ -13,6 +13,7 @@ defmodule AshQuick.LiveView.ListUtils do
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.CellFilterMenu
   alias AshQuick.LiveView.Components.FilterForm
+  alias AshQuick.LiveView.CustomFilter
   alias AshQuick.LiveView.FilterRecords
   alias AshQuick.LiveView.ListBulk
   alias AshQuick.LiveView.ListExport
@@ -34,7 +35,8 @@ defmodule AshQuick.LiveView.ListUtils do
     params =
       URLParams.allow_filter_form(params, ListFilterGuard.offered_fields(socket, action, options))
 
-    {socket, params, page} = ListRead.initial_read(socket, params, options)
+    {socket, params, page} =
+      socket |> forget_held_filter(params) |> ListRead.initial_read(params, options)
 
     socket
     |> assign(:params, params)
@@ -81,6 +83,15 @@ defmodule AshQuick.LiveView.ListUtils do
     )
   end
 
+  # A filter the list was too slow to read with is held for the form, which
+  # opens holding it, through the patch that takes it out of the URL, and
+  # for as long as the form stays open with no other filter. See
+  # `ListRead.initial_read/3`.
+  defp forget_held_filter(socket, %URLParams{show_custom_filter: true, custom_filter: nil}),
+    do: assign_new(socket, :held_filter, fn -> nil end)
+
+  defp forget_held_filter(socket, _params), do: assign(socket, :held_filter, nil)
+
   defp set_title(socket, %{resource: resource}) do
     title =
       case Ash.Resource.Info.plural_name(resource) do
@@ -97,7 +108,8 @@ defmodule AshQuick.LiveView.ListUtils do
   # to keep these events off a list drawn under the action modal.
   @events ~w(search page_size new_click export close-export-modal bulk_action bulk_validate
              bulk_save bulk_close row_actions_open row_action_click toggle-filter
-             table-form-change reload_list cell_filter_open cell_filter)
+             table-form-change reload_list cell_filter_open cell_filter remove_filter_chip
+             open_custom_filter)
 
   @doc false
   def events, do: @events
@@ -139,6 +151,32 @@ defmodule AshQuick.LiveView.ListUtils do
   defp handle_list_events("reload_list", _, socket, _) do
     {:halt,
      push_patch(socket, to: URLParams.full_path(socket.assigns.path, socket.assigns.params))}
+  end
+
+  # A chip's ✕: the node it names dropped from the filter the page holds.
+  # A node the filter no longer has, as a stale page can name, drops
+  # nothing.
+  defp handle_list_events("remove_filter_chip", %{"node" => uuid}, socket, _)
+       when is_binary(uuid) do
+    params = socket.assigns.params
+
+    case params.custom_filter do
+      %CustomFilter{} = filter ->
+        params = URLParams.change_custom_filter(params, CustomFilter.without(filter, uuid))
+        {:halt, push_patch(socket, to: URLParams.full_path(socket.assigns.path, params))}
+
+      nil ->
+        {:halt, socket}
+    end
+  end
+
+  defp handle_list_events("remove_filter_chip", _, socket, _), do: {:halt, socket}
+
+  # A group's chip opens the filter form, which shows the group's rows.
+  defp handle_list_events("open_custom_filter", _, socket, _) do
+    %URLParams{} = params = socket.assigns.params
+    params = %URLParams{params | show_custom_filter: true}
+    {:halt, push_patch(socket, to: URLParams.full_path(socket.assigns.path, params))}
   end
 
   defp handle_list_events("new_click", _, socket, _) do
@@ -258,6 +296,15 @@ defmodule AshQuick.LiveView.ListUtils do
 
   defp handle_list_info({:refetch, :data, refetch_info}, socket, _) do
     {:halt, AshPhoenix.LiveView.handle_live(socket, :refetch, :data, refetch_info)}
+  end
+
+  # Apply with no row holding a value: the list without a filter, the form
+  # closed, as Apply closes it.
+  defp handle_list_info({FilterForm, :none}, socket, _) do
+    %URLParams{} = params = URLParams.change_custom_filter(socket.assigns.params, nil)
+    params = %URLParams{params | show_custom_filter: false}
+
+    {:halt, push_patch(socket, to: URLParams.full_path(socket.assigns.path, params))}
   end
 
   defp handle_list_info({FilterForm, custom_filter}, socket, _) do

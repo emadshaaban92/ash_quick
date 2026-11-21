@@ -218,8 +218,38 @@ defmodule AshQuick.LiveView.URLParamsTest do
       ]
 
       for custom_filter <- undecodable do
-        assert URLParams.from_url_params(%{"custom_filter" => custom_filter}).custom_filter == nil
+        params = URLParams.from_url_params(%{"custom_filter" => custom_filter})
+        assert params.custom_filter == nil
+        refute params.custom_filter_refused?
       end
+    end
+
+    # One that decodes, past the bounds a list reads a filter in, is dropped
+    # too, but marked, so the list can say it was refused.
+    test "a filter past its bounds is dropped and marked as refused" do
+      %{rows: rows} = CustomFilter.bounds()
+
+      filter = %CustomFilter{
+        uuid: Ash.UUID.generate(),
+        operator: "and",
+        children:
+          for i <- 0..rows do
+            %CustomFilter{
+              uuid: Ash.UUID.generate(),
+              operator: "equals",
+              field_name: "code",
+              value: "#{i}"
+            }
+          end
+      }
+
+      params = URLParams.from_url_params(%{"custom_filter" => CustomFilter.to_string!(filter)})
+
+      assert params.custom_filter == nil
+      assert params.custom_filter_refused?
+
+      refute URLParams.full_path("/items", %URLParams{params | default_limit: 20}) =~
+               "custom_filter"
     end
 
     # The table above is nine shapes somebody found; this is the claim they are

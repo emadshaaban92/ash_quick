@@ -8,6 +8,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   alias AshQuick.Labels
   alias AshQuick.LiveView.ActionErrors
   alias AshQuick.LiveView.CustomFilter
+  alias AshQuick.LiveView.Digits
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.FilterField
   alias AshQuick.LiveView.FilterRecords
@@ -15,6 +16,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   alias AshQuick.LiveView.MapFilter
 
   @datetime_types [Ash.Type.DateTime, Ash.Type.UtcDatetimeUsec, Ash.Type.UtcDatetime]
+  @number_types [Ash.Type.Integer, Ash.Type.Decimal, Ash.Type.Float]
 
   attr :resource, :atom, required: true
   attr :action, :map, default: nil, doc: "the read the list runs"
@@ -57,6 +59,10 @@ defmodule AshQuick.LiveView.Components.FilterForm do
           timezone={@timezone}
           record_options={@record_options}
         />
+
+        <p :if={@too_large?} id="custom-filter-too-large" role="alert" class="text-error text-sm pt-4">
+          {AshQuick.LiveView.ListFilterGuard.too_large_message()}
+        </p>
 
         <div class="flex w-full gap-2 pt-4 pb-1">
           <button type="submit" class="btn btn-primary flex-1">{gettext("Apply Filters")}</button>
@@ -454,10 +460,17 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # Any other field, and a row naming one this form does not offer: a URL
   # written for an actor who could see it, or by hand. A link can hand it a
   # list, which reads as Any Of's typed values do.
+  #
+  # A number is typed as text, so that a value in Arabic-Indic digits or
+  # with a decimal comma reaches `hold/4` to be read, but asks a phone for
+  # its number keyboard where the value cannot be negative.
   defp filter_value(assigns) do
+    assigns = assign(assigns, :inputmode, number_inputmode(assigns.field))
+
     ~H"""
     <input
       type="text"
+      inputmode={@inputmode}
       name={"value-#{@filter.uuid}"}
       value={typed_list(@filter.value, @field, @timezone)}
       class={["input input-sm min-w-0 flex-1", @error && "input-error"]}
@@ -465,6 +478,25 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       {invalid_attrs(@filter, @error)}
     />
     """
+  end
+
+  # A phone's number keyboard has no minus key on iOS, so it is asked for
+  # only on a field whose constraints hold it at zero or above; any other
+  # number keeps the full keyboard, on which a negative value can be typed.
+  @doc false
+  def number_inputmode(%{type: type} = field) when type in @number_types do
+    if non_negative?(Map.get(field, :constraints) || []),
+      do: if(type == Ash.Type.Integer, do: "numeric", else: "decimal")
+  end
+
+  def number_inputmode(_field), do: nil
+
+  defp non_negative?(constraints) do
+    case constraints[:min] do
+      %Decimal{} = min -> not Decimal.negative?(min)
+      min when is_number(min) -> min >= 0
+      _none -> false
+    end
   end
 
   defp date_input(assigns) do
@@ -590,6 +622,7 @@ defmodule AshQuick.LiveView.Components.FilterForm do
       # The zone the list shows timestamps in, which a timestamp is typed in.
       |> assign(:timezone, AshQuick.Scope.timezone(assigns[:scope] || socket.assigns[:scope]))
       |> assign_new(:value_errors, fn -> %{} end)
+      |> assign_new(:too_large?, fn -> false end)
       |> assign_new(:record_options, fn -> %{} end)
       |> assign_fields()
       |> maybe_assign_new_filter()
@@ -764,17 +797,30 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # Nothing is applied while a row holds a value its field cannot take: the
   # read would refuse the whole tree, and the visitor could not tell which row
   # it was. Each such row says so under itself instead.
+  #
+  # Rows left without a value filter by nothing, and are left out of what
+  # is applied, so the URL carries none of them; with no row left, Apply
+  # applies no filter at all. Nor is a filter past the bounds a list reads
+  # one in applied, which the list would refuse: the form says so above its
+  # buttons instead.
   def handle_event("apply_filter", _, socket) do
     %{custom_filter: custom_filter, fields: fields} = socket.assigns
     errors = value_errors(custom_filter, fields, socket.assigns.timezone)
+    custom_filter = CustomFilter.with_currencies(custom_filter, fields)
+    applied = CustomFilter.applied_only(custom_filter)
 
-    if errors == %{} do
-      custom_filter = CustomFilter.with_currencies(custom_filter, fields)
-      notify_parent(custom_filter)
+    cond do
+      errors != %{} ->
+        {:noreply, assign(socket, value_errors: errors, too_large?: false)}
 
-      {:noreply, assign(socket, custom_filter: custom_filter, value_errors: errors)}
-    else
-      {:noreply, assign(socket, :value_errors, errors)}
+      applied && not CustomFilter.within_bounds?(applied) ->
+        {:noreply, assign(socket, value_errors: errors, too_large?: true)}
+
+      true ->
+        notify_parent(applied || :none)
+
+        {:noreply,
+         assign(socket, custom_filter: custom_filter, value_errors: errors, too_large?: false)}
     end
   end
 
@@ -960,10 +1006,10 @@ defmodule AshQuick.LiveView.Components.FilterForm do
 
   # Any Of's and Has Any Of's LiveSelect sends a list, `[]` once its last
   # value is removed; their text input, on a field without a fixed set, one
-  # string.
+  # string, split at each comma, the Arabic `،` among them.
   defp hold(:list, field, value, timezone) when is_binary(value) do
     value
-    |> String.split(",")
+    |> String.split([",", "،"])
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
     |> Enum.map(&hold(:scalar, field, &1, timezone))
@@ -974,7 +1020,35 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   defp hold(:scalar, %{type: type}, value, timezone) when type in @datetime_types,
     do: LocalDatetime.to_utc(value, timezone)
 
+  defp hold(:scalar, %{type: type}, value, _timezone)
+       when type in @number_types and is_binary(value),
+       do: typed_number(value, type)
+
+  # A `Money` amount, with or without its currency, is a number typed the
+  # same way: `USD ١٠` reads as `USD 10`, and a bare `١٠٫٥` or `10,5` as
+  # `10.5`.
+  defp hold(:scalar, field, value, _timezone) when is_binary(value) do
+    if CustomFilter.money?(field),
+      do: typed_number(value, Ash.Type.Decimal),
+      else: value
+  end
+
   defp hold(_shape, _field, value, _timezone), do: value
+
+  # A number as typed on a phone or keyboard set to Arabic or Persian, with
+  # its digits and separators read as ASCII (`Digits.normalize/1`). A
+  # decimal comma is read as a point too, `1,5` as `1.5`, on a field that
+  # takes a fraction, where it is the only separator and is not followed by
+  # exactly three digits: `1,000` could be a thousand, and is left as typed,
+  # for the field to refuse rather than to read as one.
+  @doc false
+  def typed_number(value, type) do
+    value = value |> String.trim() |> Digits.normalize()
+
+    if type != Ash.Type.Integer and Regex.match?(~r/\A-?\d+,(\d{1,2}|\d{4,})\z/, value),
+      do: String.replace(value, ",", "."),
+      else: value
+  end
 
   # Asked only when what it depends on changed, rather than on every render,
   # event or re-render of the modal: a field policy is a check against the

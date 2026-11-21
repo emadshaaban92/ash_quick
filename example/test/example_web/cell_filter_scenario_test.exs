@@ -21,6 +21,34 @@ defmodule ExampleWeb.CellFilterScenarioTest do
   end
 
   describe "a cell's menu" do
+    # The row it adds would take the filter past the bounds a list reads one
+    # in, and the list would refuse it whole; the page keeps its filter.
+    test "keeps the filter it has when its row would take it past its bounds", %{
+      conn: conn,
+      admin: admin,
+      prefix: prefix
+    } do
+      %{rows: rows} = CustomFilter.bounds()
+      record = product(actor: admin, name: "#{prefix}a")
+
+      filter =
+        encode_filter(
+          for _ <- 1..rows,
+              do: %{"field_name" => "name", "operator" => "starts_with", "value" => prefix}
+        )
+
+      {:ok, view, _html} = live(conn, "/products?custom_filter=#{filter}")
+      assert length(chips(view)) == rows
+
+      open_menu(view, record, "name")
+      html = view |> element(choice(record, "name", "equals")) |> render_click()
+
+      assert html =~ "That filter is too large to apply."
+      refute html =~ @refused
+      assert length(chips(view)) == rows
+      assert render(view) =~ record.name
+    end
+
     test "is offered on a column the filter offers, and no other", %{
       conn: conn,
       admin: admin,

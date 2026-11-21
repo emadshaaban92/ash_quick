@@ -867,6 +867,14 @@ msgstr "سجل غير متاح"
 msgid "The person you are acting as can't open %{path}."
 msgstr "لا يمكن للحساب الذي تتصفح به فتح ⁨%{path}⁩."
 
+#, elixir-format
+msgid "Reading the list with that filter took too long, so the list shows unfiltered. Narrow the filter and apply it again."
+msgstr "استغرقت قراءة القائمة بهذا البحث وقتًا طويلًا، لذا تظهر القائمة دون بحث. ضيّق البحث ثم طبّقه مرة أخرى."
+
+#, elixir-format
+msgid "That filter is too large to apply. Remove some conditions or values and try again."
+msgstr "هذا البحث أكبر من أن يُطبَّق. احذف بعض الشروط أو القيم ثم حاول مرة أخرى."
+
 msgid "Accepts"
 msgstr ""
 

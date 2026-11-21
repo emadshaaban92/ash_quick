@@ -215,8 +215,9 @@ defmodule AshQuick.LiveView.QuickView do
       `"new_click"`, `"export"`, `"close-export-modal"`, `"bulk_action"`,
       `"bulk_validate"`, `"bulk_save"`, `"bulk_close"`, `"row_actions_open"`,
       `"row_action_click"`, `"toggle-filter"`, `"table-form-change"`,
-      `"cell_filter_open"` and `"cell_filter"`. A widget
-      pushing one of them does nothing, so give its events names of their own.
+      `"reload_list"`, `"cell_filter_open"`, `"cell_filter"`,
+      `"remove_filter_chip"` and `"open_custom_filter"`. A widget pushing one
+      of them does nothing, so give its events names of their own.
 
   ## Action routing convention
 

@@ -6,6 +6,8 @@ defmodule AshQuick.LiveView.ListRead do
   require Ash.Query
   require Logger
   import Phoenix.LiveView, only: [put_flash: 3]
+  import Phoenix.Component, only: [assign: 3]
+  use Gettext, backend: AshQuick.Gettext
 
   alias AshQuick.LiveView.CustomFilter
   alias AshQuick.LiveView.DetailsUtils
@@ -167,11 +169,17 @@ defmodule AshQuick.LiveView.ListRead do
     # each inner error's own: the rescue's trace is only where `Ash.read!`
     # re-raised, the same for every failure.
     values = CustomFilter.values(params.custom_filter)
+    timed_out? = timed_out?(error)
+
+    told =
+      if timed_out?,
+        do: "The visitor will be told the read took too long.",
+        else:
+          "The visitor will be told the filter was refused, whether or not that is what this error means."
 
     Logger.warning("""
     AshQuick is re-reading #{inspect(options.resource)} without the custom \
-    filter the URL carried, which raised. The visitor will be told the filter \
-    was refused, whether or not that is what this error means.
+    filter the URL carried, which raised. #{told}
 
     Filtered fields: #{Enum.map_join(CustomFilter.field_names(params.custom_filter), ", ", &inspect/1)}
     Errors:
@@ -179,11 +187,53 @@ defmodule AshQuick.LiveView.ListRead do
     #{Enum.map_join(inner_errors(error), "\n", &raised_at(&1, values))}\
     """)
 
-    params = %URLParams{params | custom_filter: nil}
+    if timed_out? do
+      # The filter was read, and too slowly: the list is read without it,
+      # as any other, but the visitor is told so, and the filter form opens
+      # holding the filter, to narrow it rather than write it again.
+      held = params.custom_filter
+      params = %URLParams{params | custom_filter: nil, show_custom_filter: true}
 
-    {put_flash(socket, :error, ListFilterGuard.refused_filter_message()), params,
-     load_data!(socket, params, options)}
+      {socket |> put_flash(:error, timed_out_message()) |> assign(:held_filter, held), params,
+       load_data!(socket, params, options)}
+    else
+      params = %URLParams{params | custom_filter: nil}
+
+      {put_flash(socket, :error, ListFilterGuard.refused_filter_message()), params,
+       load_data!(socket, params, options)}
+    end
   end
+
+  defp timed_out_message,
+    do:
+      gettext(
+        "Reading the list with that filter took too long, so the list shows unfiltered. Narrow the filter and apply it again."
+      )
+
+  # Whether the read failed for taking too long, rather than for the
+  # filter: Postgres cancelling it at its `statement_timeout`. It reaches the
+  # rescue as Ash's unknown error around Postgrex's own, which may be
+  # rendered to text by then. A connection error is not one: the pool says
+  # `connection is closed because of an error, disconnect or timeout` for a
+  # dropped connection as for one that ran out of time, and the visitor is
+  # not told a filter took too long over a disconnect. The module is named
+  # rather than matched: AshQuick does not depend on Postgrex.
+  @doc false
+  def timed_out?(error) do
+    error
+    |> inner_errors()
+    |> Enum.any?(&(&1 |> Map.get(:error) |> timeout_cause?()))
+  end
+
+  defp timeout_cause?(%{__struct__: Postgrex.Error, postgres: %{code: :query_canceled}}),
+    do: true
+
+  defp timeout_cause?(message) when is_binary(message),
+    do:
+      message =~ "canceling statement due to statement timeout" or
+        message =~ "(query_canceled)"
+
+  defp timeout_cause?(_cause), do: false
 
   defp inner_errors(error) do
     case Ash.Error.to_error_class(error) do

@@ -6,7 +6,9 @@ defmodule AshQuick.LiveView.ListFilterGuard do
   import Phoenix.LiveView, only: [put_flash: 3]
   use Gettext, backend: AshQuick.Gettext
 
+  alias AshQuick.LiveView.Components.FilterForm
   alias AshQuick.LiveView.CustomFilter
+  alias AshQuick.LiveView.FilterField
   alias AshQuick.LiveView.LocalDatetime
   alias AshQuick.LiveView.URLParams
   alias AshQuick.LiveView.QuickView.Options
@@ -17,6 +19,17 @@ defmodule AshQuick.LiveView.ListFilterGuard do
   # the link cannot act on the name either way.
   def refused_filter_message,
     do: gettext("That filter couldn't be applied to this list, so it was ignored.")
+
+  @doc """
+  What a filter past the bounds a list reads one in is answered with where
+  the visitor built it, in the form or a cell's menu: what to do about it.
+  A link past them gets `refused_filter_message/0`, as any refused link.
+  """
+  def too_large_message,
+    do:
+      gettext(
+        "That filter is too large to apply. Remove some conditions or values and try again."
+      )
 
   def listed_fields(resource, options),
     do:
@@ -68,6 +81,18 @@ defmodule AshQuick.LiveView.ListFilterGuard do
   #
   # A root left with no rows, as one a hand-written link wrote as a single
   # row is, leaves no filter at all.
+  #
+  # A filter past the bounds a list reads one in, which only a link carries,
+  # was dropped as the URL was read (`CustomFilter.within_bounds?/1`), and
+  # the visitor is told here.
+  def drop_refused_rows(
+        socket,
+        %URLParams{custom_filter_refused?: true} = params,
+        _action,
+        _options
+      ),
+      do: {put_flash(socket, :error, refused_filter_message()), params}
+
   def drop_refused_rows(socket, %URLParams{custom_filter: nil} = params, _action, _options),
     do: {socket, params}
 
@@ -136,13 +161,31 @@ defmodule AshQuick.LiveView.ListFilterGuard do
     end
   end
 
-  # Whether a row holds a key path exactly when its field is a map. A name the
+  # Whether a row holds a key path exactly when its field is a map, and
+  # compares any other field by an operator the form offers on it. A name the
   # list does not offer is refused with its field.
   defp fits?(%CustomFilter{field_name: name} = row, by_name) do
     case by_name[name] do
       nil -> true
-      field -> CustomFilter.fits?(row, field)
+      field -> CustomFilter.fits?(row, field) and offered_operator?(row, field)
     end
+  end
+
+  # Ash's filter input takes any of its operators on any field, so a link
+  # could ask `Active > Yes` or `Name` on a day, which the form never
+  # writes: Ash reads some as something else again, and the data layer
+  # refuses others, which costs the list a second read. A row is held to
+  # the operators its field offers in the form, Is Empty and Is Not Empty
+  # included, and Any Of on any field compared by Equals, which a link can
+  # write and the form shows as typed values. A record row and a map row
+  # are held to theirs by `CustomFilter.fits?/2` and
+  # `CustomFilter.readable?/1`.
+  defp offered_operator?(%CustomFilter{path: path}, _field) when is_list(path), do: true
+  defp offered_operator?(_row, %FilterField{record?: true}), do: true
+
+  defp offered_operator?(%CustomFilter{operator: operator}, %FilterField{field: field}) do
+    operators = FilterForm.offered_operators(field)
+    operator in operators or (operator == "in" and "equals" in operators)
   end
 
   # Whether a row names a field holding a list. A row left without a value

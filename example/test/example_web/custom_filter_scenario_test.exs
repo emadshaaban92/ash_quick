@@ -644,7 +644,7 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       refute no.code in texts(view, "td")
 
       view
-      |> element(~s([data-filter-chip="active"] a[data-remove-filter]))
+      |> element(~s([data-filter-chip="active"] button[data-remove-filter]))
       |> render_click()
 
       cells = texts(view, "td")
@@ -659,7 +659,7 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
 
       view
-      |> element(~s([data-filter-chip="code"] a[data-remove-filter]))
+      |> element(~s([data-filter-chip="code"] button[data-remove-filter]))
       |> render_click()
 
       assert_patch(view, "/test/filter_fields")
@@ -703,7 +703,7 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       assert chips(view) == ["Code = x", "Any of 2 conditions"]
       assert has_element?(view, "#ash-quick-filter-count", "3 filters applied")
 
-      view |> element(~s([data-filter-chip="group"] a), "2 conditions") |> render_click()
+      view |> element(~s([data-filter-chip="group"] button), "2 conditions") |> render_click()
       assert has_element?(view, "#ash-quick-filter-modal")
     end
 
@@ -745,7 +745,9 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       assert chips(view) == ["Code starts with #{code}", "Active = Yes"]
       refute no.code in texts(view, "td")
 
-      view |> element(~s([data-filter-chip="active"] a[data-remove-filter])) |> render_click()
+      view
+      |> element(~s([data-filter-chip="active"] button[data-remove-filter]))
+      |> render_click()
 
       assert chips(view) == ["Code starts with #{code}"]
       cells = texts(view, "td")
@@ -767,7 +769,7 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       assert chips(view) == ["Code = x"]
       assert has_element?(view, "#ash-quick-filter-count", "1 filter applied")
 
-      view |> element(~s([data-filter-chip="code"] a[data-remove-filter])) |> render_click()
+      view |> element(~s([data-filter-chip="code"] button[data-remove-filter])) |> render_click()
 
       assert_patch(view, "/test/filter_fields")
       assert chips(view) == []
@@ -784,7 +786,8 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
 
       names =
-        for ids <- attribute(view, "[data-filter-chip] a[data-remove-filter]", "aria-labelledby") do
+        for ids <-
+              attribute(view, "[data-filter-chip] button[data-remove-filter]", "aria-labelledby") do
           ids
           |> String.split()
           |> Enum.map_join(" ", &(view |> texts("##{&1}") |> Enum.join()))

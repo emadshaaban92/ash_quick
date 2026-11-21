@@ -128,16 +128,13 @@ defmodule AshQuick.LiveView.Components.FilterChips do
 
         ~H"""
         <.chip_box node={@node} params={@params} path={@path}>
-          <.link
-            patch={URLParams.full_path(@path, URLParams.toggle_show_custom_filter(@params))}
-            class="hover:underline"
-          >
+          <button type="button" phx-click="open_custom_filter" class="hover:underline">
             <%= if @node.operator == "or" do %>
               {ngettext("Any of %{count} condition", "Any of %{count} conditions", @count)}
             <% else %>
               {ngettext("All of %{count} condition", "All of %{count} conditions", @count)}
             <% end %>
-          </.link>
+          </button>
         </.chip_box>
         """
     end
@@ -159,6 +156,10 @@ defmodule AshQuick.LiveView.Components.FilterChips do
     """
   end
 
+  # The ✕ is a button naming its node, which the list drops from the filter
+  # it holds, rather than a link holding the rest of the filter: one such
+  # link per chip repeats the whole filter on the page once per row.
+  #
   # The ✕ is named by the chip's own words, so a screen reader listing the
   # page's links hears which filter each one removes rather than the same
   # "Remove filter" for all of them. A long value wraps inside the chip rather
@@ -203,22 +204,16 @@ defmodule AshQuick.LiveView.Components.FilterChips do
         <% end %>
       </span>
       <span id={"#{@id}-remove"} hidden>{gettext("Remove filter")}</span>
-      <.link
-        patch={
-          URLParams.full_path(
-            @path,
-            URLParams.change_custom_filter(
-              @params,
-              CustomFilter.without(@params.custom_filter, @node.uuid)
-            )
-          )
-        }
+      <button
+        type="button"
+        phx-click="remove_filter_chip"
+        phx-value-node={@node.uuid}
         class="btn btn-ghost btn-xs btn-circle shrink-0"
         aria-labelledby={"#{@id}-remove #{@id}-text"}
         data-remove-filter
       >
         <.icon name="hero-x-mark" class="w-3.5 h-3.5" />
-      </.link>
+      </button>
     </span>
     """
   end

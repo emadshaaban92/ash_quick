@@ -150,3 +150,43 @@ defmodule AshQuick.Test.Filter.Cell do
     defaults [:read]
   end
 end
+
+defmodule AshQuick.Test.Filter.Stage do
+  @moduledoc "A NewType built on an atom with a fixed set of values."
+  use Ash.Type.NewType, subtype_of: :atom, constraints: [one_of: [:draft, :live]]
+end
+
+defmodule AshQuick.Test.Filter.Whole do
+  @moduledoc "A NewType built on an integer."
+  use Ash.Type.NewType, subtype_of: :integer, constraints: [min: 0]
+end
+
+defmodule AshQuick.Test.Filter.Count do
+  @moduledoc "A NewType built on another, built on an integer."
+  use Ash.Type.NewType, subtype_of: AshQuick.Test.Filter.Whole
+end
+
+defmodule AshQuick.Test.Filter.Typed do
+  @moduledoc """
+  Fields typed with an `Ash.Type.NewType`, which the filter reads as the type
+  each is built on.
+  """
+  use Ash.Resource,
+    domain: AshQuick.Test.Filter.Domain,
+    data_layer: Ash.DataLayer.Ets
+
+  ets do
+    private? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :body, AshQuick.AshTypes.Text, public?: true
+    attribute :stage, AshQuick.Test.Filter.Stage, public?: true
+    attribute :count, AshQuick.Test.Filter.Count, public?: true
+  end
+
+  actions do
+    defaults [:read]
+  end
+end
