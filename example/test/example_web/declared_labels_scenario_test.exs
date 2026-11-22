@@ -138,16 +138,7 @@ defmodule ExampleWeb.DeclaredLabelsScenarioTest do
     assert has_element?(view, "label", "Applicant")
     refute html =~ "Borrower National<"
 
-    view |> element("#form_status_text_input") |> render_focus()
-
-    view
-    |> with_target("div[phx-feedback-for='form[status]']")
-    |> render_hook("live_select_change", %{
-      "text" => "",
-      "id" => "form_status_live_select_component"
-    })
-
-    assert texts(view, "#form_status_live_select_component ul li") == [
+    assert ExampleWeb.PickerDriver.search(view, "form_status-picker") == [
              "Active",
              "Paid Off in Full"
            ]

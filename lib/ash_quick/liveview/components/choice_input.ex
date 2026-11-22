@@ -4,117 +4,58 @@ defmodule AshQuick.LiveView.Components.ChoiceInput do
   # `Ash.Type.Enum`, or an atom with `one_of`. `multiple` picks a list of them.
   # `resource`, the form's, labels the values as it declares them.
   use Phoenix.LiveComponent
-  import AshQuick.Components
+  import AshQuick.LiveView.Components.PickerInput
   alias AshQuick.LiveView.EnumOptions
 
   @impl true
-  def render(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
+  def render(assigns) do
+    %{form: form, attribute: attribute} = assigns
+    resource = assigns[:resource]
+    stored = stored(form.data, attribute, resource)
+    offered = EnumOptions.options(attribute, resource)
+
     assigns =
-      assigns
-      |> assign(:errors, AshQuick.LiveView.FieldErrors.for_select(field))
-      |> assign_new(:help, fn -> nil end)
+      assign(assigns,
+        field: form[attribute.name],
+        search: fn text -> search(stored, offered, text) end,
+        resolve: fn _values -> stored ++ Enum.map(offered, &option/1) end
+      )
 
     ~H"""
     <div phx-feedback-for={@field.name} class="sm:col-span-2 phx-submit-loading:pointer-events-none">
-      <.label for={@field.id}>{@label}</.label>
-      <span :if={@required} class="text-error"> &ast;</span>
-      <LiveSelect.live_select
-        :if={not @multiple}
+      <.picker_input
         field={@field}
-        style={:daisyui}
-        container_extra_class="w-full"
-        update_min_len={0}
-        allow_clear={true}
-        options={@default_options}
-        phx-target={@myself}
-        phx-focus="set-default"
+        mode={if @multiple, do: :tags, else: :single}
+        search={@search}
+        resolve={@resolve}
+        label={@label}
+        required={@required}
+        help={assigns[:help]}
       />
-      <%!-- The tag class is replaced rather than extended: daisyUI 5's badge is a
-      fixed-height box with inline padding only, so live_select's preset adds
-      vertical padding the line has no room for and the text spills out. --%>
-      <LiveSelect.live_select
-        :if={@multiple}
-        field={@field}
-        style={:daisyui}
-        container_extra_class="w-full"
-        update_min_len={0}
-        options={@default_options}
-        allow_clear={true}
-        mode={:quick_tags}
-        tag_class="badge badge-primary h-auto min-h-6 py-0.5 max-w-full whitespace-normal"
-        phx-target={@myself}
-      />
-
-      <AshQuick.LiveView.FieldErrors.used_marker field={@field} />
-      <%!-- LiveSelect leaves no aria hook on its text box, so the help and the
-      errors are drawn under it without an `aria-describedby`. --%>
-      <AshQuick.LiveView.Components.FieldHelp.help text={@help} />
-      <.error :for={msg <- @errors} class={if !@help, do: "-mt-6"}>{msg}</.error>
     </div>
     """
   end
 
-  @impl true
-  def update(assigns, socket) do
-    {:ok, assign(socket, assigns) |> set_default_options() |> set_field()}
-  end
+  # The values the record holds lead the list when nothing is typed, so one
+  # the type no longer lists can still be seen and unpicked; typing narrows
+  # only the values on offer, by label.
+  defp search(stored, offered, nil),
+    do: Enum.uniq_by(stored ++ Enum.map(offered, &option/1), & &1.value)
 
-  defp set_default_options(socket) do
-    assign(
-      socket,
-      default_options: get_options(socket)
-    )
-  end
+  defp search(_stored, offered, text),
+    do: offered |> EnumOptions.search(text) |> Enum.map(&option/1)
 
-  defp set_field(socket) do
-    %{form: form, attribute: attribute} = socket.assigns
-    assign(socket, field: form[attribute.name])
-  end
-
-  @impl true
-  def handle_event(
-        "live_select_change",
-        %{"text" => search, "id" => live_select_id},
-        socket
-      ) do
-    send_update(LiveSelect.Component,
-      id: live_select_id,
-      options: get_options(socket, search)
-    )
-
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("set-default", %{"id" => live_select_id}, socket) do
-    send_update(LiveSelect.Component,
-      id: live_select_id,
-      options: get_options(socket)
-    )
-
-    {:noreply, socket}
-  end
-
-  # The stored value leads, so a value the type no longer lists still shows
-  # as picked; a search narrows only the values on offer.
-  defp get_options(socket, search \\ nil) do
-    %{form: form, attribute: attribute} = socket.assigns
-    resource = socket.assigns[:resource]
-
-    on_offer = attribute |> EnumOptions.options(resource) |> EnumOptions.search(search)
-
-    case Ash.Resource.loaded?(form.data, attribute.name) do
-      true ->
-        form.data
-        |> Map.fetch!(attribute.name)
-        |> List.wrap()
-        |> Enum.reject(&is_nil/1)
-        |> Enum.map(&{EnumOptions.label(attribute, &1, resource), &1})
-        |> Enum.concat(on_offer)
-        |> Enum.uniq_by(&elem(&1, 1))
-
-      false ->
-        on_offer
+  defp stored(data, attribute, resource) do
+    if Ash.Resource.loaded?(data, attribute.name) do
+      data
+      |> Map.fetch!(attribute.name)
+      |> List.wrap()
+      |> Enum.reject(&is_nil/1)
+      |> Enum.map(&option({EnumOptions.label(attribute, &1, resource), &1}))
+    else
+      []
     end
   end
+
+  defp option({label, value}), do: %{value: to_string(value), label: label}
 end

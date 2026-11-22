@@ -14,6 +14,7 @@ defmodule ExampleWeb.EnumScenarioTest do
 
   alias Example.Test.EnumPicks
   alias ExampleWeb.FilterPicker
+  alias ExampleWeb.PickerDriver
 
   setup %{conn: conn, admin: admin} do
     {:ok, conn: log_in(conn, admin)}
@@ -39,7 +40,7 @@ defmodule ExampleWeb.EnumScenarioTest do
       {:ok, view, html} = live(conn, "/test/enum_picks/create?action=jot")
 
       assert html =~ ~s(id="form_mood")
-      refute html =~ "form_mood_live_select_component"
+      refute html =~ "form_mood-picker"
 
       pick(view, "stage", "On air")
 
@@ -75,7 +76,7 @@ defmodule ExampleWeb.EnumScenarioTest do
       assert picked(view, "stage") == ["live"]
       assert picked(view, "channels") == ["sms"]
       assert picked(view, "phase") == ["closed_now"]
-      assert texts(view, "#form_channels_live_select_component .badge") == ["Text message"]
+      assert PickerDriver.picked(view, "form_channels-picker") == ["Text message"]
 
       assert offered(view, "stage") == ["On air", "Being written", "Archived"]
       assert offered(view, "channels") == ["Text message", "E-mail"]
@@ -256,30 +257,13 @@ defmodule ExampleWeb.EnumScenarioTest do
   defp by_code(records, code), do: Enum.filter(records, &(&1.code == code))
 
   # The labels a select lists once opened, and once `search` is typed into it.
-  # Focusing the text input opens LiveSelect's dropdown; the search goes to
-  # the widget around it, which answers with the options to list.
-  defp offered(view, field, search \\ "") do
-    view |> element("#form_#{field}_text_input") |> render_focus()
+  defp offered(view, field, search \\ ""),
+    do: PickerDriver.search(view, "form_#{field}-picker", search)
 
-    view
-    |> with_target("div[phx-feedback-for='form[#{field}]']")
-    |> render_hook("live_select_change", %{
-      "text" => search,
-      "id" => "form_#{field}_live_select_component"
-    })
-
-    texts(view, "#form_#{field}_live_select_component ul li")
-  end
-
-  # Clicks the option a select lists under `label`, the way LiveSelect's hook
-  # reports a click to its component.
+  # Picks the option a select lists under `label`, as its hook does.
   defp pick(view, field, label) do
-    idx = view |> offered(field) |> Enum.find_index(&(&1 == label))
-    assert idx, "#{field} does not offer #{label}"
-
-    view
-    |> element("#form_#{field}_live_select_component")
-    |> render_hook("option_click", %{"idx" => to_string(idx)})
+    PickerDriver.search(view, "form_#{field}-picker")
+    PickerDriver.pick(view, "form_#{field}-picker", label)
   end
 
   # The values a select holds as picked, one hidden input each.

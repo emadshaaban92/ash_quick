@@ -55,11 +55,11 @@ defmodule ExampleWeb.QuickViewScenarioTest do
 
     view |> element("button", "Add Product") |> render_click()
 
-    # The two relationships are LiveSelect dropdowns, whose hidden input a
-    # `form/3` cannot be given a value for — its options are loaded by the
-    # component's own `phx-target`, which a LiveView test cannot reach. They are
-    # passed at submit instead, which is exactly what the browser sends once the
-    # user has picked one.
+    # The two relationships are pickers, whose hidden input a `form/3` cannot
+    # be given a value for until something is picked: its options are
+    # searched by the component's own `phx-target`. They are passed at submit
+    # instead, which is exactly what the browser sends once the user has
+    # picked one.
     view
     |> form("#product-create", %{
       "form" => %{

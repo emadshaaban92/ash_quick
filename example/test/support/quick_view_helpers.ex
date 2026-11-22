@@ -13,10 +13,11 @@ defmodule ExampleWeb.QuickViewHelpers do
     * **A forged row action**, and the forged confirmation after it, are the
       only way to test the policy rather than the UI. A missing link or button
       stops nobody from pushing the event behind it.
-    * **A relationship dropdown** is a `LiveSelect` component with its own
-      `phx-target`. Its options are loaded by the component, so they are not in
-      the initial render and a plain `assert_has` over them fails whether or not
-      the read is right.
+    * **A relationship dropdown** is an `AshQuick.LiveView.Picker` with its
+      own `phx-target`. Its options are searched for when it opens, so they are
+      not in the initial render and a plain `assert_has` over them fails
+      whether or not the read is right. It is driven through
+      `ExampleWeb.PickerDriver`, as its hook drives it.
 
   Every function is session-first and chainable except `dropdown_entries/3`,
   which returns the entries.
@@ -147,10 +148,10 @@ defmodule ExampleWeb.QuickViewHelpers do
   `{label, hint}`, with `nil` for an entry drawn without a hint.
   """
   def dropdown_options(%PhoenixTest.Live{view: view}, label) do
-    field = find_live_select!(view, label)
+    id = find_picker!(view, label)
 
     view
-    |> open_dropdown(field)
+    |> open_dropdown(id)
     |> Enum.map(&{part_text(&1, "label") || text(&1), part_text(&1, "hint")})
   end
 
@@ -159,12 +160,12 @@ defmodule ExampleWeb.QuickViewHelpers do
   `{label, hint}` like `dropdown_options/2`.
   """
   def picked_tags(%PhoenixTest.Live{view: view}, label) do
-    field = find_live_select!(view, label)
+    id = find_picker!(view, label)
 
     view
     |> LiveViewTest.render()
     |> LazyHTML.from_fragment()
-    |> LazyHTML.query(field.tags_selector)
+    |> LazyHTML.query("##{id} [data-part=tag]")
     |> Enum.map(&{part_text(&1, "label") || text(&1), part_text(&1, "hint")})
   end
 
@@ -193,10 +194,10 @@ defmodule ExampleWeb.QuickViewHelpers do
   """
   def select_entry(session, label, entry, opts \\ []) do
     PhoenixTest.unwrap(session, fn view ->
-      field = find_live_select!(view, label)
+      id = find_picker!(view, label)
 
       view
-      |> open_dropdown(field)
+      |> open_dropdown(id)
       |> Enum.find(&entry_matches?(&1, entry, opts))
       |> case do
         nil ->
@@ -206,51 +207,40 @@ defmodule ExampleWeb.QuickViewHelpers do
           )
 
         element ->
-          idx = element |> LazyHTML.attribute("data-idx") |> List.first()
-
-          view
-          |> LiveViewTest.element(field.selector)
-          |> LiveViewTest.render_hook("option_click", %{idx: idx})
+          [value] = LazyHTML.attribute(element, "data-value")
+          view |> ExampleWeb.PickerDriver.pick(id, value: value) |> LiveViewTest.render()
       end
     end)
   end
 
-  # Clicking the text input is what `phx-focus` hangs off, so the options are
-  # the component's own unsearched read rather than whatever the initial render
-  # happened to embed.
-  defp open_dropdown(view, field) do
+  # Opened with nothing typed, so the options are the picker's own unsearched
+  # read rather than whatever the initial render happened to embed.
+  defp open_dropdown(view, id) do
+    ExampleWeb.PickerDriver.search(view, id)
+
     view
-    |> LiveViewTest.element(field.text_input_selector)
-    |> LiveViewTest.render_click()
+    |> LiveViewTest.render()
     |> LazyHTML.from_fragment()
-    |> LazyHTML.query(field.dropdown_entries_selector)
+    |> LazyHTML.query("##{id}-listbox [role=option]")
     |> Enum.to_list()
   end
 
-  defp find_live_select!(view, label) do
-    html = LiveViewTest.render(view)
+  # The picker whose text box the label names.
+  defp find_picker!(view, label) do
+    doc = view |> LiveViewTest.render() |> LazyHTML.from_fragment()
 
-    label_selector =
-      html
-      |> PhoenixTest.Query.find_by_label!("label", label)
-      |> PhoenixTest.Element.build_selector()
+    ids =
+      for node <- LazyHTML.query(doc, "label[for]"),
+          text(node) == label,
+          [input_id] = LazyHTML.attribute(node, "for"),
+          picker = "#{input_id}-picker",
+          doc |> LazyHTML.query("##{picker}[data-aq-picker]") |> Enum.any?(),
+          do: picker
 
-    case PhoenixTest.Query.find(html, "#{label_selector} ~ div[phx-hook='LiveSelect']") do
-      {:found, element} ->
-        selector = PhoenixTest.Element.build_selector(element)
-
-        %{
-          selector: selector,
-          dropdown_entries_selector: "#{selector} > ul > li > div",
-          tags_selector: "#{selector} > div > div.badge",
-          text_input_selector: "#{selector} > div > input[type='text']"
-        }
-
-      :not_found ->
-        raise ArgumentError, "no dropdown labelled #{inspect(label)} on the page"
-
-      {:found_many, _elements} ->
-        raise ArgumentError, "more than one dropdown labelled #{inspect(label)}"
+    case ids do
+      [id] -> id
+      [] -> raise ArgumentError, "no dropdown labelled #{inspect(label)} on the page"
+      _many -> raise ArgumentError, "more than one dropdown labelled #{inspect(label)}"
     end
   end
 end

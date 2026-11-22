@@ -10,6 +10,7 @@ defmodule ExampleWeb.SelectErrorsScenarioTest do
   use ExampleWeb.FeatureCase, async: true
 
   alias Example.Test.{RequiredAttachments, RequiredPicks}
+  alias ExampleWeb.PickerDriver, as: Picker
 
   setup %{conn: conn, admin: admin} do
     {:ok, conn: log_in(conn, admin)}
@@ -35,8 +36,8 @@ defmodule ExampleWeb.SelectErrorsScenarioTest do
   end
 
   # A cleared select posts the same blank as one never touched. What tells
-  # them apart is the change event LiveSelect fires from the field's own hidden
-  # input, so each step here posts the `_target` the browser would.
+  # them apart is the change event the picker fires from the field's own
+  # hidden input, so each step here posts the `_target` the browser would.
   test "say what is missing once a pick is taken back, and keep saying it", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/test/required_picks/create")
     owner = Ash.create!(RequiredAttachments, %{code: unique("R"), name: "Owner"})
@@ -61,6 +62,30 @@ defmodule ExampleWeb.SelectErrorsScenarioTest do
     # Typing elsewhere posts the marks the page now carries.
     change(view, %{"code" => unique("P")}, "code")
 
+    for {field, message} <- @fields, do: assert(errors(view, field) == [message])
+  end
+
+  # The same steps taken through the pickers themselves: each pick, ✕ and
+  # removed tag posts the form with its own hidden input as the `_target`.
+  test "say what is missing once a picker is emptied by its ✕ or its last tag",
+       %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/test/required_picks/create")
+    owner = Ash.create!(RequiredAttachments, %{code: unique("R"), name: "Owner"})
+
+    Picker.search(view, "form_owner_id-picker", owner.code)
+    Picker.pick(view, "form_owner_id-picker", owner.code)
+    Picker.search(view, "form_kind-picker")
+    Picker.pick(view, "form_kind-picker", "Small")
+    Picker.search(view, "form_tags-picker")
+    Picker.pick(view, "form_tags-picker", "Red")
+
+    for {field, _message} <- @fields, do: assert(errors(view, field) == [])
+
+    Picker.clear(view, "form_owner_id-picker")
+    Picker.clear(view, "form_kind-picker")
+    Picker.remove(view, "form_tags-picker", "Red")
+
+    assert Picker.posted(view, "form_tags-picker") == [{"form[tags_empty_selection]", ""}]
     for {field, message} <- @fields, do: assert(errors(view, field) == [message])
   end
 

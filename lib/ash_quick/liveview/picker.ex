@@ -71,8 +71,13 @@ defmodule AshQuick.LiveView.Picker do
   use Gettext, backend: AshQuick.Gettext
 
   @default_classes %{
-    box: "input w-full h-auto min-h-(--size) flex flex-wrap items-center gap-1 py-1 cursor-text",
-    input: "grow basis-16 min-w-0 bg-transparent outline-none",
+    box: "input w-full h-auto min-h-(--size) flex items-center gap-1 py-1 cursor-text",
+    # A host's base styles for text inputs (`@tailwindcss/forms` gives each
+    # a border, padding, a white background and a focus ring) are undone:
+    # this box is the text part of the daisyUI box around it.
+    input:
+      "min-w-0 appearance-none border-0 bg-transparent p-0 shadow-none outline-none " <>
+        "text-[length:inherit] leading-[inherit] focus:shadow-none focus:ring-0",
     tag: "badge badge-primary h-auto min-h-6 py-0.5 max-w-full whitespace-normal gap-1",
     popup:
       "absolute z-20 top-full start-0 mt-1 w-full max-h-60 overflow-y-auto rounded-box " <>
@@ -355,67 +360,97 @@ defmodule AshQuick.LiveView.Picker do
     >
       <div
         data-part="box"
-        class={[@classes.box, @size == :sm && "input-sm", @invalid && "input-error"]}
+        class={[
+          @classes.box,
+          @mode == :tags && "flex-wrap",
+          @size == :sm && "input-sm",
+          @invalid && "input-error"
+        ]}
       >
-        <%!-- Tags and the selection each sit in a box of their own, so
+        <%!-- Tags wrap onto as many lines as they take, the text box after
+        them. A single pick holds one line: the text box lies over the
+        selection, which is hidden only once something is typed to replace
+        it, and a long selection is cut short rather than growing the box. --%>
+        <div
+          data-part="field"
+          class={
+            if @mode == :tags,
+              do: "contents",
+              else: "group/field grid min-w-0 flex-1 items-center"
+          }
+        >
+          <%!-- Tags and the selection each sit in a box of their own, so
         adding one never moves the text box, which would lose its focus. --%>
-        <span id={"#{@id}-held"} class="contents">
-          <span
-            :for={option <- if(@mode == :tags, do: @selection, else: [])}
-            data-part="tag"
-            data-value={option.value}
-            data-new={option[:new] && "true"}
-            data-unavailable={option[:unavailable] && "true"}
-            class={[@classes.tag, option[:new] && "badge-outline"]}
-          >
-            <%= if @tag != [] do %>
-              {render_slot(@tag, option)}
-            <% else %>
-              <span class="wrap-anywhere">{option.label}</span>
-            <% end %>
-            <span :if={option[:new]} class="text-xs opacity-80">{gettext("new")}</span>
-            <button
-              type="button"
-              data-remove={option.value}
-              class="cursor-pointer opacity-80 hover:opacity-100"
-              aria-label={remove_name(option)}
+          <span id={"#{@id}-held"} class="contents">
+            <span
+              :for={option <- if(@mode == :tags, do: @selection, else: [])}
+              data-part="tag"
+              data-value={option.value}
+              data-new={option[:new] && "true"}
+              data-unavailable={option[:unavailable] && "true"}
+              class={[@classes.tag, option[:new] && "badge-outline"]}
             >
-              <span aria-hidden="true">✕</span>
-            </button>
+              <%= if @tag != [] do %>
+                {render_slot(@tag, option)}
+              <% else %>
+                <span class="wrap-anywhere">{option.label}</span>
+              <% end %>
+              <span :if={option[:new]} class="text-xs opacity-80">{gettext("new")}</span>
+              <button
+                type="button"
+                data-remove={option.value}
+                class="cursor-pointer opacity-80 hover:opacity-100"
+                aria-label={remove_name(option)}
+              >
+                <span aria-hidden="true">✕</span>
+              </button>
+            </span>
+            <span
+              :for={option <- if(@mode == :single, do: @selection, else: [])}
+              id={@selection_id}
+              data-part="selection"
+              data-value={option.value}
+              class={[
+                "col-start-1 row-start-1 flex min-w-0 items-baseline gap-1 overflow-hidden",
+                "group-has-[input:not(:placeholder-shown)]/field:invisible"
+              ]}
+            >
+              <%= if @tag != [] do %>
+                {render_slot(@tag, option)}
+              <% else %>
+                <%!-- Each part is cut short on its own, in its own direction, so
+                a Latin name in a right-to-left page still shows its start. --%>
+                <span data-part="label" dir="auto" class="min-w-0 truncate">{option.label}</span>
+                <span
+                  :if={option[:hint] not in [nil, ""]}
+                  dir="auto"
+                  class="min-w-0 max-w-1/2 shrink-0 truncate text-xs opacity-60"
+                >
+                  {option.hint}
+                </span>
+              <% end %>
+            </span>
           </span>
-          <span
-            :for={option <- if(@mode == :single, do: @selection, else: [])}
-            id={@selection_id}
-            data-part="selection"
-            data-value={option.value}
-            class="min-w-0"
-          >
-            <%= if @tag != [] do %>
-              {render_slot(@tag, option)}
-            <% else %>
-              <span class="wrap-anywhere">{option.label}</span>
-              <span :if={option[:hint]} class="ms-1 text-xs opacity-60 wrap-anywhere">
-                {option.hint}
-              </span>
-            <% end %>
-          </span>
-        </span>
-        <input
-          id={@field.id}
-          type="text"
-          role="combobox"
-          autocomplete="off"
-          data-part="input"
-          class={@classes.input}
-          placeholder={@selection == [] && @placeholder}
-          aria-autocomplete="list"
-          aria-expanded="false"
-          aria-controls={@listbox_id}
-          aria-labelledby={@label_id}
-          aria-label={!@label_id && @aria_label}
-          aria-describedby={described_by(@mode, @selection, @selection_id, @describedby)}
-          aria-invalid={@invalid && "true"}
-        />
+          <input
+            id={@field.id}
+            type="text"
+            role="combobox"
+            autocomplete="off"
+            data-part="input"
+            class={[
+              @classes.input,
+              if(@mode == :tags, do: "grow basis-16", else: "col-start-1 row-start-1 w-full")
+            ]}
+            placeholder={placeholder(@mode, @selection, @placeholder)}
+            aria-autocomplete="list"
+            aria-expanded="false"
+            aria-controls={@listbox_id}
+            aria-labelledby={@label_id}
+            aria-label={!@label_id && @aria_label}
+            aria-describedby={described_by(@mode, @selection, @selection_id, @describedby)}
+            aria-invalid={@invalid && "true"}
+          />
+        </div>
         <button
           :if={@mode == :single and @clearable and @selection != []}
           type="button"
@@ -741,6 +776,13 @@ defmodule AshQuick.LiveView.Picker do
     </div>
     """
   end
+
+  # Held, a single picker's text box keeps a blank placeholder, so the
+  # selection under it can tell typed text (`:placeholder-shown` no longer
+  # matching) from none.
+  defp placeholder(:single, [_held], _placeholder), do: " "
+  defp placeholder(_mode, [], placeholder), do: placeholder
+  defp placeholder(_mode, _held, _placeholder), do: nil
 
   # A tag's ✕ is named for its label, and its hint when it has one, so two
   # sharing a label are named apart.
