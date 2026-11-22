@@ -165,6 +165,25 @@ defmodule ExampleWeb.MapFilterScenarioTest do
     end
   end
 
+  # The chip reads the value as typed, in its own direction: a phone number
+  # left to right on an Arabic page too.
+  describe "the chip" do
+    test "reads a value with no letter left to right", %{conn: conn, key: key} do
+      for {value, dir} <- [{"+20 100 123 4567", "ltr"}, {"Acme Inc.", "auto"}] do
+        row = %{
+          "field_name" => "changes",
+          "path" => [key],
+          "operator" => "equals",
+          "value" => value
+        }
+
+        {:ok, view, _html} = live(conn, "/audit_logs?custom_filter=#{encode_filter([row])}")
+
+        assert has_element?(view, ~s([data-filter-chip] span[dir="#{dir}"]), value)
+      end
+    end
+  end
+
   describe "a long number" do
     # Past 100 digits a value is compared as text, rather than as a number
     # anything parsing it might refuse.

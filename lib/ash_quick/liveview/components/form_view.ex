@@ -15,6 +15,7 @@ defmodule AshQuick.LiveView.Components.FormView do
   alias AshQuick.LiveView.AttachmentUpload
   alias AshQuick.LiveView.EnumOptions
   alias AshQuick.LiveView.Components.FieldHelp
+  alias AshQuick.LiveView.Components.FieldValue
   alias AshQuick.LiveView.Components.MapValue
   alias AshQuick.LiveView.FieldErrors
   alias AshQuick.LiveView.FormInputs
@@ -99,6 +100,13 @@ defmodule AshQuick.LiveView.Components.FormView do
   # action and what it acts on, and the one button that runs it.
   @doc false
   def confirm_form(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :record_label,
+        assigns.record && AshQuick.Info.display_value(assigns.record)
+      )
+
     ~H"""
     <.form
       for={@form || %{}}
@@ -109,7 +117,7 @@ defmodule AshQuick.LiveView.Components.FormView do
     >
       <h3 class="text-lg font-semibold">{Labels.name(@ash_action.name, @resource)}</h3>
       <p :if={@ash_action.type != :create and @record} class="font-medium">
-        {AshQuick.Info.display_value(@record)}
+        <span dir={FieldValue.text_dir(@record_label)}>{@record_label}</span>
       </p>
       <p :if={@applies_to} class="font-medium">
         {ngettext(

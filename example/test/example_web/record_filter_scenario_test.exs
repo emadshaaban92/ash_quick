@@ -110,6 +110,21 @@ defmodule ExampleWeb.RecordFilterScenarioTest do
     # LiveSelect tells a picked option from the others by its label, not its
     # value, so two held records sharing one would take a click on either for
     # the first, and post its id again rather than unpicking it.
+    # A chip names the records in their own direction: a name of digits and
+    # signs left to right on an Arabic page too.
+    test "names the records in the chip in their own direction", %{conn: conn, admin: admin} do
+      for {name, dir} <- [
+            {"+20 #{System.unique_integer([:positive])}", "ltr"},
+            {unique("Ada"), "auto"}
+          ] do
+        owner = owner(name: name)
+        item(owner: owner)
+        view = open(conn, admin, [row("owner", "in", [owner.id])])
+
+        assert has_element?(view, ~s([data-filter-chip] span[dir="#{dir}"]), name)
+      end
+    end
+
     test "unpicks either of two records a link holds that share a name",
          %{conn: conn, admin: admin} do
       name = unique("Twin")

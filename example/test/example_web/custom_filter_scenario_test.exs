@@ -629,6 +629,38 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       refute Enum.any?(chips(view), &String.contains?(&1, "Failed"))
     end
 
+    # A value with no letter, such as a phone number, reads left to right on
+    # an Arabic page too, in the chip and in the list; one with letters takes
+    # its own direction.
+    test "reads a value with no letter left to right", %{conn: conn} do
+      code = "+20 #{System.unique_integer([:positive])}"
+      named = unique("Acme")
+      filter_field(code: code)
+      filter_field(code: named)
+
+      for {value, dir} <- [{code, "ltr"}, {named, "auto"}] do
+        filter =
+          encode_filter([%{"field_name" => "code", "operator" => "equals", "value" => value}])
+
+        {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+        assert has_element?(view, ~s([data-filter-chip="code"] span[dir="#{dir}"]), value)
+        assert has_element?(view, ~s(tbody td span[dir="#{dir}"]), value)
+      end
+    end
+
+    # A value its field cannot read is shown as typed, in its own direction.
+    test "reads a value it shows as typed in its own direction", %{conn: conn} do
+      for {value, dir} <- [{"12-34", "ltr"}, {"ten", "auto"}] do
+        filter =
+          encode_filter([%{"field_name" => "salary", "operator" => "equals", "value" => value}])
+
+        {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+        assert has_element?(view, ~s([data-filter-chip="salary"] span[dir="#{dir}"]), value)
+      end
+    end
+
     test "drops a row by its chip's ✕, and the list widens", %{conn: conn} do
       code = unique("CX")
       yes = filter_field(code: "#{code}-yes", active: true)
