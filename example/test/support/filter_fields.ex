@@ -63,6 +63,7 @@ defmodule Example.Test.FilterFields do
         :fee,
         :deposit,
         :reference,
+        :pin,
         :parent_id
       ]
     ]
@@ -155,6 +156,9 @@ defmodule Example.Test.FilterFields do
     # Ash takes it only in a filter's one top-level `==`, which a row of the
     # form need not be, so the filter does not offer it.
     attribute :reference, :string, public?: true, filterable?: :simple_equality
+
+    # Never shown: an aggregate reading it is never offered in the filter.
+    attribute :pin, :string, public?: true, sensitive?: true
   end
 
   relationships do
@@ -165,6 +169,9 @@ defmodule Example.Test.FilterFields do
   aggregates do
     # Never empty: a row with no children sums to its default.
     sum :children_salary, :children, :salary, default: 0, public?: true
+    # Ash names an average's type by its short name, `:float`.
+    avg :children_salary_avg, :children, :salary, public?: true
+    first :first_child_pin, :children, :pin, public?: true
   end
 end
 

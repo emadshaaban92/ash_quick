@@ -270,6 +270,115 @@ defmodule ExampleWeb.CustomFilterGuardScenarioTest do
     end
   end
 
+  # `Example.Test.TypedInputs.Count` is a NewType built on an integer, held
+  # at zero or above, so its value is typed as that integer's is.
+  describe "a number typed with a NewType" do
+    test "asks for the number keyboard and is typed left to right", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/test/typed_inputs?show_custom_filter=true")
+      [uuid] = filter_uuids(view)
+
+      filter_change(view, "field_name-#{uuid}", "boxes")
+      filter_change(view, "operator-#{uuid}", "equals")
+
+      input = "input[name='value-#{uuid}']"
+      assert attribute(view, input, "inputmode") == ["numeric"]
+      assert attribute(view, input, "dir") == ["ltr"]
+      assert [class] = attribute(view, input, "class")
+      assert "rtl:text-right" in String.split(class)
+    end
+  end
+
+  # An aggregate's struct carries no type: the filter reads it as the type
+  # Ash works out for it, here a sum of the non-negative `salary`.
+  describe "an aggregate" do
+    test "is offered and filters as the number it sums", %{conn: conn} do
+      code = unique("AG")
+      kept = filter_field(code: "#{code}-kept")
+      dropped = filter_field(code: "#{code}-dropped")
+      filter_field(code: unique("AGC"), salary: 1200, parent_id: kept.id)
+      filter_field(code: unique("AGC"), salary: 800, parent_id: kept.id)
+      filter_field(code: unique("AGC"), salary: 300, parent_id: dropped.id)
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      [uuid] = filter_uuids(view)
+
+      assert "children_salary" in attribute(
+               view,
+               "select[name='field_name-#{uuid}'] option",
+               "value"
+             )
+
+      filter_change(view, "field_name-#{uuid}", "children_salary")
+      filter_change(view, "operator-#{uuid}", "gt")
+
+      input = "input[name='value-#{uuid}']"
+      assert attribute(view, input, "inputmode") == ["numeric"]
+      assert attribute(view, input, "dir") == ["ltr"]
+
+      filter_change(view, "value-#{uuid}", arabic_digits(1000))
+      view |> element("#custom-filter-form") |> render_submit()
+
+      assert applied(view) == [{"children_salary", "gt", "1000"}]
+      assert chips(view) == ["Children Salary > 1,000"]
+      cells = texts(view, "td")
+      assert kept.code in cells
+      refute dropped.code in cells
+    end
+
+    # Its chip reads its values as the number they are, as the field's own
+    # would: grouped, and joined so that the grouping comma is not misread.
+    test "names its values on the chip as numbers", %{conn: conn} do
+      filter = encode_filter([row("children_salary", "in", ["1000", "2000"])])
+      {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+      assert chips(view) == ["Children Salary is any of 1,000; 2,000"]
+    end
+
+    # Ash names an average's type `:float`, not by its module.
+    test "is offered as an average", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      [uuid] = filter_uuids(view)
+
+      assert "children_salary_avg" in attribute(
+               view,
+               "select[name='field_name-#{uuid}'] option",
+               "value"
+             )
+
+      filter_change(view, "field_name-#{uuid}", "children_salary_avg")
+      filter_change(view, "operator-#{uuid}", "gt")
+      assert attribute(view, "input[name='value-#{uuid}']", "dir") == ["ltr"]
+    end
+
+    # `first :first_child_pin` reads `pin`, which is `sensitive?`: Starts With
+    # on it would give the pin back a character at a time.
+    test "over a sensitive field is not offered, nor read from a link", %{conn: conn} do
+      code = unique("AS")
+      parent = filter_field(code: "#{code}-parent")
+      filter_field(code: unique("ASC"), pin: "4321", parent_id: parent.id)
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")
+      [uuid] = filter_uuids(view)
+
+      refute "first_child_pin" in attribute(
+               view,
+               "select[name='field_name-#{uuid}'] option",
+               "value"
+             )
+
+      filter =
+        encode_filter([
+          row("code", "equals", parent.code),
+          row("first_child_pin", "starts_with", "4")
+        ])
+
+      {:ok, view, _html} = live(conn, "/test/filter_fields?custom_filter=#{filter}")
+
+      assert render(view) =~ @refused
+      assert chips(view) == ["Code = #{parent.code}"]
+    end
+  end
+
   # `AshQuick.AshTypes.Text` is a NewType built on a string, and was never
   # offered.
   describe "a field typed with a NewType" do

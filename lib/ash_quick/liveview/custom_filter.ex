@@ -430,11 +430,25 @@ defmodule AshQuick.LiveView.CustomFilter do
     # would give the value back: rows that start with "4", then "43", and so
     # on, a character at a time, with only the list to read the answer off.
     |> Enum.reject(
-      &(&1.name in belongs_to_source_attributes or AshQuick.Info.sensitive?(resource, &1.name))
+      &(&1.name in belongs_to_source_attributes or AshQuick.Info.sensitive?(resource, &1.name) or
+          reads_sensitive?(resource, &1))
     )
-    |> Enum.map(&built_on/1)
+    |> Enum.map(&built_on(resource, &1))
     |> Enum.filter(&(&1.public? and filterable?(&1) and offered_type?(resource, &1)))
   end
+
+  # An aggregate over a `sensitive?` field gives that field's value back as
+  # surely as the field itself would, a `first` or a `max` of it, whatever the
+  # aggregate says of itself.
+  defp reads_sensitive?(resource, %Ash.Resource.Aggregate{field: field, relationship_path: path})
+       when is_atom(field) and not is_nil(field) do
+    case Ash.Resource.Info.related(resource, path) do
+      nil -> false
+      destination -> AshQuick.Info.sensitive?(destination, field)
+    end
+  end
+
+  defp reads_sensitive?(_resource, _field), do: false
 
   # A field typed with an `Ash.Type.NewType`, as `AshQuick.AshTypes.Text`
   # is, read as the type it is built on: offered, compared, typed in and
@@ -442,11 +456,27 @@ defmodule AshQuick.LiveView.CustomFilter do
   # together, as Ash initialised them. Ash's filter casts the value by the
   # field's own type when it reads it. A `Money` is matched through its
   # NewType by `money?/1`, and kept, as is a list.
-  defp built_on(%{type: type} = field) do
-    type = Ash.Type.get_type(type)
+  #
+  # An aggregate's struct carries no type of its own: Ash works it out from
+  # its kind and the field it reads, a sum over a non-negative count as that
+  # count, constraints and all. It is then read as a field of that type is.
+  defp built_on(resource, %Ash.Resource.Aggregate{type: nil} = aggregate) do
+    case Ash.Query.Aggregate.aggregate_type(resource, aggregate) do
+      {:ok, type, constraints} ->
+        built_on(resource, %{aggregate | type: type, constraints: constraints})
 
-    if is_atom(type) and Ash.Type.NewType.new_type?(type) and not money?(field),
-      do: %{field | type: Ash.Type.get_type(Ash.Type.NewType.subtype_of(type))},
+      _unknown ->
+        aggregate
+    end
+  end
+
+  # The type is kept as its module: Ash names an average's by its short name,
+  # `:float`.
+  defp built_on(_resource, %{type: type} = field) do
+    field = %{field | type: Ash.Type.get_type(type)}
+
+    if is_atom(field.type) and Ash.Type.NewType.new_type?(field.type) and not money?(field),
+      do: %{field | type: Ash.Type.get_type(Ash.Type.NewType.subtype_of(field.type))},
       else: field
   end
 
@@ -647,7 +677,7 @@ defmodule AshQuick.LiveView.CustomFilter do
     own =
       resource
       |> Ash.Resource.Info.fields([:attributes, :aggregates, :calculations])
-      |> Enum.map(&FilterField.own(resource, &1))
+      |> Enum.map(&FilterField.own(resource, built_on(resource, &1)))
 
     paths =
       resource
