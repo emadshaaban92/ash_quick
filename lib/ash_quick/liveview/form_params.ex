@@ -259,6 +259,10 @@ defmodule AshQuick.LiveView.FormParams do
 
   defp embedded_change_params(_changeset, _field, _type), do: :no_change
 
+  # An embed's value as the params a sub-form posts for it.
+  @doc false
+  def embedded_params(value), do: embedded_to_params(value)
+
   defp embedded_to_params(values) when is_list(values) do
     Enum.map(values, &embedded_struct_to_params/1)
   end

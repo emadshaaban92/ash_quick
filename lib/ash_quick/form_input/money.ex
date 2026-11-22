@@ -61,7 +61,9 @@ defmodule AshQuick.FormInput.Money do
         amount_name: phx_field.name <> "[amount]",
         currency_name: phx_field.name <> "[currency]",
         errors: FieldErrors.for_field(phx_field, used?(phx_field, pick?)),
-        label_text: Labels.name(field.name, assigns.resource),
+        label_text: assigns[:label] || Labels.name(field.name, assigns.resource),
+        required: Map.get(assigns, :required, not field.allow_nil?),
+        attrs: Map.get(assigns, :attrs, []),
         number_attrs: Keyword.delete(number_attrs(field), :class),
         number_class: Keyword.get(number_attrs(field), :class)
       )
@@ -69,14 +71,14 @@ defmodule AshQuick.FormInput.Money do
     ~H"""
     <div class="sm:col-span-2" data-money-input>
       <.label for={"#{@id}_amount"}>{@label_text}</.label>
-      <span :if={not @field.allow_nil?} class="text-error"> &ast;</span>
+      <span :if={@required} class="text-error"> &ast;</span>
       <div class="join w-full">
         <input
           type="text"
           id={"#{@id}_amount"}
           name={@amount_name}
           value={@amount}
-          required={not @field.allow_nil?}
+          required={@required}
           autocomplete="off"
           phx-debounce="blur"
           class={[
@@ -86,6 +88,7 @@ defmodule AshQuick.FormInput.Money do
           ]}
           {amount_describe_attrs(@id, @help, @errors, @pick?)}
           {@number_attrs}
+          {@attrs}
         />
         <label :if={@pick?} for={"#{@id}_currency"} class="sr-only">
           {gettext("%{field} currency", field: @label_text)}

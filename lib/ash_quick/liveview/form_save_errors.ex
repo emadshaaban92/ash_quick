@@ -81,16 +81,23 @@ defmodule AshQuick.LiveView.FormSaveErrors do
   # never fails without saying why. Where an error shows depends on where it
   # belongs, not on how many there are. A sub-form's errors are held to the
   # inputs the page draws for it, and each flashed one says which item it is
-  # about: "Items 2 › Note: is hidden".
+  # about: "Items 2 › Note: is hidden". A field the form state hides or
+  # disables draws no input to show an error under, so its errors are flashed
+  # too, and so are those of a sub-form under it.
   @doc false
-  def flash_unplaced_errors(socket, form, scope) do
+  def flash_unplaced_errors(socket, form, scope, state \\ nil) do
+    held = held_inputs(state)
+
     form
     |> AshPhoenix.Form.raw_errors(for_path: :all)
     # A map past 32 keys iterates in hash order; the page reads top to bottom.
     |> Enum.sort_by(&elem(&1, 0))
     |> Enum.flat_map(fn {path, errors} ->
       errors
-      |> ActionErrors.unplaced_sentences(drawn_inputs(form, path, scope), resource_at(form, path))
+      |> ActionErrors.unplaced_sentences(
+        drawn_inputs(form, path, scope, held),
+        resource_at(form, path)
+      )
       |> Enum.map(&located(&1, form, path))
     end)
     |> Enum.uniq()
@@ -123,7 +130,7 @@ defmodule AshQuick.LiveView.FormSaveErrors do
     end
   end
 
-  # The resource of the sub-form at `path`, as `drawn_inputs/3` walks it.
+  # The resource of the sub-form at `path`, as `drawn_inputs/4` walks it.
   defp resource_at(form, []), do: form.resource
 
   defp resource_at(form, [field | path]) do
@@ -144,19 +151,32 @@ defmodule AshQuick.LiveView.FormSaveErrors do
   # item's index when it holds a list. A sub-form under a field this actor
   # cannot see is still built, and can refuse the save, but the page draws none
   # of its inputs.
-  defp drawn_inputs(form, [], scope), do: input_names(form, scope)
+  defp drawn_inputs(form, [], scope, held),
+    do: form |> input_names(scope) |> MapSet.difference(held)
 
-  defp drawn_inputs(form, [field | path], scope) do
+  defp drawn_inputs(form, [field | path], scope, held) do
     {sub_form, path} =
       case {Map.fetch!(form.forms, field), path} do
         {forms, [index | path]} when is_list(forms) -> {Enum.at(forms, index), path}
         {sub_form, path} -> {sub_form, path}
       end
 
-    if field in input_names(form, scope),
-      do: drawn_inputs(sub_form, path, scope),
+    if field in input_names(form, scope) and field not in held,
+      do: drawn_inputs(sub_form, path, scope, MapSet.new()),
       else: MapSet.new()
   end
+
+  # The names a root form's error can be filed under for every field the
+  # state hides or disables: the field's own and its inputs (`customer_id`).
+  defp held_inputs(%AshQuick.FormState{fields: fields}) do
+    for field <- fields,
+        field.hidden? or field.disabled?,
+        name <- [field.name | field.inputs],
+        into: MapSet.new(),
+        do: name
+  end
+
+  defp held_inputs(_state), do: MapSet.new()
 
   # A belongs_to is offered as its relationship, and its errors are filed under
   # the attribute behind it (`owner_id`), which the same input shows.

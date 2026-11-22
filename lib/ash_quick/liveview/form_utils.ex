@@ -19,6 +19,7 @@ defmodule AshQuick.LiveView.FormUtils do
   alias AshQuick.LiveView.FormAttachments
   alias AshQuick.LiveView.FormParams
   alias AshQuick.LiveView.FormSaveErrors
+  alias AshQuick.LiveView.FormStateFlow
   alias AshQuick.LiveView.FormUploads
   alias AshQuick.LiveView.DownloadUtils
   alias AshQuick.LiveView.PrintUtils
@@ -56,6 +57,7 @@ defmodule AshQuick.LiveView.FormUtils do
     |> set_title(action_name, options)
     |> set_record!(action_type, action_name, params, options)
     |> set_form(action_type, options)
+    |> FormStateFlow.store(:build)
     |> then(&FormUploads.allow_image_upload(&1, &1.assigns.form))
     |> then(&assign(&1, ash_quick_refusal: FormView.refusal(&1.assigns)))
   end
@@ -331,6 +333,7 @@ defmodule AshQuick.LiveView.FormUtils do
     {:halt,
      socket
      |> assign(form: form)
+     |> FormStateFlow.store(:validate)
      |> FormUploads.allow_image_upload(form)
      |> FormAttachments.clear_form_flash()}
   end
@@ -343,6 +346,7 @@ defmodule AshQuick.LiveView.FormUtils do
      socket
      |> FormUploads.follow_removed_sub_form(held, form, path)
      |> assign(form: form)
+     |> FormStateFlow.store(:validate)
      |> FormAttachments.clear_form_flash()}
   end
 
@@ -406,9 +410,19 @@ defmodule AshQuick.LiveView.FormUtils do
       |> FormAttachments.carry_uploaded_attachments(socket.assigns.form)
       |> FormParams.maybe_put_has_many(socket.assigns.form)
 
-    case AttachmentKeys.validate_issued(socket.assigns.form, params, socket) do
-      {_params, form} ->
-        {:halt, socket |> assign(form: form) |> FormAttachments.clear_form_flash()}
+    held = socket.assigns.form
+
+    # What the state hides is dropped from the params just posted, never from
+    # the page drawn last: a hand-made post can name a hidden field.
+    case AttachmentKeys.validate_issued(held, params, socket) do
+      {params, form} ->
+        {_params, form, state} = FormStateFlow.settle(held, params, form, :validate, socket)
+
+        {:halt,
+         socket
+         |> assign(form: form)
+         |> assign(ash_quick_form_state: state)
+         |> FormAttachments.clear_form_flash()}
 
       :refused ->
         {:halt, socket}
@@ -430,6 +444,11 @@ defmodule AshQuick.LiveView.FormUtils do
   defp handle_open_form_events(_, _, socket, _options), do: {:cont, socket}
 
   defp submit_form(form, params, socket) do
+    # What this post hides takes no upload: the state it builds is what the
+    # save consults before it stores any file.
+    socket =
+      assign(socket, ash_quick_form_state: FormStateFlow.build(form, :submit, socket))
+
     # A socket upload the store refuses at save is left out and the save goes
     # on, as it would had the file never been picked; the flash says so, so an
     # update keeping its old file is not read as the new one saved.
@@ -450,8 +469,37 @@ defmodule AshQuick.LiveView.FormUtils do
       end)
       |> FormAttachments.flash_failed_uploads(refused)
 
-    result = submit(form, upload_params, socket)
+    # The post the save runs is the one just made, less what the state built
+    # from it hides, and a field the state requires is held to it here: Ash
+    # knows nothing of either. It is validated under the submit stage, and
+    # the save runs the form as it settles, so the post is validated once.
+    {_params, checked, state} =
+      form
+      |> put_stage(AshQuick.form_submit_stage())
+      |> then(
+        &FormStateFlow.settle(
+          &1,
+          upload_params,
+          AshPhoenix.Form.validate(&1, upload_params, errors: false),
+          :submit,
+          socket,
+          errors: false
+        )
+      )
 
+    case submit(checked, state, socket) do
+      {:refused, refused} ->
+        {:halt,
+         socket
+         |> assign(form: put_stage(refused, AshQuick.form_validate_stage()))
+         |> FormStateFlow.store(:validate)}
+
+      result ->
+        run_submit(result, state, params, socket)
+    end
+  end
+
+  defp run_submit(result, state, params, socket) do
     socket = socket |> PrintUtils.print(result) |> DownloadUtils.deliver(result)
 
     case result do
@@ -480,18 +528,32 @@ defmodule AshQuick.LiveView.FormUtils do
           [] ->
             {:halt, put_flash(socket, :error, FormSaveErrors.failed_save_message(form))}
 
-          # The form stays open, so its next validate runs under the validate stage.
+          # The form stays open, so its next validate runs under the validate
+          # stage. An error on a field the state the save ran with holds back
+          # has no input on the page, so it is flashed.
           _errors ->
             socket =
-              FormSaveErrors.flash_unplaced_errors(socket, form, Map.get(socket.assigns, :scope))
+              FormSaveErrors.flash_unplaced_errors(
+                socket,
+                form,
+                Map.get(socket.assigns, :scope),
+                state
+              )
 
-            {:halt, assign(socket, form: put_stage(form, AshQuick.form_validate_stage()))}
+            {:halt,
+             socket
+             |> assign(form: put_stage(form, AshQuick.form_validate_stage()))
+             |> FormStateFlow.store(:validate)}
         end
     end
   end
 
-  # Timed as `[:ash_quick, :form, :submit]` (see `AshQuick.Telemetry`).
-  defp submit(form, upload_params, socket) do
+  # Timed as `[:ash_quick, :form, :submit]` (see `AshQuick.Telemetry`). A
+  # field `require/3` marks that is blank refuses the save before the action
+  # runs, as `{:refused, form}`, and counts as an `:error`. `form` was
+  # validated with the post already, under the submit stage, so the submit
+  # does not validate it again.
+  defp submit(form, state, socket) do
     scope = Map.get(socket.assigns, :scope)
 
     AshQuick.Telemetry.span(
@@ -505,13 +567,17 @@ defmodule AshQuick.LiveView.FormUtils do
       },
       fn ->
         result =
-          form
-          |> put_stage(AshQuick.form_submit_stage())
-          |> AshPhoenix.Form.submit(
-            params: upload_params,
-            before_submit: &FormAttachments.reference_attachments(&1, scope),
-            action_opts: action_opts(form)
-          )
+          case FormStateFlow.enforce(state, form) do
+            :ok ->
+              AshPhoenix.Form.submit(form,
+                params: nil,
+                before_submit: &FormAttachments.reference_attachments(&1, scope),
+                action_opts: action_opts(form)
+              )
+
+            {:error, refused} ->
+              {:refused, refused}
+          end
 
         {result, %{result: if(match?({:ok, _}, result), do: :ok, else: :error)}}
       end

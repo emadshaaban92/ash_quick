@@ -3,6 +3,9 @@ defmodule ExampleWeb.TelemetryScenarioTest do
   The page events `AshQuick.Telemetry` lists, emitted by real pages: a load,
   a list read, a form's save, a bulk run, a print and an export.
 
+  A save refused by a field the form state requires goes through
+  `Example.Test.ShapedOrders` at `/test/shaped_orders`.
+
   Prints and bulk runs go through `Example.Test.Printable` at
   `/test/printable`, whose actions print through the suite's renderer double;
   the export through `/products`.
@@ -150,6 +153,31 @@ defmodule ExampleWeb.TelemetryScenarioTest do
 
     assert_received {[:ash_quick, :form, :submit, :stop], ^ref, _,
                      %{action: :rename_and_print, type: :update, result: :error}}
+  end
+
+  test "a save a form state's required field refuses is reported as an error", ctx do
+    %{conn: conn, admin: admin} = ctx
+    {:ok, view, _html} = conn |> log_in(admin) |> live("/test/shaped_orders/create")
+    form = "form[phx-submit=save]"
+
+    view
+    |> form(form)
+    |> render_change(%{
+      "form" => %{"code" => unique("O"), "kind" => "discount"},
+      "_target" => ["form", "kind"]
+    })
+
+    ref = attach([[:ash_quick, :form, :submit, :stop]])
+
+    view |> form(form, %{"form" => %{"discount_reason" => ""}}) |> render_submit()
+
+    assert_received {[:ash_quick, :form, :submit, :stop], ^ref, _,
+                     %{
+                       quick_view: Example.Test.ShapedOrdersLive.Quick,
+                       action: :create,
+                       type: :create,
+                       result: :error
+                     }}
   end
 
   test "a bulk run is timed, with how many rows it was asked for and wrote", ctx do

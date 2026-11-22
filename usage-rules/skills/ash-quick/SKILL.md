@@ -531,6 +531,55 @@ end
 defp after_handle_params(socket, _options), do: socket
 ```
 
+## Form state: `adjust_form/2`
+
+A form whose shape follows its values (hide a field unless another holds a
+value, require it then, show a field read-only) is written in one overridable
+callback over `AshQuick.FormState`. It is pure: a state in, a state out.
+
+```elixir
+alias AshQuick.FormState
+
+defp adjust_form(%{action: %{name: action}} = state, _options)
+     when action in [:create, :update] do
+  discount? = FormState.value(state, :kind) == :discount
+
+  state
+  |> FormState.hide(:discount_reason, not discount?)
+  |> FormState.require(:discount_reason, discount?)
+end
+
+defp adjust_form(state, _options), do: state
+```
+
+- The state is rebuilt from the form on every event (open, change, upload,
+  sub-form added or removed, save) and goes through the hook every time:
+  state the whole rule each time, from `FormState.value/2` (the cast value),
+  and never skip one: a rule left out of a pass is off for that event.
+- `hide/3`, `require/3`, `disable/3`, `show/2`, `put_label/3`, `put_help/3`,
+  `put_attrs/3`. A name that is no input of the action raises; an input this
+  actor's form leaves out (field policy, `read_only_fields`) is a no-op, and
+  `value/2` answers nil for it.
+- **Guard on the action.** The hook runs for every form, a destroy's too,
+  which takes no inputs: a clause that names fields without matching the
+  actions that take them raises there. Match `action.name` and pass every
+  other state through, as above.
+- Narrow only: it starts from the fields the form would draw (field policies
+  and `read_only_fields` applied) and can't add one, unhide one Ash left out,
+  or make an Ash-required field optional.
+- The server drops hidden and disabled fields' params, worked out from each
+  post itself, and refuses a blank `require/3`d field at save. On an update a
+  hidden field keeps the record's value. An Ash error on a hidden or disabled
+  field is flashed, since it has no input.
+- Root fields only; sub-forms and bulk forms are drawn as before.
+- UI only: bulk actions, the API and code never run it. Put real invariants
+  in the resource (`where:`). Hiding doesn't clear a value, so a value that
+  must not outlive what shows it is cleared by a change
+  (`change set_attribute(:reason, nil), where: [...]`); a `validate absent`
+  would refuse every save of a record that has one.
+- A custom `action_*` template gets `@ash_quick_form_state`; a widget gets
+  `@state_field`.
+
 ## Custom handle_event
 
 You can define custom `handle_event` callbacks alongside QuickView:
