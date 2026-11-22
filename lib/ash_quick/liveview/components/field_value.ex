@@ -140,20 +140,23 @@ defmodule AshQuick.LiveView.Components.FieldValue do
   end
 
   # Each item is handed the list's field, so an item of a list of enum values
-  # reads its label.
+  # reads its label. Each item is a badge of its own, with no character
+  # between them: a comma, a dash or a semicolon could be read as part of a
+  # value (`-5`, `1,000`) or as the separator of an export's file.
   def field_value(%{value: value} = assigns) when is_list(value) do
     ~H"""
-    <span :for={{item, i} <- Enum.with_index(@value)}>
-      <span :if={i != 0}> - </span>
-      <.field_value
-        value={item}
-        path={@path}
-        ash_field={@ash_field}
-        resource={@resource}
-        scope={@scope}
-        linker={@linker}
-      />
-    </span>
+    <.badges items={@value}>
+      <:item :let={item}>
+        <.field_value
+          value={item}
+          path={@path}
+          ash_field={@ash_field}
+          resource={@resource}
+          scope={@scope}
+          linker={@linker}
+        />
+      </:item>
+    </.badges>
     """
   end
 
@@ -227,10 +230,11 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     ~H"""
     <%= case {@links_label?, @value} do %>
       <% {true, [_ | _]} -> %>
-        <span :for={{item, i} <- Enum.with_index(@value)}>
-          <span :if={i != 0}> - </span>
-          <.linked_label record={item} path={@path} scope={@scope} linker={@linker} />
-        </span>
+        <.badges items={@value}>
+          <:item :let={item}>
+            <.linked_label record={item} path={@path} scope={@scope} linker={@linker} />
+          </:item>
+        </.badges>
       <% {true, %_{}} -> %>
         <.linked_label record={@value} path={@path} scope={@scope} linker={@linker} />
       <% _ -> %>
@@ -322,6 +326,29 @@ defmodule AshQuick.LiveView.Components.FieldValue do
   def field_value(%{path: []} = assigns) do
     ~H"""
     <span>{@value}</span>
+    """
+  end
+
+  # A list's items, each a badge of its own, read by a screen reader as a
+  # list. A badge grows to hold a long value rather than overflow it. An
+  # empty list renders nothing, rather than a list a screen reader would
+  # announce with no items in it. The space around each badge, which the
+  # flex layout does not draw, keeps the items apart in the text a cell is
+  # copied as: `red green`, not `redgreen`.
+  attr :items, :list, required: true
+  slot :item, required: true
+
+  defp badges(assigns) do
+    ~H"""
+    <span :if={@items != []} role="list" class="inline-flex flex-wrap gap-1 align-middle">
+      <span
+        :for={item <- @items}
+        role="listitem"
+        class="badge badge-ghost badge-sm h-auto min-h-5 py-0.5 max-w-full whitespace-normal"
+      >
+        {render_slot(@item, item)}
+      </span>
+    </span>
     """
   end
 

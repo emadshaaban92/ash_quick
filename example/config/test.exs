@@ -111,6 +111,7 @@ test_pages = [
   "/test/two_file_rows",
   "/test/typed_inputs",
   "/test/uncounted_pages",
+  "/test/value_lists",
   "/test/vault_filter",
   "/test/wide_offset_pages",
   "/test/worded_policy",
