@@ -200,6 +200,58 @@ defmodule AshQuick.LiveView.Components.FieldValueTest do
     end
   end
 
+  describe "field_value/1 on lists" do
+    # Each item's text, as a badge of its own.
+    defp items(value, type) do
+      html =
+        render_component(&FieldValue.field_value/1,
+          value: value,
+          path: [],
+          ash_field: %{type: {:array, type}}
+        )
+
+      document = LazyHTML.from_fragment(html)
+      list = LazyHTML.query(document, "[role=list]")
+
+      {Enum.count(list), LazyHTML.text(list),
+       document
+       |> LazyHTML.query("[role=list] > [role=listitem].badge")
+       |> Enum.map(&String.trim(LazyHTML.text(&1)))}
+    end
+
+    # Only space stands between two items: a comma, a dash or a semicolon
+    # could be read as part of a value, or as an export's separator.
+    test "shows each word as a badge, with only space between them" do
+      assert {1, text, ["red", "green", "blue"]} =
+               items(["red", "green", "blue"], Ash.Type.String)
+
+      assert String.split(text) == ["red", "green", "blue"]
+    end
+
+    test "shows each number as a badge, a minus and a grouping kept to its own" do
+      assert {1, text, ["-1,000", "-3"]} = items([-1_000, -3], Ash.Type.Integer)
+      assert String.split(text) == ["-1,000", "-3"]
+
+      assert {1, _, ["1.50", "-2"]} =
+               items([Decimal.new("1.50"), Decimal.new("-2")], Ash.Type.Decimal)
+    end
+
+    test "an empty list renders nothing" do
+      html =
+        render_component(&FieldValue.field_value/1,
+          value: [],
+          path: [],
+          ash_field: %{type: {:array, Ash.Type.String}}
+        )
+
+      assert String.trim(html) == ""
+    end
+
+    test "a single value is a single badge" do
+      assert {1, _, ["-5"]} = items([-5], Ash.Type.Integer)
+    end
+  end
+
   describe "a sensitive field" do
     # Asked before any clause that would format the value, so a date, a number
     # or a list reads as redacted as a string does.
