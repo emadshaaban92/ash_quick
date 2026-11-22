@@ -708,7 +708,7 @@ defmodule AshQuick.Components do
           {@form_title}
         </h2>
         <p :if={@form_subtitle} class="-mt-2 mb-4 font-medium text-base-content/70">
-          {@form_subtitle}
+          <span dir={AshQuick.LiveView.Components.FieldValue.text_dir(@form_subtitle)}>{@form_subtitle}</span>
         </p>
         <.form
           :let={f}

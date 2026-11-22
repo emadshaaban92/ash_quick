@@ -302,9 +302,12 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     """
   end
 
+  # The words run in the direction of their own first letter, while the
+  # paragraph stays lined up with the values around it, on the side the page
+  # starts.
   def field_value(%{path: [], ash_field: %{type: AshQuick.AshTypes.Text}} = assigns) do
     ~H"""
-    <p class="w-11/12 pe-4 overflow-x-auto text-wrap">{@value}</p>
+    <p class="w-11/12 pe-4 overflow-x-auto text-wrap"><span dir={text_dir(@value)}>{@value}</span></p>
     """
   end
 
@@ -319,13 +322,16 @@ defmodule AshQuick.LiveView.Components.FieldValue do
       navigate={@record_path}
       label={@record_label}
       hint={AshQuick.Info.display_hint_value(@value)}
-    ><span>{@record_label || @value}</span></.maybe_hinted_link>
+    ><span dir={text_dir(@record_label || @value)}>{@record_label || @value}</span></.maybe_hinted_link>
     """
   end
 
+  # Text people typed reads in its own direction, kept apart from the text
+  # around it. See `text_dir/1`. The span still sits where the page's text
+  # starts.
   def field_value(%{path: []} = assigns) do
     ~H"""
-    <span>{@value}</span>
+    <span dir={text_dir(@value)}>{@value}</span>
     """
   end
 
@@ -351,6 +357,38 @@ defmodule AshQuick.LiveView.Components.FieldValue do
     </span>
     """
   end
+
+  @doc false
+  # The direction text people typed reads in: its first letter's, as
+  # `dir="auto"` finds it, or left to right when it holds no letter at all.
+  #
+  # Left to a right-to-left page, a phone number such as `+20 100 123 4567`
+  # reads `20 100 123 4567+` and a Latin name ending in a full stop has the
+  # stop moved to its front. `dir="auto"` alone mends the name, but digits
+  # and signs are not letters, so a value of only those is left to whatever
+  # direction the browser falls back on. Such a value is a number, a code or
+  # a phone number, and those read left to right in Arabic and Hebrew too.
+  #
+  # `nil`, so no `dir` is drawn, for anything that is no text, such as an
+  # unloaded relationship. Bytes that are not UTF-8 are left to the browser.
+  def text_dir(text) when is_binary(text) do
+    cond do
+      not String.valid?(text) -> "auto"
+      Regex.match?(~r/\p{L}/u, text) -> "auto"
+      true -> "ltr"
+    end
+  end
+
+  # An id a record falls back to when it has no label.
+  def text_dir(number) when is_number(number), do: "ltr"
+
+  # A struct that prints itself, such as an `Ash.CiString`, reads as what it
+  # prints.
+  def text_dir(value) when is_struct(value) do
+    if String.Chars.impl_for(value), do: value |> to_string() |> text_dir()
+  end
+
+  def text_dir(_value), do: nil
 
   @doc false
   # A link to a record's details page carrying its display hint, as a tooltip

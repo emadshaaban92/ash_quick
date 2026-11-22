@@ -264,16 +264,20 @@ defmodule AshQuick.LiveView.Components.FilterChips do
         Enum.map(ids, &(assigns.records[&1] || FilterRecords.unavailable(&1)).label)
       )
 
+    assigns = assign(assigns, :text, Enum.join(assigns.names, ", "))
+
     ~H"""
-    <span class="font-semibold" dir="auto">{Enum.join(@names, ", ")}</span>
+    <span class="font-semibold" dir={FieldValue.text_dir(@text)}>{@text}</span>
     """
   end
 
   # A map row's value is compared with whatever the map holds, of any type,
   # so it reads as typed.
   defp chip_value(%{leaf: %{path: path}} = assigns) when is_list(path) do
+    assigns = assign(assigns, :text, CustomFilter.as_written(assigns.leaf.value))
+
     ~H"""
-    <span class="font-semibold" dir="auto">{CustomFilter.as_written(@leaf.value)}</span>
+    <span class="font-semibold" dir={FieldValue.text_dir(@text)}>{@text}</span>
     """
   end
 
@@ -315,8 +319,10 @@ defmodule AshQuick.LiveView.Components.FilterChips do
   end
 
   defp chip_value(assigns) do
+    assigns = assign(assigns, :text, CustomFilter.as_written(assigns.leaf.value))
+
     ~H"""
-    <span class="font-semibold">{CustomFilter.as_written(@leaf.value)}</span>
+    <span class="font-semibold" dir={FieldValue.text_dir(@text)}>{@text}</span>
     """
   end
 

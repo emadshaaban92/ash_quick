@@ -66,7 +66,7 @@ defmodule AshQuick.LiveView.Components.DetailsView do
         >
           <.icon name="hero-arrow-left" class="w-5 h-5 rtl:rotate-180" />
         </.link>
-        {AshQuick.Info.display_value(@record) || Map.get(@record, :id)}
+        <span dir={text_dir(title(@record))}>{title(@record)}</span>
         <:subtitle>
           <.bookkeeping_header record={@record} linker={@linker} scope={@scope} />
         </:subtitle>
@@ -207,14 +207,27 @@ defmodule AshQuick.LiveView.Components.DetailsView do
 
   defp writer_key(_writer), do: nil
 
+  defp title(record), do: AshQuick.Info.display_value(record) || Map.get(record, :id)
+
   defp bookkeeping_part(%{part: text} = assigns) when is_binary(text), do: ~H"{@part}"
 
-  defp bookkeeping_part(%{part: %{path: nil}} = assigns), do: ~H"{@part.label}"
+  # A writer's name is kept apart from the sentence around it, in the
+  # direction of its own letters, as `field_value/1` keeps a plain value.
+  defp bookkeeping_part(%{part: %{path: nil}} = assigns) do
+    assigns = assign(assigns, :dir, text_dir(assigns.part.label))
 
-  defp bookkeeping_part(assigns),
-    do: ~H"""
-    <.hinted_link navigate={@part.path} label={@part.label} hint={@part.hint}>{@part.label}</.hinted_link>
+    ~H"""
+    <span dir={@dir}>{@part.label}</span>
     """
+  end
+
+  defp bookkeeping_part(assigns) do
+    assigns = assign(assigns, :dir, text_dir(assigns.part.label))
+
+    ~H"""
+    <.hinted_link navigate={@part.path} label={@part.label} hint={@part.hint}><span dir={@dir}>{@part.label}</span></.hinted_link>
+    """
+  end
 
   # The writers' resource, when the header names any, and every resource a
   # details field names a record of.

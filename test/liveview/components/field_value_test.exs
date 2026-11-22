@@ -187,13 +187,109 @@ defmodule AshQuick.LiveView.Components.FieldValueTest do
         assert html =~ ~s(<span dir="ltr">#{unquote(shown)}</span>)
       end
     end
+  end
 
-    test "leaves a string of digits to the page's direction" do
+  describe "field_value/1 on text" do
+    # Text people typed reads in its own direction. One with no letter is a
+    # number, a code or a phone number, and reads left to right on a
+    # right-to-left page too, whatever a browser falls back on for
+    # `dir="auto"` when it finds no letter.
+    for {label, value, dir} <- [
+          {"a phone number", "+20 100 123 4567", "ltr"},
+          {"a string of digits", "-12345", "ltr"},
+          {"a code of digits and signs", "(02) 2345-6789 #12", "ltr"},
+          {"a Latin name", "Acme Inc.", "auto"},
+          {"an Arabic name", "شركة النيل", "auto"},
+          {"an Arabic name with a number in it", "فرع 12", "auto"},
+          {"an empty string", "", "ltr"}
+        ] do
+      test "gives #{label} dir=#{dir}" do
+        html =
+          render_component(&FieldValue.field_value/1,
+            value: unquote(value),
+            path: [],
+            ash_field: %{type: Ash.Type.String}
+          )
+
+        assert html =~ ~s(<span dir="#{unquote(dir)}">)
+      end
+    end
+
+    test "reads a case-insensitive string as the text it holds" do
+      for {value, dir} <- [{"+20 100 123 4567", "ltr"}, {"Acme Inc.", "auto"}] do
+        html =
+          render_component(&FieldValue.field_value/1,
+            value: Ash.CiString.new(value),
+            path: [],
+            ash_field: %{type: Ash.Type.CiString}
+          )
+
+        assert html =~ ~s(<span dir="#{dir}">#{value}</span>)
+      end
+    end
+
+    test "text_dir/1 reads a number left to right, and draws no dir for what is no text" do
+      assert FieldValue.text_dir(42) == "ltr"
+      assert FieldValue.text_dir(~D[2026-11-22]) == "ltr"
+      assert FieldValue.text_dir(nil) == nil
+      assert FieldValue.text_dir(%{name: "x"}) == nil
+      assert FieldValue.text_dir(%Ash.NotLoaded{}) == nil
+    end
+
+    # Bytes that are not UTF-8 cannot be searched for a letter, and are left
+    # to the browser rather than taking the page down.
+    test "text_dir/1 leaves bytes that are not UTF-8 to the browser" do
+      assert FieldValue.text_dir("abc" <> <<0xFF>>) == "auto"
+      assert FieldValue.text_dir("12" <> <<0xFF>>) == "auto"
+    end
+
+    # A related record reads as its label, in the label's own direction.
+    test "a related record's label reads in its own direction" do
+      for {name, dir} <- [{"+20 100 123 4567", "ltr"}, {"Acme Inc.", "auto"}] do
+        html =
+          render_component(&FieldValue.field_value/1,
+            value:
+              struct(AshQuick.Test.Activation.Activated, id: Ash.UUID.generate(), name: name),
+            path: [],
+            ash_field: nil
+          )
+
+        assert html =~ ~s(<span dir="#{dir}">#{name}</span>)
+      end
+    end
+
+    # An unloaded relationship has no text to direct, so its empty span stays
+    # bare.
+    test "an unloaded relationship draws no dir" do
       html =
         render_component(&FieldValue.field_value/1,
-          value: "-12345",
+          value: %Ash.NotLoaded{type: :relationship, field: :brand},
           path: [],
-          ash_field: %{type: Ash.Type.String}
+          ash_field: nil
+        )
+
+      refute html =~ "dir="
+    end
+
+    test "a long text reads in its own direction" do
+      for {value, dir} <- [{"Ships on Monday.", "auto"}, {"+20 100 123 4567", "ltr"}] do
+        html =
+          render_component(&FieldValue.field_value/1,
+            value: value,
+            path: [],
+            ash_field: %{type: AshQuick.AshTypes.Text}
+          )
+
+        assert html =~ ~s(<span dir="#{dir}">#{value}</span></p>)
+      end
+    end
+
+    test "Yes and No read in the page's direction" do
+      html =
+        render_component(&FieldValue.field_value/1,
+          value: true,
+          path: [],
+          ash_field: %{type: Ash.Type.Boolean}
         )
 
       refute html =~ "dir="
