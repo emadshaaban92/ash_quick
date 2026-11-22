@@ -30,7 +30,8 @@ end
 defmodule Example.Test.TwoFileRows do
   @moduledoc """
   An embedded array whose rows hold two attachment fields that take different
-  files, beside a root `:cover` that takes only images.
+  files, beside a root `:cover` that takes only images. `:add_photos` folds
+  an upload argument onto the same rows.
 
   A row's upload is consumed only at save, so until then the key its presign
   minted is bound to `:rows` by the presign alone, which is what lets a post
@@ -48,6 +49,30 @@ defmodule Example.Test.TwoFileRows do
 
   actions do
     defaults [:read, create: [:code, :cover, :rows], update: [:code, :cover, :rows]]
+
+    # Photos picked here are folded onto `:rows` by the action, after the
+    # rows the form draws, and the action takes `:rows` itself. The argument
+    # is spent as it folds, so applied twice it adds each photo twice. The
+    # save does not keep them yet (#260): the photo's key is issued for
+    # `:new_photos`, and the form posts it under `rows`.
+    update :add_photos do
+      accept [:rows]
+      require_atomic? false
+
+      argument :new_photos, {:array, :attachment},
+        constraints: [items: [visibility: :private, accepts: [:image], max_size_mb: 10]]
+
+      change fn changeset, _context ->
+        added =
+          changeset
+          |> Ash.Changeset.get_argument(:new_photos)
+          |> List.wrap()
+          |> Enum.map(&%{photo: &1})
+
+        rows = Ash.Changeset.get_attribute(changeset, :rows) || []
+        Ash.Changeset.change_attribute(changeset, :rows, rows ++ added)
+      end
+    end
 
     read :index do
       argument :search, :string

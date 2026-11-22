@@ -38,6 +38,25 @@ defmodule ExampleWeb.FormStateSocketUploadTest do
     assert stored?(name)
   end
 
+  # The form also draws `:lines` as sub-forms, whose empty post the changeset
+  # holds as a change: the re-seed of the embeds runs after the upload.
+  test "a shown field's upload is held by the form and saved", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/test/shaped_orders/create")
+    code = unique("O")
+    change(view, %{"code" => code, "kind" => "gift"}, "kind")
+
+    name = unique("saved") <> ".jpg"
+    view |> pick(@form, name) |> render_upload(name)
+
+    assert view
+           |> element("#{@form} input[type=hidden][name='form[photo]'][value*='#{name}']")
+           |> has_element?()
+
+    view |> form(@form) |> render_submit()
+
+    assert %{photo: %{original_filename: ^name}} = order(code)
+  end
+
   test "a hidden field cancels what arrives for it", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/test/shaped_orders/create")
     change(view, %{"code" => unique("O"), "kind" => "standard"}, "kind")

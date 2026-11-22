@@ -375,7 +375,7 @@ defmodule ExampleWeb.FormStateScenarioTest do
       change(view, %{"kind" => "discount"}, "kind")
 
       assert held_fields(view) == %{
-               hidden: ~w(gift_note lines customer photo rush),
+               hidden: ~w(gift_note lines customer photo tag_ids rush),
                disabled: ~w(code)
              }
     end

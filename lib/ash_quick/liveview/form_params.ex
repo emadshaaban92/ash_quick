@@ -197,6 +197,12 @@ defmodule AshQuick.LiveView.FormParams do
     end
   end
 
+  # Each list argument the form takes over a relationship, filled with the
+  # ids of the records the relationship holds. The params it validates with
+  # restate the embeds drawn as sub-forms (`carry_embedded_params/2`): they
+  # start from the form's own, which on a form just built name none, and
+  # `transform_nested_params/3` reads an embed the params leave out as
+  # emptied, so the record's rows would go.
   @doc false
   def prefill_form_has_many_args(form, socket) do
     AshPhoenix.Form.arguments(form)
@@ -210,7 +216,10 @@ defmodule AshQuick.LiveView.FormParams do
            Utils.argument_to_relationship(arg, resource, form.action),
          records when is_list(records) <- Map.get(form.data, name) do
       value = Enum.map(records, & &1.id)
-      form |> AshPhoenix.Form.update_params(&Map.put(&1, arg.name, value))
+
+      AshPhoenix.Form.update_params(form, fn params ->
+        params |> Map.put(arg.name, value) |> carry_embedded_params(form)
+      end)
     else
       _ -> form
     end

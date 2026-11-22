@@ -164,8 +164,8 @@ defmodule Example.Test.ShapedOrders do
     * `:price`, drawn by AshQuick's money input, is relabelled, given a
       placeholder, and required for the order coded `priced_code/0`;
     * `:customer` (a `belongs_to`, posting `customer_id`), `:tag_ids` (an
-      argument over a many-to-many, on the create only) and `:rush` (a plain
-      argument) are hidden for a discount;
+      argument over a many-to-many) and `:rush` (a plain argument) are
+      hidden for a discount;
     * `:photo`, an attachment, shows only for a gift;
     * `:code` is hidden for a sample, on a create too, so Ash refuses a
       sample's create for the code it lacks, and its update refuses a
@@ -229,10 +229,9 @@ defmodule Example.Test.ShapedOrders do
         :photo
       ]
 
-      # No `:tag_ids` here: an update form over an embedded list and a
-      # many-to-many argument opens with the list's rows gone, which has
-      # nothing to do with the form state.
+      argument :tag_ids, {:array, :uuid}
       argument :rush, :boolean
+      change manage_relationship(:tag_ids, :tags, type: :append_and_remove)
       change set_attribute(:rushed, arg(:rush))
 
       # What `AshQuick.FormState` suggests for a value that must not outlive
@@ -415,7 +414,7 @@ defmodule Example.Test.ShapedOrdersLive.Quick do
     |> FormState.put_attrs(:price, placeholder: "0.00")
     |> FormState.require(:price, FormState.value(state, :code) == priced_code())
     |> FormState.hide(:customer, kind == :discount)
-    |> hide_tags(action, kind)
+    |> FormState.hide(:tag_ids, kind == :discount)
     # `read_only_fields` keeps every actor from writing it, so it is in no
     # actor's state: naming it is a no-op, not an error.
     |> FormState.disable(:locked_code)
@@ -425,10 +424,6 @@ defmodule Example.Test.ShapedOrdersLive.Quick do
   end
 
   defp adjust_form(state, _options), do: state
-
-  # Only the create takes `:tag_ids`: naming it on the update would raise.
-  defp hide_tags(state, :create, kind), do: FormState.hide(state, :tag_ids, kind == :discount)
-  defp hide_tags(state, :update, _kind), do: state
 
   defp overreach(state) do
     locked = %FormState.Field{
