@@ -312,7 +312,16 @@ defmodule AshQuick.LiveView.FormAttachments do
 
   defp maybe_upload_image(_field, params, _socket, _form), do: {params, @no_uploads}
 
+  # A sub-form field the post names nothing under (a stored row with no
+  # parts, its last one removed) has no rows to upload for.
   defp upload_nested_images(field_name, params, socket, form) do
+    case Map.get(params, to_string(field_name)) do
+      nil -> {params, @no_uploads}
+      _posted -> upload_posted_nested_images(field_name, params, socket, form)
+    end
+  end
+
+  defp upload_posted_nested_images(field_name, params, socket, form) do
     nested_form = form.forms[field_name]
 
     {nested_params, tally} =

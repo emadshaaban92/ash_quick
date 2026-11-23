@@ -571,7 +571,15 @@ defp adjust_form(state, _options), do: state
   post itself, and refuses a blank `require/3`d field at save. On an update a
   hidden field keeps the record's value. An Ash error on a hidden or disabled
   field is flashed, since it has no input.
-- Root fields only; sub-forms and bulk forms are drawn as before.
+- Sub-forms (embeds, managed relationships) each get a state of their own,
+  held by field in `state.forms`. State a rule once for every row with
+  `FormState.update_each(state, [:lines], fn line -> ... end)`
+  (`[:lines, :parts]` goes a level deeper); a row reads its parent's values
+  with `FormState.value(line.parent, :channel)`. Rows are rebuilt each
+  event, so adding or removing one never leaves a rule on the wrong row. The
+  server holds each row to its state as it does the root; on a stored row a
+  hidden or disabled field keeps the row's value. Bulk forms are drawn as
+  before.
 - UI only: bulk actions, the API and code never run it. Put real invariants
   in the resource (`where:`). Hiding doesn't clear a value, so a value that
   must not outlive what shows it is cleared by a change

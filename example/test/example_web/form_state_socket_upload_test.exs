@@ -84,14 +84,62 @@ defmodule ExampleWeb.FormStateSocketUploadTest do
     refute stored?(name)
   end
 
+  describe "a row's field" do
+    # A sub-form's files are consumed at the save, from the row they were
+    # picked on: only while that row's state shows the field.
+    @row_upload "form[items][0][photo]_upload"
+
+    test "stores what was picked while its row shows it", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/test/shaped_bundles/create")
+      code = unique("B")
+      add_item(view)
+      change(view, %{"code" => code, "items" => %{"0" => %{"kind" => "device"}}}, "kind")
+      change(view, %{"items" => %{"0" => %{"serial" => "SN-1"}}}, "serial")
+
+      name = unique("row") <> ".jpg"
+      view |> pick(@form, name, @row_upload) |> render_upload(name)
+      view |> form(@form) |> render_submit()
+
+      assert stored?(name)
+      assert [%{photo: %{original_filename: ^name}}] = bundle(code).items
+    end
+
+    test "takes nothing once its row hides it", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/test/shaped_bundles/create")
+      code = unique("B")
+      add_item(view)
+      change(view, %{"code" => code, "items" => %{"0" => %{"kind" => "device"}}}, "kind")
+
+      name = unique("row-held") <> ".jpg"
+      view |> pick(@form, name, @row_upload) |> render_upload(name)
+      change(view, %{"items" => %{"0" => %{"kind" => "good"}}}, "kind")
+      view |> form(@form) |> render_submit()
+
+      refute stored?(name)
+      assert [%{kind: :good, photo: nil}] = bundle(code).items
+    end
+  end
+
+  defp add_item(view) do
+    view
+    |> element("#{@form} [phx-click=add-form][phx-value-path='form[items]']")
+    |> render_click()
+  end
+
+  defp bundle(code) do
+    Example.Test.ShapedBundles
+    |> Ash.Query.filter(code == ^code)
+    |> Ash.read_one!(authorize?: false)
+  end
+
   defp change(view, params, target) do
     view
     |> form(@form)
     |> render_change(%{"form" => params, "_target" => ["form", target]})
   end
 
-  defp pick(view, form, name) do
-    file_input(view, form, @upload, [
+  defp pick(view, form, name, upload \\ @upload) do
+    file_input(view, form, upload, [
       %{name: name, content: @jpeg, type: "image/jpeg", size: byte_size(@jpeg)}
     ])
   end
