@@ -51,7 +51,7 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
 
       # The good item is the first row now, and it has no serial.
       refute has_input?(view, "items][0][serial")
-      refute has_input?(view, "items][1]")
+      refute has_input?(view, "items][1")
 
       add_item(view)
       change(view, %{"items" => items(["good", "device"])}, "kind")
@@ -184,6 +184,81 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
 
       assert [%{kind: :good, serial: nil}, %{kind: :device, serial: "SN-13"}] =
                bundle(code).items
+    end
+
+    # On an update each row keeps its own stored row, which a held field
+    # posts: not the one the form held at the index the row moved to.
+    test "drop a stored row", %{conn: conn} do
+      record = create(items: [%{kind: :device, serial: "SN-A"}, %{kind: :good}])
+      {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
+
+      push_submit(view, %{
+        "_drop_items" => ["0"],
+        "items" => %{
+          "0" => %{"kind" => "device", "serial" => "SN-A"},
+          "1" => %{"kind" => "good", "serial" => "Forged"}
+        }
+      })
+
+      assert [%{kind: :good, serial: nil}] = bundle(record.code).items
+    end
+
+    test "reorder stored rows", %{conn: conn} do
+      record = create(items: [%{kind: :device, serial: "SN-B"}, %{kind: :good}])
+      {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
+
+      push_submit(view, %{
+        "_sort_items" => ["1", "0"],
+        "items" => %{
+          "0" => %{"kind" => "device", "serial" => "SN-B"},
+          "1" => %{"kind" => "good", "serial" => "Forged"}
+        }
+      })
+
+      assert [%{kind: :good, serial: nil}, %{kind: :device, serial: "SN-B"}] =
+               bundle(record.code).items
+    end
+
+    test "add a row above stored rows", %{conn: conn} do
+      # The discount is read-only on a retail bundle: held to the stored one.
+      record = create(items: [%{kind: :good, discount: 5}])
+      {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
+
+      push_submit(view, %{
+        "_add_items" => "start",
+        "items" => %{"0" => %{"kind" => "good", "discount" => "5"}}
+      })
+
+      assert [%{kind: :good, discount: nil}, %{kind: :good, discount: 5}] =
+               bundle(record.code).items
+    end
+
+    # Moved on a change, a row's own sub-forms move with it, so the page
+    # draws them under the row's new place and the save keeps them with it.
+    test "reorder stored rows on a change, then save", %{conn: conn} do
+      record = two_devices()
+      {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
+
+      move(view, %{"_sort_items" => ["1", "0"], "items" => two_devices_posted()})
+      view |> form(@form) |> render_submit()
+
+      assert [
+               %{serial: "SN-B", parts: [%{name: "pb"}], spec: %{watts: 7}},
+               %{serial: "SN-A", parts: [%{name: "pa"}], spec: %{watts: 5}}
+             ] = bundle(record.code).items
+    end
+
+    test "drop a stored row on a change, then save", %{conn: conn} do
+      record = two_devices()
+      {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
+
+      move(view, %{"_drop_items" => ["0"], "items" => two_devices_posted()})
+      assert has_input?(view, "items][0][parts][0][name")
+      refute has_input?(view, "items][1")
+      view |> form(@form) |> render_submit()
+
+      assert [%{serial: "SN-B", parts: [%{name: "pb"}], spec: %{watts: 7}}] =
+               bundle(record.code).items
     end
   end
 
@@ -497,6 +572,35 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
                bundle(code).items
     end
   end
+
+  defp two_devices do
+    create(
+      items: [
+        %{kind: :device, serial: "SN-A", parts: [%{name: "pa"}], spec: %{watts: 5}},
+        %{kind: :device, serial: "SN-B", parts: [%{name: "pb"}], spec: %{watts: 7}}
+      ]
+    )
+  end
+
+  defp two_devices_posted do
+    %{
+      "0" => %{
+        "kind" => "device",
+        "serial" => "SN-A",
+        "parts" => %{"0" => %{"name" => "pa"}},
+        "spec" => %{"watts" => "5"}
+      },
+      "1" => %{
+        "kind" => "device",
+        "serial" => "SN-B",
+        "parts" => %{"0" => %{"name" => "pb"}},
+        "spec" => %{"watts" => "7"}
+      }
+    }
+  end
+
+  defp move(view, params),
+    do: render_change(view, "validate", %{"form" => params, "_target" => ["form", "items"]})
 
   defp create(attrs) do
     Ash.create!(ShapedBundles, Map.new(attrs) |> Map.put(:code, unique("B")), authorize?: false)
