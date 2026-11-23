@@ -11,14 +11,22 @@ defmodule AshQuick.LiveView.Components.ChoiceInput do
   def render(assigns) do
     %{form: form, attribute: attribute} = assigns
     resource = assigns[:resource]
-    stored = stored(form.data, attribute, resource)
-    offered = EnumOptions.options(attribute, resource)
+    narrowed = narrowed(assigns[:state_field])
+    offered = attribute |> EnumOptions.options(resource) |> offered(narrowed)
+    # Under options a hook narrows, the save checks what the record holds
+    # too, so a stored value they leave out is not offered: it stays picked,
+    # and can be unpicked.
+    stored = if narrowed, do: [], else: stored(form.data, attribute, resource)
 
     assigns =
       assign(assigns,
+        narrowed: narrowed,
         field: form[attribute.name],
         search: fn text -> search(stored, offered, text) end,
-        resolve: fn _values -> stored ++ Enum.map(offered, &option/1) end
+        resolve: fn _values ->
+          stored(form.data, attribute, resource) ++
+            Enum.map(EnumOptions.options(attribute, resource), &option/1)
+        end
       )
 
     ~H"""
@@ -28,12 +36,25 @@ defmodule AshQuick.LiveView.Components.ChoiceInput do
         mode={if @multiple, do: :tags, else: :single}
         search={@search}
         resolve={@resolve}
+        search_key={@narrowed}
         label={@label}
         required={@required}
         help={assigns[:help]}
       />
     </div>
     """
+  end
+
+  # The values `adjust_form/2` narrowed the field to
+  # (`AshQuick.FormState.options/3`), or nil for all its type lists.
+  defp narrowed(%{options: options}) when is_list(options), do: options
+  defp narrowed(_state_field), do: nil
+
+  defp offered(options, nil), do: options
+
+  defp offered(options, narrowed) do
+    kept = MapSet.new(narrowed, &to_string/1)
+    Enum.filter(options, fn {_label, value} -> MapSet.member?(kept, to_string(value)) end)
   end
 
   # The values the record holds lead the list when nothing is typed, so one

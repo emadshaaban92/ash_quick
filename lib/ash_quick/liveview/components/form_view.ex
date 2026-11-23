@@ -476,6 +476,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       required={@required}
       id={"select-#{@phx_field.id}"}
       module={AshQuick.LiveView.Components.HasManyInput}
+      state_field={@state_field}
       label={@label}
       help={@help}
       relationship={@relationship}
@@ -498,6 +499,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       id={"select-#{@phx_field.id}"}
       required={@required}
       module={AshQuick.LiveView.Components.BelongsToInput}
+      state_field={@state_field}
       label={@label}
       help={@help}
       relationship={@field}
@@ -515,6 +517,7 @@ defmodule AshQuick.LiveView.Components.FormView do
       id={"select-#{@phx_field.id}"}
       required={@required}
       module={AshQuick.LiveView.Components.ChoiceInput}
+      state_field={@state_field}
       multiple={@choice == :array}
       label={@label}
       help={@help}

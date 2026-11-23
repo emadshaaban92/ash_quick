@@ -484,7 +484,10 @@ defmodule AshQuick.LiveView.QuickView do
   on the server; a field it disables shows its value read-only and is
   dropped the same way; a field it requires refuses a blank save. It can only
   narrow what Ash allows. Each sub-form has a state of its own, which
-  `AshQuick.FormState.update_each/3` reaches for every row at once.
+  `AshQuick.FormState.update_each/3` reaches for every row at once. A
+  picker's records can be narrowed with `AshQuick.FormState.filter/3` and
+  `AshQuick.FormState.lookup_args/3`, and a fixed set of values with
+  `AshQuick.FormState.options/3`; the save refuses a value they leave out.
   See `AshQuick.FormState` for the functions and the rules.
 
   ## Sidebar
