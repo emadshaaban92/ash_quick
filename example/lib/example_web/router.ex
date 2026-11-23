@@ -176,6 +176,7 @@ defmodule ExampleWeb.Router do
         quick_view "/two_file_rows", Example.Test.TwoFileRowsLive.Quick
         quick_view "/typed_inputs", Example.Test.TypedInputsLive.Quick
         quick_view "/uncounted_pages", Example.Test.UncountedPagesLive.Quick
+        quick_view "/unseen_keepers", Example.Test.UnseenKeepersLive.Quick
         quick_view "/value_lists", Example.Test.ValueListsLive.Quick
         quick_view "/vault_filter", Example.Test.VaultFilterLive.Quick
         quick_view "/wide_offset_pages", Example.Test.WideOffsetPagesLive.Quick

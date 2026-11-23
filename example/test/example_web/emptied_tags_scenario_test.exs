@@ -1,7 +1,7 @@
 defmodule ExampleWeb.EmptiedTagsScenarioTest do
   @moduledoc """
   A multi-select emptied of its last pick posts no value under its name, only
-  LiveSelect's `<name>_empty_selection` marker. The form must read that as an
+  the picker's `<name>_empty_selection` marker. The form must read that as an
   empty list, not as an absent field that falls back to the stored picks.
 
   The form helper merges in the `tags[]` hidden inputs still on the page, so

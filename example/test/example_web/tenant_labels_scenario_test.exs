@@ -84,7 +84,7 @@ defmodule ExampleWeb.TenantLabelsScenarioTest do
     assert {name, nil} in dropdown_options(session, "Bin")
     assert {name, nil} in dropdown_options(session, "Spare Bins")
     assert picked_tags(session, "Spare Bins") == [{name, nil}]
-    assert_has(session, "input[name='form[bin_id_text_input]'][value='#{name}']")
+    assert_has(session, "#form_bin_id-picker [data-part=selection]", text: name, exact: true)
   end
 
   defp cells(view, selector) do

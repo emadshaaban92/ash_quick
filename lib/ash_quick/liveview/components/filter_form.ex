@@ -296,8 +296,8 @@ defmodule AshQuick.LiveView.Components.FilterForm do
         phx-target={@myself}
         phx-focus="offer_values"
       >
-        <:option :let={option}><.record_option option={option} /></:option>
-        <:tag :let={option}><.record_tag option={option} /></:tag>
+        <:option :let={option}><.record_option option={record_parts(option)} /></:option>
+        <:tag :let={option}><.record_tag option={record_parts(option)} /></:tag>
       </LiveSelect.live_select>
     </div>
     """
@@ -547,6 +547,14 @@ defmodule AshQuick.LiveView.Components.FilterForm do
   # selector would read as a class, so the id joins it with dashes instead.
   defp picker_id(%CustomFilter{uuid: uuid, field_name: name}),
     do: "filter-values-#{uuid}-#{String.replace(to_string(name), ".", "--")}"
+
+  # LiveSelect tells options apart by label, so a record's carries its hint
+  # ("Name (hint)") and its name apart. One it restored after a reconnect has
+  # that label alone, which already reads as both.
+  defp record_parts(%{name: name} = option) when is_binary(name),
+    do: %{label: name, hint: option[:hint]}
+
+  defp record_parts(option), do: %{label: option.label}
 
   # How a filter row's LiveSelect is drawn: one box the height of the row's
   # other inputs, holding its tags and its text input on one line and

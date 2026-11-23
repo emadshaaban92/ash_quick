@@ -52,9 +52,14 @@ defmodule ExampleWeb.PickerHintScenarioTest do
     # than the option read.
     session = conn |> visit(~p"/products/#{created.id}/update")
 
-    assert_has(
-      session,
-      "input[name='form[brand_id_text_input]'][value='#{name} (#{second.code})']"
+    assert_has(session, "#form_brand_id-picker [data-part=selection] span",
+      text: name,
+      exact: true
+    )
+
+    assert_has(session, "#form_brand_id-picker [data-part=selection] span",
+      text: second.code,
+      exact: true
     )
 
     assert {name, second.code} in dropdown_options(session, "Brand")
@@ -96,19 +101,18 @@ defmodule ExampleWeb.PickerHintScenarioTest do
     session = conn |> visit("/test/picked_labels/#{record.id}/update")
     assert sorted_tags(session) == [{name, "Shelf A"}, {name, "Shelf B"}]
 
-    # After a reconnect LiveSelect restores the tags from what the browser
-    # kept of them: a label and a value each. The label still says which.
+    # After a reconnect the form posts back the ids its hidden inputs held,
+    # and the picker that rejoins names them again, hints and all.
     session =
-      PhoenixTest.unwrap(session, fn view ->
+      conn
+      |> visit("/test/picked_labels/create")
+      |> PhoenixTest.unwrap(fn view ->
         view
-        |> element("#form_picks_live_select_component")
-        |> render_hook("selection_recovery", [
-          %{"label" => "#{name} (Shelf A)", "value" => upper.id},
-          %{"label" => "#{name} (Shelf B)", "value" => lower.id}
-        ])
+        |> element("#picked_labels-create")
+        |> render_change(%{"form" => %{"code" => code, "picks" => [upper.id, lower.id]}})
       end)
 
-    assert sorted_tags(session) == [{"#{name} (Shelf A)", nil}, {"#{name} (Shelf B)", nil}]
+    assert sorted_tags(session) == [{name, "Shelf A"}, {name, "Shelf B"}]
   end
 
   describe "a hint counted per tenant" do
@@ -140,10 +144,11 @@ defmodule ExampleWeb.PickerHintScenarioTest do
     end
   end
 
-  # The option read loads every option's hint, so it is the read a keystroke
-  # must not repeat. Shelves are read by this module alone, so counting their
-  # reads counts this form's.
-  test "the options are read once, not on every keystroke in the form", ctx do
+  # The option read loads every option's hint, so it runs when the dropdown
+  # opens, and a keystroke elsewhere in the form never repeats it. Shelves
+  # are read by this module alone, so counting their reads counts this
+  # form's.
+  test "the options are read when the dropdown opens, not on every keystroke", ctx do
     %{conn: conn, admin: admin} = ctx
     conn = log_in(conn, admin)
     Ash.create!(Shelf, %{name: unique("Shelf")})
@@ -162,6 +167,9 @@ defmodule ExampleWeb.PickerHintScenarioTest do
     on_exit(fn -> :telemetry.detach(handler) end)
 
     {:ok, view, _html} = live(conn, "/test/shelved_crates/create")
+    refute_received :shelf_read
+
+    ExampleWeb.PickerDriver.search(view, "form_shelf_id-picker")
     assert_received :shelf_read
     flush_shelf_reads()
 

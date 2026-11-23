@@ -25,6 +25,7 @@ defmodule ExampleWeb.PickerDriver do
   `""`, and returns the labels it offers.
   """
   def search(view, id, text \\ "") do
+    assert has_element?(view, "##{id}[data-aq-picker]"), "no picker #{inspect(id)} on the page"
     view |> with_target("##{id}") |> render_hook("search", %{"text" => text})
     render_async(view)
     offered(view, id)
@@ -80,7 +81,7 @@ defmodule ExampleWeb.PickerDriver do
     view
     |> query("##{id} [data-part=tag], ##{id} [data-part=selection]")
     |> Enum.map(fn node ->
-      label = LazyHTML.query(node, ".wrap-anywhere:first-child")
+      label = LazyHTML.query(node, "[data-part=label], .wrap-anywhere:first-child")
 
       text =
         if Enum.empty?(label), do: LazyHTML.text(node), else: LazyHTML.text(Enum.at(label, 0))

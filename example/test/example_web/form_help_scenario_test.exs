@@ -80,11 +80,24 @@ defmodule ExampleWeb.FormHelpScenarioTest do
     assert helps(view) == ["The new price, before tax."]
   end
 
-  # LiveSelect leaves no hook on its text box for an `aria-describedby`.
-  test "draws a relationship's help under its dropdown", %{conn: conn} do
+  # The picker's text box takes the field's id, so it is described by the
+  # help under it, and by its errors once a save is refused.
+  test "draws a relationship's help under its dropdown, and names it", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/products/create")
 
     assert "Who makes it, as printed on the box." in helps(view)
+    box = view |> html() |> LazyHTML.query("#form_brand_id")
+    assert LazyHTML.attribute(box, "role") == ["combobox"]
+    assert described_by(box) == ["form_brand_id-help"]
+    assert help(html(view), "form_brand_id-help") =~ "Who makes it, as printed on the box."
+    assert LazyHTML.attribute(box, "aria-invalid") == []
+
+    view |> form("#ash-quick-action-modal form[phx-submit=save]") |> render_submit()
+
+    box = view |> html() |> LazyHTML.query("#form_brand_id")
+    assert LazyHTML.attribute(box, "aria-invalid") == ["true"]
+    assert described_by(box) == ["form_brand_id-help", "form_brand_id-errors"]
+    assert view |> html() |> LazyHTML.query("#form_brand_id-errors") |> Enum.any?()
   end
 
   test "names the help before the errors once a save is refused", ctx do
