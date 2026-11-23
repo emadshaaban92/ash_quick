@@ -212,10 +212,11 @@ defmodule AshQuick.LiveView.FormParams do
   end
 
   defp prefill_form_has_many_arg(form, resource, arg) do
-    with %{destination: _, name: name} <-
+    with %{destination: _, name: name} = relationship <-
            Utils.argument_to_relationship(arg, resource, form.action),
          records when is_list(records) <- Map.get(form.data, name) do
-      value = Enum.map(records, & &1.id)
+      key = Utils.list_key(arg, relationship, form.action)
+      value = Enum.map(records, &(&1 |> Map.fetch!(key) |> to_string()))
 
       AshPhoenix.Form.update_params(form, fn params ->
         params |> Map.put(arg.name, value) |> carry_embedded_params(form)
@@ -367,7 +368,11 @@ defmodule AshQuick.LiveView.FormParams do
     |> Utils.form_fields()
     |> Enum.filter(fn
       %Argument{type: {:array, item_type}} = argument ->
-        item_type in [Type.UUID, Type.UUIDv7] or EnumOptions.kind(argument) == :array
+        item_type in [Type.UUID, Type.UUIDv7] or EnumOptions.kind(argument) == :array or
+          match?(
+            %Ash.Resource.Relationships.ManyToMany{},
+            Utils.argument_to_relationship(argument, form.resource, form.action)
+          )
 
       _ ->
         false

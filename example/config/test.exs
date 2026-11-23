@@ -62,6 +62,7 @@ test_pages = [
   "/test/counted_bins",
   "/test/counted_box_codes",
   "/test/counted_boxes",
+  "/test/created_picks",
   "/test/dated_entries",
   "/test/default_pages",
   "/test/digits_only",
@@ -107,6 +108,7 @@ test_pages = [
   "/test/small_pages",
   "/test/sorted_rows",
   "/test/sorted_rows_named",
+  "/test/sourced_labels",
   "/test/stored_map_lists",
   "/test/two_file_rows",
   "/test/typed_inputs",
@@ -127,7 +129,9 @@ config :ash_quick,
       # Tower keeps its default reporter here on purpose: it is the one that
       # holds events in memory, and `Example.ActionErrorsTest` reads what was
       # reported back from it.
-      unconfigured_error_reporter: [:tower]
+      unconfigured_error_reporter: [:tower],
+      # A join no page renders, keyed by its pair of ids.
+      missing_extension: [Example.Catalog.ProductLabel]
     ]
   ]
 

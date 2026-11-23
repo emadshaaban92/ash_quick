@@ -1041,6 +1041,9 @@ msgstr ""
 msgid "Ip"
 msgstr ""
 
+msgid "Labels"
+msgstr ""
+
 msgid "Locale"
 msgstr ""
 

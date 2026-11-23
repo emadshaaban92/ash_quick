@@ -1,6 +1,6 @@
 defmodule AshQuick.LiveView.RelationshipArgumentTest do
   @moduledoc """
-  Which relationship an id-list argument edits, which is what a form renders a
+  Which relationship a list argument edits, which is what a form renders a
   dropdown for, prefills on update and loads the record with. It is read off
   the action's `manage_relationship` changes, so the argument's name is the
   resource's to choose; the `<relationship>_ids` name is only the fallback.
@@ -16,6 +16,16 @@ defmodule AshQuick.LiveView.RelationshipArgumentTest do
   defp relationship(action, argument) do
     arg = Enum.find(Ash.Resource.Info.action(Post, action).arguments, &(&1.name == argument))
     Utils.argument_to_relationship(arg, Post, action)
+  end
+
+  defp created(action, argument) do
+    arg = Enum.find(Ash.Resource.Info.action(Post, action).arguments, &(&1.name == argument))
+    Utils.created_values(arg, relationship(action, argument), action)
+  end
+
+  defp key(action, argument) do
+    arg = Enum.find(Ash.Resource.Info.action(Post, action).arguments, &(&1.name == argument))
+    Utils.list_key(arg, relationship(action, argument), action)
   end
 
   test "an argument named for its relationship edits it" do
@@ -42,6 +52,45 @@ defmodule AshQuick.LiveView.RelationshipArgumentTest do
     assert %Argument{name: :legacy_ids} = relationship(:legacy, :legacy_ids)
   end
 
+  describe "a list of text" do
+    test "edits the relationship whose change looks it up by value_is_key" do
+      for action <- [:named_create, :named_create_with, :named_code, :named_strict] do
+        assert %ManyToMany{name: :tags} = relationship(action, :names)
+      end
+
+      assert key(:named_create, :names) == :name
+      assert key(:named_code, :names) == :code
+    end
+
+    test "names nothing when its change never looks a name up, or names no key" do
+      assert %Argument{name: :names} = relationship(:named_unlooked, :names)
+      assert %Argument{name: :names} = relationship(:named_unkeyed, :names)
+    end
+
+    test "adds what matches nothing when the change creates it" do
+      assert created(:named_create, :names) == %{action: :create, match: :exact}
+      assert created(:named_create_with, :names) == %{action: :tagged, match: :exact}
+    end
+
+    test "matches in any case on a ci_string key" do
+      assert created(:named_code, :names) == %{action: :create, match: :any_case}
+    end
+
+    test "adds nothing when the change creates nothing" do
+      assert created(:named_strict, :names) == nil
+    end
+
+    test "adds nothing through a create that does not take the key" do
+      assert created(:named_unfillable, :names) == nil
+    end
+  end
+
+  test "an id list adds nothing, though its change creates what it misses" do
+    assert %ManyToMany{name: :tags} = relationship(:ids_create, :ids)
+    assert key(:ids_create, :ids) == :id
+    assert created(:ids_create, :ids) == nil
+  end
+
   test "a page renders a dropdown for an argument not named _ids" do
     widget = fn assigns -> assigns end
 
@@ -54,7 +103,11 @@ defmodule AshQuick.LiveView.RelationshipArgumentTest do
           Options.new(__MODULE__.SomeQuickView, Post,
             resource: Post,
             form: [
-              widgets: Map.new([:picked, :everywhere, :overridden, :tags_ids], &{&1, widget})
+              widgets:
+                Map.new(
+                  [:picked, :everywhere, :overridden, :tags_ids, :names, :ids],
+                  &{&1, widget}
+                )
             ]
           )
         end)

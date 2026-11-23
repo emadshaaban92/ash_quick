@@ -450,30 +450,31 @@ defmodule AshQuick.LiveView.Components.FormView do
   # the page. It takes the input's id (`form_rows_0_kind`), which carries the
   # sub-form's path: two rows of a sub-form, or a row and its parent, share
   # field names.
+  defp field_input(%{state_field: %{kind: :many_to_many}} = assigns) do
+    relationship =
+      Utils.argument_to_relationship(assigns.field, assigns.resource, assigns.form.action)
+
+    assigns = assign(assigns, relationship: relationship)
+
+    ~H"""
+    <.live_component
+      required={@required}
+      id={"select-#{@phx_field.id}"}
+      module={AshQuick.LiveView.Components.HasManyInput}
+      label={@label}
+      help={@help}
+      relationship={@relationship}
+      scope={@scope}
+      form={@form |> to_form()}
+      argument_name={@field.name}
+    />
+    """
+  end
+
+  # An id list that edits no many_to_many has nothing to pick from.
   defp field_input(%{field: %Argument{type: {:array, item_type}}} = assigns)
        when item_type in [Type.UUID, Type.UUIDv7] do
-    case Utils.argument_to_relationship(assigns.field, assigns.resource, assigns.form.action) do
-      %Ash.Resource.Relationships.ManyToMany{} = relationship ->
-        assigns = assign(assigns, relationship: relationship)
-
-        ~H"""
-        <.live_component
-          :if={@relationship}
-          required={@required}
-          id={"select-#{@phx_field.id}"}
-          module={AshQuick.LiveView.Components.HasManyInput}
-          label={@label}
-          help={@help}
-          relationship={@relationship}
-          scope={@scope}
-          form={@form |> to_form()}
-          argument_name={@field.name}
-        />
-        """
-
-      _ ->
-        ~H""
-    end
+    ~H""
   end
 
   defp field_input(%{field: %BelongsTo{}} = assigns) do

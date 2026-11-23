@@ -21,6 +21,8 @@ defmodule AshQuick.LiveView.Components.PickerInput do
   attr :help, :string, default: nil
   attr :placeholder, :string, default: nil
   attr :records, :boolean, default: false, doc: "draws each option's hint, as a record's"
+  attr :create, :boolean, default: false, doc: "offers typed text that matches nothing as new"
+  attr :create_match, :atom, default: :exact, values: [:exact, :any_case]
 
   def picker_input(assigns) do
     field = assigns.field
@@ -51,6 +53,8 @@ defmodule AshQuick.LiveView.Components.PickerInput do
       label_id={@label_id}
       describedby={[@help_id, @errors_id]}
       invalid={@errors != []}
+      create={@create}
+      create_match={@create_match}
     >
       <:option :let={option} :if={@records}><.record_option option={option} /></:option>
       <%!-- A single pick shows its hint beside it, as the picker draws it. --%>

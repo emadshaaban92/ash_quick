@@ -244,6 +244,12 @@ defmodule AshQuick.LiveView.QuickView.Options do
 
           form: [widgets: %{#{elem(hd(unsaveable), 1).name}: &__MODULE__.#{elem(hd(unsaveable), 1).name}_input/1}]
 
+      or, for a list of text naming records, edit a many_to_many through it with \
+      a `manage_relationship` change that looks them up by a key, and it is \
+      picked from that relationship's records:
+
+          change manage_relationship(:labels, type: :append_and_remove, value_is_key: :name)
+
       or leave it out of the action. A `read_only` entry that leaves it out does \
       not count: whether it leaves the field out depends on who opens the \
       form, and the page is checked for anyone.
@@ -294,6 +300,8 @@ defmodule AshQuick.LiveView.QuickView.Options do
   defp unsaveable_list?(%{type: {:array, item}} = field, resource, action) do
     cond do
       not is_nil(EnumOptions.kind(field)) -> false
+      # Text a many_to_many's change looks up by `value_is_key`: picked.
+      match?(%ManyToMany{}, Utils.argument_to_relationship(field, resource, action)) -> false
       text_item?(item) -> true
       untyped_item?(item) -> not Utils.managed_argument?(field, resource, action)
       true -> false

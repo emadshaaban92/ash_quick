@@ -6,7 +6,7 @@
 # It assumes an empty database — there is no find-or-create anywhere below.
 
 alias Example.Accounts.User
-alias Example.Catalog.{Brand, Category, PriceChange, Product, Store}
+alias Example.Catalog.{Brand, Category, Label, PriceChange, Product, Store}
 
 # `:role` is a read-only field (see `Example.Checks.RoleIsAdminOnly`), and
 # `AshQuick.ReadOnlyFields.StripReadOnlyFields` drops it from the changeset
@@ -62,6 +62,12 @@ categories =
     )
   end
 
+# A product form picks these by name, and offers an admin to add a new one.
+labels =
+  for name <- ["Camping", "Lightweight", "Waterproof"] do
+    Label.create!(%{name: name}, actor: admin, authorize?: false)
+  end
+
 products =
   for {sku, name, price, tags, store_id} <- [
         {"TNT-2P", "Two-person tent", Money.new(:USD, "249.00"), [:new], north.id},
@@ -78,6 +84,7 @@ products =
         description: "Seeded demo product. Edit me — the form is derived from the resource.",
         price: price,
         tags: tags,
+        labels: if(String.starts_with?(sku, "TNT"), do: ["Camping", "Waterproof"], else: []),
         brand_id: Enum.random(brands).id,
         category_id: Enum.random(categories).id,
         store_id: store_id
@@ -96,7 +103,7 @@ products
 IO.puts("""
 
 Seeded 2 stores, #{length(brands)} brands, #{length(categories) + 1} categories, \
-#{length(products)} products and #{Ash.count!(PriceChange, authorize?: false)} price change(s).
+#{length(labels)} labels, #{length(products)} products and #{Ash.count!(PriceChange, authorize?: false)} price change(s).
 
 Sign in at http://localhost:4000/login as any of:
 

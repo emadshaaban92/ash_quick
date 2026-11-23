@@ -50,7 +50,33 @@ defmodule Example.Catalog.Product do
       :store_id
     ]
 
-    defaults [:create, :read, :update, :destroy]
+    defaults [:read, :destroy]
+
+    # `:labels` takes names: the ones that match a label relate it, and the
+    # rest are created, so the form's picker offers to add a new name, to an
+    # actor who may create a label (`Example.Catalog.Label`).
+    create :create do
+      primary? true
+      argument :labels, {:array, :string}
+
+      change manage_relationship(:labels,
+               type: :append_and_remove,
+               value_is_key: :name,
+               on_no_match: :create
+             )
+    end
+
+    update :update do
+      primary? true
+      require_atomic? false
+      argument :labels, {:array, :string}
+
+      change manage_relationship(:labels,
+               type: :append_and_remove,
+               value_is_key: :name,
+               on_no_match: :create
+             )
+    end
 
     read :index do
       argument :search, :string
@@ -263,6 +289,13 @@ defmodule Example.Catalog.Product do
     belongs_to :store, Example.Catalog.Store do
       public? true
       allow_nil? true
+    end
+
+    many_to_many :labels, Example.Catalog.Label do
+      through Example.Catalog.ProductLabel
+      source_attribute_on_join_resource :product_id
+      destination_attribute_on_join_resource :label_id
+      public? true
     end
 
     has_many :price_changes, Example.Catalog.PriceChange do

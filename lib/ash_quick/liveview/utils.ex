@@ -148,15 +148,19 @@ defmodule AshQuick.LiveView.Utils do
   end
 
   @doc """
-  The relationship an id-list argument of `action` edits, or the argument
-  itself when it edits none.
+  The relationship a list argument of `action` edits, or the argument itself
+  when it edits none.
 
-  The argument edits the relationship a `manage_relationship` change on the
+  An id list edits the relationship a `manage_relationship` change on the
   action (or, failing that, a global one covering it) names it for, whatever
   it is called. A change's `where:` is not consulted: it is judged against the
   changeset on submit, so the form takes the change at its word.
   With no such change, an argument named `<relationship>_ids` is still taken
   to edit `<relationship>`.
+
+  A list of text edits a many_to_many only through such a change that names
+  `value_is_key` and looks the values up (`on_lookup`): each item is then a
+  value of that destination attribute, which `list_key/3` names.
   """
   def argument_to_relationship(%Argument{type: {:array, item_type}} = arg, resource, action)
       when item_type in [Ash.Type.UUID, Ash.Type.UUIDv7] do
@@ -166,7 +170,104 @@ defmodule AshQuick.LiveView.Utils do
     end
   end
 
+  def argument_to_relationship(%Argument{type: {:array, item_type}} = arg, resource, action) do
+    with true <- text_type?(item_type),
+         change when is_list(change) <- managed_change(resource, action, arg.name),
+         key when is_atom(key) and not is_nil(key) <- change[:opts][:value_is_key],
+         %Relationships.ManyToMany{} = relationship <-
+           Ash.Resource.Info.relationship(resource, change[:relationship]),
+         true <-
+           Ash.Changeset.ManagedRelationshipHelpers.could_lookup?(
+             manage_opts(relationship, change)
+           ) do
+      relationship
+    else
+      _ -> arg
+    end
+  end
+
   def argument_to_relationship(arg, _resource, _action), do: arg
+
+  @doc """
+  The destination attribute each item of `argument`, a list editing
+  `relationship` (`argument_to_relationship/3`), is a value of: the change's
+  `value_is_key`, else the destination's primary key. A composite key has no
+  single value to post, so it is refused, naming the relationship.
+  """
+  def list_key(%Argument{name: name}, relationship, action) do
+    change = managed_change(relationship.source, action, name) || []
+
+    case change[:opts][:value_is_key] ||
+           Ash.Resource.Info.primary_key(relationship.destination) do
+      key when is_atom(key) ->
+        key
+
+      [key] ->
+        key
+
+      keys ->
+        raise ArgumentError, """
+        #{inspect(relationship.destination)} has the composite primary key \
+        #{inspect(keys)}, which a multi-select has no single value to submit for. \
+        #{inspect(relationship.source)}.#{relationship.name} cannot be edited \
+        through a list argument unless its manage_relationship names value_is_key.
+        """
+    end
+  end
+
+  @doc """
+  How a picker over `argument`, a list of text editing `relationship`, may
+  add values that match no record: `%{action: create, match: :exact |
+  :any_case}`, or `nil` when it may not.
+
+  It may when the action's `manage_relationship` change creates what it
+  finds no match for (`on_no_match: :create` or `{:create, action}`, as Ash
+  resolves it) and that create accepts the `value_is_key` attribute, which
+  is all a typed value can fill. A `ci_string` key matches in any case, as
+  the lookup will. Whether the actor may run the create is asked where the
+  scope is known.
+  """
+  def created_values(%Argument{name: name, type: {:array, item_type}}, relationship, action) do
+    with true <- text_type?(item_type),
+         change when is_list(change) <- managed_change(relationship.source, action, name),
+         key when is_atom(key) and not is_nil(key) <- change[:opts][:value_is_key],
+         {:create, create, _join_create, _join_keys} <-
+           manage_opts(relationship, change)[:on_no_match],
+         %{accept: accept} <- Ash.Resource.Info.action(relationship.destination, create),
+         true <- key in accept do
+      attribute = Ash.Resource.Info.attribute(relationship.destination, key)
+      %{action: create, match: if(ci_string?(attribute), do: :any_case, else: :exact)}
+    else
+      _ -> nil
+    end
+  end
+
+  def created_values(_argument, _relationship, _action), do: nil
+
+  # The options as the change will run them: its `type`'s defaults under
+  # what it says, resolved by Ash as `manage_relationship` resolves them.
+  defp manage_opts(relationship, change) do
+    opts = change[:opts] || []
+    defaults = if opts[:type], do: Ash.Changeset.manage_relationship_opts(opts[:type]), else: []
+
+    Ash.Changeset.ManagedRelationshipHelpers.sanitize_opts(
+      relationship,
+      Keyword.merge(defaults, opts)
+    )
+  end
+
+  defp text_type?(type), do: base_type(type) in [Ash.Type.String, Ash.Type.CiString]
+
+  defp ci_string?(%{type: type}), do: base_type(type) == Ash.Type.CiString
+  defp ci_string?(_attribute), do: false
+
+  defp base_type(type) do
+    type = Ash.Type.get_type(type)
+
+    if is_atom(type) and Ash.Type.NewType.new_type?(type),
+      do: base_type(Ash.Type.NewType.subtype_of(type)),
+      else: type
+  end
 
   @doc """
   Whether `action` manages a relationship through `field`, an argument, so that
@@ -187,12 +288,20 @@ defmodule AshQuick.LiveView.Utils do
   # `action_changes/2` puts global changes first; the action's own change is the
   # more specific statement, so it is the one looked at first.
   defp managed_relationship(resource, action, argument) do
+    case managed_change(resource, action, argument) do
+      nil -> nil
+      change -> change[:relationship]
+    end
+  end
+
+  # The options of the `manage_relationship` change through `argument`.
+  defp managed_change(resource, action, argument) do
     resource
     |> Ash.Resource.Info.action_changes(action)
     |> Enum.reverse()
     |> Enum.find_value(fn
       %Ash.Resource.Change{change: {Ash.Resource.Change.ManageRelationship, opts}} ->
-        if opts[:argument] == argument, do: opts[:relationship]
+        if opts[:argument] == argument, do: opts
 
       _ ->
         nil
