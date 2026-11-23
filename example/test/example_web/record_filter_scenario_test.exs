@@ -107,9 +107,6 @@ defmodule ExampleWeb.RecordFilterScenarioTest do
       assert chips(view) == ["Owner is any of #{prefix} Ada"]
     end
 
-    # LiveSelect tells a picked option from the others by its label, not its
-    # value, so two held records sharing one would take a click on either for
-    # the first, and post its id again rather than unpicking it.
     # A chip names the records in their own direction: a name of digits and
     # signs left to right on an Arabic page too.
     test "names the records in the chip in their own direction", %{conn: conn, admin: admin} do
@@ -125,6 +122,8 @@ defmodule ExampleWeb.RecordFilterScenarioTest do
       end
     end
 
+    # The picker tells its options apart by value, so of two held records
+    # sharing a name, a click on one unpicks that one only.
     test "unpicks either of two records a link holds that share a name",
          %{conn: conn, admin: admin} do
       name = unique("Twin")
@@ -190,6 +189,27 @@ defmodule ExampleWeb.RecordFilterScenarioTest do
 
       [uuid] = row_uuids(view)
       assert squashed(picked(view, uuid)) == ["#{red.name} R1", "#{blue.name} B1"]
+    end
+
+    # The picker tells records apart by id, so a link's id written in
+    # capitals is held as the record's own: searched for and picked, the
+    # record is unpicked rather than held twice.
+    test "holds a link's id in capitals as the record's own", %{conn: conn, admin: admin} do
+      red = tag(name: unique("Red"), code: "R1")
+
+      {:ok, view, _html} =
+        live(
+          log_in(conn, admin),
+          "/test/record_filter?show_custom_filter=true&custom_filter=" <>
+            encode_filter([row("tags", "in", [String.upcase(red.id)])])
+        )
+
+      [uuid] = row_uuids(view)
+      assert squashed(picked(view, uuid)) == ["#{red.name} R1"]
+
+      assert squashed(search_values(view, uuid, red.name)) == ["#{red.name} R1"]
+      pick_values(view, uuid, ["#{red.name} R1"], searched: true)
+      assert picked(view, uuid) == []
     end
 
     test "keeps the items with a tag in any group picked, two hops away",
@@ -444,8 +464,21 @@ defmodule ExampleWeb.RecordFilterScenarioTest do
       assert label == counted.id
 
       assert FilterRecords.held(counted_field(), [counted.id], scope) == %{
-               counted.id => %{label: counted.id, value: counted.id, name: counted.id, hint: nil}
+               counted.id => %{label: counted.id, value: counted.id, hint: nil}
              }
+    end
+
+    test "offers the first 20 records a search matches, and says there are more",
+         %{admin: admin} do
+      prefix = unique("Many")
+      for i <- 1..21, do: owner(name: "#{prefix} #{i}")
+      scope = Example.Scope.new(actor: admin)
+
+      assert {options, :more} = FilterRecords.search(owner_field(), prefix, scope)
+      assert length(options) == 20
+
+      assert [%{label: label}] = FilterRecords.search(owner_field(), "#{prefix} 21", scope)
+      assert label == "#{prefix} 21"
     end
 
     test "offers nothing from a read the destination refuses, and logs why", %{admin: admin} do
@@ -499,6 +532,16 @@ defmodule ExampleWeb.RecordFilterScenarioTest do
       spec: :counted,
       field: Ash.Resource.Info.attribute(resource, :id),
       resource: resource,
+      record?: true
+    }
+  end
+
+  defp owner_field do
+    %FilterField{
+      name: "owner",
+      spec: :owner,
+      field: Ash.Resource.Info.attribute(Owner, :id),
+      resource: Owner,
       record?: true
     }
   end

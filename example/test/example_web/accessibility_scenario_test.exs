@@ -14,9 +14,7 @@ defmodule ExampleWeb.AccessibilityScenarioTest do
 
   A control is named here as a browser names it: by `aria-label`,
   `aria-labelledby`, a `<label>` that holds it or names its id, or, for a
-  button or a link, its text. LiveSelect's search input takes no attributes,
-  so its name is set by the picker's hook from the `data-label` it wraps it
-  in, and that is what is checked for it.
+  button or a link, its text.
   """
   use ExampleWeb.FeatureCase, async: true
 
@@ -74,7 +72,8 @@ defmodule ExampleWeb.AccessibilityScenarioTest do
       filter_change(view, "field_name-#{uuid}", "stage")
       filter_change(view, "operator-#{uuid}", "in")
 
-      assert attribute(view, "##{picker_id(view, uuid)}-wrap", "data-label") == ["Value"]
+      assert attribute(view, "##{picker_id(view, uuid)} [role=combobox]", "aria-label") ==
+               ["Value"]
     end
   end
 
@@ -378,17 +377,8 @@ defmodule ExampleWeb.AccessibilityScenarioTest do
       "#{scope} select, #{scope} textarea, #{scope} button, " <>
         "#{scope} input:not([type='hidden'])"
     )
-    |> Enum.reject(&live_select_input?(&1, html))
     |> Enum.filter(&(name(&1, html) in [nil, ""]))
     |> Enum.map(&LazyHTML.to_html/1)
-  end
-
-  # LiveSelect's search input, which the picker's hook names.
-  defp live_select_input?(node, html) do
-    case LazyHTML.attribute(node, "id") do
-      [id] -> html |> LazyHTML.query("[data-label] ##{id}") |> Enum.any?()
-      _ -> false
-    end
   end
 
   defp name(node, html) do

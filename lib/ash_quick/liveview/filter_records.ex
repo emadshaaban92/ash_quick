@@ -1,10 +1,12 @@
 defmodule AshQuick.LiveView.FilterRecords do
   @moduledoc false
   # The records a record row of the list's filter picks from, and those it
-  # holds, as the options a relationship dropdown draws: read through the
+  # holds, as `AshQuick.LiveView.Picker` options: read through the
   # destination's lookup action with the reader's scope, so a record they
-  # may not read is neither offered nor named. Each option's `:value` is its
-  # primary key as the row holds it and the URL carries it, a string.
+  # may not read is neither offered nor named. An option is
+  # `%{value:, label:, hint:}`, its label the record's display name, its hint
+  # the display hint, and its value its primary key as the row holds it and
+  # the URL carries it, a string.
   use Gettext, backend: AshQuick.Gettext
   require Ash.Query
   require Logger
@@ -18,13 +20,26 @@ defmodule AshQuick.LiveView.FilterRecords do
   # first few a search matches, and the search narrows them.
   @limit 20
 
-  @doc "The records of `field`'s destination `search` matches, the first #{@limit}."
+  @doc """
+  The records of `field`'s destination `search` matches, the first #{@limit},
+  or `{options, :more}` when there are more.
+  """
   def search(%FilterField{resource: resource, field: key}, search, scope) do
-    resource
-    |> query(key, search, scope)
-    |> Ash.Query.page(limit: @limit, count: false)
-    |> read(key)
+    {options, more?} =
+      resource
+      |> query(key, search, scope)
+      |> Ash.Query.page(limit: @limit, count: false)
+      |> read(key)
+
+    if more?, do: {options, :more}, else: options
   end
+
+  @doc """
+  The options for `ids`, the values a row's picker holds, as `held/3` names
+  them, each carrying the id it was asked for.
+  """
+  def resolve(%FilterField{} = field, ids, scope),
+    do: for({id, option} <- held(field, ids, scope), do: %{option | value: id})
 
   @doc """
   The option for each of `ids`, by id: the record's, or a placeholder for
@@ -52,6 +67,7 @@ defmodule AshQuick.LiveView.FilterRecords do
           |> Ash.Query.filter(^Ash.Expr.ref(key.name) in ^values)
           |> Ash.Query.page(limit: length(values), count: false)
           |> read(key)
+          |> elem(0)
           |> Map.new(&{&1.value, &1})
       end
 
@@ -82,14 +98,10 @@ defmodule AshQuick.LiveView.FilterRecords do
   defp held_ids(_row, _field), do: []
 
   @doc """
-  The option standing for a record the reader cannot be shown. Its tag
-  draws `:name`, so it reads plainly even when two such options' labels are
-  told apart by their ids.
+  The option standing for a record the reader cannot be shown, which names
+  nothing of it.
   """
-  def unavailable(id) do
-    name = gettext("Unavailable record")
-    %{label: name, value: id, name: name}
-  end
+  def unavailable(id), do: %{label: gettext("Unavailable record"), value: id, hint: nil}
 
   # Inactive records are offered too, though a relationship dropdown hides
   # them: a list is filtered by what its rows hold, and a row can hold a
@@ -109,16 +121,17 @@ defmodule AshQuick.LiveView.FilterRecords do
     |> Utils.load_display_hint()
   end
 
-  # A read the destination refuses offers nothing, as one it filters to
-  # nothing does, and is logged: the visitor sees an empty picker, or a
-  # record they picked named as unavailable, and nothing more.
+  # The options read, and whether there are more past them. A read the
+  # destination refuses offers nothing, as one it filters to nothing does,
+  # and is logged: the visitor sees an empty picker, or a record they picked
+  # named as unavailable, and nothing more.
   defp read(query, key) do
     case Ash.read(query) do
-      {:ok, %{results: records}} ->
-        Enum.map(records, &option(&1, key))
+      {:ok, %{results: records} = page} ->
+        {Enum.map(records, &option(&1, key)), Map.get(page, :more?, false) == true}
 
       {:ok, records} when is_list(records) ->
-        Enum.map(records, &option(&1, key))
+        {Enum.map(records, &option(&1, key)), false}
 
       {:error, error} ->
         Logger.warning(fn ->
@@ -127,12 +140,12 @@ defmodule AshQuick.LiveView.FilterRecords do
             Exception.message(Ash.Error.to_error_class(error))
         end)
 
-        []
+        {[], false}
     end
   end
 
   defp option(record, key) do
-    option = Utils.to_option(record, key.name)
-    %{option | value: to_string(option.value)}
+    %{name: name, hint: hint, value: value} = Utils.to_option(record, key.name)
+    %{value: to_string(value), label: name, hint: hint && to_string(hint)}
   end
 end
