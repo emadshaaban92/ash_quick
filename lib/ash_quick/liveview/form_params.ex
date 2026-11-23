@@ -273,6 +273,10 @@ defmodule AshQuick.LiveView.FormParams do
   @doc false
   def embedded_params(value), do: embedded_to_params(value)
 
+  # One attribute's value as a sub-form posts it.
+  @doc false
+  def attribute_param(value, type), do: encode_embedded_value(value, type)
+
   defp embedded_to_params(values) when is_list(values) do
     Enum.map(values, &embedded_struct_to_params/1)
   end

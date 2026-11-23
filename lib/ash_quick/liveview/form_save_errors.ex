@@ -83,11 +83,10 @@ defmodule AshQuick.LiveView.FormSaveErrors do
   # inputs the page draws for it, and each flashed one says which item it is
   # about: "Items 2 › Note: is hidden". A field the form state hides or
   # disables draws no input to show an error under, so its errors are flashed
-  # too, and so are those of a sub-form under it.
+  # too, on the root form or a sub-form, and so are those of a sub-form under
+  # it.
   @doc false
   def flash_unplaced_errors(socket, form, scope, state \\ nil) do
-    held = held_inputs(state)
-
     form
     |> AshPhoenix.Form.raw_errors(for_path: :all)
     # A map past 32 keys iterates in hash order; the page reads top to bottom.
@@ -95,7 +94,7 @@ defmodule AshQuick.LiveView.FormSaveErrors do
     |> Enum.flat_map(fn {path, errors} ->
       errors
       |> ActionErrors.unplaced_sentences(
-        drawn_inputs(form, path, scope, held),
+        drawn_inputs(form, path, scope, state),
         resource_at(form, path)
       )
       |> Enum.map(&located(&1, form, path))
@@ -150,24 +149,27 @@ defmodule AshQuick.LiveView.FormSaveErrors do
   # files errors under: each field is a key of `form.forms`, followed by the
   # item's index when it holds a list. A sub-form under a field this actor
   # cannot see is still built, and can refuse the save, but the page draws none
-  # of its inputs.
-  defp drawn_inputs(form, [], scope, held),
-    do: form |> input_names(scope) |> MapSet.difference(held)
+  # of its inputs. `state` is the form state of `form`, whose held fields draw
+  # none either, and each sub-form's is found in it by the sub-form's name.
+  defp drawn_inputs(form, [], scope, state),
+    do: form |> input_names(scope) |> MapSet.difference(held_inputs(state))
 
-  defp drawn_inputs(form, [field | path], scope, held) do
+  defp drawn_inputs(form, [field | path], scope, state) do
     {sub_form, path} =
       case {Map.fetch!(form.forms, field), path} do
         {forms, [index | path]} when is_list(forms) -> {Enum.at(forms, index), path}
         {sub_form, path} -> {sub_form, path}
       end
 
-    if field in input_names(form, scope) and field not in held,
-      do: drawn_inputs(sub_form, path, scope, MapSet.new()),
+    sub_state = state && sub_form && AshQuick.FormState.find(state, sub_form.name)
+
+    if field in input_names(form, scope) and field not in held_inputs(state),
+      do: drawn_inputs(sub_form, path, scope, sub_state),
       else: MapSet.new()
   end
 
-  # The names a root form's error can be filed under for every field the
-  # state hides or disables: the field's own and its inputs (`customer_id`).
+  # The names a form's error can be filed under for every field its state
+  # hides or disables: the field's own and its inputs (`customer_id`).
   defp held_inputs(%AshQuick.FormState{fields: fields}) do
     for field <- fields,
         field.hidden? or field.disabled?,

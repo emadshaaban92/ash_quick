@@ -483,7 +483,8 @@ defmodule AshQuick.LiveView.QuickView do
   never skips one. A field it hides is not drawn and its params are dropped
   on the server; a field it disables shows its value read-only and is
   dropped the same way; a field it requires refuses a blank save. It can only
-  narrow what Ash allows.
+  narrow what Ash allows. Each sub-form has a state of its own, which
+  `AshQuick.FormState.update_each/3` reaches for every row at once.
   See `AshQuick.FormState` for the functions and the rules.
 
   ## Sidebar

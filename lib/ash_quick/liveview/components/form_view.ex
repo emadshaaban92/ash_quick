@@ -263,8 +263,9 @@ defmodule AshQuick.LiveView.Components.FormView do
   end
 
   # The root form is drawn from the state its page holds, which the
-  # QuickView's `adjust_form/2` has been through. A sub-form or a bulk form is
-  # drawn from a state built here, as the form would be without a hook.
+  # QuickView's `adjust_form/2` has been through, and each sub-form from its
+  # own state in it. A bulk form, or a sub-form drawn without one, is drawn
+  # from a state built here, as the form would be without a hook.
   def form_fields(%{form: form, scope: scope} = assigns) do
     assigns =
       assigns
@@ -313,6 +314,7 @@ defmodule AshQuick.LiveView.Components.FormView do
             scope={@scope}
             uploads={@uploads}
             form_key_type={@form.form_keys[state_field.name][:type]}
+            sub_states={Map.get(@state.forms, state_field.name, [])}
             widget={Map.get(@widgets, state_field.name)}
             form_input={AshQuick.FormInput.module(state_field.source)}
             choice={EnumOptions.kind(state_field.source)}
@@ -324,10 +326,15 @@ defmodule AshQuick.LiveView.Components.FormView do
     """
   end
 
+  # The state of the sub-form `form` among its field's, by name. None when the
+  # page holds no state, and `form_fields/1` builds one.
+  defp sub_state(states, form), do: Enum.find(states, &(&1.form.name == form.name))
+
   # A disabled field shows its value, read-only, the way the details page
   # shows it, and posts nothing: the server drops its params anyway. On an
-  # update an attribute or relationship reads off the record, which is the
-  # value it keeps. Anything else reads the value the form holds.
+  # update an attribute or relationship reads off the record, or the stored
+  # row of a sub-form, which is the value it keeps. Anything else reads the
+  # value the form holds.
   defp disabled_field(assigns) do
     %{state: state, state_field: field} = assigns
     id = "#{state.form.id}_#{field.name}_disabled"
@@ -335,7 +342,7 @@ defmodule AshQuick.LiveView.Components.FormView do
     {value, path, ash_field} =
       case {state.record, field.source} do
         {%_{}, %Argument{}} -> {FormState.value(state, field.name), [], field.source}
-        {%_{} = record, _field} -> {record, field.name, nil}
+        {%_{} = record, source} -> disabled_value(record, field, source)
         {nil, source} -> {FormState.value(state, field.name), [], source}
       end
 
@@ -373,6 +380,14 @@ defmodule AshQuick.LiveView.Components.FormView do
       <FieldHelp.help id={@id} text={@state_field.help} />
     </div>
     """
+  end
+
+  # A row of an embed is a value, not a record a path can be read from: its
+  # attribute is read off it and drawn as that attribute's type.
+  defp disabled_value(%row{} = record, field, source) do
+    if Ash.Resource.Info.embedded?(row),
+      do: {Map.get(record, field.name), [], source},
+      else: {record, field.name, nil}
   end
 
   # A field drawn as sub-forms reads as its rows, each the public fields of
@@ -736,6 +751,7 @@ defmodule AshQuick.LiveView.Components.FormView do
           <div class="grow grid gap-4 sm:grid-cols-4 sm:gap-6">
             <.form_fields
               form={nested_phx_form.source}
+              state={sub_state(@sub_states, nested_phx_form.source)}
               scope={@scope}
               uploads={@uploads}
               title={nil}
@@ -773,6 +789,7 @@ defmodule AshQuick.LiveView.Components.FormView do
     <.inputs_for :let={nested_phx_form} field={@phx_field}>
       <.form_fields
         form={nested_phx_form.source}
+        state={sub_state(@sub_states, nested_phx_form.source)}
         scope={@scope}
         uploads={@uploads}
         title={@label}

@@ -281,11 +281,16 @@ defmodule AshQuick.LiveView.FormUtils do
     end
   end
 
+  # A single sub-form the record holds nothing for is added empty, so its
+  # inputs are drawn. Not validated: AshPhoenix would validate the root with
+  # params that name none of the rows of a list sub-form it has not touched
+  # yet, which `FormParams.transform_nested_params/3` reads as emptied, and an
+  # update would open with the record's rows gone.
   defp add_nested_forms(form, form_keys) do
     form_keys
     |> Enum.reject(&(Map.has_key?(form.forms, elem(&1, 0)) or elem(&1, 1)[:type] == :list))
     |> Enum.reduce(form, fn {field_name, _}, form_acc ->
-      form_acc |> AshPhoenix.Form.add_form(form.name <> "[#{field_name}]")
+      form_acc |> AshPhoenix.Form.add_form(form.name <> "[#{field_name}]", validate?: false)
     end)
   end
 
@@ -418,10 +423,13 @@ defmodule AshQuick.LiveView.FormUtils do
       {params, form} ->
         {_params, form, state} = FormStateFlow.settle(held, params, form, :validate, socket)
 
+        # A row this post brings that the page did not add, as a reconnect's
+        # replay does, gets its uploads here: its input reads them.
         {:halt,
          socket
          |> assign(form: form)
          |> assign(ash_quick_form_state: state)
+         |> FormUploads.allow_image_upload(form)
          |> FormAttachments.clear_form_flash()}
 
       :refused ->

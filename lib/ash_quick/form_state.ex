@@ -104,8 +104,34 @@ defmodule AshQuick.FormState do
   either can follow the flags; the server strips and enforces them whatever a
   template draws.
 
-  Only the root form's fields are in the state: the fields of a sub-form are
-  drawn as before.
+  ## Sub-forms
+
+  A field drawn as sub-forms (an embed, or a relationship the action manages)
+  holds a state of its own for each of its sub-forms, built from that
+  sub-form as the root's is from the root form: `state.forms` maps the
+  field's name to its rows' states, in the order they are drawn (a single
+  sub-form is a list of one). `update_each/3` states a rule once for every
+  row, and a row reads its parent's values through `state.parent`:
+
+      state
+      |> FormState.update_each([:lines], fn line ->
+        line
+        |> FormState.hide(:serial, FormState.value(line, :kind) != :device)
+        |> FormState.require(:serial, FormState.value(line, :kind) == :device)
+        |> FormState.disable(:discount, FormState.value(line.parent, :channel) != :wholesale)
+      end)
+
+  A path names one field per level, `[:lines, :parts]` for the parts of every
+  line. Rows are built again from the sub-forms on every event, so a row
+  removed or added never leaves a rule on the wrong row: there is no index
+  to go stale.
+
+  The server holds a sub-form's fields to its state as it does the root's: a
+  hidden or disabled field's params are dropped from that row, a row's
+  required field left blank refuses the save with an error under it, and on
+  a row the record already holds, a hidden or disabled field keeps the row's
+  value. The fields of a sub-form under a hidden or disabled field are not
+  looked at: the whole field keeps the record's value, or is left out.
   """
 
   alias Ash.Resource.Relationships.BelongsTo
@@ -123,11 +149,13 @@ defmodule AshQuick.FormState do
           record: struct() | nil,
           scope: term(),
           form: AshPhoenix.Form.t(),
-          fields: [Field.t()]
+          fields: [Field.t()],
+          forms: %{optional(atom()) => [t()]},
+          parent: t() | nil
         }
 
   @enforce_keys [:stage, :resource, :action, :form, :fields]
-  defstruct [:stage, :resource, :action, :record, :scope, :form, fields: []]
+  defstruct [:stage, :resource, :action, :record, :scope, :form, :parent, fields: [], forms: %{}]
 
   @doc """
   The value the form holds for the field `name`, cast by Ash: an atom for an
@@ -208,6 +236,83 @@ defmodule AshQuick.FormState do
   def put_attrs(state, name, attrs) when is_list(attrs),
     do: update!(state, name, &%{&1 | attrs: Keyword.merge(&1.attrs, attrs)})
 
+  @doc """
+  Puts each sub-form state at `path` through `fun`, which returns it changed.
+
+  `path` names a field drawn as sub-forms, then one of its sub-form's, and so
+  on: `[:lines]` reaches every line, `[:lines, :parts]` every part of every
+  line. `fun` is given each state with `parent` set to the state it is a
+  sub-form of, as it stands when `update_each/3` is called, so it can read
+  the parent's values with `value/2`.
+
+  A field this actor's form leaves out does nothing. A name that is no input
+  of the action raises an `ArgumentError`, and so does one that is not drawn
+  as sub-forms.
+  """
+  @spec update_each(t(), [atom()], (t() -> t())) :: t()
+  def update_each(%__MODULE__{} = state, [name | rest], fun) when is_function(fun, 1) do
+    case fetch(state, name) do
+      %Field{kind: :nested} ->
+        parent = %{state | forms: %{}}
+
+        rows =
+          state.forms
+          |> Map.get(name, [])
+          |> Enum.map(&update_row(%{&1 | parent: parent}, rest, fun))
+
+        %{state | forms: Map.put(state.forms, name, rows)}
+
+      %Field{} ->
+        raise_not_nested(state, name)
+
+      nil ->
+        state
+    end
+  end
+
+  defp update_row(row, [], fun), do: apply_each(row, fun)
+  defp update_row(row, rest, fun), do: update_each(row, rest, fun)
+
+  defp apply_each(row, fun) do
+    case fun.(row) do
+      %__MODULE__{} = returned ->
+        returned
+
+      other ->
+        raise ArgumentError,
+              "the function given to update_each/3 must return an AshQuick.FormState, " <>
+                "got: #{inspect(other)}"
+    end
+  end
+
+  @doc """
+  The sub-form states at `path`, in the order they are drawn, as
+  `update_each/3` reaches them: `[:lines]` gives every line, `[:lines,
+  :parts]` every part of every line. A field this actor's form leaves out
+  gives none; a name that is no input of the action, or one not drawn as
+  sub-forms, raises as `update_each/3` does.
+  """
+  @spec sub_forms(t(), [atom()]) :: [t()]
+  def sub_forms(%__MODULE__{} = state, [name | rest]) do
+    case fetch(state, name) do
+      %Field{kind: :nested} ->
+        rows = Map.get(state.forms, name, [])
+        if rest == [], do: rows, else: Enum.flat_map(rows, &sub_forms(&1, rest))
+
+      %Field{} ->
+        raise_not_nested(state, name)
+
+      nil ->
+        []
+    end
+  end
+
+  defp raise_not_nested(state, name) do
+    raise ArgumentError,
+          "#{inspect(name)} of #{inspect(state.resource)}.#{state.action.name} " <>
+            "is not drawn as sub-forms"
+  end
+
   @doc "The fields the form draws, in order: every field not hidden."
   @spec visible_fields(t()) :: [Field.t()]
   def visible_fields(%__MODULE__{fields: fields}), do: Enum.reject(fields, & &1.hidden?)
@@ -264,15 +369,54 @@ defmodule AshQuick.FormState do
       |> Utils.form_fields(scope)
       |> Enum.map(&new_field(&1, form, widgets))
 
-    %__MODULE__{
+    state = %__MODULE__{
       stage: stage,
       resource: resource,
       action: action,
       record: if(form.type in [:update, :destroy], do: form.data),
       scope: scope,
       form: form,
-      fields: fields
+      fields: fields,
+      parent: opts[:parent]
     }
+
+    # A sub-form has no widgets: they are named by the root's fields.
+    sub_opts = [scope: scope, parent: state]
+
+    forms =
+      for %Field{kind: :nested, name: name} <- fields, into: %{} do
+        rows =
+          form.forms
+          |> Map.get(name)
+          |> List.wrap()
+          |> Enum.map(&new(&1, stage, sub_opts))
+
+        {name, rows}
+      end
+
+    %{state | forms: forms}
+  end
+
+  @doc false
+  # Every sub-form state under `state`, a row before its own sub-forms, with
+  # those under a hidden or disabled field left out: that whole field keeps
+  # the record's value or is dropped, so its rows are not looked at.
+  def taken_sub_forms(%__MODULE__{} = state) do
+    for %Field{kind: :nested, hidden?: false, disabled?: false, name: name} <- state.fields,
+        row <- Map.get(state.forms, name, []),
+        state <- [row | taken_sub_forms(row)],
+        do: state
+  end
+
+  @doc false
+  # The state of the (sub-)form named `name` (`"form[lines][0]"`), or nil.
+  def find(%__MODULE__{form: %{name: name}} = state, name), do: state
+
+  def find(%__MODULE__{forms: forms}, name) do
+    forms
+    |> Map.values()
+    |> List.flatten()
+    |> Enum.find_value(&find(&1, name))
   end
 
   @doc false
@@ -285,29 +429,51 @@ defmodule AshQuick.FormState do
     fields =
       Enum.map(built.fields, fn field ->
         case Map.fetch(by_name, field.name) do
-          {:ok, %Field{} = got} ->
-            %{
-              field
-              | hidden?: got.hidden? == true,
-                disabled?: got.disabled? == true,
-                required?: field.required? or got.required? == true,
-                label: if(is_binary(got.label), do: got.label, else: field.label),
-                help: if(is_binary(got.help) or is_nil(got.help), do: got.help, else: field.help),
-                attrs: if(Keyword.keyword?(got.attrs), do: got.attrs, else: field.attrs)
-            }
-
-          _absent ->
-            field
+          {:ok, %Field{} = got} -> narrow_field(field, got)
+          _absent -> field
         end
       end)
 
-    %{built | fields: fields}
+    got_forms = if is_map(returned.forms), do: returned.forms, else: %{}
+
+    forms =
+      Map.new(built.forms, fn {name, rows} -> {name, narrow_rows(rows, got_forms[name])} end)
+
+    %{built | fields: fields, forms: forms}
   end
 
   def narrow(%__MODULE__{}, returned) do
     raise ArgumentError,
           "adjust_form/2 must return an AshQuick.FormState, got: #{inspect(returned)}"
   end
+
+  defp narrow_field(field, got) do
+    %{
+      field
+      | hidden?: got.hidden? == true,
+        disabled?: got.disabled? == true,
+        required?: field.required? or got.required? == true,
+        label: if(is_binary(got.label), do: got.label, else: field.label),
+        help: if(is_binary(got.help) or is_nil(got.help), do: got.help, else: field.help),
+        attrs: if(Keyword.keyword?(got.attrs), do: got.attrs, else: field.attrs)
+    }
+  end
+
+  # Each row the form has, narrowed by the hook's row of the same sub-form,
+  # found by its name. A row the hook dropped, or put something else in
+  # place of, is kept as built.
+  defp narrow_rows(rows, got) when is_list(got) do
+    by_name = for %__MODULE__{form: %{name: name}} = row <- got, into: %{}, do: {name, row}
+
+    Enum.map(rows, fn row ->
+      case Map.fetch(by_name, row.form.name) do
+        {:ok, got_row} -> narrow(row, got_row)
+        :error -> row
+      end
+    end)
+  end
+
+  defp narrow_rows(rows, _got), do: rows
 
   @doc false
   # The params the server drops: every input of a hidden or disabled field,
