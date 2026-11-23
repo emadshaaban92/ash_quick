@@ -20,5 +20,7 @@ defmodule Example.Catalog do
     resource Example.Catalog.Category
     resource Example.Catalog.Product
     resource Example.Catalog.PriceChange
+    resource Example.Catalog.Label
+    resource Example.Catalog.ProductLabel
   end
 end

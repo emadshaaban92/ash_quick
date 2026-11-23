@@ -397,15 +397,13 @@ defmodule AshQuick.FormState do
     cond do
       is_function(Map.get(widgets, source.name)) -> :widget
       Map.get(source, :sensitive?) == true -> :password
-      uuid_list_argument?(source) -> uuid_list_kind(source, form)
+      many_to_many(source, form) -> :many_to_many
+      uuid_list_argument?(source) -> :text
       match?(%BelongsTo{}, source) -> :belongs_to
       EnumOptions.kind(source) in [:single, :array] -> :choice
       true -> typed_kind(source, form)
     end
   end
-
-  defp uuid_list_kind(source, form),
-    do: if(many_to_many(source, form), do: :many_to_many, else: :text)
 
   @datetimes [Ash.Type.DateTime, Ash.Type.UtcDatetimeUsec, Ash.Type.UtcDatetime]
 

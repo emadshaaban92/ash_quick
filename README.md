@@ -1059,6 +1059,32 @@ use AshQuick.LiveView.QuickView,
   form: [widgets: %{tags: &__MODULE__.tags_input/1}]
 ```
 
+A list argument a `manage_relationship` change reads onto a many_to_many is
+picked from that relationship's records, as tags. A list of ids posts each
+record's primary key. A list of text posts names instead, when the change
+looks them up by `value_is_key`, and its records are offered by that key:
+
+```elixir
+argument :labels, {:array, :string}
+
+change manage_relationship(:labels,
+         type: :append_and_remove,
+         value_is_key: :name,
+         on_no_match: :create
+       )
+```
+
+When the change creates what matches nothing (`on_no_match: :create` or
+`{:create, action}`), and that create accepts the key, the picker also offers
+the typed text as a new value: its last row reads Add "Kayak", and what it
+adds is a tag marked "new" until the form is saved. Ash then relates the
+names that match and creates the rest. The row is offered only to an actor
+`Ash.can?/3` lets run that create. It is asked as the create will run,
+without the form's `action_source`, which Ash does not pass on to a
+`manage_relationship`'s own actions. The row ignores case when the key is a
+`ci_string`, as the lookup does. A list of ids never offers it, since a new
+value has no id to post.
+
 A scalar's input follows its Ash type, through a NewType too. A date gets the
 browser's date picker, a time held to the second a time picker, and a naive
 datetime a `datetime-local` one; a zoned timestamp gets its own input with a

@@ -20,12 +20,27 @@ defmodule AshQuick.Test.RelationshipArgs.Tag do
   attributes do
     uuid_primary_key :id
     attribute :name, :string, public?: true
+    attribute :code, :ci_string, public?: true
   end
 
   # No lookup action, so a page with a dropdown onto it refuses to compile:
-  # that refusal is how a test sees the dropdown was found.
+  # that refusal is how a test sees the dropdown was found. `:unnamed` takes
+  # no field a typed value could fill.
   actions do
-    defaults [:read, :create]
+    defaults [:read]
+
+    create :create do
+      primary? true
+      accept [:name, :code]
+    end
+
+    create :unnamed do
+      accept []
+    end
+
+    create :tagged do
+      accept [:name]
+    end
   end
 
   ash_quick do
@@ -76,6 +91,18 @@ defmodule AshQuick.Test.RelationshipArgs.Post do
     * `:everywhere` edits `:labels` through a global change.
     * `:overridden` edits `:tags` through its own change, over a global one
       naming `:labels` for the same argument.
+
+  The `:named_*` actions edit `:tags` through a list of text, which is a list
+  of names only when the change says `value_is_key` and looks them up:
+
+    * `:named_create` creates what matches no name (`on_no_match: :create`),
+      `:named_create_with` through `:tagged`, which is not the primary
+      create, `:named_code` by a `ci_string` key, and `:named_unfillable`
+      through a create that takes no name.
+    * `:named_strict` relates the names it finds and creates nothing.
+    * `:named_unlooked` never looks a name up (`type: :create`), and
+      `:named_unkeyed` names no key: neither is a list of names.
+    * `:ids_create` is a list of ids whose change creates what it misses.
   """
   use Ash.Resource,
     domain: AshQuick.Test.RelationshipArgs.Domain,
@@ -147,6 +174,78 @@ defmodule AshQuick.Test.RelationshipArgs.Post do
     update :everywhere do
       require_atomic? false
       argument :everywhere, {:array, :uuid}
+    end
+
+    update :named_create do
+      require_atomic? false
+      argument :names, {:array, :string}
+
+      change manage_relationship(:names, :tags,
+               type: :append_and_remove,
+               value_is_key: :name,
+               on_no_match: :create
+             )
+    end
+
+    update :named_create_with do
+      require_atomic? false
+      argument :names, {:array, :string}
+
+      change manage_relationship(:names, :tags,
+               type: :append_and_remove,
+               value_is_key: :name,
+               on_no_match: {:create, :tagged}
+             )
+    end
+
+    update :named_code do
+      require_atomic? false
+      argument :names, {:array, :ci_string}
+
+      change manage_relationship(:names, :tags,
+               type: :append_and_remove,
+               value_is_key: :code,
+               on_no_match: :create
+             )
+    end
+
+    update :named_unfillable do
+      require_atomic? false
+      argument :names, {:array, :string}
+
+      change manage_relationship(:names, :tags,
+               type: :append_and_remove,
+               value_is_key: :name,
+               on_no_match: {:create, :unnamed}
+             )
+    end
+
+    update :named_strict do
+      require_atomic? false
+      argument :names, {:array, :string}
+      change manage_relationship(:names, :tags, type: :append_and_remove, value_is_key: :name)
+    end
+
+    update :named_unlooked do
+      require_atomic? false
+      argument :names, {:array, :string}
+      change manage_relationship(:names, :tags, type: :create, value_is_key: :name)
+    end
+
+    update :named_unkeyed do
+      require_atomic? false
+      argument :names, {:array, :string}
+      change manage_relationship(:names, :tags, type: :append_and_remove)
+    end
+
+    update :ids_create do
+      require_atomic? false
+      argument :ids, {:array, :uuid}
+
+      change manage_relationship(:ids, :tags,
+               type: :append_and_remove,
+               on_no_match: :create
+             )
     end
 
     update :overridden do

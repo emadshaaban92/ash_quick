@@ -127,6 +127,7 @@ defmodule ExampleWeb.Router do
         quick_view "/counted_bins", Example.Test.CountedBinsLive.Quick
         quick_view "/counted_box_codes", Example.Test.CountedBoxCodesLive.Quick
         quick_view "/counted_boxes", Example.Test.CountedBoxesLive.Quick
+        quick_view "/created_picks", Example.Test.CreatedPicksLive.Quick
         quick_view "/dated_entries", Example.Test.DatedEntriesLive.Quick
         quick_view "/default_pages", Example.Test.DefaultPagesLive.Quick
         quick_view "/digits_only", Example.Test.DigitsOnlyLive.Quick
@@ -172,6 +173,7 @@ defmodule ExampleWeb.Router do
         quick_view "/small_pages", Example.Test.SmallPagesLive.Quick
         quick_view "/sorted_rows", Example.Test.SortedRowsLive.Quick
         quick_view "/sorted_rows_named", Example.Test.SortedRowsNamedLive.Quick
+        quick_view "/sourced_labels", Example.Test.SourcedLabelsLive.Quick
         quick_view "/stored_map_lists", Example.Test.StoredMapListsLive.Quick
         quick_view "/two_file_rows", Example.Test.TwoFileRowsLive.Quick
         quick_view "/typed_inputs", Example.Test.TypedInputsLive.Quick
