@@ -213,6 +213,64 @@ defmodule ExampleWeb.AttachmentArrayScenarioTest do
     end
   end
 
+  # Here the form also draws the embed the argument folds onto as sub-forms,
+  # so each upload re-seeds them from the changeset, which holds the fold:
+  # handed the argument as well, the re-seed would fold it a second time.
+  describe "an argument folded onto an embed drawn as sub-forms" do
+    test "folds each upload once", %{conn: conn} do
+      record = Ash.create!(Example.Test.TwoFileRows, %{code: unique("F")})
+
+      {:ok, view, _html} = live(conn, "/test/two_file_rows/#{record.id}/add_photos")
+      pick(view, "front.jpg", "form[new_photos]_upload")
+
+      %{socket: %{assigns: %{form: form}}} = :sys.get_state(view.pid)
+
+      assert form.source
+             |> Ash.Changeset.get_attribute(:rows)
+             |> Enum.map(& &1.photo.original_filename) == ["front.jpg"]
+    end
+
+    # Known gap (#260): the key is minted for `:new_photos`, and once the fold
+    # lands it in the `:rows` sub-forms the browser posts it under `rows`,
+    # where the save drops it as a key the form never issued for that field.
+    @tag :skip
+    test "saves the folded photos", %{conn: conn} do
+      record = Ash.create!(Example.Test.TwoFileRows, %{code: unique("F")})
+
+      {:ok, view, _html} = live(conn, "/test/two_file_rows/#{record.id}/add_photos")
+      pick(view, "front.jpg", "form[new_photos]_upload")
+      save(view)
+
+      assert record
+             |> Ash.reload!(authorize?: false)
+             |> Map.fetch!(:rows)
+             |> Enum.map(& &1.photo.original_filename) == ["front.jpg"]
+    end
+  end
+
+  # A row added beside it leaves the changeset holding the rows as a change,
+  # so the ✕ re-seeds them: the cleared value has to survive the re-seed, or
+  # the record keeps the file the ✕ took off the page.
+  describe "a single attachment beside an embed drawn as sub-forms" do
+    test "cleared by its ✕ saves without its file", %{conn: conn} do
+      cover = %{key: "private/two_file_rows/#{unique("cover")}.jpg", file_type: :image}
+
+      record =
+        Ash.create!(Example.Test.TwoFileRows, %{code: unique("F"), cover: cover, rows: [%{}]})
+
+      {:ok, view, _html} = live(conn, "/test/two_file_rows/#{record.id}/update")
+      view |> element("button[phx-click=add-form][phx-value-path='form[rows]']") |> render_click()
+
+      view
+      |> element("[data-attachment-field=cover] button[aria-label='Remove']")
+      |> render_click()
+
+      save(view)
+
+      assert %{cover: nil, rows: [_, _]} = Ash.reload!(record, authorize?: false)
+    end
+  end
+
   describe "the details page" do
     test "opens each servable image in a viewer, and nothing else", ctx do
       %{conn: conn, admin: admin} = ctx

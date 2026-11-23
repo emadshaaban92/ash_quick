@@ -53,14 +53,14 @@ defmodule AshQuick.LiveView.FormAttachments do
     key = field.name |> to_string()
     raw_params = form.raw_params || %{}
 
-    # The field's own params are folded into `value` by the caller, so they must
-    # not survive into the re-seed as well — they would be applied a second time.
+    # The field's own params are folded into `value` by the caller, so what
+    # it held before is dropped, not applied a second time.
     carried = raw_params |> Map.delete(key) |> FormParams.carry_embedded_params(form)
 
     params = Map.put(carried, key, value)
 
     # A field the form's state hides takes nothing from here either.
-    {carried, validated, _state} =
+    {settled, validated, _state} =
       FormStateFlow.settle(
         form,
         params,
@@ -69,7 +69,7 @@ defmodule AshQuick.LiveView.FormAttachments do
         socket
       )
 
-    form = FormParams.prefill_changed_embedded_forms(validated, Map.delete(carried, key))
+    form = FormParams.prefill_changed_embedded_forms(validated, reseed_params(settled, field))
 
     # Folding the values in can create sub-forms — an embedded array grows a
     # form per image — and each one's own attachment field needs its upload
@@ -79,6 +79,15 @@ defmodule AshQuick.LiveView.FormAttachments do
     |> FormStateFlow.store(:validate)
     |> FormUploads.allow_image_upload(form)
   end
+
+  # The params the embeds' re-seed validates with, which the changeset's
+  # value for each embed overrides. An attribute keeps its value just put:
+  # left out, the re-seed would drop it (an attachment beside an embed drawn
+  # as sub-forms). An argument does not: a change that folds it onto an
+  # embed has already, so the embed's seeded value holds it, and the
+  # argument once more would fold it a second time.
+  defp reseed_params(params, %Argument{name: name}), do: Map.delete(params, to_string(name))
+  defp reseed_params(params, _attribute), do: params
 
   # This batch consumed its entries, so from here the field's params are the
   # only record of a batch picked before it. Whether they belong under this one
