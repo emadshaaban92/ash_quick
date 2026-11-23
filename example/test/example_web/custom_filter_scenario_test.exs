@@ -1188,8 +1188,8 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
     end
 
     # A value its Ash.Type.Enum does not hold is refused under the row, though
-    # only a forged event can post one, and LiveSelect's input carries the
-    # error as the other rows' inputs do.
+    # only a forged event can post one, and the picker's box and text box
+    # carry the error as the other rows' inputs do.
     test "marks the picker holding a value its enum refuses", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/test/enum_picks?show_custom_filter=true")
       uuid = filter_uuid(view)
@@ -1208,24 +1208,22 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
 
       assert texts(view, "#value-error-#{uuid}") == ["is invalid"]
       id = picker_id(view, uuid)
-      assert attribute(view, "##{id}-wrap", "data-error-id") == ["value-error-#{uuid}"]
-      # The box holding the tags and the input carries the error, and the
-      # primary colour an input holding picks is drawn in, which would hide
-      # it, is never drawn.
-      [class] = attribute(view, "##{id}", "class")
-      assert class =~ "input-error"
-      refute attribute(view, "##{id} input[type=text]", "class") |> hd() =~ "input-primary"
+      input = "##{id} [role=combobox]"
+      assert attribute(view, input, "aria-describedby") == ["value-error-#{uuid}"]
+      assert attribute(view, input, "aria-invalid") == ["true"]
+      # The box holding the tags and the text box carries the error.
+      assert attribute(view, "##{id} [data-part=box]", "class") |> hd() =~ "input-error"
       refute_patched(view)
 
       remove_value(view, uuid, "Gone")
       refute has_element?(view, "#value-error-#{uuid}")
-      assert attribute(view, "##{id}-wrap", "data-error-id") == []
-      refute attribute(view, "##{id}", "class") |> hd() =~ "input-error"
+      assert attribute(view, input, "aria-describedby") == []
+      assert attribute(view, input, "aria-invalid") == []
+      refute attribute(view, "##{id} [data-part=box]", "class") |> hd() =~ "input-error"
     end
 
-    # LiveSelect tells its options apart by label, so a value outside the set
-    # that reads as one inside it names its value too, rather than the two
-    # unpicking each other.
+    # A value outside the set that reads as one inside it names its value
+    # too, so the two tags read apart.
     test "names a value whose label another value has", %{conn: conn} do
       filter =
         encode_filter([
@@ -1270,9 +1268,9 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       assert picked(view, filter_uuid(view)) == ["Couldn't read"]
     end
 
-    # After a reconnect LiveSelect hands back the tags it held, label and
-    # value only, and offers just those: they still read by label, and
-    # focusing the input offers every value again.
+    # After a reconnect the form's recovery posts the values the picker's
+    # hidden inputs held, and the picker names them again from the field's
+    # set: they still read by label, and opening the list offers every value.
     test "keeps its tags' labels across a reconnect", %{conn: conn} do
       filter =
         encode_filter([
@@ -1286,10 +1284,13 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       assert picked(view, uuid) == ["Couldn't read"]
 
       view
-      |> element("##{picker_id(view, uuid)}")
-      |> render_hook("selection_recovery", [%{"label" => "Couldn't read", "value" => "failed"}])
+      |> element("#custom-filter-form")
+      |> render_change(%{
+        "_target" => ["value-#{uuid}", "values"],
+        "value-#{uuid}" => %{"values" => ["failed", "done"]}
+      })
 
-      assert picked(view, uuid) == ["Couldn't read"]
+      assert picked(view, uuid) == ["Couldn't read", "Done"]
       assert focus_values(view, uuid) == ["Pending", "Done", "Couldn't read"]
     end
 
@@ -1376,7 +1377,7 @@ defmodule ExampleWeb.CustomFilterScenarioTest do
       assert focus_values(view, uuid) == ["Pending", "Done", "Couldn't read"]
     end
 
-    # With its last tag removed, LiveSelect posts only its empty-selection
+    # With its last tag removed, the picker posts only its empty-selection
     # marker, so the row then holds nothing and filters by nothing.
     test "applies nothing once every value is removed", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/test/filter_fields?show_custom_filter=true")

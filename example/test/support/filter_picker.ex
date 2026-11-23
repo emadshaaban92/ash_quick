@@ -1,75 +1,63 @@
 defmodule ExampleWeb.FilterPicker do
   @moduledoc """
-  Drives the `LiveSelect` a filter row picks Any Of and Has Any Of values
-  with, the way its hook does in a browser.
-
-  Pushing the form's change event by hand proves only that the form reads
-  what the test sent. These go through LiveSelect itself: its own events open
-  the dropdown, search it, pick a value and remove a tag, and what LiveSelect
-  then pushes to the page is followed as its hook follows it. A search, and
-  the focus event LiveSelect is told to send, reach the form at the component
-  its `data-phx-target` names, and a pick is posted only when LiveSelect asks
-  for it, from the hidden inputs it rendered. What the form reads is then
-  what the page would post.
+  Drives the picker a filter row picks Any Of and Has Any Of values with, the
+  way its hook does in a browser, through `ExampleWeb.PickerDriver`.
 
   Each takes the LiveView and the row's uuid. `pick_values/3` and
-  `remove_value/3` return the view; the others return labels.
+  `remove_value/3` return the view; the others return labels. An option or a
+  tag reads as all its text, a record's hint under its name included, and is
+  matched by that text with its runs of whitespace taken as one space.
   """
 
   import ExUnit.Assertions
   import Phoenix.LiveViewTest
 
-  @doc "The id of the row's LiveSelect, or `nil` when the row draws none."
+  alias ExampleWeb.PickerDriver
+
+  @doc "The id of the row's picker, or `nil` when the row draws none."
   def picker_id(view, uuid) do
     view
-    |> query("[phx-hook=LiveSelect][id^='filter-values-#{uuid}-']")
+    |> query("[data-aq-picker][id^='filter-values-#{uuid}-']")
     |> LazyHTML.attribute("id")
     |> List.first()
   end
 
   @doc "The labels of the row's tags, in order."
-  def picked(view, uuid), do: texts(view, "##{picker!(view, uuid)} .badge")
+  def picked(view, uuid),
+    do: texts(view, "##{picker!(view, uuid)} [data-part=tag] > :first-child")
 
   @doc """
-  Focuses the row's input, as clicking into it does, and returns the labels
-  its dropdown offers.
+  Opens the row's list with nothing typed, as clicking into it does, and
+  returns the labels it offers.
   """
   def focus_values(view, uuid) do
-    id = picker!(view, uuid)
-    view |> element("##{id}") |> render_hook("focus", %{})
-    follow(view, id)
+    PickerDriver.search(view, picker!(view, uuid), "")
     offered(view, uuid)
   end
 
   @doc "Types `text` into the row's input, and returns the labels offered."
   def search_values(view, uuid, text) do
-    id = picker!(view, uuid)
-    view |> element("##{id}") |> render_hook("change", %{"text" => text})
-    push_to_form(view, id, "live_select_change", %{"id" => id, "text" => text})
+    PickerDriver.search(view, picker!(view, uuid), text)
     offered(view, uuid)
   end
 
-  @doc "The labels the row's open dropdown offers."
-  def offered(view, uuid), do: texts(view, "##{picker!(view, uuid)} ul li")
+  @doc "The labels the row's open list offers."
+  def offered(view, uuid),
+    do: texts(view, "##{picker!(view, uuid)}-listbox [role=option] > :last-child")
 
   @doc """
-  Picks each of `labels` from the row's dropdown, by clicking its option, and
-  posts each pick. Each is picked from the dropdown focused afresh, or with
-  `searched: true` from the one a search left open, which focusing would
-  clear.
+  Picks each of `labels` from the row's list, and posts each pick. Each is
+  picked from the list opened afresh, or with `searched: true` from the one a
+  search left open, which opening it again would clear.
   """
   def pick_values(view, uuid, labels, opts \\ []) do
     for label <- labels do
       unless opts[:searched], do: focus_values(view, uuid)
       id = picker!(view, uuid)
 
-      options = view |> query("##{id} ul li div[data-idx]") |> Enum.to_list()
-      option = Enum.find(options, &(&1 |> LazyHTML.text() |> String.trim() == label))
-      assert option, "#{inspect(label)} is not offered: #{inspect(offered(view, uuid))}"
-      [idx] = LazyHTML.attribute(option, "data-idx")
-
-      view |> element("##{id}") |> render_hook("option_click", %{"idx" => idx})
-      follow(view, id)
+      value = value_of(view, "##{id}-listbox [role=option]", ":last-child", label)
+      assert value, "#{inspect(label)} is not offered: #{inspect(offered(view, uuid))}"
+      PickerDriver.pick(view, id, value: value)
     end
 
     view
@@ -78,47 +66,14 @@ defmodule ExampleWeb.FilterPicker do
   @doc "Removes the tag labelled `label` by its ✕, and posts what is left."
   def remove_value(view, uuid, label) do
     id = picker!(view, uuid)
-    idx = Enum.find_index(picked(view, uuid), &(&1 == label))
-    assert idx, "no tag #{inspect(label)}: #{inspect(picked(view, uuid))}"
 
-    view |> element("##{id}") |> render_hook("option_remove", %{"idx" => to_string(idx)})
-    follow(view, id)
-    view
-  end
-
-  # What the hook does with the `select` event LiveSelect pushes: posts the
-  # form when asked to, and sends the form the event it names, the
-  # `phx-focus` it was given.
-  defp follow(view, id) do
-    assert_push_event(view, "select", %{id: ^id} = select)
-    if select[:input_event], do: post(view, id)
-    if event = select[:parent_event], do: push_to_form(view, id, event, %{"id" => id})
-  end
-
-  # The hook fires `input` on LiveSelect's first hidden input, which is its
-  # empty-selection marker once nothing is picked, so the form's change
-  # carries every input the form now holds and that one as its target.
-  defp post(view, id) do
-    [name | _] = view |> query("##{id} input[type=hidden]") |> LazyHTML.attribute("name")
-    [_, row, input] = Regex.run(~r/^([^\[]+)\[([^\]]+)\]/, name)
-
-    view
-    |> element("#custom-filter-form")
-    |> render_change(%{"_target" => [row, input]})
-  end
-
-  # LiveSelect sends its search and focus events to the component its
-  # `data-phx-target` names, rather than to the form it sits in.
-  defp push_to_form(view, id, event, payload) do
-    [cid] = view |> query("##{id}") |> LazyHTML.attribute("data-phx-target")
-
-    view
-    |> with_target("[data-phx-component='#{cid}']")
-    |> render_hook(event, payload)
+    value = value_of(view, "##{id} [data-part=tag]", ":first-child", label)
+    assert value, "no tag #{inspect(label)}: #{inspect(picked(view, uuid))}"
+    PickerDriver.remove(view, id, value: value)
   end
 
   defp picker!(view, uuid) do
-    picker_id(view, uuid) || flunk("row #{uuid} draws no LiveSelect")
+    picker_id(view, uuid) || flunk("row #{uuid} draws no picker")
   end
 
   defp query(view, selector),
@@ -126,4 +81,17 @@ defmodule ExampleWeb.FilterPicker do
 
   defp texts(view, selector),
     do: view |> query(selector) |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+
+  # The value of the first of `items` whose `part` (a child of it) reads as
+  # `label`.
+  defp value_of(view, items, part, label) do
+    values = view |> query(items) |> LazyHTML.attribute("data-value")
+    labels = view |> query("#{items} > #{part}") |> Enum.map(&(&1 |> LazyHTML.text() |> squash()))
+
+    Enum.find_value(Enum.zip(labels, values), fn {text, value} ->
+      if text == squash(label), do: value
+    end)
+  end
+
+  defp squash(text), do: text |> String.trim() |> String.replace(~r/\s+/, " ")
 end

@@ -58,7 +58,19 @@ defmodule ExampleWeb.PickerDriver do
     push(view, id, "pick", %{"value" => value, "new" => new?(option)})
   end
 
-  @doc "Removes the tag labelled `label` by its ✕, and posts the form."
+  @doc """
+  Removes the tag labelled `label`, or the one whose value is `value: value`,
+  by its ✕, and posts the form.
+  """
+  def remove(view, id, label_or_value)
+
+  def remove(view, id, value: value) do
+    assert has_element?(view, "##{id} [data-part=tag][data-value='#{value}']"),
+           "no tag of #{inspect(value)}: #{inspect(picked(view, id))}"
+
+    push(view, id, "remove", %{"value" => value})
+  end
+
   def remove(view, id, label) do
     tag =
       view

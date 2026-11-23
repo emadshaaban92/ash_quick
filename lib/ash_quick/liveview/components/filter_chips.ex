@@ -252,17 +252,18 @@ defmodule AshQuick.LiveView.Components.FilterChips do
     ~H""
   end
 
-  # A record row names the records it holds, as a relationship dropdown
-  # labels them, and a placeholder for one the reader may not read.
+  # A record row names the records it holds, each by its name and its hint,
+  # and a placeholder for one the reader may not read.
   defp chip_value(%{filter_field: %FilterField{record?: true}, leaf: %{value: value}} = assigns) do
     ids = for id <- List.wrap(value), is_binary(id) and id != "", uniq: true, do: id
 
-    assigns =
-      assign(
-        assigns,
-        :names,
-        Enum.map(ids, &(assigns.records[&1] || FilterRecords.unavailable(&1)).label)
-      )
+    names =
+      Enum.map(ids, fn id ->
+        %{label: label, hint: hint} = assigns.records[id] || FilterRecords.unavailable(id)
+        FieldValue.label_with_hint(label, hint)
+      end)
+
+    assigns = assign(assigns, :names, names)
 
     assigns = assign(assigns, :text, Enum.join(assigns.names, ", "))
 
