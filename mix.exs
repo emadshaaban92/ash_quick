@@ -70,7 +70,6 @@ defmodule AshQuick.MixProject do
       {:phoenix_live_view, "~> 1.2 and >= 1.2.14"},
       {:phoenix_html, "~> 4.4"},
       {:gettext, "~> 1.0"},
-      {:live_select, "~> 1.7"},
       {:jason, "~> 1.4"},
       # The events `AshQuick.Telemetry` lists. Ash and Phoenix require it
       # already; named here because AshQuick calls it itself.

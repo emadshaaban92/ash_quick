@@ -464,9 +464,10 @@ def input(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
 end
 ```
 
-A host `widget:` built on `LiveSelect` posts its value from a hidden input,
-which `used_input?/1` cannot judge, and a cleared select posts the same blank
-as one never touched. Read its errors with `FieldErrors.for_select/1` and
+A host `widget:` built on a picker such as `LiveSelect` (a dependency of the
+host's own; AshQuick does not depend on it) posts its value from a hidden
+input, which `used_input?/1` cannot judge, and a cleared select posts the same
+blank as one never touched. Read its errors with `FieldErrors.for_select/1` and
 render `FieldErrors.used_marker/1` beside it. The form marks the field the
 change event came from, and the marker keeps that mark on the page:
 

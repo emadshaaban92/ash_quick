@@ -53,12 +53,13 @@ defmodule AshQuick.LiveView.FieldErrors do
   end
 
   @doc """
-  `for_field/2` for a LiveSelect widget, which must also render
-  `used_marker/1` for the field.
+  `for_field/2` for a picker, such as `AshQuick.LiveView.Picker` or a host
+  widget built on LiveSelect, which must also render `used_marker/1` for the
+  field.
 
-  Its value posts from a hidden input too, and a cleared select posts the same
+  Its value posts from a hidden input, and a cleared select posts the same
   blank as one never touched, so the value cannot say whether it was used. The
-  change event can: LiveSelect fires it from the field's own hidden input, so
+  change event can: the picker fires it from the field's own hidden input, so
   its `_target` names the field. The form marks that field in its params
   (`mark_used/2`), and `used_marker/1` keeps the mark on the page. Each post
   carries it from then on, and so does the post that recovers the form after a

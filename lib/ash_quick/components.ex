@@ -740,17 +740,15 @@ defmodule AshQuick.Components do
       </div>
     </section>
     <%!-- LiveView makes a submitting form's inputs read-only, which a browser
-    ignores for a checkbox, a radio or a select, and skips LiveSelect's input,
-    which sits under `phx-update="ignore"`; `AshQuick.LiveView.Picker`
-    (`[data-aq-picker]`) changes its value through its keys too. A value
-    changed now would be validated after a successful run has closed the
-    modal, so while the form loads this refuses what would change one.
-    Bundled into the host's app.js rather than inline, so a strict CSP lets
-    it run. --%>
+    ignores for a checkbox, a radio or a select, and `AshQuick.LiveView.Picker`
+    (`[data-aq-picker]`) changes its value through its keys. A value changed
+    now would be validated after a successful run has closed the modal, so
+    while the form loads this refuses what would change one. Bundled into the
+    host's app.js rather than inline, so a strict CSP lets it run. --%>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".SubmitLock">
       const loading = form => form.classList.contains("phx-submit-loading")
       const toggle = el => el instanceof HTMLInputElement && (el.type === "checkbox" || el.type === "radio")
-      const picker = el => el instanceof HTMLSelectElement || !!el.closest?.("[phx-hook=LiveSelect], [data-aq-picker]")
+      const picker = el => el instanceof HTMLSelectElement || !!el.closest?.("[data-aq-picker]")
 
       export default {
         mounted() {

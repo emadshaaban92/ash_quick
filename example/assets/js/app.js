@@ -28,7 +28,6 @@ import {LiveSocket} from "phoenix_live_view"
 import {withAshQuick, attachAshQuick} from "ash_quick"
 import {hooks as colocatedHooks} from "phoenix-colocated/example"
 import topbar from "../vendor/topbar"
-import live_select from "live_select"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, withAshQuick({
@@ -40,7 +39,7 @@ const liveSocket = new LiveSocket("/live", Socket, withAshQuick({
     _csrf_token: csrfToken,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   }),
-  hooks: {...colocatedHooks, ...live_select},
+  hooks: colocatedHooks,
 }))
 attachAshQuick(liveSocket)
 
