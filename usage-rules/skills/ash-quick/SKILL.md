@@ -581,6 +581,18 @@ defp adjust_form(state, _options), do: state
   server holds each row to its state as it does the root; on a stored row a
   hidden or disabled field keeps the row's value. Bulk forms are drawn as
   before.
+- Pickers: `FormState.filter(state, :city, expr(country_id == ^country))`
+  adds an Ash filter on top of the relationship's own; `FormState.lookup_args(
+  state, :city, %{country_id: country})` passes arguments to the lookup action
+  (unknown ones raise); `FormState.options(state, :status, [:draft])` narrows
+  an enum or `one_of` field. All three reach sub-forms through `update_each`.
+  A picker searches again only when its filter or arguments change. A pick
+  the new ones leave out is kept, and refused at save with "is not one of the
+  choices offered": each picked key is read back through the same query (one
+  read per field), and so is a key the relationship's own `filter` leaves out.
+  A key an update's record already holds is read back only when the hook
+  narrows that field, and an enum value it holds is refused when outside
+  `options/3`; `disable/3` the field to keep it.
 - UI only: bulk actions, the API and code never run it. Put real invariants
   in the resource (`where:`). Hiding doesn't clear a value, so a value that
   must not outlive what shows it is cleared by a change

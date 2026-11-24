@@ -93,6 +93,7 @@ test_pages = [
   "/test/picked_rows",
   "/test/printable",
   "/test/record_filter",
+  "/test/picked_places",
   "/test/private_create",
   "/test/quiet_writes",
   "/test/related_filter",

@@ -93,7 +93,9 @@ defmodule AshQuick.FormState do
 
   The hook runs on every change, and at the save. A read in it runs on every
   keystroke that posts, so keep reads out of it, or cheap: there is no way to
-  skip one on an event, since every event states every rule again.
+  skip one on an event, since every event states every rule again. A picker
+  narrowed by `lookup_args/3` or `filter/3` reads only when the person opens
+  it, or when what narrows it changes.
 
   ## Drawing
 
@@ -103,6 +105,48 @@ defmodule AshQuick.FormState do
   a custom `action_*` template the whole state as `@ash_quick_form_state`, so
   either can follow the flags; the server strips and enforces them whatever a
   template draws.
+
+  ## Picker filters and options
+
+  A picker of records (a `belongs_to`, or a list argument over a
+  many-to-many) can be narrowed with `filter/3`, an Ash filter on top of the
+  relationship's own `filter`s, and `lookup_args/3`, arguments passed to the
+  destination's lookup action. A field picked from a fixed set (an
+  `Ash.Type.Enum`, or an atom with `one_of`) is narrowed with `options/3`:
+
+      import Ash.Expr
+
+      country = FormState.value(state, :country)
+
+      state
+      |> FormState.lookup_args(:city, %{country_id: country})
+      |> FormState.filter(:stop_ids, expr(country_id == ^country))
+      |> FormState.options(:status, [:draft, :submitted])
+
+  `lookup_args/3` keeps the rule in the destination resource, behind its
+  policies, and is what a lookup action taking the argument wants. A picker
+  searches again only when its filter or arguments change: as the rest of
+  the form changes, it is not read again.
+
+  When a change narrows a picker past what it holds, the pick is kept, under
+  its own label: it is not cleared behind the person's back. The save then
+  refuses it with an error under the field. A hook that wants it cleared
+  clears it itself. At the save, the records a field holds are read back
+  through the query its picker searches, the lookup action with the field's
+  arguments, the relationship's filters and the field's, one read per field,
+  and a key the read does not find is refused, as is an inactive record. A
+  value outside `options/3` is refused the same way.
+
+  This also holds a pick to the relationship's own `filter`s when the hook
+  narrows nothing. A field drawn by a widget or a type's form input
+  (`AshQuick.FormInput`) offers what its input offers, so the save reads it back
+  only when the hook narrows it. A key an update's record already holds is not
+  read back then: the save leaves it as it is. When the hook narrows the field,
+  that key is read back too, since the rule that narrows it may have changed,
+  and so is an enum value the record holds outside `options/3`. A record the
+  reader may not read, which the picker shows as unavailable, is not found by
+  that read either, so the save is refused until another is picked. To keep what
+  the record holds whatever it is, `disable/3` the field.
 
   ## Sub-forms
 
@@ -237,6 +281,105 @@ defmodule AshQuick.FormState do
     do: update!(state, name, &%{&1 | attrs: Keyword.merge(&1.attrs, attrs)})
 
   @doc """
+  Adds `filter`, an Ash filter expression over the destination, to the
+  records the picker of the field `name` offers: a `belongs_to`, or a list
+  argument over a many-to-many. It goes on top of the relationship's own
+  `filter`s and the lookup action, and each call adds one more.
+
+      import Ash.Expr
+
+      country = FormState.value(state, :country)
+      FormState.filter(state, :city, expr(country_id == ^country))
+
+  At the save, the records the field holds are read back through the same
+  query, and one it leaves out gets an error under the field: see "Picker
+  filters and options" in the moduledoc. A field drawn by a widget gets the
+  error too, which the widget shows itself.
+
+  The picker searches again whenever the filter differs from the one it
+  searched with, compared by value: a filter pinning a value that changes
+  on every run, such as `^DateTime.utc_now()`, searches again on every
+  change to the form. Pin a value that holds still, such as the date.
+
+  A field that picks no records raises an `ArgumentError`, and so does one
+  whose destination has no lookup action to read through.
+  """
+  @spec filter(t(), atom(), term()) :: t()
+  def filter(state, name, filter) do
+    picker!(state, name, "filter/3")
+    update!(state, name, &%{&1 | filters: &1.filters ++ [filter]})
+  end
+
+  @doc """
+  Passes `args`, a map of arguments, to the lookup action the picker of the
+  field `name` reads its records through, as `filter/3` narrows them. Each
+  call merges into what earlier calls passed. The search the person types
+  is the lookup action's own argument, and wins over one named here.
+
+      FormState.lookup_args(state, :city, %{country_id: FormState.value(state, :country)})
+
+  This keeps the rule in the destination resource, and its policies: the
+  lookup action decides what the argument means. At the save, the records
+  the field holds are read back with the same arguments.
+
+  An argument the lookup action does not take, or a field that picks no
+  records, raises an `ArgumentError`.
+  """
+  @spec lookup_args(t(), atom(), map()) :: t()
+  def lookup_args(state, name, args) when is_map(args) do
+    case fetch(state, name) do
+      %Field{} = field ->
+        relationship = picker!(state, name, "lookup_args/3")
+        check_lookup_args!(relationship, args, state, field)
+        update!(state, name, &%{&1 | lookup_args: Map.merge(&1.lookup_args, args)})
+
+      nil ->
+        state
+    end
+  end
+
+  @doc """
+  Narrows the values the field `name` offers, one picked from a fixed set (an
+  `Ash.Type.Enum`, or an atom with `one_of`, alone or in a list), to
+  `values`, drawn in the order the type lists them. A second call narrows
+  what the first left.
+
+      FormState.options(state, :status, [:draft, :submitted])
+
+  At the save, a value outside them gets an error under the field.
+
+  A value the type does not list, or a field picked from no fixed set,
+  raises an `ArgumentError`.
+  """
+  @spec options(t(), atom(), [term()]) :: t()
+  def options(state, name, values) when is_list(values) do
+    case fetch(state, name) do
+      %Field{} = field ->
+        offered = choice_values!(state, field)
+        listed = MapSet.new(offered, &to_string/1)
+        given = MapSet.new(values, &to_string/1)
+
+        case Enum.reject(values, &MapSet.member?(listed, to_string(&1))) do
+          [] ->
+            :ok
+
+          unknown ->
+            raise ArgumentError,
+                  "#{inspect(name)} of #{inspect(state.resource)}.#{state.action.name} " <>
+                    "offers no #{inspect(unknown)}; its values are #{inspect(offered)}"
+        end
+
+        update!(state, name, fn field ->
+          kept = Enum.filter(field.options || offered, &MapSet.member?(given, to_string(&1)))
+          %{field | options: kept}
+        end)
+
+      nil ->
+        state
+    end
+  end
+
+  @doc """
   Puts each sub-form state at `path` through `fun`, which returns it changed.
 
   `path` names a field drawn as sub-forms, then one of its sub-form's, and so
@@ -353,6 +496,74 @@ defmodule AshQuick.FormState do
     end
   end
 
+  # The relationship the field `name` picks records of, or a raise naming
+  # `fun`. Nil when it is an input this actor's form leaves out.
+  defp picker!(state, name, fun) do
+    case fetch(state, name) do
+      %Field{} = field ->
+        relationship =
+          relationship(state, field) ||
+            raise ArgumentError,
+                  "#{fun} narrows the records a picker offers, and #{inspect(name)} of " <>
+                    "#{inspect(state.resource)}.#{state.action.name} picks no records"
+
+        # The save reads the field's records back through the lookup action,
+        # which a field a widget draws need not have: asked here, a missing
+        # one fails in the hook, naming the fix.
+        Utils.lookup_action!(relationship)
+        relationship
+
+      nil ->
+        nil
+    end
+  end
+
+  defp check_lookup_args!(relationship, args, state, field) do
+    lookup = Utils.lookup_action!(relationship)
+    action = Ash.Resource.Info.action(relationship.destination, lookup)
+    taken = Enum.map(action.arguments, & &1.name)
+
+    case Enum.reject(Map.keys(args), &(&1 in taken)) do
+      [] ->
+        :ok
+
+      unknown ->
+        raise ArgumentError,
+              "the lookup action #{inspect(relationship.destination)}.#{lookup} behind " <>
+                "#{inspect(field.name)} of #{inspect(state.resource)}.#{state.action.name} " <>
+                "takes no #{inspect(unknown)}; its arguments are #{inspect(taken)}"
+    end
+  end
+
+  defp choice_values!(state, field) do
+    if EnumOptions.kind(field.source) in [:single, :array] do
+      field.source |> EnumOptions.values() |> List.wrap()
+    else
+      raise ArgumentError,
+            "options/3 narrows a field picked from a fixed set, and #{inspect(field.name)} " <>
+              "of #{inspect(state.resource)}.#{state.action.name} is not one"
+    end
+  end
+
+  @doc false
+  # The relationship whose records `field` picks: a `belongs_to`, or the
+  # many-to-many a list argument edits. Nil for any other field.
+  def relationship(_state, %Field{source: %BelongsTo{} = relationship}), do: relationship
+
+  def relationship(state, %Field{source: %Ash.Resource.Actions.Argument{} = source}) do
+    case Utils.argument_to_relationship(source, state.resource, state.action.name) do
+      %Ash.Resource.Relationships.ManyToMany{} = relationship -> relationship
+      _other -> nil
+    end
+  end
+
+  def relationship(_state, _field), do: nil
+
+  @doc false
+  # Whether the hook narrows what `field` offers.
+  def narrowed?(%Field{filters: filters, lookup_args: args, options: options}),
+    do: filters != [] or args != %{} or options != nil
+
   # --- Built by AshQuick ---------------------------------------------------
 
   @doc false
@@ -455,8 +666,34 @@ defmodule AshQuick.FormState do
         required?: field.required? or got.required? == true,
         label: if(is_binary(got.label), do: got.label, else: field.label),
         help: if(is_binary(got.help) or is_nil(got.help), do: got.help, else: field.help),
-        attrs: if(Keyword.keyword?(got.attrs), do: got.attrs, else: field.attrs)
+        attrs: if(Keyword.keyword?(got.attrs), do: got.attrs, else: field.attrs),
+        filters: if(is_list(got.filters), do: field.filters ++ got.filters, else: field.filters),
+        lookup_args:
+          if(is_map(got.lookup_args),
+            do: Map.merge(got.lookup_args, field.lookup_args),
+            else: field.lookup_args
+          ),
+        options: narrow_options(field, got.options)
     }
+  end
+
+  # Only values the type lists, in its order: a hook can narrow them, never
+  # add one.
+  defp narrow_options(field, options) when is_list(options) do
+    if EnumOptions.kind(field.source) in [:single, :array],
+      do: listed_options(field, options),
+      else: field.options
+  end
+
+  defp narrow_options(field, _options), do: field.options
+
+  defp listed_options(field, options) do
+    given = MapSet.new(options, &to_string/1)
+
+    field.source
+    |> EnumOptions.values()
+    |> List.wrap()
+    |> Enum.filter(&MapSet.member?(given, to_string(&1)))
   end
 
   # Each row the form has, narrowed by the hook's row of the same sub-form,

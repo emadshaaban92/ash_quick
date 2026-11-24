@@ -218,7 +218,9 @@ defmodule AshQuick.LiveView.Utils do
   @doc """
   How a picker over `argument`, a list of text editing `relationship`, may
   add values that match no record: `%{action: create, match: :exact |
-  :any_case}`, or `nil` when it may not.
+  :any_case, read_action: read}`, or `nil` when it may not. `read_action`
+  is the destination read the change looks typed values up through: its
+  own `read_action`, else the primary read.
 
   It may when the action's `manage_relationship` change creates what it
   finds no match for (`on_no_match: :create` or `{:create, action}`, as Ash
@@ -231,12 +233,19 @@ defmodule AshQuick.LiveView.Utils do
     with true <- text_type?(item_type),
          change when is_list(change) <- managed_change(relationship.source, action, name),
          key when is_atom(key) and not is_nil(key) <- change[:opts][:value_is_key],
-         {:create, create, _join_create, _join_keys} <-
-           manage_opts(relationship, change)[:on_no_match],
+         opts = manage_opts(relationship, change),
+         {:create, create, _join_create, _join_keys} <- opts[:on_no_match],
          %{accept: accept} <- Ash.Resource.Info.action(relationship.destination, create),
          true <- key in accept do
       attribute = Ash.Resource.Info.attribute(relationship.destination, key)
-      %{action: create, match: if(ci_string?(attribute), do: :any_case, else: :exact)}
+
+      %{
+        action: create,
+        match: if(ci_string?(attribute), do: :any_case, else: :exact),
+        read_action:
+          opts[:read_action] ||
+            Ash.Resource.Info.primary_action!(relationship.destination, :read).name
+      }
     else
       _ -> nil
     end

@@ -39,12 +39,14 @@ defmodule AshQuick.LiveView.Components.HasManyInput do
     Utils.lookup_action!(relationship)
     key = Utils.list_key(argument(form, assigns.argument_name), relationship, action(form))
     current = current(form.data, relationship)
+    narrowing = FormRecords.narrowing(assigns[:state_field])
 
     assigns =
       assign(assigns,
+        narrowing: narrowing,
         field: form[assigns.argument_name],
-        search: &FormRecords.search(relationship, key, &1, scope, current),
-        resolve: &FormRecords.resolve(relationship, key, &1, scope, current)
+        search: &FormRecords.search(relationship, key, &1, scope, current, narrowing),
+        resolve: &FormRecords.resolve(relationship, key, &1, scope, current, narrowing)
       )
 
     ~H"""
@@ -54,6 +56,7 @@ defmodule AshQuick.LiveView.Components.HasManyInput do
         mode={:tags}
         search={@search}
         resolve={@resolve}
+        search_key={@narrowing}
         label={@label}
         required={@required}
         help={assigns[:help]}

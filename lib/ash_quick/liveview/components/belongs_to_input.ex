@@ -18,12 +18,14 @@ defmodule AshQuick.LiveView.Components.BelongsToInput do
     AshQuick.LiveView.Utils.lookup_action!(relationship)
     key = relationship.destination_attribute
     current = current(form.data, relationship)
+    narrowing = FormRecords.narrowing(assigns[:state_field])
 
     assigns =
       assign(assigns,
+        narrowing: narrowing,
         field: form[relationship.source_attribute],
-        search: &FormRecords.search(relationship, key, &1, scope, current),
-        resolve: &FormRecords.resolve(relationship, key, &1, scope, current)
+        search: &FormRecords.search(relationship, key, &1, scope, current, narrowing),
+        resolve: &FormRecords.resolve(relationship, key, &1, scope, current, narrowing)
       )
 
     ~H"""
@@ -33,6 +35,7 @@ defmodule AshQuick.LiveView.Components.BelongsToInput do
         mode={:single}
         search={@search}
         resolve={@resolve}
+        search_key={@narrowing}
         label={@label}
         required={@required}
         help={assigns[:help]}

@@ -57,6 +57,11 @@ defmodule AshQuick.LiveView.Picker do
   #
   # ## Other assigns
   #
+  #   * `search_key`: what `search` depends on beyond the typed text, such
+  #     as a filter. The callbacks are new closures on every redraw, so they
+  #     cannot say so themselves. When it changes, a picker that has searched
+  #     searches again for the text it last searched, so an open list never
+  #     shows options from before. Its selection is kept as it is.
   #   * `clearable` (single): draws a ✕ that empties the field.
   #   * `placeholder`, and `label_id` (for `aria-labelledby`) or `aria_label`.
   #   * `describedby`: ids for `aria-describedby`, help before errors; `nil`s
@@ -110,9 +115,12 @@ defmodule AshQuick.LiveView.Picker do
 
   @impl true
   def update(assigns, socket) do
+    searched_for = Map.get(socket.assigns, :search_key)
+
     {:ok,
      socket
      |> assign(assigns)
+     |> assign_new(:search_key, fn -> nil end)
      |> assign_new(:mode, fn -> :single end)
      |> assign_new(:resolve, fn -> fn _values -> [] end end)
      |> assign_new(:clearable, fn -> false end)
@@ -127,7 +135,19 @@ defmodule AshQuick.LiveView.Picker do
      |> assign_new(:class, fn -> %{} end)
      |> assign_new(:option, fn -> [] end)
      |> assign_new(:tag, fn -> [] end)
-     |> adopt_value()}
+     |> adopt_value()
+     |> search_again(searched_for)}
+  end
+
+  # A search key that changed under a list already searched: the options it
+  # holds may be ones the new key leaves out. A search the hook waits on is
+  # answered by this one, under its `seq`.
+  defp search_again(%{assigns: %{search_key: key}} = socket, key), do: socket
+  defp search_again(%{assigns: %{searched?: false, searching?: false}} = socket, _key), do: socket
+
+  defp search_again(socket, _key) do
+    seq = if socket.assigns.searching?, do: socket.assigns[:asked]
+    start_search(socket, socket.assigns.query, seq)
   end
 
   # The field's value is the selection whenever it changes: the picker's own
@@ -209,15 +229,8 @@ defmodule AshQuick.LiveView.Picker do
         _not_text -> nil
       end
 
-    ref = socket.assigns.rev + 1
     seq = if is_integer(params["seq"]), do: params["seq"]
-    search = socket.assigns.search
-
-    {:noreply,
-     socket
-     |> assign(query: query, query_ref: ref, rev: ref, searching?: true, asked: seq)
-     |> cancel_async(:search)
-     |> start_async(:search, fn -> {ref, seq, search.(query)} end)}
+    {:noreply, start_search(socket, query, seq)}
   end
 
   # The hook has posted the form for a change (`changes`, its count). If it
@@ -260,6 +273,16 @@ defmodule AshQuick.LiveView.Picker do
 
   defp changed(socket),
     do: {:reply, %{changed: true, changes: socket.assigns.changes}, socket}
+
+  defp start_search(socket, query, seq) do
+    ref = socket.assigns.rev + 1
+    search = socket.assigns.search
+
+    socket
+    |> assign(query: query, query_ref: ref, rev: ref, searching?: true, asked: seq)
+    |> cancel_async(:search)
+    |> start_async(:search, fn -> {ref, seq, search.(query)} end)
+  end
 
   @impl true
   def handle_async(:search, {:ok, {ref, seq, result}}, %{assigns: %{query_ref: ref}} = socket) do

@@ -16,6 +16,7 @@ defmodule AshQuick.LiveView.Components.PickerInput do
   attr :mode, :atom, required: true, values: [:single, :tags]
   attr :search, :any, required: true
   attr :resolve, :any, required: true
+  attr :search_key, :any, default: nil, doc: "what `search` depends on: a change searches again"
   attr :label, :string, default: nil
   attr :required, :boolean, default: false
   attr :help, :string, default: nil
@@ -48,6 +49,7 @@ defmodule AshQuick.LiveView.Components.PickerInput do
       mode={@mode}
       search={@search}
       resolve={@resolve}
+      search_key={@search_key}
       clearable={@mode == :single}
       placeholder={@placeholder}
       label_id={@label_id}
