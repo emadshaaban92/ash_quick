@@ -94,8 +94,8 @@ defmodule Example.MixProject do
       {:exceed, "~> 0.7"},
       {:nimble_csv, "~> 1.3"},
       {:briefly, "~> 0.5"},
-      {:ex_aws, "~> 2.7"},
-      {:ex_aws_s3, "~> 2.5"},
+      {:ex_aws, "~> 2.8"},
+      {:ex_aws_s3, "~> 2.6"},
       {:ash_money, "~> 0.2"},
       {:ex_money_sql, "~> 2.2"},
 

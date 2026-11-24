@@ -104,10 +104,11 @@ defmodule AshQuick.Storage.Served do
   end
 
   @doc false
-  # A key that names one object and no other. A `.` or `..` segment is
-  # resolved away by whatever reads the key next (a file system, or the HTTP
-  # client that asks the bucket), so `public/../private/x` would be granted as
-  # a `public/` key and read as a private one. An empty segment, a backslash
+  # A key that names one object and no other. A `.` or `..` segment may be
+  # resolved away by whatever reads the key next (a file system, or anything
+  # between ExAws, which sends dot segments as they are, and the bucket), so
+  # `public/../private/x` would be granted as a `public/` key and read as a
+  # private one. An empty segment, a backslash
   # or a NUL byte is refused for the same reason. Decoded first, so an encoded
   # `%2E%2E` or `%2F` is refused as what it decodes to.
   #
