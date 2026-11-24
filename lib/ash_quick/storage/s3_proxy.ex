@@ -97,13 +97,14 @@ defmodule AshQuick.Storage.S3.Proxy do
   ## Keys
 
   A requested key is refused, before its link is checked, when it holds an
-  empty segment, `.` or `..`, a backslash or a NUL byte, encoded or not. The
-  HTTP client that asks the bucket resolves dot segments, so
-  `public/../private/x` would otherwise be granted as a public key and read
-  as a private one. So is a key holding a `?` or a `#`: ExAws splits the
-  bucket's URL at the first `?`, so the rest would reach the bucket as
-  signed query parameters (`versionId`, `acl`, `tagging`). `put_file/3`
-  refuses the same keys, so nothing is stored that could not be served.
+  empty segment, `.` or `..`, a backslash or a NUL byte, encoded or not.
+  ExAws puts dot segments into the bucket's URL as they are, and anything
+  between it and the bucket may resolve them, so `public/../private/x` could
+  otherwise be granted as a public key and read as a private one. So is a key
+  holding a `?` or a `#`: the keys AshQuick writes never hold one, so a
+  request for one names nothing it stored and is refused rather than passed
+  on to the bucket. `put_file/3` refuses the same keys, so nothing is stored
+  that could not be served.
 
   ## Serving uploads from the application's origin
 
@@ -175,11 +176,10 @@ defmodule AshQuick.Storage.S3.Proxy do
   end
 
   @doc false
-  # `AshQuick.Storage.Served.safe_key?/1`, and no `?` or `#`. ExAws puts the
-  # key into the bucket's URL as it is and splits that URL at the first `?`,
-  # so `public/logo.png?versionId=old` would ask the bucket for an old
-  # version (or the ACL, or the tags) of a public object, signed with the
-  # application's credentials.
+  # `AshQuick.Storage.Served.safe_key?/1`, and no `?` or `#`. ExAws encodes
+  # both in the bucket's URL, but the keys AshQuick writes never hold one, so
+  # a key with either is refused here rather than signed and sent to the
+  # bucket with the application's credentials.
   def safe_key?(key), do: Served.safe_key?(key) and not String.contains?(key, ["?", "#"])
 
   @doc false
