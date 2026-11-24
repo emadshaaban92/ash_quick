@@ -9,7 +9,6 @@
    host's Tailwind build does not scan by default. Without this line every
    QuickView renders unstyled. */
 @source "../../../lib/ash_quick/**/*.*ex";
-@source "../../deps/live_select/lib/live_select/component.*ex";
 
 /* A Tailwind plugin that makes "hero-#{ICON}" classes available.
    The heroicons installation itself is managed by your mix.exs */

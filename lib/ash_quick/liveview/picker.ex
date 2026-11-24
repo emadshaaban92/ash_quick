@@ -42,8 +42,9 @@ defmodule AshQuick.LiveView.Picker do
   #
   # ## What it posts
   #
-  # The same as LiveSelect, so `AshQuick.LiveView.FormParams` and
-  # `AshQuick.LiveView.FieldErrors` read it unchanged:
+  # The names and marker LiveSelect posts, so `AshQuick.LiveView.FormParams`
+  # and `AshQuick.LiveView.FieldErrors` read the picker and a host widget built
+  # on LiveSelect alike:
   #
   #   * single: `<name>=<value>`, or `<name>=""` once cleared;
   #   * tags: `<name>[]=<value>` for each pick, or only

@@ -425,13 +425,9 @@ defmodule AshQuick.LiveView.Utils do
   @doc """
   A relationship dropdown's option for `record`, submitted as its `key`.
 
-  LiveSelect tells a picked option from the others by its `label`, so the
-  label carries the hint, "Name (hint)", the way a hinted link's accessible
-  name does: two records sharing a name are then two options it can tell
-  apart, and the closed single-select and a tag LiveSelect restores after a
-  reconnect still show which record it is. `:name` and `:hint` are the two
-  parts, for the slots that draw them separately. Falls back to the key when
-  there is no label, since that still points at the record picked.
+  `:name` is the record's display label and `:hint` its display hint, for the
+  picker to draw separately. Falls back to the key when there is no label,
+  since that still points at the record picked.
   """
   def to_option(record, key) do
     value = Map.fetch!(record, key)
@@ -439,7 +435,6 @@ defmodule AshQuick.LiveView.Utils do
     hint = AshQuick.Info.display_hint_value(record)
 
     %{
-      label: AshQuick.LiveView.Components.FieldValue.label_with_hint(name, hint),
       value: value,
       name: name,
       hint: hint

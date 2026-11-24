@@ -345,10 +345,10 @@ defmodule AshQuick.LiveView.FormParams do
   end
 
   # A multi-select emptied of its last pick posts no value under its name, only
-  # LiveSelect's `<name>_empty_selection` marker. Read as absent, the field
-  # would fall back to the value the record holds, and the select would redraw
-  # every stored pick. The marker is the page saying the list is now empty, on
-  # the root form and on any sub-form.
+  # a `<name>_empty_selection` marker (`AshQuick.LiveView.Picker` posts one, as
+  # LiveSelect does). Read as absent, the field would fall back to the value the
+  # record holds, and the select would redraw every stored pick. The marker is
+  # the page saying the list is now empty, on the root form and on any sub-form.
   @empty_selection "_empty_selection"
 
   @doc false

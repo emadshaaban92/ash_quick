@@ -578,7 +578,6 @@ defmodule AshQuick.LiveView.QuickView do
 
     * `ash` and `ash_phoenix` — Core Ash framework
     * `phoenix` and `phoenix_live_view` — Phoenix LiveView
-    * `live_select` — Used for the value pickers of the list's filter rows
     * Tailwind CSS 4 and daisyUI 5 — All components use Tailwind utility
       classes and daisyUI's (`btn`, `menu`, `modal`, `bg-base-100`); without
       the daisyUI plugin they render unstyled
