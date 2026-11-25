@@ -490,8 +490,12 @@ defmodule AshQuick.LiveView.FormUtils do
     # from it hides, and a field the state requires is held to it here: Ash
     # knows nothing of either. It is validated under the submit stage, and
     # the save runs the form as it settles, so the post is validated once.
+    # It settles from the form held before this post, as a change does: the
+    # one validated with it has its rows cut to those posted and matched by
+    # place, so a row posted under another key would find its stored row
+    # gone.
     {_params, checked, state} =
-      form
+      socket.assigns.form
       |> put_stage(AshQuick.form_submit_stage())
       |> then(
         &FormStateFlow.settle(

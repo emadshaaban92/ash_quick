@@ -90,11 +90,12 @@ defmodule AshQuick.LiveView.FormStateFlow do
 
   # AshPhoenix matches a posted row to the sub-form at its index, which is
   # the row's own only while nothing moved: after a `_drop_` or a `_sort_`,
-  # the row at index 1 may be the one the form held at 0, and the record
-  # behind it with it. So the form's own rows are moved first as the post
-  # moved them, each renamed for where it ends up, its sub-forms with it, as
-  # AshPhoenix's `sort_forms/3` renames them. A dropped row, and the place of
-  # one `_add_` put in, hold no sub-form, and a new one is built there.
+  # or a post that leaves a row out, the row at index 0 may be the one the
+  # form held at 1, and AshPhoenix would give it the record held at 0. So
+  # the form's own rows are moved first as the post moved them, each renamed
+  # for where it ends up, its sub-forms with it, as AshPhoenix's
+  # `sort_forms/3` renames them. A dropped row, and the place of one `_add_`
+  # put in, hold no sub-form, and a new one is built there.
   defp move_rows(%Phoenix.HTML.Form{source: source} = form, moves) when moves != %{},
     do: source |> move_rows(moves) |> Phoenix.HTML.FormData.to_form(form.options)
 
@@ -172,10 +173,11 @@ defmodule AshQuick.LiveView.FormStateFlow do
   # reorder and add inputs) are applied here as AshPhoenix applies them,
   # and taken out, so the rows' names say where each one ends up.
   #
-  # Comes back with the moves those keys made: for the list under the
+  # Comes back with the moves those keys made, and those of rows posted
+  # under other keys than the ones they end up with: for the list under the
   # sub-form whose id is `id`, which index each row was posted under (nil
   # for a row `_add_` put in). `id` is the sub-form's id in the form the
-  # post was made from.
+  # post was made from. Each row keeps the stored row it was posted for.
   defp number_rows(params, %FormState{} = state, id)
        when is_map(params) and not is_struct(params) do
     Enum.reduce(state.forms, {params, %{}}, fn {name, rows}, {params, moves} ->
@@ -224,32 +226,46 @@ defmodule AshQuick.LiveView.FormStateFlow do
   end
 
   # The rows left after a drop, sorted and added to as the post says, each
-  # beside the index it was posted under. Without a control key, the rows are
-  # only renumbered, and AshPhoenix matches each one by its new index.
+  # beside the index it was posted under. A row posted under another index
+  # than the one it ends up at moved, with or without a control key: a post
+  # keyed `"1"` alone is stored row 1, not row 0, so the form's rows are
+  # moved with it. Only rows posted under `"0"` up to one less than their
+  # count, with no control key, are left where they are.
   defp number_moved(params, entries, controls, {key, name}, rows, id) do
     [_drop, sort, add] = Enum.map(controls, &params[&1])
-    moved? = Enum.any?(controls, &Map.has_key?(params, &1))
+    controlled? = Enum.any?(controls, &Map.has_key?(params, &1))
 
     entries =
-      if moved? do
-        entries
-        |> Enum.map(fn {index, row} -> {index, {index, row}} end)
-        |> sort_rows(sort)
-        |> add_row(add)
-      else
-        entries |> sort_rows(nil) |> Enum.with_index(&{&2, &1})
-      end
+      entries
+      |> Enum.map(fn {index, row} -> {index, {index, row}} end)
+      |> sort_rows(sort)
+      |> add_row(add)
+      |> claim_once()
 
     {numbered, moves} = number_each(entries, rows, "#{id}_#{name}")
     numbered = numbered |> Enum.with_index(&{to_string(&2), &1}) |> Map.new()
     params = params |> Map.drop(controls) |> Map.put(key, numbered)
+    sources = Enum.with_index(entries, fn {source, _row}, at -> {at, source} end)
 
-    if moved? do
-      sources = Enum.with_index(entries, fn {source, _row}, at -> {at, source} end)
+    if controlled? or Enum.any?(sources, fn {at, source} -> at != source end) do
       {params, Map.put(moves, {id, to_string(name)}, Map.new(sources))}
     else
       {params, moves}
     end
+  end
+
+  # Two keys can name the same index (`"1"` and `"01"`): only the row whose
+  # key sorts first as text (`"01"`) keeps that stored row, and the others
+  # are new rows, as a key past the stored rows is.
+  defp claim_once(entries) do
+    {entries, _claimed} =
+      Enum.map_reduce(entries, MapSet.new(), fn {source, row}, claimed ->
+        if is_integer(source) and MapSet.member?(claimed, source),
+          do: {{nil, row}, claimed},
+          else: {{source, row}, MapSet.put(claimed, source)}
+      end)
+
+    entries
   end
 
   # Each `{source, row}` numbered in turn, a row's own rows under the id its
@@ -268,7 +284,13 @@ defmodule AshQuick.LiveView.FormStateFlow do
   defp indexed(posted) when is_list(posted), do: Enum.with_index(posted, &{&2, &1})
 
   defp indexed(posted) do
-    entries = Enum.map(posted, fn {key, row} -> {integer_key(key), row} end)
+    # Sorted by key as text first, so two keys for one index (`"01"` and
+    # `"1"`) come in one order however large the map is.
+    entries =
+      posted
+      |> Enum.sort_by(&to_string(elem(&1, 0)))
+      |> Enum.map(fn {key, row} -> {integer_key(key), row} end)
+
     if Enum.all?(entries, &is_integer(elem(&1, 0))), do: entries, else: :error
   end
 

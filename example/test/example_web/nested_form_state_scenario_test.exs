@@ -144,6 +144,107 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
       assert [%{kind: :device, serial: "SN-9"}, %{kind: :good, serial: nil}] =
                bundle(code).items
     end
+
+    # On an update, a row posted under another key than the one it ends up
+    # with is still the stored row it was posted for.
+    test "a stored row left out of an update post", %{conn: conn} do
+      record = create(items: [%{kind: :device, serial: "SN-A"}, %{kind: :good}])
+      {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
+
+      push_submit(view, %{"items" => %{"1" => %{"kind" => "good", "serial" => "Forged"}}})
+
+      assert [%{kind: :good, serial: nil}] = bundle(record.code).items
+    end
+
+    # The discount is read-only on a retail bundle: held to each row's own
+    # stored one.
+    test "a stored row left out of a change, then save", %{conn: conn} do
+      record = create(items: [%{kind: :good, discount: 5}, %{kind: :good, discount: 9}])
+      {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
+
+      move(view, %{"items" => %{"1" => %{"kind" => "good", "discount" => "1"}}})
+      refute has_input?(view, "items][1")
+      view |> form(@form) |> render_submit()
+
+      assert [%{kind: :good, discount: 9}] = bundle(record.code).items
+    end
+
+    test "stored rows posted under keys past their own", %{conn: conn} do
+      record = create(items: [%{kind: :good, discount: 5}, %{kind: :good, discount: 9}])
+      {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
+
+      push_submit(view, %{
+        "items" => %{
+          "1" => %{"kind" => "good", "discount" => "1"},
+          "4" => %{"kind" => "good", "discount" => "2"}
+        }
+      })
+
+      assert [%{kind: :good, discount: 9}, %{kind: :good, discount: nil}] =
+               bundle(record.code).items
+    end
+
+    # Saved as the post itself, a moved row keeps its record, and the
+    # rows of its own that it posts.
+    test "a stored row left out of a save keeps its record", %{conn: conn} do
+      record =
+        create(
+          items: [
+            %{kind: :good, discount: 5},
+            %{kind: :device, serial: "SN-B", discount: 9, parts: [%{name: "P1"}]}
+          ]
+        )
+
+      {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
+
+      push_submit(view, %{
+        "items" => %{
+          "1" => %{
+            "kind" => "device",
+            "serial" => "SN-B",
+            "discount" => "1",
+            "parts" => %{"0" => %{"name" => "P1x"}}
+          }
+        }
+      })
+
+      assert [%{kind: :device, serial: "SN-B", discount: 9, parts: [%{name: "P1x"}]}] =
+               bundle(record.code).items
+    end
+
+    test "stored rows saved under keys one past their own", %{conn: conn} do
+      record = create(items: Enum.map(0..3, &%{kind: :good, discount: &1}))
+      {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
+
+      push_submit(view, %{
+        "items" => Map.new(1..3, &{to_string(&1), %{"kind" => "good", "discount" => "0"}})
+      })
+
+      assert [1, 2, 3] = Enum.map(bundle(record.code).items, & &1.discount)
+    end
+
+    # Two keys for one index: the one that sorts first as text keeps the
+    # stored row, the other is a new row, with or without a control key.
+    for {label, controls} <- [
+          {"without a control key", %{}},
+          {"with a control key", %{"_drop_items" => ["7"]}}
+        ] do
+      test "two keys for one stored row, #{label}", %{conn: conn} do
+        record = create(items: [%{kind: :good, discount: 5}, %{kind: :good, discount: 9}])
+        {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
+
+        push_submit(
+          view,
+          Map.put(unquote(Macro.escape(controls)), "items", %{
+            "1" => %{"kind" => "good"},
+            "01" => %{"kind" => "service", "hours" => "2"}
+          })
+        )
+
+        assert [%{kind: :service, discount: 9}, %{kind: :good, discount: nil}] =
+                 bundle(record.code).items
+      end
+    end
   end
 
   describe "a template's remove and reorder inputs" do

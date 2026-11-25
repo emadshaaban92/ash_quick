@@ -215,6 +215,19 @@ defmodule ExampleWeb.ManagedRowsScenarioTest do
     %{rows: rows, tags: tags}
   end
 
+  # A hand-made save that leaves stored row 0 out: row "1" is still the
+  # second record, updated, keeping the note the page disables and the
+  # secret its sub-form does not draw; the first is removed.
+  test "a row left out of a hand-made save updates its own record", ctx do
+    %{conn: conn, editor: editor, record: record, stored: [_first, second]} = ctx
+    {:ok, view, _html} = conn |> log_in(editor) |> live("/test/managed_rows/#{record.id}/update")
+
+    render_submit(view, "save", %{"form" => %{"items" => %{"1" => %{"status" => "b2"}}}})
+
+    assert [%{id: id, status: "b2", note: "also", secret: "second"}] = items_of(record)
+    assert id == second.id
+  end
+
   defp items_of(record) do
     Item
     |> Ash.Query.filter(managed_rows_id == ^record.id)
