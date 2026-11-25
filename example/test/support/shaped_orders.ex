@@ -184,11 +184,6 @@ defmodule Example.Test.ShapedOrders do
     data_layer: Ash.DataLayer.Ets,
     extensions: [AshQuick]
 
-  # An upload's key is filed under it.
-  resource do
-    plural_name :shaped_orders
-  end
-
   actions do
     defaults [:read]
 
