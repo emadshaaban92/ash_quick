@@ -114,6 +114,50 @@ defmodule AshQuick.LiveView.Utils do
     |> Keyword.put(:auto?, false)
   end
 
+  @doc """
+  The relationships an update form for `action` must find loaded on its
+  record: each one a `manage_relationship` change edits through sub-forms that
+  are built over the related records (its `on_match` updates or destroys
+  them, or reads them), and, under each, those its own sub-forms edit in turn.
+
+  `AshPhoenix.Form` reads such a relationship off the record, and draws no
+  sub-form for one left unloaded. Its rows would then post nothing, and a
+  change that destroys what it is not sent, such as `direct_control`, would
+  destroy every stored row on a plain save. A relationship already on the
+  path is not walked again, so a change that manages its way back stops there.
+
+  Each relationship names its destination's attributes selected by default,
+  beside its own nested loads: merged with a host's `load:` that narrows the
+  same relationship's select, it widens it again, so a sub-form never draws
+  an attribute empty and saves that emptiness over the stored value.
+  """
+  def managed_loads(resource, action) do
+    resource
+    |> AshPhoenix.Form.Auto.auto(action)
+    |> managed_loads_of(MapSet.new())
+  end
+
+  defp managed_loads_of(forms, seen) do
+    for {_key, opts} <- forms,
+        {source, name, _manage_opts} <- [opts[:managed_relationship]],
+        not MapSet.member?(seen, {source, name}),
+        opts = built_form_opts(opts),
+        Keyword.has_key?(opts, :data) do
+      %{destination: destination} = Ash.Resource.Info.relationship(source, name)
+
+      {name,
+       Enum.to_list(Ash.Resource.Info.selected_by_default_attribute_names(destination)) ++
+         managed_loads_of(opts[:forms] || [], MapSet.put(seen, {source, name}))}
+    end
+  end
+
+  defp built_form_opts(opts) do
+    case opts[:updater] do
+      updater when is_function(updater, 1) -> updater.(opts)
+      _ -> opts
+    end
+  end
+
   defp reject_hidden(fields, data) do
     case hidden_field_names(data) do
       [] -> fields
