@@ -57,6 +57,21 @@ defmodule ExampleWeb.FormStateSocketUploadTest do
     assert %{photo: %{original_filename: ^name}} = order(code)
   end
 
+  # `ShapedOrders` declares no `plural_name`: the key is filed under its short
+  # name rather than an empty segment the store refuses (issue #253).
+  test "an upload's key is filed under the short name of a resource with no plural name",
+       %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/test/shaped_orders/create")
+    code = unique("O")
+    change(view, %{"code" => code, "kind" => "gift"}, "kind")
+
+    name = unique("keyed") <> ".jpg"
+    view |> pick(@form, name) |> render_upload(name)
+    view |> form(@form) |> render_submit()
+
+    assert %{photo: %{key: "private/shaped_orders/" <> _}} = order(code)
+  end
+
   test "a hidden field cancels what arrives for it", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/test/shaped_orders/create")
     change(view, %{"code" => unique("O"), "kind" => "standard"}, "kind")

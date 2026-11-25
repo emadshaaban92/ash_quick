@@ -172,6 +172,7 @@ defmodule ExampleWeb.Router do
         quick_view "/required_entries", Example.Test.RequiredEntriesLive.Quick
         quick_view "/required_picks", Example.Test.RequiredPicksLive.Quick
         quick_view "/secrets", Example.Test.SecretsLive.Quick
+        quick_view "/shadowed_arguments", Example.Test.ShadowedArgumentsLive.Quick
         quick_view "/shaped_bundles", Example.Test.ShapedBundlesLive.Quick
         quick_view "/shaped_orders", Example.Test.ShapedOrdersLive.Quick
         quick_view "/second_lists", Example.Test.SecondListsLive.Quick

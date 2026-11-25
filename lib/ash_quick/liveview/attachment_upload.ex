@@ -238,8 +238,15 @@ defmodule AshQuick.LiveView.AttachmentUpload do
 
   @doc false
   def build_attachment_key(entry, socket, visibility) do
-    directory = Ash.Resource.Info.plural_name(socket.assigns.resource)
+    directory = key_directory(socket.assigns.resource)
     "#{visibility}/#{directory}/#{entry.uuid}-#{safe_filename(entry.client_name)}"
+  end
+
+  # The segment an upload's key is filed under: the resource's `plural_name`,
+  # or its short name when it declares none, so a resource without one never
+  # builds a `private//` key that a store refuses.
+  defp key_directory(resource) do
+    Ash.Resource.Info.plural_name(resource) || Ash.Resource.Info.short_name(resource)
   end
 
   @doc """
