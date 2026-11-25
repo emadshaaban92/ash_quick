@@ -47,25 +47,27 @@ defmodule AshQuick.MixProject do
       #
       # Floors track the versions the suite runs against. Two are also hard
       # minimums, so keep them if a floor is ever loosened: ash 3.35.0, where
-      # `Ash.can_see_fields/4` (which decides the columns a field policy hides)
-      # loads a policy authorizer itself instead of skipping one that is not
-      # loaded yet, and ash_phoenix 2.3.20, for the dynamic `keep_live`
-      # subscriptions `AshQuick.LiveView.Liveness` re-targets. ash_phoenix sits
-      # at 2.3.25 because that release fixed CVE-2026-82724..82727. ash sits at
-      # 3.38.0 because that release fixed CVE-2026-124283 (a forged keyset
-      # cursor was decoded as Erlang terms). Earlier floors it covers: 3.37.1
-      # fixed EEF-CVE-2026-114214, 3.37.3 stopped an update that manages a
-      # relationship failing on a record whose embed a field policy hides, and
-      # 3.37.4 asks a related field's policies in a filter with
-      # `accessing_from`, as the filter form does. phoenix_live_view sits
-      # at 1.2.14 because that release fixed CVE-2026-126334 (a LiveView
-      # joined without a url skipped its live_session's on_mount hooks, where
-      # AshQuick and the host check access). phoenix sits at 1.8.17 because
-      # that release fixed CVE-2026-129344 (an unserializable channel message
-      # took down a shared topic) and CVE-2026-128361 (an unsanitized
-      # presence key crashed the Presence tracker AshQuick's browser sessions
-      # use).
-      {:ash, "~> 3.38"},
+      # `Ash.can_see_fields/4` (which decides the columns a field policy
+      # hides) loads a policy authorizer itself instead of skipping one that
+      # is not loaded yet, and ash_phoenix 2.3.20, for the dynamic `keep_live`
+      # subscriptions `AshQuick.LiveView.Liveness` re-targets. ash_phoenix
+      # sits at 2.3.25 because that release fixed CVE-2026-82724..82727. ash
+      # sits at 3.38.1 because that release fixed CVE-2026-120299 (client
+      # input cast to an `Ash.Type.Keyword` reached its fields' storage
+      # casting, as if it were trusted), and 3.38.0 before it fixed
+      # CVE-2026-124283 (a forged keyset cursor was decoded as Erlang terms).
+      # Earlier floors it covers: 3.37.1 fixed EEF-CVE-2026-114214, 3.37.3
+      # stopped an update that manages a relationship failing on a record
+      # whose embed a field policy hides, and 3.37.4 asks a related field's
+      # policies in a filter with `accessing_from`, as the filter form does.
+      # phoenix_live_view sits at 1.2.14 because that release fixed
+      # CVE-2026-126334 (a LiveView joined without a url skipped its
+      # live_session's on_mount hooks, where AshQuick and the host check
+      # access). phoenix sits at 1.8.17 because that release fixed
+      # CVE-2026-129344 (an unserializable channel message took down a shared
+      # topic) and CVE-2026-128361 (an unsanitized presence key crashed the
+      # Presence tracker AshQuick's browser sessions use).
+      {:ash, "~> 3.38 and >= 3.38.1"},
       {:ash_phoenix, "~> 2.3 and >= 2.3.25"},
       {:spark, "~> 2.7"},
       {:phoenix, "~> 1.8 and >= 1.8.17"},
