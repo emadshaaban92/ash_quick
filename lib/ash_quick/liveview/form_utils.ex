@@ -105,6 +105,7 @@ defmodule AshQuick.LiveView.FormUtils do
       |> Ash.Query.load(options.load, strict?: true)
       |> Utils.load_fields(fields, strict?: true)
       |> then(&Ash.Query.load(&1, picked_hint_load(action_type, action_fields, &1.tenant)))
+      |> Ash.Query.load(managed_load(action_type, options.resource, action_name))
       |> Ash.read_one!()
 
     socket |> assign(record: record)
@@ -126,6 +127,14 @@ defmodule AshQuick.LiveView.FormUtils do
   end
 
   defp picked_hint_load(_action_type, _action_fields, _tenant), do: []
+
+  # The related records an update form's sub-forms are built over: unloaded,
+  # the form would draw none of them, and a change that destroys what it is
+  # not sent would destroy them all on save. See `Utils.managed_loads/2`.
+  # Merged rather than strict, so a host's own `load:` of the same relationship
+  # keeps what it reads.
+  defp managed_load(:update, resource, action), do: Utils.managed_loads(resource, action)
+  defp managed_load(_action_type, _resource, _action), do: []
 
   defp set_form(socket, :create, _options) do
     form =

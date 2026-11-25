@@ -315,6 +315,12 @@ use AshQuick.LiveView.QuickView,
   details: [load: [lines: [:product]]]      # details-only (heavy relationship)
 ```
 
+An update form loads on its own the related records its sub-forms edit: a
+relationship a `manage_relationship` change on the action updates, destroys or
+reads (`direct_control` among them), and those the related rows' own sub-forms
+edit in turn. Each stored record gets its sub-form, and a plain save keeps
+them. No `:load` is needed for it.
+
 ## Action routing convention
 
 URL determines view type:
