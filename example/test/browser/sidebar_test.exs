@@ -64,9 +64,9 @@ defmodule ExampleWeb.Browser.SidebarTest do
     |> assert_out(locale)
   end
 
-  # The next page draws a new drawer, shut, before the entry's own toggle
+  # The next page draws a new drawer, shut, before the entry's own close
   # lands on the old one (it never does: the old drawer is gone a frame
-  # on), so this pins what the reader sees, not that toggle.
+  # on), so this pins what the reader sees, not that close.
   test "an entry picked goes to its page with the drawer shut",
        %{conn: conn, admin: admin, locale: locale} do
     conn
@@ -82,10 +82,8 @@ defmodule ExampleWeb.Browser.SidebarTest do
     |> assert_out(locale)
   end
 
-  # Known gap: the entry of the page the reader is on patches the page
-  # rather than drawing a new one, and carries no toggle, so the drawer
-  # stays open over the page.
-  @tag :skip
+  # The entry of the page the reader is on patches the page rather than
+  # drawing a new one, so the drawer it was picked from has to shut itself.
   test "the entry of the page it is on slides it out",
        %{conn: conn, admin: admin, locale: locale} do
     conn
@@ -97,5 +95,38 @@ defmodule ExampleWeb.Browser.SidebarTest do
     |> click("#default-sidebar a[href^='/products']")
     |> refute_has("#sidebar-backdrop")
     |> assert_out(locale)
+  end
+
+  # From `lg` up the sidebar is pinned with the drawer's classes still on it,
+  # so an entry picked there must leave them shut: a toggle would flip them
+  # to open, and the drawer would cover the page once the window narrows.
+  @tag browser_context_opts: [viewport: %{width: 1280, height: 800}]
+  test "an entry picked where it is pinned leaves the drawer shut for a phone",
+       %{conn: conn, admin: admin, locale: locale} do
+    conn
+    |> log_in(admin)
+    |> visit(~p"/products?search=tent")
+    |> connected()
+    |> click("#default-sidebar a[href^='/products']")
+    |> assert_has("input[value='tent']")
+    |> tap(&resize(&1, 390, 844))
+    |> refute_has("#sidebar-backdrop")
+    |> assert_out(locale)
+  end
+
+  # PhoenixTest.Playwright has no resize step, so this sends Playwright's own.
+  defp resize(conn, width, height) do
+    response =
+      PlaywrightEx.Connection.send(
+        PlaywrightEx.Supervisor.Connection,
+        %{
+          guid: conn.page_id,
+          method: :setViewportSize,
+          params: %{viewportSize: %{width: width, height: height}}
+        },
+        5000
+      )
+
+    refute Map.has_key?(response, :error), inspect(response)
   end
 end

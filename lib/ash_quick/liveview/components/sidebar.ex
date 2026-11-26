@@ -102,10 +102,12 @@ defmodule AshQuick.LiveView.Components.Sidebar do
             </li>
             <li :for={entry <- section.entries}>
               <%!-- Patching keeps the list params, but only the view that owns
-              them can answer one; every other page navigates to itself. --%>
+              them can answer one; every other page navigates to itself. A
+              patch keeps this drawer, so the entry shuts it itself. --%>
               <.link
                 :if={marked?(entry, @current_path) and @list_params}
                 patch={URLParams.full_path(entry.path, @list_params)}
+                phx-click={close_sidebar()}
                 class="bg-base-300 hover:bg-base-200"
               >
                 <.nav_icon icon={entry.icon} class="w-6 h-6 text-base-content/60" />
@@ -114,6 +116,7 @@ defmodule AshQuick.LiveView.Components.Sidebar do
               <.link
                 :if={marked?(entry, @current_path) and is_nil(@list_params)}
                 navigate={entry.path}
+                phx-click={close_sidebar()}
                 class="bg-base-300 hover:bg-base-200"
               >
                 <.nav_icon icon={entry.icon} class="w-6 h-6 text-base-content/60" />
@@ -122,7 +125,7 @@ defmodule AshQuick.LiveView.Components.Sidebar do
               <.link
                 :if={not marked?(entry, @current_path)}
                 navigate={entry.path}
-                phx-click={toggle_sidebar()}
+                phx-click={close_sidebar()}
               >
                 <.nav_icon
                   icon={entry.icon}
@@ -164,6 +167,17 @@ defmodule AshQuick.LiveView.Components.Sidebar do
   # plain link rather than a patch nothing can answer.
   defp list_params(%URLParams{} = params), do: URLParams.to_list_params(params)
   defp list_params(_params), do: nil
+
+  # An entry shuts the drawer rather than toggling it: from `lg` up the
+  # sidebar is pinned open with the drawer's classes still on it, and a toggle
+  # there would leave it "open" for the next time the window narrows.
+  defp close_sidebar do
+    JS.add_class("hidden", to: "#sidebar-backdrop")
+    |> JS.add_class("max-lg:-translate-x-full max-lg:rtl:translate-x-full",
+      to: "#default-sidebar"
+    )
+    |> JS.remove_class("translate-x-0", to: "#default-sidebar")
+  end
 
   defp toggle_sidebar do
     JS.toggle_class("hidden", to: "#sidebar-backdrop")
