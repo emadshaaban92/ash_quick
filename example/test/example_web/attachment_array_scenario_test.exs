@@ -229,23 +229,6 @@ defmodule ExampleWeb.AttachmentArrayScenarioTest do
              |> Ash.Changeset.get_attribute(:rows)
              |> Enum.map(& &1.photo.original_filename) == ["front.jpg"]
     end
-
-    # Known gap (#260): the key is minted for `:new_photos`, and once the fold
-    # lands it in the `:rows` sub-forms the browser posts it under `rows`,
-    # where the save drops it as a key the form never issued for that field.
-    @tag :skip
-    test "saves the folded photos", %{conn: conn} do
-      record = Ash.create!(Example.Test.TwoFileRows, %{code: unique("F")})
-
-      {:ok, view, _html} = live(conn, "/test/two_file_rows/#{record.id}/add_photos")
-      pick(view, "front.jpg", "form[new_photos]_upload")
-      save(view)
-
-      assert record
-             |> Ash.reload!(authorize?: false)
-             |> Map.fetch!(:rows)
-             |> Enum.map(& &1.photo.original_filename) == ["front.jpg"]
-    end
   end
 
   # A row added beside it leaves the changeset holding the rows as a change,

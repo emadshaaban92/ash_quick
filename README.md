@@ -1059,6 +1059,16 @@ use AshQuick.LiveView.QuickView,
   form: [widgets: %{tags: &__MODULE__.tags_input/1}]
 ```
 
+Two form shapes are not supported, and compile all the same:
+
+- A single embed inside another single embed gets no inputs: the outer
+  embed's are drawn, the inner one's are not. Move the inner embed's
+  attributes onto the outer one.
+- An upload argument that the action's own change folds onto an embedded
+  list the same form draws as sub-forms can't be saved: the file shows as a
+  new row, and the save drops it. Leave that embed out of the action's
+  `accept`, so the form draws only the upload.
+
 A list argument a `manage_relationship` change reads onto a many_to_many is
 picked from that relationship's records, as tags. A list of ids posts each
 record's primary key. A list of text posts names instead, when the change
