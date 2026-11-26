@@ -13,7 +13,13 @@ config :example, Example.Repo,
 config :example, ExampleWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4002],
   secret_key_base: "Yb3sXqNvE8mR1tKzP5gWjA7cHdLuF2oZi6QeTyVnMxBrJ4kSaC0pDlUhGwIfOt9K",
+  # Only a run that includes the browser tests serves it, which
+  # `test/test_helper.exs` turns on.
   server: false
+
+# A browser test's requests and LiveViews join its database transaction. See
+# `ExampleWeb.SqlSandbox`.
+config :example, sql_sandbox: true
 
 config :logger, level: :warning
 
@@ -23,6 +29,24 @@ config :phoenix, :sort_verified_routes_query_params, true
 config :phoenix_live_view, enable_expensive_runtime_checks: true
 
 config :phoenix_test, :endpoint, ExampleWeb.Endpoint
+
+# The browser tests (`test/browser`, tagged `:playwright`): Chromium, driven
+# through the Playwright `assets/package.json` installs. One browser at a time,
+# since the pages they drive share ETS tables. Each assertion waits up to 5s
+# for the page. `PW_SCREENSHOT=true` keeps a screenshot of each test's last
+# page under `screenshots/`, and `PW_TRACE=true` a Playwright trace under
+# `traces/`. `PW_CHROMIUM` names a Chromium to run instead of the one
+# Playwright installs, for a machine that cannot download it.
+config :phoenix_test,
+  otp_app: :example,
+  playwright:
+    [
+      browser_pools: [[id: :chromium, browser: :chromium, size: 1]],
+      browser_pool: :chromium,
+      timeout: to_timeout(second: 5),
+      trace: System.get_env("PW_TRACE", "false") in ~w(t true),
+      screenshot: System.get_env("PW_SCREENSHOT", "false") in ~w(t true)
+    ] ++ if(path = System.get_env("PW_CHROMIUM"), do: [executable_path: path], else: [])
 
 # Presigning is offline arithmetic, but an export really uploads the file it
 # generated. `Example.Test.S3Stub` is a bucket in ETS, so the bytes a reader

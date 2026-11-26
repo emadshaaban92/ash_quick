@@ -75,6 +75,19 @@ few helpers a QuickView needs driving (`ExampleWeb.QuickViewHelpers`) and the
 browser-tab identity impersonation is resolved per
 (`ExampleWeb.Sessions`).
 
+`test/browser/` drives pages in a real Chromium, for what only a browser runs:
+AshQuick's hooks, the picker's keyboard, focus and right-to-left drawing above
+all. They are written on `ExampleWeb.BrowserCase` (the same `PhoenixTest`
+calls, through `phoenix_test_playwright`), tagged `:playwright` and left out
+of a plain `mix test`. They need Node.js:
+
+```console
+$ npm ci --prefix assets
+$ (cd assets && npx playwright install chromium)
+$ MIX_ENV=test mix assets.build
+$ mix test --only playwright
+```
+
 ## What is wired where
 
 | Seam | Here |

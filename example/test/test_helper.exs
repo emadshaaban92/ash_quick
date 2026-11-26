@@ -1,5 +1,21 @@
 # `:s3_server` cases need an S3-compatible server; see `Example.S3ServerTest`.
-ExUnit.start(exclude: [:s3_server])
+# `:playwright` cases need Chromium and the Playwright `assets/package.json`
+# installs; see `ExampleWeb.BrowserCase`.
+ExUnit.start(exclude: [:s3_server, :playwright])
+
+# Only a run that includes the browser cases serves the app over HTTP and
+# starts the browser driver, so a plain `mix test` binds no port and needs no
+# Node.js. The endpoint reads `:server` as it starts, so it is restarted.
+if :playwright in Keyword.get(ExUnit.configuration(), :include, []) do
+  endpoint = Application.fetch_env!(:example, ExampleWeb.Endpoint)
+  Application.put_env(:example, ExampleWeb.Endpoint, Keyword.put(endpoint, :server, true))
+  :ok = Supervisor.terminate_child(Example.Supervisor, ExampleWeb.Endpoint)
+  {:ok, _pid} = Supervisor.restart_child(Example.Supervisor, ExampleWeb.Endpoint)
+
+  {:ok, _pid} = PhoenixTest.Playwright.Supervisor.start_link()
+  Application.put_env(:phoenix_test, :base_url, ExampleWeb.Endpoint.url())
+end
+
 Ecto.Adapters.SQL.Sandbox.mode(Example.Repo, :manual)
 
 # Ash's Ets data layer registers a table's manager before the manager creates

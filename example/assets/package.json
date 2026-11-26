@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "description": "The browser the example app's browser tests drive (test/browser), through phoenix_test_playwright.",
+  "devDependencies": {
+    "playwright": "1.65.1"
+  }
+}
