@@ -10,7 +10,7 @@ defmodule ExampleWeb.Browser.MenusTest do
 
   In both directions: a menu lines its end up with its button's and grows
   toward the line's start, which in Arabic is the right, and must stay on the
-  screen either way. Two known gaps are recorded as skipped tests.
+  screen either way. One known gap is recorded as a skipped test.
   """
   use ExampleWeb.BrowserCase,
     parameterize: [%{locale: :en}, %{locale: :ar}]
@@ -93,15 +93,21 @@ defmodule ExampleWeb.Browser.MenusTest do
       |> assert_shut(row)
     end
 
-    # Known gap: ↓ and ↑ open the menu without its button's click, which is
-    # what asks the server for the entries, so it stays on "Loading…".
-    @tag :skip
     test "opened by ↓ or ↑ asks the server for its entries", ctx do
       %{conn: conn, admin: admin, row: row} = ctx
-      conn = conn |> open_list(admin) |> press(trigger(row), "ArrowUp") |> assert_open(row)
-      last = conn |> entries(row) |> List.last()
+      # ↓ first, on a row whose entries were never sent: once a menu has
+      # been opened the server keeps its entries, so ↑ after it would pass
+      # without asking. The cell's test below covers ↑ on a fresh menu.
+      conn = conn |> open_list(admin) |> press(trigger(row), "ArrowDown") |> assert_open(row)
+      [first | _] = items = entries(conn, row)
 
-      assert_has(conn, ~s([id="#{row}-content"] [role=menuitem]:focus), text: last)
+      conn
+      |> assert_has(~s([id="#{row}-content"] [role=menuitem]:focus), text: first)
+      |> press(":focus", "Escape")
+      |> assert_shut(row)
+      |> press(trigger(row), "ArrowUp")
+      |> assert_open(row)
+      |> assert_has(~s([id="#{row}-content"] [role=menuitem]:focus), text: List.last(items))
     end
 
     test "a click opens it without moving the focus into it, a second one shuts it", ctx do
@@ -185,6 +191,15 @@ defmodule ExampleWeb.Browser.MenusTest do
       |> press(":focus", "Enter")
       |> assert_shut(cell)
       |> assert_has("[data-filter-chip]", text: product.name)
+    end
+
+    test "a cell's menu opens by ↑ onto its last choice, once the server sends them", ctx do
+      %{conn: conn, admin: admin, product: product} = ctx
+      cell = "#{product.id}-cell-filter-name"
+      conn = conn |> open_list(admin) |> press(trigger(cell), "ArrowUp") |> assert_open(cell)
+      last = conn |> entries(cell) |> List.last()
+
+      assert_has(conn, ~s([id="#{cell}-content"] [role=menuitem]:focus), text: last)
     end
   end
 
