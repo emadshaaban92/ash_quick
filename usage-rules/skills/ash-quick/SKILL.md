@@ -980,6 +980,12 @@ write.
   (`form: [widgets: %{tags: &__MODULE__.tags_input/1}]`) or a configured
   input for its list type (`form_inputs: %{{:array, MyType} => MyInput}`), or
   leave it out of the action.
+- **Unsupported form shapes** — These compile but don't work: a single embed
+  inside another single embed gets no inputs (only the outer one's are
+  drawn), and an upload argument that the action's change folds onto an
+  embedded list the same form draws as sub-forms is dropped at save. Flatten
+  the inner embed into the outer one, and leave a folded-onto embed out of
+  the action's `accept`.
 - **Typed inputs** — A date, a time held to the second and a naive datetime
   get the browser's pickers. A number stays `type="text"` (match it as such in
   tests), with `dir="ltr"`, and gets `inputmode` for a phone's number pad

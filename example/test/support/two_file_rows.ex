@@ -52,9 +52,9 @@ defmodule Example.Test.TwoFileRows do
 
     # Photos picked here are folded onto `:rows` by the action, after the
     # rows the form draws, and the action takes `:rows` itself. The argument
-    # is spent as it folds, so applied twice it adds each photo twice. The
-    # save does not keep them yet (#260): the photo's key is issued for
-    # `:new_photos`, and the form posts it under `rows`.
+    # is spent as it folds, so applied twice it adds each photo twice. This
+    # shape is unsupported, and its save drops the photos: the photo's key is
+    # issued for `:new_photos`, and the form posts it under `rows`.
     update :add_photos do
       accept [:rows]
       require_atomic? false
