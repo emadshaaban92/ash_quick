@@ -8,8 +8,10 @@ defmodule ExampleWeb.Browser.ActionModalTest do
   not close it (only its ✕ and Cancel do), and once it closes the focus goes
   back to what opened it. Opened from a row's menu, the menu's hook returns
   the focus as well, so the cases that pin the modal's own return open it
-  from a list's or a details page's button, and both are known gaps. While
-  its form submits, its ✕ is a disabled twin, and the boxes and selects in
+  from a list's Create button and a details page's action button: neither
+  carries an id, and both are drawn again, as new nodes, under the modal,
+  so the modal finds the new one by the event its click pushes. While its
+  form submits, its ✕ is a disabled twin, and the boxes and selects in
   the form refuse what would change them, the clicks and keys a browser
   would otherwise act on.
 
@@ -88,10 +90,9 @@ defmodule ExampleWeb.Browser.ActionModalTest do
 
   # Opened from a row's menu, the menu hands the focus back to its button by
   # itself (`reclaim()` in the Menus hook). Opened from any other control, only
-  # the modal can. Known gap: opening the modal draws the page under it again,
-  # the Create button with it, and AshQuick's buttons carry no id, so the
-  # modal cannot find the one that opened it and the focus falls to the body.
-  @tag :skip
+  # the modal can: opening it draws the page under it again, the Create button
+  # with it, and the button carries no id, so the modal finds the new one by
+  # the event its click pushes.
   test "opened from the list's Create button, it hands the focus back to it", ctx do
     %{conn: conn, admin: admin} = ctx
     create = "button:has(> .hero-plus)"
@@ -112,8 +113,7 @@ defmodule ExampleWeb.Browser.ActionModalTest do
     |> assert_has("#{create}:focus")
   end
 
-  # Known gap: the same, for a details page's action buttons.
-  @tag :skip
+  # The same, for a details page's action buttons.
   test "opened from a details page's button, it hands the focus back to it", ctx do
     %{conn: conn, admin: admin, record: record} = ctx
     update = ~s|button[phx-click*='"action_name":"update"']|

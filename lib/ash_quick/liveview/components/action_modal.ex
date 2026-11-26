@@ -113,7 +113,7 @@ defmodule AshQuick.LiveView.Components.ActionModal do
       // The last control focused on the page. By the time the server's reply
       // draws the modal, the page under it may have been drawn again and the
       // control that asked for it lost the focus with its old node, so the
-      // modal goes back to it by id once it closes.
+      // modal looks for it again once it closes (see `found/1`).
       let lastFocused = null
       document.addEventListener("focusin", (event) => {
         if (!event.target.closest("dialog")) lastFocused = event.target
@@ -151,10 +151,27 @@ defmodule AshQuick.LiveView.Components.ActionModal do
           requestAnimationFrame(() => {
             const at = document.activeElement
             const lost = !at || at === document.body || !at.isConnected || dialog.contains(at)
-            const back = opener && (opener.isConnected ? opener : opener.id && document.getElementById(opener.id))
-            if (lost && back) back.focus({preventScroll: true})
+            if (lost && opener) found(opener)?.focus({preventScroll: true})
           })
         }
+      }
+
+      // The opener itself while it is on the page, else the control drawn in
+      // its place. Most of AshQuick's buttons (a list's Create, a details
+      // page's actions) and many a host's carry no id, but what they do names
+      // them: the event their click pushes, or the page their link goes to.
+      // Only a control that alone matches is taken, never a guess between two.
+      function found(opener) {
+        if (opener.isConnected) return opener
+        if (opener.id) return document.getElementById(opener.id)
+        for (const name of ["phx-click", "href"]) {
+          const value = opener.getAttribute(name)
+          if (!value) continue
+          const same = [...document.querySelectorAll(`${opener.localName}[${name}]`)]
+            .filter((el) => el.getAttribute(name) === value && !el.closest("dialog"))
+          return same.length === 1 ? same[0] : null
+        }
+        return null
       }
     </script>
     """
