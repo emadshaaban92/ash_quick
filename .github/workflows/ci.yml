@@ -253,8 +253,9 @@ jobs:
       - name: Run tests + coverage
         run: mix coveralls
 
-  # AshQuick's own JavaScript in a real browser: the picker's hook above all,
-  # whose keyboard, focus and right-to-left drawing no LiveViewTest reaches.
+  # AshQuick's own JavaScript in a real browser: its hooks, its S3 uploader
+  # and its listeners, whose keyboard, focus and right-to-left drawing no
+  # LiveViewTest reaches.
   # Chromium through Playwright, the version example/assets/package-lock.json
   # pins. See example/test/support/browser_case.ex.
   browser:
