@@ -586,7 +586,12 @@ defp adjust_form(state, _options), do: state
   event, so adding or removing one never leaves a rule on the wrong row. The
   server holds each row to its state as it does the root; on a stored row a
   hidden or disabled field keeps the row's value. Bulk forms are drawn as
-  before.
+  before. A posted row is matched to a stored one by AshPhoenix: by primary
+  key when the row posts it, else by place. An embed has no key unless it
+  is given one, so after a reconnect that follows a removed row (or a
+  template's `_drop_`/`_sort_` input) a held field keeps the value of the
+  stored row at that place. Give the embedded resource
+  `uuid_primary_key :id, public?: true` where each row must keep its own.
 - Pickers: `FormState.filter(state, :city, expr(country_id == ^country))`
   adds an Ash filter on top of the relationship's own; `FormState.lookup_args(
   state, :city, %{country_id: country})` passes arguments to the lookup action

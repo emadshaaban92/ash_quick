@@ -11,6 +11,7 @@ defmodule AshQuick.LiveView.FormAttachments do
   import Phoenix.Component, only: [assign: 2]
   alias Ash.Resource.Actions.Argument
   alias AshQuick.LiveView.AttachmentKeys
+  alias AshQuick.LiveView.SubForms
   alias AshQuick.LiveView.AttachmentUpload
   alias AshQuick.LiveView.FormParams
   alias AshQuick.LiveView.FormStateFlow
@@ -61,13 +62,7 @@ defmodule AshQuick.LiveView.FormAttachments do
 
     # A field the form's state hides takes nothing from here either.
     {settled, validated, _state} =
-      FormStateFlow.settle(
-        form,
-        params,
-        AshPhoenix.Form.validate(form, params),
-        :validate,
-        socket
-      )
+      FormStateFlow.settle(SubForms.validate(form, params), :validate, socket)
 
     form = FormParams.prefill_changed_embedded_forms(validated, reseed_params(settled, field))
 
@@ -290,6 +285,9 @@ defmodule AshQuick.LiveView.FormAttachments do
     end)
   end
 
+  # Not a row's params, as a single sub-form posted as text is not.
+  def upload_images(params, _socket, _form), do: {params, @no_uploads}
+
   defp add_tally({refused, keys}, {more_refused, more_keys}),
     do: {refused + more_refused, more_keys ++ keys}
 
@@ -433,10 +431,19 @@ defmodule AshQuick.LiveView.FormAttachments do
   end
 
   # A presign that failed leaves its entry `valid?`, but with an upload error.
+  # A row a save brings that no change brought before has no upload yet, and
+  # so no entries.
   defp valid_entries(socket, upload_name) do
-    conf = socket.assigns.uploads[upload_name]
+    case socket.assigns.uploads[upload_name] do
+      nil ->
+        []
 
-    Enum.filter(conf.entries, &(&1.valid? and Phoenix.Component.upload_errors(conf, &1) == []))
+      conf ->
+        Enum.filter(
+          conf.entries,
+          &(&1.valid? and Phoenix.Component.upload_errors(conf, &1) == [])
+        )
+    end
   end
 
   defp attachment_params(key, entry) do

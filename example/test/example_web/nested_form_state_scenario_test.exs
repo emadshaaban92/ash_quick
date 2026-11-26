@@ -145,19 +145,24 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
                bundle(code).items
     end
 
-    # On an update, a row posted under another key than the one it ends up
-    # with is still the stored row it was posted for.
+    # On an update the rows post no key of their own (an embed has none), so
+    # AshPhoenix matches each to the stored row at its place, whatever key
+    # it was posted under: a field held back on a row is held to that stored
+    # row's value. A page never moves rows in a post, its ✕ and Add go
+    # through the server. A reconnect after a ✕ does, and so does a
+    # template's `_drop_` or `_sort_` input: see "Sub-forms" in
+    # `AshQuick.FormState`.
     test "a stored row left out of an update post", %{conn: conn} do
       record = create(items: [%{kind: :device, serial: "SN-A"}, %{kind: :good}])
       {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
 
       push_submit(view, %{"items" => %{"1" => %{"kind" => "good", "serial" => "Forged"}}})
 
-      assert [%{kind: :good, serial: nil}] = bundle(record.code).items
+      assert [%{kind: :good, serial: "SN-A"}] = bundle(record.code).items
     end
 
-    # The discount is read-only on a retail bundle: held to each row's own
-    # stored one.
+    # The discount is read-only on a retail bundle: held to the stored one
+    # at the row's place.
     test "a stored row left out of a change, then save", %{conn: conn} do
       record = create(items: [%{kind: :good, discount: 5}, %{kind: :good, discount: 9}])
       {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
@@ -166,7 +171,7 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
       refute has_input?(view, "items][1")
       view |> form(@form) |> render_submit()
 
-      assert [%{kind: :good, discount: 9}] = bundle(record.code).items
+      assert [%{kind: :good, discount: 5}] = bundle(record.code).items
     end
 
     test "stored rows posted under keys past their own", %{conn: conn} do
@@ -180,13 +185,13 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
         }
       })
 
-      assert [%{kind: :good, discount: 9}, %{kind: :good, discount: nil}] =
+      assert [%{kind: :good, discount: 5}, %{kind: :good, discount: 9}] =
                bundle(record.code).items
     end
 
-    # Saved as the post itself, a moved row keeps its record, and the
-    # rows of its own that it posts.
-    test "a stored row left out of a save keeps its record", %{conn: conn} do
+    # Saved as the post itself, the row keeps the rows of its own that it
+    # posts.
+    test "a stored row left out of a save keeps the rows it posts", %{conn: conn} do
       record =
         create(
           items: [
@@ -208,7 +213,7 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
         }
       })
 
-      assert [%{kind: :device, serial: "SN-B", discount: 9, parts: [%{name: "P1x"}]}] =
+      assert [%{kind: :device, serial: "SN-B", discount: 5, parts: [%{name: "P1x"}]}] =
                bundle(record.code).items
     end
 
@@ -220,11 +225,11 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
         "items" => Map.new(1..3, &{to_string(&1), %{"kind" => "good", "discount" => "0"}})
       })
 
-      assert [1, 2, 3] = Enum.map(bundle(record.code).items, & &1.discount)
+      assert [0, 1, 2] = Enum.map(bundle(record.code).items, & &1.discount)
     end
 
-    # Two keys for one index: the one that sorts first as text keeps the
-    # stored row, the other is a new row, with or without a control key.
+    # Two keys for one index are two rows, in the order of their keys as
+    # text, with or without a control key.
     for {label, controls} <- [
           {"without a control key", %{}},
           {"with a control key", %{"_drop_items" => ["7"]}}
@@ -241,7 +246,7 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
           })
         )
 
-        assert [%{kind: :service, discount: 9}, %{kind: :good, discount: nil}] =
+        assert [%{kind: :service, discount: 5}, %{kind: :good, discount: 9}] =
                  bundle(record.code).items
       end
     end
@@ -287,8 +292,8 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
                bundle(code).items
     end
 
-    # On an update each row keeps its own stored row, which a held field
-    # posts: not the one the form held at the index the row moved to.
+    # On an update a row these inputs move is matched to the stored row at
+    # the place it ends up, and a held field posts that row's value.
     test "drop a stored row", %{conn: conn} do
       record = create(items: [%{kind: :device, serial: "SN-A"}, %{kind: :good}])
       {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
@@ -301,7 +306,7 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
         }
       })
 
-      assert [%{kind: :good, serial: nil}] = bundle(record.code).items
+      assert [%{kind: :good, serial: "SN-A"}] = bundle(record.code).items
     end
 
     test "reorder stored rows", %{conn: conn} do
@@ -316,7 +321,7 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
         }
       })
 
-      assert [%{kind: :good, serial: nil}, %{kind: :device, serial: "SN-B"}] =
+      assert [%{kind: :good, serial: "SN-B"}, %{kind: :device, serial: "SN-B"}] =
                bundle(record.code).items
     end
 
@@ -330,7 +335,7 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
         "items" => %{"0" => %{"kind" => "good", "discount" => "5"}}
       })
 
-      assert [%{kind: :good, discount: nil}, %{kind: :good, discount: 5}] =
+      assert [%{kind: :good, discount: 5}, %{kind: :good, discount: nil}] =
                bundle(record.code).items
     end
 
@@ -641,6 +646,22 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
     end
   end
 
+  # No page posts a single sub-form as text. AshPhoenix raises on it, so it
+  # is left out, and the record keeps its address.
+  for event <- ["validate", "save"] do
+    test "a single sub-form posted as text is left out of a #{event}", %{conn: conn} do
+      record = create(shipping: %{country: "US", region: "CA"})
+      {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
+
+      render_change(view, unquote(event), %{
+        "form" => %{"_touched" => "shipping", "shipping" => ""},
+        "_target" => ["form", "shipping"]
+      })
+
+      assert render(view)
+    end
+  end
+
   describe "after a reconnect" do
     test "each row comes back with the same shape and values", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/test/shaped_bundles/create")
@@ -671,6 +692,103 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
 
       assert [%{kind: :service, hours: 2}, %{kind: :device, serial: "SN-5"}] =
                bundle(code).items
+    end
+
+    @stored_rows [
+      %{kind: :good, discount: 5},
+      %{kind: :device, serial: "SN-B", discount: 9, parts: [%{name: "P1"}]}
+    ]
+
+    test "a row added beside stored rows comes back as a new row", %{conn: conn} do
+      record = create(items: @stored_rows)
+      {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
+      add_item(view)
+      change(view, %{"items" => %{"2" => %{"kind" => "service"}}}, "kind")
+      change(view, %{"items" => %{"2" => %{"hours" => "4"}}}, "hours")
+      held = page_params(view)
+      assert held["items"]["2"]["_form_type"] == "create"
+
+      {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
+      render_change(view, "validate", %{"form" => held})
+
+      assert view
+             |> element("input[name='form[items][2][hours]'][value='4']")
+             |> has_element?()
+
+      view |> form(@form) |> render_submit()
+
+      assert [
+               %{kind: :good, discount: 5},
+               %{kind: :device, serial: "SN-B", discount: 9, parts: [%{name: "P1"}]},
+               %{kind: :service, hours: 4}
+             ] = bundle(record.code).items
+    end
+
+    # A row the page added posts itself as new, and is never matched to the
+    # stored row at its place: every stored row removed and one added, the
+    # row that comes back holds no stored row's discount.
+    test "a row added once the stored rows are removed is still a new row", %{conn: conn} do
+      record = create(items: @stored_rows)
+      {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
+      remove_item(view, 0)
+      remove_item(view, 0)
+      add_item(view)
+      held = page_params(view)
+      assert held["items"]["0"]["_form_type"] == "create"
+
+      {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
+      render_change(view, "validate", %{"form" => held})
+      view |> form(@form) |> render_submit()
+
+      assert [%{kind: :good, discount: nil, parts: []}] = bundle(record.code).items
+    end
+
+    # An embed with a public primary key posts it, so each row left after a
+    # ✕ is matched to its own stored row, and keeps its own held values:
+    # the device's serial, hidden once it is a good, and the discount.
+    test "embed rows with a primary key keep their own stored row", %{conn: conn} do
+      record =
+        Ash.create!(
+          Example.Test.KeyedItems,
+          %{
+            code: unique("K"),
+            items: [%{kind: :good, discount: 5}, %{kind: :device, serial: "SN-B", discount: 9}]
+          },
+          authorize?: false
+        )
+
+      {:ok, view, _html} = live(conn, "/test/keyed_items/#{record.id}/update")
+      remove_item(view, 0)
+      held = page_params(view)
+      assert map_size(held["items"]) == 1
+
+      {:ok, view, _html} = live(conn, "/test/keyed_items/#{record.id}/update")
+      render_change(view, "validate", %{"form" => held})
+
+      assert view
+             |> element("input[name='form[items][0][serial]'][value='SN-B']")
+             |> has_element?()
+
+      view |> form(@form) |> render_submit()
+
+      assert [%{kind: :device, serial: "SN-B", discount: 9}] =
+               Ash.get!(Example.Test.KeyedItems, record.id, authorize?: false).items
+    end
+
+    # A change the page sent before its ✕ landed still names the removed
+    # row: AshPhoenix takes what a post names, so the row is back, drawn
+    # again for the reader to remove.
+    test "a change sent before a ✕ landed brings the row back", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/test/shaped_bundles/create")
+      add_item(view)
+      add_item(view)
+      stale = page_params(view)
+      remove_item(view, 1)
+      refute has_input?(view, "items][1")
+
+      move(view, stale)
+
+      assert has_input?(view, "items][1")
     end
   end
 
