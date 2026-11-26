@@ -169,6 +169,8 @@ defmodule ExampleWeb.Router do
         quick_view "/managed_rows", Example.Test.ManagedRowsLive.Quick
         quick_view "/managed_rows_held", Example.Test.ManagedRowsHeldLive.Quick
         quick_view "/managed_rows_narrow", Example.Test.ManagedRowsNarrowLive.Quick
+        quick_view "/managed_rows_locked", Example.Test.ManagedRowsLockedLive.Quick
+        quick_view "/managed_rows_hidden", Example.Test.ManagedRowsHiddenLive.Quick
         quick_view "/lookup_items", Example.Test.LookupItemsLive.Quick
         quick_view "/named_rows", Example.Test.NamedRowsLive.Quick
         quick_view "/named_rows_counted", Example.Test.NamedRowsCountedLive.Quick

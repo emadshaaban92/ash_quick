@@ -506,3 +506,41 @@ defmodule Example.Test.KeyedRowsLive.Quick do
     list: [fields: [:code]],
     details: [fields: [:code]]
 end
+
+defmodule Example.Test.ManagedRowsLockedLive.Quick do
+  @moduledoc """
+  `Example.Test.ManagedRowsLive.Quick` with the whole `:items` list disabled
+  on the update by the page's `adjust_form/2`, so a save must leave every
+  stored row as it is.
+  """
+  use AshQuick.LiveView.QuickView,
+    resource: Example.Test.ManagedRows,
+    list: [fields: [:code]],
+    details: [fields: [:code]]
+
+  alias AshQuick.FormState
+
+  defp adjust_form(%{action: %{name: :update}} = state, _options),
+    do: FormState.disable(state, :items, true)
+
+  defp adjust_form(state, _options), do: state
+end
+
+defmodule Example.Test.ManagedRowsHiddenLive.Quick do
+  @moduledoc """
+  `Example.Test.ManagedRowsLive.Quick` with the whole `:items` list hidden on
+  the update by the page's `adjust_form/2`, so a save must leave every stored
+  row as it is.
+  """
+  use AshQuick.LiveView.QuickView,
+    resource: Example.Test.ManagedRows,
+    list: [fields: [:code]],
+    details: [fields: [:code]]
+
+  alias AshQuick.FormState
+
+  defp adjust_form(%{action: %{name: :update}} = state, _options),
+    do: FormState.hide(state, :items, true)
+
+  defp adjust_form(state, _options), do: state
+end

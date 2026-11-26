@@ -110,6 +110,22 @@ defmodule ExampleWeb.ManagedRowsScenarioTest do
     assert edited.secret == "first"
   end
 
+  for page <- ~w(managed_rows_locked managed_rows_hidden) do
+    @page page
+    test "a plain save keeps every stored row of a list #{page} holds back", ctx do
+      %{conn: conn, editor: editor, record: record, stored: stored} = ctx
+
+      conn
+      |> log_in(editor)
+      |> visit("/test/#{@page}/#{record.id}/update")
+      |> refute_has(~s(#{@modal} [name^="form[items]"]))
+      |> click_button("#{@modal} button", "Save")
+      |> refute_has("#flash-error")
+
+      assert items_of(record) == stored
+    end
+  end
+
   test "a host load that narrows the rows still draws and keeps every field", ctx do
     %{conn: conn, editor: editor, record: record, stored: stored} = ctx
 

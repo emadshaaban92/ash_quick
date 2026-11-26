@@ -115,6 +115,8 @@ test_pages = [
   "/test/managed_rows",
   "/test/managed_rows_held",
   "/test/managed_rows_narrow",
+  "/test/managed_rows_locked",
+  "/test/managed_rows_hidden",
   "/test/lookup_items",
   "/test/named_rows",
   "/test/named_rows_counted",

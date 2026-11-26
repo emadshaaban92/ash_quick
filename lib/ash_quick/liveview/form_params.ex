@@ -166,17 +166,15 @@ defmodule AshQuick.LiveView.FormParams do
     end
   end
 
+  # A list sub-form is left as AshPhoenix gives it: `[]` when the form counts
+  # it as touched and it holds no rows, and nothing when it is untouched. An
+  # untouched list is one the post left alone, or one the state holds back
+  # (`AshQuick.LiveView.FormStateFlow` untouches it), so Ash never sees its
+  # argument and an update keeps the record's rows.
   defp transform_nested_form_params(params, form) do
-    form.form_keys
-    |> Enum.reduce(params, fn {field_name, form_key}, params_acc ->
-      case form_key[:type] do
-        :single ->
-          handle_empty_nested(params_acc, field_name |> to_string())
-
-        :list ->
-          params_acc |> Map.put_new(field_name |> to_string(), %{})
-      end
-    end)
+    for {name, opts} <- form.form_keys, opts[:type] == :single, reduce: params do
+      params -> handle_empty_nested(params, to_string(name))
+    end
   end
 
   defp handle_empty_nested(params, field_name) when is_binary(field_name) do
@@ -200,9 +198,7 @@ defmodule AshQuick.LiveView.FormParams do
   # Each list argument the form takes over a relationship, filled with the
   # ids of the records the relationship holds. The params it validates with
   # restate the embeds drawn as sub-forms (`carry_embedded_params/2`): they
-  # start from the form's own, which on a form just built name none, and
-  # `transform_nested_params/3` reads an embed the params leave out as
-  # emptied, so the record's rows would go.
+  # start from the form's own, which on a form just built name none.
   @doc false
   def prefill_form_has_many_args(form, socket) do
     AshPhoenix.Form.arguments(form)

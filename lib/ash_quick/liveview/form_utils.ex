@@ -292,10 +292,7 @@ defmodule AshQuick.LiveView.FormUtils do
   end
 
   # A single sub-form the record holds nothing for is added empty, so its
-  # inputs are drawn. Not validated: AshPhoenix would validate the root with
-  # params that name none of the rows of a list sub-form it has not touched
-  # yet, which `FormParams.transform_nested_params/3` reads as emptied, and an
-  # update would open with the record's rows gone.
+  # inputs are drawn.
   defp add_nested_forms(form, form_keys) do
     form_keys
     |> Enum.reject(&(Map.has_key?(form.forms, elem(&1, 0)) or elem(&1, 1)[:type] == :list))
