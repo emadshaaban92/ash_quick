@@ -9,8 +9,12 @@ defmodule ExampleWeb.Browser.MenusTest do
   reads the markup; these press the keys.
 
   In both directions: a menu lines its end up with its button's and grows
-  toward the line's start, which in Arabic is the right, and must stay on the
-  screen either way. One known gap is recorded as a skipped test.
+  toward the line's start, which in Arabic is the right, and must stay inside
+  the part of the page that shows it either way: the window, and the list's
+  card, which cuts off what runs past it. On a phone the list's Export,
+  Actions and Filter sit at the line's start, so the first of them grows
+  toward its end instead, and a box with too little room beside its button
+  slides back into view.
   """
   use ExampleWeb.BrowserCase,
     parameterize: [%{locale: :en}, %{locale: :ar}]
@@ -236,19 +240,31 @@ defmodule ExampleWeb.Browser.MenusTest do
   end
 
   describe "layout" do
-    # The rectangle of each open menu's box, and the window's width.
+    # The left and right of each open menu's box, and of the part of the
+    # page that shows it: the window, narrowed by every ancestor that clips
+    # what overflows it, such as the list's card.
     defp box(conn, menu) do
       read(conn, """
       (() => {
-        const box = document.getElementById("#{menu}-content").getBoundingClientRect()
-        return {left: box.left, right: box.right, width: window.innerWidth}
+        const content = document.getElementById("#{menu}-content")
+        const box = content.getBoundingClientRect()
+        let start = 0, end = window.innerWidth
+        for (let node = content.parentElement; node; node = node.parentElement) {
+          if (getComputedStyle(node).overflowX === "visible") continue
+          const clip = node.getBoundingClientRect()
+          start = Math.max(start, clip.left)
+          end = Math.min(end, clip.right)
+        }
+        return {menu: "#{menu}", left: box.left, right: box.right, start, end}
       })()
       """)
     end
 
-    defp assert_on_screen(%{"left" => left, "right" => right, "width" => width}) do
-      assert left >= 0
-      assert right <= width
+    defp assert_on_screen(
+           %{"left" => left, "right" => right, "start" => start, "end" => stop} = box
+         ) do
+      assert left >= start, inspect(box)
+      assert right <= stop, inspect(box)
     end
 
     test "a row's menu and Export open inside the window", ctx do
@@ -276,19 +292,61 @@ defmodule ExampleWeb.Browser.MenusTest do
       |> assert_on_screen()
     end
 
-    # Known gap: Export is wider than its button and opens toward the edge
-    # the button sits nearest on a phone. In Arabic its box ends 6px past the
-    # window's right edge, and the list's card cuts it off.
-    @tag :skip
     @tag browser_context_opts: [viewport: %{width: 390, height: 844}]
-    test "on a phone, Export opens inside the window", ctx do
-      %{conn: conn, admin: admin} = ctx
+    test "on a phone, Export, Actions and Filter open inside the window", ctx do
+      %{conn: conn, admin: admin, product: product} = ctx
+
+      conn =
+        conn
+        |> open_list(admin)
+        |> click("#select_row_#{product.id}")
+        |> assert_has("#bulk-actions-menu")
+
+      for menu <- ["export-menu", "bulk-actions-menu", "filters-menu"] do
+        conn
+        |> click(trigger(menu))
+        |> assert_open(menu)
+        |> box(menu)
+        |> assert_on_screen()
+      end
+    end
+
+    # A button narrower than its box leaves less room on the side the box
+    # grows toward than the box needs: a label's width hangs on the language
+    # and the font. Actions, between Export and Filter, is narrowed here, so
+    # its box runs past the card's start, in English its left and in Arabic
+    # its right, unless it slides back.
+    @tag browser_context_opts: [viewport: %{width: 390, height: 844}]
+    test "on a phone, a box wider than the room beside its button slides into view", ctx do
+      %{conn: conn, admin: admin, product: product} = ctx
+
+      conn =
+        conn
+        |> open_list(admin)
+        |> click("#select_row_#{product.id}")
+        |> assert_has("#bulk-actions-menu")
+
+      read(conn, ~s|document.getElementById("bulk-actions-menu-trigger").style.width = "40px"|)
 
       conn
-      |> open_list(admin)
-      |> click(trigger("export-menu"))
-      |> assert_open("export-menu")
-      |> box("export-menu")
+      |> click(trigger("bulk-actions-menu"))
+      |> assert_open("bulk-actions-menu")
+      |> box("bulk-actions-menu")
+      |> assert_on_screen()
+    end
+
+    # A list with no Export, where Filter comes first: the example always
+    # offers Export, so the page drops it.
+    @tag browser_context_opts: [viewport: %{width: 390, height: 844}]
+    test "on a phone, the first menu opens inside the window", ctx do
+      %{conn: conn, admin: admin} = ctx
+      conn = open_list(conn, admin)
+      read(conn, ~s|document.getElementById("export-menu").remove()|)
+
+      conn
+      |> click(trigger("filters-menu"))
+      |> assert_open("filters-menu")
+      |> box("filters-menu")
       |> assert_on_screen()
     end
   end

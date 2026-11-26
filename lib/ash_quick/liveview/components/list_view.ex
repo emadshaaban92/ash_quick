@@ -728,9 +728,16 @@ defmodule AshQuick.LiveView.Components.ListView do
     """
   end
 
+  # The list's Export, Actions and Filter menus sit at the end of the line
+  # from `sm` up, and open from there toward its start. On a phone they sit
+  # at its start instead, so the first of them opens toward the end: it is
+  # wider than its button, and opening toward the start would run it past
+  # the screen's edge.
+  defp toolbar_menu, do: "dropdown-end max-sm:first:dropdown-start"
+
   defp export_menu(assigns) do
     ~H"""
-    <Menu.menu id="export-menu" class="dropdown-end" content_class="menu w-28 p-2">
+    <Menu.menu id="export-menu" class={toolbar_menu()} content_class="menu w-28 p-2">
       <:trigger>
         <.icon name="hero-chevron-down" class="w-4 h-4" /> {gettext("Export")}
       </:trigger>
@@ -831,7 +838,7 @@ defmodule AshQuick.LiveView.Components.ListView do
           @selected_rows != %{}
       }
       id="bulk-actions-menu"
-      class="dropdown-end"
+      class={toolbar_menu()}
       content_class="menu w-44 p-2"
     >
       <:trigger>
@@ -867,7 +874,7 @@ defmodule AshQuick.LiveView.Components.ListView do
       :if={@filters && Enum.count(@filters) > 0}
       id="filters-menu"
       kind={:panel}
-      class="dropdown-end"
+      class={toolbar_menu()}
       content_class="w-48 p-3"
     >
       <:trigger>

@@ -20,6 +20,11 @@ defmodule AshQuick.LiveView.Components.Menu do
   # close it too, and so does picking an entry, which hands the focus back to
   # the button: what the entry opened, a modal, takes it from there.
   #
+  # An open box that runs past what shows it, the window or an ancestor that
+  # clips its overflow such as a list's card, slides sideways back into
+  # view: a box lines up with its button, and a narrow button leaves too
+  # little room beside it.
+  #
   # `kind: :panel` is a disclosure instead, for a box of checkboxes rather
   # than a list of commands: the button says whether it is open and Escape
   # closes it, and Tab walks its contents as it does a page's.
@@ -190,7 +195,10 @@ defmodule AshQuick.LiveView.Components.Menu do
             this.js().setAttribute(this.trigger(menu), "aria-expanded", "true")
           }
           this.pending = focus
-          requestAnimationFrame(() => this.arrived())
+          requestAnimationFrame(() => {
+            this.fit(menu)
+            this.arrived()
+          })
         },
         close(menu, refocus) {
           if (this.openId === menu.id) {
@@ -200,11 +208,44 @@ defmodule AshQuick.LiveView.Components.Menu do
           this.js().removeClass(menu, "dropdown-open")
           this.js().addClass(menu, "dropdown-close")
           this.js().setAttribute(this.trigger(menu), "aria-expanded", "false")
+          this.js().removeAttribute(this.content(menu), "style")
           if (refocus) this.trigger(menu).focus()
         },
         patched() {
+          const menu = this.openMenu()
+          if (menu) this.fit(menu)
           this.arrived()
           this.reclaim()
+        },
+        // Slides an open box sideways into the part of the page that shows
+        // it: the window, narrowed by every ancestor that clips what
+        // overflows it, such as a list's card. A box that opens from its
+        // button's edge can run past it when it is wider than the room on
+        // that side, which hangs on the button's width and so on the
+        // language and the font. Where the box is wider than the room on
+        // both sides, its start edge stays in view.
+        fit(menu) {
+          const content = this.content(menu)
+          const shift = parseFloat(content.style.translate) || 0
+          const box = content.getBoundingClientRect()
+          if (box.width === 0) return
+          const left = box.left - shift, right = box.right - shift
+          let start = 0, end = document.documentElement.clientWidth
+          for (let node = menu.parentElement; node; node = node.parentElement) {
+            if (getComputedStyle(node).overflowX === "visible") continue
+            const clip = node.getBoundingClientRect()
+            start = Math.max(start, clip.left)
+            end = Math.min(end, clip.right)
+          }
+          let dx = 0
+          if (right > end) dx = end - right
+          if (left + dx < start) dx = start - left
+          const rtl = getComputedStyle(content).direction === "rtl"
+          if (right - left > end - start && rtl) dx = end - right
+          dx = dx < 0 ? Math.floor(dx) : Math.ceil(dx)
+          if (dx === shift) return
+          if (dx === 0) this.js().removeAttribute(content, "style")
+          else this.js().setAttribute(content, "style", `translate: ${dx}px 0`)
         },
         // Focuses the entry asked for once there is one: at once for a menu
         // drawn with its entries, on the server's reply for one that is not.
