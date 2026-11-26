@@ -13,6 +13,7 @@ defmodule AshQuick.LiveView.FormUtils do
   use Gettext, backend: AshQuick.Gettext
   alias AshQuick.Labels
   alias AshQuick.LiveView.ActionErrors
+  alias AshQuick.LiveView.SubForms
   alias AshQuick.LiveView.AttachmentKeys
   alias AshQuick.LiveView.AttachmentUpload
   alias AshQuick.LiveView.FieldErrors
@@ -429,8 +430,8 @@ defmodule AshQuick.LiveView.FormUtils do
     # What the state hides is dropped from the params just posted, never from
     # the page drawn last: a hand-made post can name a hidden field.
     case AttachmentKeys.validate_issued(held, params, socket) do
-      {params, form} ->
-        {_params, form, state} = FormStateFlow.settle(held, params, form, :validate, socket)
+      {_params, form} ->
+        {_params, form, state} = FormStateFlow.settle(form, :validate, socket)
 
         # A row this post brings that the page did not add, as a reconnect's
         # replay does, gets its uploads here: its input reads them.
@@ -490,18 +491,12 @@ defmodule AshQuick.LiveView.FormUtils do
     # from it hides, and a field the state requires is held to it here: Ash
     # knows nothing of either. It is validated under the submit stage, and
     # the save runs the form as it settles, so the post is validated once.
-    # It settles from the form held before this post, as a change does: the
-    # one validated with it has its rows cut to those posted and matched by
-    # place, so a row posted under another key would find its stored row
-    # gone.
     {_params, checked, state} =
       socket.assigns.form
       |> put_stage(AshQuick.form_submit_stage())
       |> then(
         &FormStateFlow.settle(
-          &1,
-          upload_params,
-          AshPhoenix.Form.validate(&1, upload_params, errors: false),
+          SubForms.validate(&1, upload_params, errors: false),
           :submit,
           socket,
           errors: false

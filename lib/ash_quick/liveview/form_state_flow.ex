@@ -12,6 +12,7 @@ defmodule AshQuick.LiveView.FormStateFlow do
   alias Ash.Resource.Relationships.BelongsTo
   alias AshQuick.FormState
   alias AshQuick.LiveView.FormParams
+  alias AshQuick.LiveView.SubForms
   alias AshQuick.LiveView.FormRecords
   alias AshQuick.LiveView.Utils
 
@@ -26,12 +27,12 @@ defmodule AshQuick.LiveView.FormStateFlow do
 
   def store(socket, _stage), do: assign(socket, @assign, nil)
 
-  # The state of `validated`, the form `form` validated with `params`, and
-  # the params less those of every field it hides or disables: when any are
-  # dropped, `form` is validated again without them and the state built
-  # again, until a pass changes nothing. Each pass that goes on drops a param,
-  # untouches a sub-form or puts back a record's rows, none of which a later
-  # pass undoes, so it ends, and one pass is the usual case.
+  # The state of `validated`, a form just validated, and its params less
+  # those of every field the state hides or disables: when any are dropped,
+  # the form is validated again without them and the state built again, until
+  # a pass changes nothing. Each pass that goes on drops a param, untouches a
+  # sub-form or puts back a record's rows, none of which a later pass undoes,
+  # so it ends, and one pass is the usual case.
   #
   # A sub-form is not just dropped. AshPhoenix reads a sub-form key it counts
   # as touched and the params lack as "emptied", so a hidden one would save
@@ -42,21 +43,42 @@ defmodule AshQuick.LiveView.FormStateFlow do
   #
   # Each sub-form's state is held to its row of the params the same way, at
   # the path its name gives (`form[lines][0]` is `params["lines"]["0"]`):
-  # see `strip_rows/3`. So the rows are put in the order AshPhoenix numbers
-  # them first (`number_rows/2`).
-  def settle(form, params, validated, stage, socket, validate_opts \\ []) do
+  # see `strip_rows/3`. Which rows a post holds, and which stored row each
+  # one is, is AshPhoenix's to say (`SubForms.validate/3`): the params are
+  # read back from the validated form (`numbered/1`), where the rows are
+  # keyed as the sub-forms are named.
+  def settle(validated, stage, socket, validate_opts \\ []) do
     state = state(validated, stage, socket)
-
-    case number_rows(params, state, state.form.id) do
-      {^params, _moves} ->
-        settle_numbered(form, params, validated, state, stage, socket, validate_opts)
-
-      {numbered, moves} ->
-        form = move_rows(form, moves)
-        revalidated = AshPhoenix.Form.validate(form, numbered, validate_opts)
-        settle(form, numbered, revalidated, stage, socket, validate_opts)
-    end
+    params = numbered(validated)
+    settle_numbered(validated, params, validated, state, stage, socket, validate_opts)
   end
+
+  # The params `form` was validated with, as AshPhoenix left them: every
+  # list's rows keyed "0" up, its control keys applied and gone.
+  defp numbered(%Phoenix.HTML.Form{source: source}), do: numbered(source)
+
+  defp numbered(%AshPhoenix.Form{} = form) do
+    Enum.reduce(form.form_keys, form.params || %{}, fn {key, opts}, params ->
+      name = to_string(opts[:as] || key)
+
+      if Map.has_key?(params, name),
+        do: put_numbered(params, name, form.forms[key]),
+        else: params
+    end)
+  end
+
+  defp put_numbered(params, name, [_ | _] = rows),
+    do: Map.put(params, name, rows |> Enum.map(&numbered/1) |> indexed())
+
+  defp put_numbered(params, name, %AshPhoenix.Form{} = row),
+    do: Map.put(params, name, numbered(row))
+
+  # A key AshPhoenix put in itself, for a sub-form it counts as touched that
+  # the post left out. It puts it in again each time.
+  defp put_numbered(params, name, none) when none in [[], nil],
+    do: if(Map.get(params, name) in [nil, %{}], do: Map.delete(params, name), else: params)
+
+  defp put_numbered(params, _name, _other), do: params
 
   defp settle_numbered(form, params, validated, state, stage, socket, validate_opts) do
     previous = socket.assigns[@assign]
@@ -68,11 +90,11 @@ defmodule AshQuick.LiveView.FormStateFlow do
       |> FormState.dropped_params()
       |> Enum.filter(&(Map.has_key?(params, &1) and &1 not in kept_keys))
 
-    restored = for {key, rows} <- kept, Map.get(params, key) != rows, do: key
+    restored = for {key, rows} <- kept, not same?(Map.get(params, key), rows), do: key
     untouched = touched_sub_forms(state, form, params) -- kept_keys
     rows_params = strip_rows(params, state, previous)
 
-    if dropped == [] and restored == [] and untouched == [] and rows_params == params do
+    if dropped == [] and restored == [] and untouched == [] and same?(rows_params, params) do
       # AshPhoenix counts a sub-form it built from the record as touched,
       # which would make the next validate or the submit read it as emptied.
       held = held_sub_forms(state, validated) -- kept_keys
@@ -83,270 +105,11 @@ defmodule AshQuick.LiveView.FormStateFlow do
       params =
         rows_params |> Map.drop(dropped) |> Map.merge(kept) |> untouch_param(untouched)
 
-      revalidated = AshPhoenix.Form.validate(form, params, validate_opts)
-      settle(form, params, revalidated, stage, socket, validate_opts)
+      revalidated = SubForms.validate(form, params, validate_opts)
+      state = state(revalidated, stage, socket)
+      settle_numbered(form, params, revalidated, state, stage, socket, validate_opts)
     end
   end
-
-  # AshPhoenix matches a posted row to the sub-form at its index, which is
-  # the row's own only while nothing moved: after a `_drop_` or a `_sort_`,
-  # or a post that leaves a row out, the row at index 0 may be the one the
-  # form held at 1, and AshPhoenix would give it the record held at 0. So
-  # the form's own rows are moved first as the post moved them, each renamed
-  # for where it ends up, its sub-forms with it, as AshPhoenix's
-  # `sort_forms/3` renames them. A dropped row, and the place of one `_add_`
-  # put in, hold no sub-form, and a new one is built there.
-  defp move_rows(%Phoenix.HTML.Form{source: source} = form, moves) when moves != %{},
-    do: source |> move_rows(moves) |> Phoenix.HTML.FormData.to_form(form.options)
-
-  defp move_rows(%AshPhoenix.Form{} = form, moves) when moves != %{} do
-    forms =
-      Map.new(form.forms, fn {key, sub_forms} ->
-        sub_forms =
-          case {sub_forms, Map.fetch(moves, {form.id, to_string(key)})} do
-            {[_ | _], {:ok, sources}} -> move_list(sub_forms, sources, moves, form, key)
-            {sub_forms, _not_moved} -> move_each(sub_forms, moves)
-          end
-
-        {key, sub_forms}
-      end)
-
-    %{form | forms: forms}
-  end
-
-  defp move_rows(form, _moves), do: form
-
-  defp move_each(sub_forms, moves) when is_list(sub_forms),
-    do: Enum.map(sub_forms, &move_rows(&1, moves))
-
-  defp move_each(sub_form, moves), do: move_rows(sub_form, moves)
-
-  defp move_list(sub_forms, sources, moves, form, key) do
-    by_id = Map.new(sub_forms, &{&1.id, &1})
-
-    sources
-    |> Enum.sort()
-    |> Enum.flat_map(fn {at, source} ->
-      case source && Map.fetch(by_id, "#{form.id}_#{key}_#{source}") do
-        {:ok, sub_form} ->
-          name = "#{form.name}[#{key}][#{at}]"
-          id = "#{form.id}_#{key}_#{at}"
-          [sub_form |> move_rows(moves) |> rename({sub_form.name, name}, {sub_form.id, id})]
-
-        _none ->
-          []
-      end
-    end)
-  end
-
-  # As AshPhoenix renames a sub-form it moves, and every sub-form under it.
-  defp rename(form, {old_name, name}, {old_id, id}) do
-    forms =
-      Map.new(form.forms || %{}, fn
-        {key, sub_forms} when is_list(sub_forms) ->
-          {key, Enum.map(sub_forms, &rename_under(&1, {old_name, name}, {old_id, id}))}
-
-        {key, nil} ->
-          {key, nil}
-
-        {key, sub_form} ->
-          {key, rename_under(sub_form, {old_name, name}, {old_id, id})}
-      end)
-
-    %{form | name: name, id: id, forms: forms}
-  end
-
-  defp rename_under(sub_form, {old_name, name}, {old_id, id}) do
-    rename(
-      sub_form,
-      {sub_form.name, String.replace_leading(sub_form.name, old_name, name)},
-      {sub_form.id, String.replace_leading(sub_form.id, old_id, id)}
-    )
-  end
-
-  # `params` with the rows of every list sub-form keyed as AshPhoenix names
-  # them: `"0"` up to one less than their count, in the order of the keys
-  # posted. AshPhoenix sorts the posted keys and numbers the rows the same
-  # way, so a hand-made post keyed `"1"` and `"5"` would otherwise have the
-  # rule of row `[0]` held to the params under `"0"`, which are not its. A
-  # template's `_drop_`, `_sort_` and `_add_` keys (AshPhoenix's remove,
-  # reorder and add inputs) are applied here as AshPhoenix applies them,
-  # and taken out, so the rows' names say where each one ends up.
-  #
-  # Comes back with the moves those keys made, and those of rows posted
-  # under other keys than the ones they end up with: for the list under the
-  # sub-form whose id is `id`, which index each row was posted under (nil
-  # for a row `_add_` put in). `id` is the sub-form's id in the form the
-  # post was made from. Each row keeps the stored row it was posted for.
-  defp number_rows(params, %FormState{} = state, id)
-       when is_map(params) and not is_struct(params) do
-    Enum.reduce(state.forms, {params, %{}}, fn {name, rows}, {params, moves} ->
-      opts = state.form.form_keys[name] || []
-      key = to_string(opts[:as] || name)
-
-      {params, moved} =
-        case {opts[:type], Map.get(params, key)} do
-          {:list, posted} when is_list(posted) or (is_map(posted) and not is_struct(posted)) ->
-            number_list(params, {key, name}, posted, rows, id)
-
-          {:single, %{} = posted} when not is_struct(posted) ->
-            {row, moved} = number_rows(posted, List.first(rows), "#{id}_#{name}")
-            {Map.put(params, key, row), moved}
-
-          _not_posted ->
-            {params, %{}}
-        end
-
-      {params, Map.merge(moves, moved)}
-    end)
-  end
-
-  defp number_rows(params, _state, _id), do: {params, %{}}
-
-  @controls ~w(_drop_ _sort_ _add_)
-
-  defp number_list(params, {key, name}, posted, rows, id) do
-    controls = Enum.map(@controls, &(&1 <> key))
-
-    if is_list(posted) and not Enum.any?(controls, &Map.has_key?(params, &1)) do
-      # Numbered by its order already, as the record's own rows are put back.
-      {numbered, moves} =
-        posted
-        |> Enum.with_index(&{&2, &1})
-        |> number_each(rows, "#{id}_#{name}")
-
-      {Map.put(params, key, numbered), moves}
-    else
-      case posted |> indexed() |> drop_rows(params[hd(controls)]) do
-        {:ok, entries} -> number_moved(params, entries, controls, {key, name}, rows, id)
-        # AshPhoenix refuses a key that is no number: nothing to line up.
-        :error -> {params, %{}}
-      end
-    end
-  end
-
-  # The rows left after a drop, sorted and added to as the post says, each
-  # beside the index it was posted under. A row posted under another index
-  # than the one it ends up at moved, with or without a control key: a post
-  # keyed `"1"` alone is stored row 1, not row 0, so the form's rows are
-  # moved with it. Only rows posted under `"0"` up to one less than their
-  # count, with no control key, are left where they are.
-  defp number_moved(params, entries, controls, {key, name}, rows, id) do
-    [_drop, sort, add] = Enum.map(controls, &params[&1])
-    controlled? = Enum.any?(controls, &Map.has_key?(params, &1))
-
-    entries =
-      entries
-      |> Enum.map(fn {index, row} -> {index, {index, row}} end)
-      |> sort_rows(sort)
-      |> add_row(add)
-      |> claim_once()
-
-    {numbered, moves} = number_each(entries, rows, "#{id}_#{name}")
-    numbered = numbered |> Enum.with_index(&{to_string(&2), &1}) |> Map.new()
-    params = params |> Map.drop(controls) |> Map.put(key, numbered)
-    sources = Enum.with_index(entries, fn {source, _row}, at -> {at, source} end)
-
-    if controlled? or Enum.any?(sources, fn {at, source} -> at != source end) do
-      {params, Map.put(moves, {id, to_string(name)}, Map.new(sources))}
-    else
-      {params, moves}
-    end
-  end
-
-  # Two keys can name the same index (`"1"` and `"01"`): only the row whose
-  # key sorts first as text (`"01"`) keeps that stored row, and the others
-  # are new rows, as a key past the stored rows is.
-  defp claim_once(entries) do
-    {entries, _claimed} =
-      Enum.map_reduce(entries, MapSet.new(), fn {source, row}, claimed ->
-        if is_integer(source) and MapSet.member?(claimed, source),
-          do: {{nil, row}, claimed},
-          else: {{source, row}, MapSet.put(claimed, source)}
-      end)
-
-    entries
-  end
-
-  # Each `{source, row}` numbered in turn, a row's own rows under the id its
-  # sub-form had when posted.
-  defp number_each(entries, rows, prefix) do
-    entries
-    |> Enum.with_index()
-    |> Enum.map_reduce(%{}, fn {{source, row}, at}, moves ->
-      id = if is_integer(source), do: "#{prefix}_#{source}", else: "#{prefix}_added_#{at}"
-      {row, moved} = number_rows(row, Enum.at(rows, at), id)
-      {row, Map.merge(moves, moved)}
-    end)
-  end
-
-  # The posted rows as `{index, row}`, or :error when a key is no number.
-  defp indexed(posted) when is_list(posted), do: Enum.with_index(posted, &{&2, &1})
-
-  defp indexed(posted) do
-    # Sorted by key as text first, so two keys for one index (`"01"` and
-    # `"1"`) come in one order however large the map is.
-    entries =
-      posted
-      |> Enum.sort_by(&to_string(elem(&1, 0)))
-      |> Enum.map(fn {key, row} -> {integer_key(key), row} end)
-
-    if Enum.all?(entries, &is_integer(elem(&1, 0))), do: entries, else: :error
-  end
-
-  # As AshPhoenix's `drop_nested/2`: the rows a `_drop_` list names go.
-  defp drop_rows(:error, _drop), do: :error
-
-  defp drop_rows(entries, drop) when is_list(drop) do
-    dropped = drop |> List.wrap() |> Enum.map(&integer_key/1)
-    {:ok, Enum.reject(entries, &(elem(&1, 0) in dropped))}
-  end
-
-  defp drop_rows(entries, _drop), do: {:ok, entries}
-
-  # As AshPhoenix's `sort_nested/2`: the row posted at position `p` goes to
-  # the index the `_sort_` list holds at `p`, and the rows then go by index.
-  # The rows come back as a plain list.
-  defp sort_rows(entries, sort) when is_list(sort) do
-    by_index = Map.new(entries)
-
-    sort
-    |> Enum.with_index()
-    |> Enum.flat_map(fn {target, position} ->
-      case {integer_key(target), Map.fetch(by_index, position)} do
-        {index, {:ok, row}} when is_integer(index) -> [{index, row}]
-        _gone -> []
-      end
-    end)
-    |> sort_rows(nil)
-  end
-
-  defp sort_rows(entries, _sort),
-    do: entries |> Enum.sort_by(&elem(&1, 0)) |> Enum.map(&elem(&1, 1))
-
-  # As AshPhoenix's `add_nested/2`: an `_add_` key puts an empty row in, at
-  # the start, the end or the index it names.
-  defp add_row(rows, nil), do: rows
-
-  defp add_row(rows, at), do: List.insert_at(rows, add_index(at), {nil, %{}})
-
-  defp add_index("start"), do: 0
-
-  defp add_index(at) do
-    case integer_key(at) do
-      index when is_integer(index) -> index
-      _end -> -1
-    end
-  end
-
-  defp integer_key(key) when is_binary(key) do
-    case Integer.parse(key) do
-      {index, ""} -> index
-      _not_an_index -> key
-    end
-  end
-
-  defp integer_key(key), do: key
 
   # `params` with each sub-form's row held to that sub-form's state: the
   # params of a field it hides or disables are dropped from the row, or, on a
@@ -475,6 +238,24 @@ defmodule AshQuick.LiveView.FormStateFlow do
     {index, ""} = Integer.parse(key)
     List.update_at(list, index, &put_path(&1, path, new))
   end
+
+  # Whether two params are the same once AshPhoenix numbers their rows: it
+  # reads a list of rows as the rows keyed "0" up.
+  defp same?(a, b) when is_list(a) and is_map(b) and not is_struct(b), do: same?(indexed(a), b)
+  defp same?(a, b) when is_list(b) and is_map(a) and not is_struct(a), do: same?(a, indexed(b))
+
+  defp same?(a, b) when is_list(a) and is_list(b),
+    do: length(a) == length(b) and Enum.all?(Enum.zip(a, b), fn {x, y} -> same?(x, y) end)
+
+  defp same?(a, b) when is_map(a) and is_map(b) and not is_struct(a) and not is_struct(b) do
+    Map.keys(a) == Map.keys(b) and
+      Enum.all?(a, fn {key, value} -> same?(value, Map.get(b, key)) end)
+  end
+
+  defp same?(a, b), do: a == b
+
+  defp indexed(rows),
+    do: rows |> Enum.with_index() |> Map.new(fn {row, at} -> {to_string(at), row} end)
 
   # The record's rows, as params, of each embed drawn as sub-forms on an
   # update that the state holds back, or that the state before it held back
