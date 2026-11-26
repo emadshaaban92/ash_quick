@@ -6,6 +6,7 @@ defmodule AshQuick.LiveView.AttachmentKeys do
   require Logger
   import Phoenix.Component, only: [assign: 2]
   alias AshQuick.LiveView.FormParams
+  alias AshQuick.LiveView.SubForms
   alias AshQuick.LiveView.FormUploads
   alias AshQuick.Storage
 
@@ -132,7 +133,7 @@ defmodule AshQuick.LiveView.AttachmentKeys do
   # `:refused` when even that holds such a key.
   @doc false
   def validate_issued(form, params, socket) do
-    validated = AshPhoenix.Form.validate(form, params)
+    validated = SubForms.validate(form, params)
 
     case unissued_fields(validated, socket) do
       [] ->
@@ -146,7 +147,7 @@ defmodule AshQuick.LiveView.AttachmentKeys do
         end)
 
         params = restore_held_params(params, form, fields)
-        validated = AshPhoenix.Form.validate(form, params)
+        validated = SubForms.validate(form, params)
 
         if unissued_fields(validated, socket) == [],
           do: {params, validated},

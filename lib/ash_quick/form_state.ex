@@ -176,6 +176,18 @@ defmodule AshQuick.FormState do
   a row the record already holds, a hidden or disabled field keeps the row's
   value. The fields of a sub-form under a hidden or disabled field are not
   looked at: the whole field keeps the record's value, or is left out.
+
+  Which stored row a posted row is, AshPhoenix decides: the one with the
+  same primary key when the row posts all of it, as a related record's row
+  does, and otherwise the one at the same place, as for an embed, which has
+  no key. So a rule that hides or disables a field on embed rows keeps, for
+  each row, the value of the stored row at its place. The page's own Add and
+  ✕ never move rows in a post. A template that draws AshPhoenix's `_drop_`
+  or `_sort_` inputs does, and so does a reconnect after a stored row was
+  removed: the rows after it then keep the value of the stored row above.
+  Where each row must keep its own, give the embedded resource a public
+  primary key (`uuid_primary_key :id, public?: true`): its rows then post
+  it, and each is matched to its own stored row wherever it ends up.
   """
 
   alias Ash.Resource.Relationships.BelongsTo
