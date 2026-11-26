@@ -35,6 +35,10 @@ example-*.tar
 npm-debug.log
 /assets/node_modules/
 
+# What a browser test leaves with `PW_SCREENSHOT` or `PW_TRACE` set.
+/screenshots/
+/traces/
+
 
 # Localize data, fetched by `mix localize.download_locales` like deps.
 /priv/localize/

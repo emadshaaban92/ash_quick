@@ -253,6 +253,104 @@ jobs:
       - name: Run tests + coverage
         run: mix coveralls
 
+  # AshQuick's own JavaScript in a real browser: the picker's hook above all,
+  # whose keyboard, focus and right-to-left drawing no LiveViewTest reaches.
+  # Chromium through Playwright, the version example/assets/package-lock.json
+  # pins. See example/test/support/browser_case.ex.
+  browser:
+    name: Browser tests (example app)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: example
+    services:
+      db:
+        image: postgres:18
+        env:
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: admin
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U admin"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Elixir / OTP
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.20"
+          otp-version: "29"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: example/assets/package-lock.json
+
+      - name: Cache example deps and _build
+        uses: actions/cache@v6
+        with:
+          path: |
+            example/deps
+            example/_build
+          key: ${{ runner.os }}-mix-example-test-${{ hashFiles('example/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-example-test-
+
+      - name: Map the "db" host to localhost
+        run: echo "127.0.0.1 db" | sudo tee -a /etc/hosts
+
+      - name: Install example dependencies
+        run: mix deps.get
+
+      - name: Install Playwright
+        run: npm ci --prefix assets
+
+      - name: Install Chromium
+        working-directory: example/assets
+        run: npx playwright install --with-deps --only-shell chromium
+
+      - name: Cache Localize locale data
+        uses: actions/cache@v6
+        with:
+          path: example/priv/localize
+          key: ${{ runner.os }}-localize-${{ hashFiles('example/mix.lock', 'example/config/config.exs') }}
+
+      - name: Download Localize locale data
+        run: mix localize.download_locales
+
+      # The pages load the app's CSS and JavaScript, AshQuick's hooks in it.
+      - name: Build assets
+        run: mix do assets.setup + assets.build
+
+      - name: Set up the test database
+        run: mix ash.setup
+
+      # A failure runs the failed tests once more, keeping a trace and a
+      # screenshot of each, and still fails the job.
+      - name: Run browser tests
+        run: |
+          mix test --only playwright && exit 0
+          PW_TRACE=true PW_SCREENSHOT=true mix test --only playwright --failed
+          exit 1
+
+      - name: Keep traces and screenshots of failed tests
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-test-failures
+          path: |
+            example/traces
+            example/screenshots
+          if-no-files-found: ignore
+
   # AshQuick.Storage.S3 and S3.Proxy against a real S3-compatible server
   # rather than the example's stub: signing, key encoding, multipart uploads,
   # bucket policies and ranged reads, in both URL styles. The server is

@@ -7,6 +7,13 @@ defmodule ExampleWeb.Router do
   import AshQuick.LiveView.Router
   import ExampleWeb.UserAuth
 
+  # Ahead of every other mount stage in the test build, so a browser test's
+  # LiveView reads inside the test's database transaction. See
+  # `ExampleWeb.SqlSandbox`.
+  @sandbox if Application.compile_env(:example, :sql_sandbox),
+             do: [ExampleWeb.SqlSandbox],
+             else: []
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -30,12 +37,14 @@ defmodule ExampleWeb.Router do
     # on both sides of the sign-in page.
     live_session :no_user,
       layout: {ExampleWeb.Layouts, :app},
-      on_mount: [
-        {ExampleWeb.UserAuth, :assign_current_user},
-        AshQuick.LiveView.Mount,
-        {ExampleWeb.UserAuth, :assign_scope},
-        {ExampleWeb.UserAuth, :require_no_user}
-      ] do
+      on_mount:
+        @sandbox ++
+          [
+            {ExampleWeb.UserAuth, :assign_current_user},
+            AshQuick.LiveView.Mount,
+            {ExampleWeb.UserAuth, :assign_scope},
+            {ExampleWeb.UserAuth, :require_no_user}
+          ] do
       live "/login", LoginLive, :index
     end
 
@@ -50,13 +59,15 @@ defmodule ExampleWeb.Router do
     # the connection's address, and `:assign_scope` is what consumes both.
     live_session :authenticated,
       layout: {ExampleWeb.Layouts, :app},
-      on_mount: [
-        {ExampleWeb.UserAuth, :assign_current_user},
-        AshQuick.LiveView.Mount,
-        {ExampleWeb.UserAuth, :assign_scope},
-        {ExampleWeb.UserAuth, :require_user},
-        AshQuick.LiveView.RouteGate
-      ] do
+      on_mount:
+        @sandbox ++
+          [
+            {ExampleWeb.UserAuth, :assign_current_user},
+            AshQuick.LiveView.Mount,
+            {ExampleWeb.UserAuth, :assign_scope},
+            {ExampleWeb.UserAuth, :require_user},
+            AshQuick.LiveView.RouteGate
+          ] do
       live "/", HomeLive, :index
 
       quick_view "/stores", StoreLive.Quick
@@ -103,7 +114,7 @@ defmodule ExampleWeb.Router do
     scope "/test", alias: false do
       pipe_through [:browser, ExampleWeb.StrictCsp]
 
-      live_session :test_picker do
+      live_session :test_picker, on_mount: @sandbox do
         live "/picker", Example.Test.PickerLive
       end
     end
@@ -113,11 +124,13 @@ defmodule ExampleWeb.Router do
 
       live_session :test_only,
         layout: {ExampleWeb.Layouts, :app},
-        on_mount: [
-          {ExampleWeb.UserAuth, :assign_current_user},
-          AshQuick.LiveView.Mount,
-          {ExampleWeb.UserAuth, :assign_scope}
-        ] do
+        on_mount:
+          @sandbox ++
+            [
+              {ExampleWeb.UserAuth, :assign_current_user},
+              AshQuick.LiveView.Mount,
+              {ExampleWeb.UserAuth, :assign_scope}
+            ] do
         quick_view "/atomic_brands", Example.Test.AtomicBrandLive.Quick
         quick_view "/brand_filter", Example.Test.BrandFilterLive.Quick
         quick_view "/brand_record_filter", Example.Test.BrandRecordFilterLive.Quick
