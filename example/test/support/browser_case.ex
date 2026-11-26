@@ -8,10 +8,14 @@ defmodule ExampleWeb.BrowserCase do
   `evaluate/3` reads the page. `PhoenixTest.Playwright` documents them. Every
   assertion waits for the page to catch up, so a test never sleeps.
 
-  These cover what `Phoenix.LiveViewTest` cannot reach: the hooks AshQuick
-  ships, which only a browser runs. The picker is the main one. Its keyboard,
-  focus, open list and right-to-left drawing all live in its hook, and its
-  `ExampleWeb.PickerDriver` stands in for that hook rather than exercising it.
+  These cover what `Phoenix.LiveViewTest` cannot reach: the JavaScript
+  AshQuick ships, which only a browser runs. Its colocated hooks (the picker,
+  the menus, the action modal, the lock on a submitting form, the zoned
+  datetime input, the image viewer and the Copy button), its `S3` uploader,
+  the listeners `attachAshQuick` adds (a tab's impersonation, the page's
+  language, downloads and printed PDFs) and the sidebar's `JS` commands each
+  have a file under `test/browser/`. `ExampleWeb.PickerDriver` stands in for
+  the picker's hook rather than exercising it.
 
   Tagged `:playwright` and excluded by default. Run them with
 
