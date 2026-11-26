@@ -29,7 +29,8 @@ defmodule AshQuick.LiveView.Components.Menu do
   # callers' own components. An entry the hook finds disabled
   # (`aria-disabled`) is skipped. The entries of a menu whose button asks
   # the server for them (`phx-click` on the trigger) arrive after it opens,
-  # and the first or last is focused as they do.
+  # and the first or last is focused as they do. ↓ and ↑ open a shut menu
+  # by clicking its button, as Enter and Space do, so they ask for them too.
 
   @doc """
   The hook a page's section carries so its menus answer: one for all of
@@ -95,6 +96,7 @@ defmodule AshQuick.LiveView.Components.Menu do
       export default {
         mounted() {
           this.openId = null
+          this.arrowed = null
           this.el.addEventListener("click", (event) => this.clicked(event))
           this.el.addEventListener("keydown", (event) => this.keydown(event))
           this.el.addEventListener("focusout", (event) => {
@@ -130,8 +132,10 @@ defmodule AshQuick.LiveView.Components.Menu do
           if (event.target.closest("[data-menu-trigger]")) {
             // A click from Enter or Space carries no pointer, `detail` 0:
             // the keyboard opens onto the first entry.
+            const arrowed = this.arrowed
+            this.arrowed = null
             if (this.openMenu() === menu) this.close(menu, false)
-            else this.open(menu, event.detail === 0 ? "first" : null)
+            else this.open(menu, arrowed || (event.detail === 0 ? "first" : null))
           } else if (menu.dataset.menu === "menu" && event.target.closest("[role=menuitem]")) {
             this.picked = {id: this.trigger(menu).id, at: Date.now()}
             this.close(menu, true)
@@ -151,7 +155,12 @@ defmodule AshQuick.LiveView.Components.Menu do
           if (event.target.closest("[data-menu-trigger]")) {
             if (event.key === "ArrowDown" || event.key === "ArrowUp") {
               event.preventDefault()
-              this.open(menu, event.key === "ArrowDown" ? "first" : "last")
+              const focus = event.key === "ArrowDown" ? "first" : "last"
+              // A shut menu opens through its button's click, as Enter and
+              // Space open it, so the click's `phx-click` asks the server
+              // for the entries of a menu drawn without them.
+              if (open) this.open(menu, focus)
+              else { this.arrowed = focus; this.trigger(menu).click() }
             }
             return
           }
