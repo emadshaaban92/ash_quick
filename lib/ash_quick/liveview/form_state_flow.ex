@@ -13,12 +13,8 @@ defmodule AshQuick.LiveView.FormStateFlow do
   alias AshQuick.FormState
   alias AshQuick.LiveView.FormParams
   alias AshQuick.LiveView.SubForms
-  alias AshQuick.LiveView.FormRecords
-  alias AshQuick.LiveView.Utils
 
   @assign :ash_quick_form_state
-
-  @not_offered "is not one of the choices offered"
 
   # The state of the form the socket holds now, under `stage`.
   def store(%{assigns: %{form: %AshPhoenix.Form{} = form}} = socket, stage) do
@@ -361,19 +357,10 @@ defmodule AshQuick.LiveView.FormStateFlow do
   def build(form, stage, socket), do: state(form, stage, socket)
 
   # `form` with an error under every field `require/3` marks that is blank,
-  # and under every field holding a value it does not offer, on the root form
-  # or a sub-form the state takes, or `:ok` when there is none. A sub-form's
-  # error is put on that sub-form, found by its name.
-  #
-  # A value is not offered when the field's narrowed `options/3` leave it
-  # out, or, for a picker of records, when the read the picker searches
-  # through does not find it: the lookup action with the field's
-  # `lookup_args/3`, the relationship's own filters and the field's
-  # `filter/3`s, one read per field. A key the record already holds is not
-  # read unless the hook narrows the field, so a save that leaves a picker as
-  # it was reads nothing; an inactive record it holds stays offered.
+  # on the root form or a sub-form the state takes, or `:ok` when there is
+  # none. A sub-form's error is put on that sub-form, found by its name.
   def enforce(%FormState{} = state, form) do
-    case required_errors(state) ++ offer_errors(state) do
+    case required_errors(state) do
       [] -> :ok
       errors -> {:error, %{put_errors(form, errors) | errors: true, submitted_once?: true}}
     end
@@ -383,103 +370,6 @@ defmodule AshQuick.LiveView.FormStateFlow do
     for held <- [state | FormState.taken_sub_forms(state)],
         field <- FormState.blank_required(held),
         do: {held.form.name, field, required_error(field, held.form)}
-  end
-
-  defp offer_errors(state) do
-    for held <- [state | FormState.taken_sub_forms(state)],
-        %{hidden?: false, disabled?: false} = field <- held.fields,
-        drawn_by_ash_quick?(field) or FormState.narrowed?(field),
-        not_offered?(held, field),
-        do: {held.form.name, field, not_offered_error(field)}
-  end
-
-  # A field a widget or a type's form input (`AshQuick.FormInput`) draws is
-  # the host's: it offers what it likes, and its destination need have no
-  # lookup action (`QuickViewOptions` asks none of it). It is held to what
-  # it offers only when the hook narrows it, which needs the lookup action.
-  defp drawn_by_ash_quick?(%{kind: :widget}), do: false
-  defp drawn_by_ash_quick?(field), do: not AshQuick.FormInput.named?(field.source)
-
-  defp not_offered?(state, %{options: options} = field) when is_list(options) do
-    kept = MapSet.new(options, &to_string/1)
-
-    state
-    |> FormState.value(field.name)
-    |> List.wrap()
-    |> Enum.reject(&(&1 in [nil, ""]))
-    |> Enum.any?(&(not MapSet.member?(kept, to_string(&1))))
-  end
-
-  defp not_offered?(state, field) do
-    case FormState.relationship(state, field) do
-      nil -> false
-      relationship -> not_offered_record?(state, field, relationship)
-    end
-  end
-
-  defp not_offered_record?(state, field, relationship) do
-    key = record_key(state, field, relationship)
-    kept = stored_keys(state.record, field, relationship, key)
-    narrowing = FormRecords.narrowing(field)
-
-    values =
-      state
-      |> FormState.value(field.name)
-      |> List.wrap()
-      |> Enum.reject(&(&1 in [nil, ""]))
-
-    # Compared as text here, which may count a key held in another case as
-    # new: the read then finds it, under the type's own comparison.
-    checked =
-      if narrowing,
-        do: values,
-        else: Enum.reject(values, &(to_string(&1) in kept))
-
-    checked != [] and
-      FormRecords.not_offered(
-        relationship,
-        key,
-        checked,
-        state.scope,
-        narrowing,
-        kept,
-        created(state, field, relationship)
-      ) != []
-  end
-
-  # A list of text whose change creates what matches no record: a value no
-  # record holds is new, and the action decides whether it may make it.
-  defp created(state, %{source: %Ash.Resource.Actions.Argument{} = argument}, relationship),
-    do: Utils.created_values(argument, relationship, state.action.name)
-
-  defp created(_state, _field, _relationship), do: nil
-
-  defp record_key(_state, %{source: %BelongsTo{destination_attribute: key}}, _relationship),
-    do: key
-
-  defp record_key(state, field, relationship),
-    do: Utils.list_key(field.source, relationship, state.action.name)
-
-  defp stored_keys(nil, _field, _relationship, _key), do: []
-
-  defp stored_keys(record, %{source: %BelongsTo{source_attribute: attribute}}, _rel, _key) do
-    case Map.get(record, attribute) do
-      nil -> []
-      value -> [to_string(value)]
-    end
-  end
-
-  # A many-to-many the record was read without counts as holding nothing,
-  # so its keys are read back as new ones. The root's record is read with
-  # its relationships; a stored row of a sub-form may not be.
-  defp stored_keys(record, _field, relationship, key) do
-    if Ash.Resource.loaded?(record, relationship.name),
-      do:
-        record
-        |> Map.fetch!(relationship.name)
-        |> List.wrap()
-        |> Enum.map(&to_string(Map.get(&1, key))),
-      else: []
   end
 
   defp put_errors(form, errors), do: Enum.reduce(errors, form, &put_error/2)
@@ -507,20 +397,9 @@ defmodule AshQuick.LiveView.FormStateFlow do
     )
   end
 
-  defp not_offered_error(%{inputs: [input | _], source: source}) do
-    case source do
-      %Ash.Resource.Actions.Argument{} ->
-        Ash.Error.Changes.InvalidArgument.exception(field: input, message: @not_offered)
-
-      _attribute_or_relationship ->
-        Ash.Error.Changes.InvalidAttribute.exception(field: input, message: @not_offered)
-    end
-  end
-
   # Once a save was refused, a change keeps the error under a field
   # `require/3` marks that is still blank, as Ash keeps its own: validating
   # again would drop the one `enforce/2` added. Only shown, never refused on.
-  # A value not offered is asked of the database, so only at the save.
   defp mark_required(%{submitted_once?: true} = form, state, :validate) do
     case required_errors(state) do
       [] -> form

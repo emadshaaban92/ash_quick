@@ -13,9 +13,8 @@ defmodule AshQuick.LiveView.Components.ChoiceInput do
     resource = assigns[:resource]
     narrowed = narrowed(assigns[:state_field])
     offered = attribute |> EnumOptions.options(resource) |> offered(narrowed)
-    # Under options a hook narrows, the save checks what the record holds
-    # too, so a stored value they leave out is not offered: it stays picked,
-    # and can be unpicked.
+    # Under options a hook narrows, a stored value they leave out is not
+    # offered again: it stays picked, under its label, and can be unpicked.
     stored = if narrowed, do: [], else: stored(form.data, attribute, resource)
 
     assigns =

@@ -68,12 +68,7 @@ defmodule Example.Test.PickedPlaces.Country do
 end
 
 defmodule Example.Test.PickedPlaces.City do
-  @moduledoc """
-  A city of a country. Its lookup action takes the country as an argument,
-  for `AshQuick.FormState.lookup_args/3`; with none, it reads every city.
-  It reads two cities a page at most, so a save holding more reads them in
-  pages. A city can be deactivated.
-  """
+  @moduledoc "A city of a country, which can be deactivated."
   use Ash.Resource,
     domain: Example.Test.PickedPlaces.Domain,
     data_layer: Ash.DataLayer.Ets,
@@ -84,15 +79,11 @@ defmodule Example.Test.PickedPlaces.City do
 
     read :index do
       argument :search, :string
-      argument :country_id, :uuid
-
-      filter expr(is_nil(^arg(:country_id)) or country_id == ^arg(:country_id))
 
       pagination do
         keyset? true
         offset? true
-        default_limit 2
-        max_page_size 2
+        default_limit 250
         countable :by_default
       end
     end
@@ -250,19 +241,17 @@ defmodule Example.Test.PickedPlaces do
   it, routed only in the test build. `Example.Test.PickedPlacesLive.Quick`'s
   `adjust_form/2` says how:
 
-    * `:city` offers only the cities of the picked country, through the
-      lookup action's `country_id` argument (`lookup_args/3`);
+    * `:city` offers only the cities of the picked country (`filter/3`);
     * `:stop_ids`, a list over a many-to-many, offers only the cities of the
-      picked country too, through a filter (`filter/3`);
+      picked country too (`filter/3`);
     * `:status` offers only draft and submitted (`options/3`);
     * each leg of a cruise offers only the ship (`options/3` on a sub-form);
     * `:labels`, typed names that create a label none holds, leaves out
       restricted labels (`filter/3`); its lookup action hides archived ones.
 
   `:port` is a `belongs_to` whose relationship filters to ports, and that
-  the hook leaves alone: the save holds it to that filter all the same.
-  `:owner` is a `belongs_to` onto a resource with no lookup action, drawn
-  by a widget, which the save leaves to the widget.
+  the hook leaves alone. `:owner` is a `belongs_to` onto a resource with no
+  lookup action, drawn by a widget.
 
   In ETS rather than Postgres: nothing here is about what lands in a table.
   The table is shared by every test, so each one finds its rows by the codes
@@ -398,10 +387,7 @@ defmodule Example.Test.PickedPlacesLive.Quick do
     country = FormState.value(state, :country)
 
     state
-    |> FormState.lookup_args(:city, %{country_id: country})
-    |> then(
-      &if country, do: FormState.filter(&1, :stop_ids, expr(country_id == ^country)), else: &1
-    )
+    |> then(&if country, do: by_country(&1, country), else: &1)
     |> FormState.options(:status, [:draft, :submitted])
     |> FormState.filter(:labels, expr(restricted? == false))
     |> FormState.update_each([:legs], fn leg ->
@@ -412,4 +398,10 @@ defmodule Example.Test.PickedPlacesLive.Quick do
   end
 
   defp adjust_form(state, _options), do: state
+
+  defp by_country(state, country) do
+    state
+    |> FormState.filter(:city, expr(country_id == ^country))
+    |> FormState.filter(:stop_ids, expr(country_id == ^country))
+  end
 end

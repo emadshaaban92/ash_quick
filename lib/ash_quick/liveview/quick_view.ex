@@ -485,9 +485,10 @@ defmodule AshQuick.LiveView.QuickView do
   dropped the same way; a field it requires refuses a blank save. It can only
   narrow what Ash allows. Each sub-form has a state of its own, which
   `AshQuick.FormState.update_each/3` reaches for every row at once. A
-  picker's records can be narrowed with `AshQuick.FormState.filter/3` and
-  `AshQuick.FormState.lookup_args/3`, and a fixed set of values with
-  `AshQuick.FormState.options/3`; the save refuses a value they leave out.
+  picker's records can be narrowed with `AshQuick.FormState.filter/3`, and a
+  fixed set of values with `AshQuick.FormState.options/3`: they decide what
+  the input offers, and a rule about which values may be saved belongs in
+  the resource.
   See `AshQuick.FormState` for the functions and the rules.
 
   ## Sidebar
