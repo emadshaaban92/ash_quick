@@ -126,17 +126,24 @@ defmodule ExampleWeb.NestedItemErrorsScenarioTest do
     assert [%{items: [%{status: "fine"}]}] = saved(code)
   end
 
-  test "a sub-form under a field the page hides has its error flashed", %{conn: conn} do
+  # The page draws none of a sub-form under a field the actor may not
+  # write, so the post names none of it, and the save leaves it out.
+  test "a sub-form under a field the page hides is left out of the save", %{conn: conn} do
     {:ok, view, html} = live(conn, "/test/hidden_address/create")
     refute html =~ "form[address]"
+    code = unique("H")
 
     html =
       view
-      |> form("form[phx-submit=save]", %{"form" => %{"code" => unique("H")}})
+      |> form("form[phx-submit=save]", %{"form" => %{"code" => code}})
       |> render_submit()
 
-    assert flash(html) =~ "Address › Street: is required"
-    refute flash(html) =~ ActionErrors.forbidden_message()
+    assert flash(html) == ""
+
+    assert %{address: nil} =
+             Example.Test.HiddenAddress
+             |> Ash.Query.filter(code == ^code)
+             |> Ash.read_one!(authorize?: false)
   end
 
   defp with_items(conn, count) do

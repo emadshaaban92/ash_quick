@@ -60,11 +60,10 @@ defmodule AshQuick.LiveView.FormAttachments do
 
     params = Map.put(carried, key, value)
 
-    # A field the form's state hides takes nothing from here either.
-    {settled, validated, _state} =
-      FormStateFlow.settle(SubForms.validate(form, params), :validate, socket)
-
-    form = FormParams.prefill_changed_embedded_forms(validated, reseed_params(settled, field))
+    form =
+      form
+      |> SubForms.validate(params)
+      |> FormParams.prefill_changed_embedded_forms(reseed_params(params, field))
 
     # Folding the values in can create sub-forms — an embedded array grows a
     # form per image — and each one's own attachment field needs its upload

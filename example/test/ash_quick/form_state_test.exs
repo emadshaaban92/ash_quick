@@ -73,9 +73,6 @@ defmodule AshQuick.FormStateTest do
     assert %{label: "Order kind", help: "Pick one"} = FormState.field(state, :kind)
     assert %{required?: true} = FormState.field(state, :discount_reason)
 
-    assert Enum.sort(FormState.dropped_params(state)) ==
-             Enum.sort(~w(code _unused_code gift_note _unused_gift_note lines _unused_lines))
-
     shown = FormState.show(state, :gift_note)
     assert :gift_note in Enum.map(FormState.visible_fields(shown), & &1.name)
   end

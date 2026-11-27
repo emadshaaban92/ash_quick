@@ -29,9 +29,8 @@ defmodule Example.Test.HiddenAddress do
   A create whose `address` embed is read-only for every actor, and a
   page over it.
 
-  The form still builds the embed's sub-form, and the sub-form refuses the save
-  for want of a street, but the page draws none of it: the refusal has to be
-  flashed, since there is no input to show it under.
+  The form still builds the embed's sub-form, whose street is required, but
+  the page draws none of it, so the save leaves it out.
 
   In ETS rather than Postgres, like `Example.Test.DigitsOnly`.
   """

@@ -408,22 +408,18 @@ defmodule AshQuick.LiveView.FormUtils do
       |> FieldErrors.mark_used(event["_target"])
       |> FormParams.put_emptied_selections()
       |> FormAttachments.carry_uploaded_attachments(socket.assigns.form)
-      |> FormParams.maybe_put_has_many(socket.assigns.form)
+      |> FormParams.maybe_put_has_many(socket.assigns.form, held_names(socket))
 
-    held = socket.assigns.form
+    {held, params} = hold_back(socket, params)
 
-    # What the state hides is dropped from the params just posted, never from
-    # the page drawn last: a hand-made post can name a hidden field.
     case AttachmentKeys.validate_issued(held, params, socket) do
       {_params, form} ->
-        {_params, form, state} = FormStateFlow.settle(form, :validate, socket)
-
         # A row this post brings that the page did not add, as a reconnect's
         # replay does, gets its uploads here: its input reads them.
         {:halt,
          socket
          |> assign(form: form)
-         |> assign(ash_quick_form_state: state)
+         |> FormStateFlow.store(:validate)
          |> FormUploads.allow_image_upload(form)
          |> FormAttachments.clear_form_flash()}
 
@@ -438,7 +434,10 @@ defmodule AshQuick.LiveView.FormUtils do
       |> FormParams.put_emptied_selections()
       |> FormAttachments.carry_uploaded_attachments(socket.assigns.form)
 
-    case AttachmentKeys.validate_issued(socket.assigns.form, params, socket) do
+    {held, params} = hold_back(socket, params)
+    socket = assign(socket, form: held)
+
+    case AttachmentKeys.validate_issued(held, params, socket) do
       {params, form} -> submit_form(form, params, socket)
       :refused -> {:halt, put_flash(socket, :error, ActionErrors.forbidden_message())}
     end
@@ -446,9 +445,21 @@ defmodule AshQuick.LiveView.FormUtils do
 
   defp handle_open_form_events(_, _, socket, _options), do: {:cont, socket}
 
+  defp held_names(socket), do: FormStateFlow.held_names(socket.assigns[:ash_quick_form_state])
+
+  # The form and the post, with the sub-form fields the page was drawn
+  # without left as they are (`FormStateFlow.hold_back/3`).
+  defp hold_back(socket, params) do
+    FormStateFlow.hold_back(
+      socket.assigns.form,
+      params,
+      socket.assigns[:ash_quick_form_state]
+    )
+  end
+
   defp submit_form(form, params, socket) do
-    # What this post hides takes no upload: the state it builds is what the
-    # save consults before it stores any file.
+    # A field the state hides takes no upload: the state built at the save
+    # is what the save consults before it stores any file.
     socket =
       assign(socket, ash_quick_form_state: FormStateFlow.build(form, :submit, socket))
 
@@ -457,8 +468,7 @@ defmodule AshQuick.LiveView.FormUtils do
     # update keeping its old file is not read as the new one saved.
     {upload_params, {refused, stored_keys}} =
       params
-      |> FormParams.maybe_put_nested_params(form)
-      |> FormParams.maybe_put_has_many(form)
+      |> FormParams.maybe_put_has_many(form, held_names(socket))
       |> FormAttachments.upload_images(socket, form)
 
     # A socket upload's key is made here, as the save consumes the entry. A
@@ -472,32 +482,16 @@ defmodule AshQuick.LiveView.FormUtils do
       end)
       |> FormAttachments.flash_failed_uploads(refused)
 
-    # The post the save runs is the one just made, less what the state built
-    # from it hides, and a field the state requires is held to it here: Ash
-    # knows nothing of either. It is validated under the submit stage, and
-    # the save runs the form as it settles, so the post is validated once.
-    {_params, checked, state} =
+    # The post is validated under the submit stage, and the save runs the
+    # form so validated, so the post is validated once.
+    checked =
       socket.assigns.form
       |> put_stage(AshQuick.form_submit_stage())
-      |> then(
-        &FormStateFlow.settle(
-          SubForms.validate(&1, upload_params, errors: false),
-          :submit,
-          socket,
-          errors: false
-        )
-      )
+      |> SubForms.validate(upload_params, errors: false)
 
-    case submit(checked, state, socket) do
-      {:refused, refused} ->
-        {:halt,
-         socket
-         |> assign(form: put_stage(refused, AshQuick.form_validate_stage()))
-         |> FormStateFlow.store(:validate)}
-
-      result ->
-        run_submit(result, state, params, socket)
-    end
+    checked
+    |> submit(socket)
+    |> run_submit(socket.assigns.ash_quick_form_state, params, socket)
   end
 
   defp run_submit(result, state, params, socket) do
@@ -549,12 +543,10 @@ defmodule AshQuick.LiveView.FormUtils do
     end
   end
 
-  # Timed as `[:ash_quick, :form, :submit]` (see `AshQuick.Telemetry`). A
-  # field `require/3` marks that is blank refuses the save before the action
-  # runs, as `{:refused, form}`, and counts as an `:error`. `form` was
-  # validated with the post already, under the submit stage, so the submit
-  # does not validate it again.
-  defp submit(form, state, socket) do
+  # Timed as `[:ash_quick, :form, :submit]` (see `AshQuick.Telemetry`).
+  # `form` was validated with the post already, under the submit stage, so
+  # the submit does not validate it again.
+  defp submit(form, socket) do
     scope = Map.get(socket.assigns, :scope)
 
     AshQuick.Telemetry.span(
@@ -568,17 +560,11 @@ defmodule AshQuick.LiveView.FormUtils do
       },
       fn ->
         result =
-          case FormStateFlow.enforce(state, form) do
-            :ok ->
-              AshPhoenix.Form.submit(form,
-                params: nil,
-                before_submit: &FormAttachments.reference_attachments(&1, scope),
-                action_opts: action_opts(form)
-              )
-
-            {:error, refused} ->
-              {:refused, refused}
-          end
+          AshPhoenix.Form.submit(form,
+            params: nil,
+            before_submit: &FormAttachments.reference_attachments(&1, scope),
+            action_opts: action_opts(form)
+          )
 
         {result, %{result: if(match?({:ok, _}, result), do: :ok, else: :error)}}
       end
