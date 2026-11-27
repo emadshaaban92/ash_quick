@@ -147,7 +147,6 @@ defmodule AshQuick.LiveView.FormUtils do
         transform_params: &FormParams.transform_nested_params/3,
         transform_errors: &ActionErrors.renderable_vars/2,
         scope: socket.assigns.scope,
-        actor: actor(socket),
         context: stage_context(AshQuick.form_build_stage())
       )
       |> then(&add_nested_forms(&1, &1.form_keys))
@@ -171,7 +170,6 @@ defmodule AshQuick.LiveView.FormUtils do
         transform_params: &FormParams.transform_nested_params/3,
         transform_errors: &ActionErrors.renderable_vars/2,
         scope: socket.assigns.scope,
-        actor: actor(socket),
         context: stage_context(AshQuick.form_build_stage())
       )
       |> opened()
@@ -194,7 +192,6 @@ defmodule AshQuick.LiveView.FormUtils do
         transform_params: &FormParams.transform_nested_params/3,
         transform_errors: &ActionErrors.renderable_vars/2,
         scope: socket.assigns.scope,
-        actor: actor(socket),
         context: stage_context(AshQuick.form_build_stage())
       )
       |> then(&add_nested_forms(&1, &1.form_keys))
@@ -281,15 +278,6 @@ defmodule AshQuick.LiveView.FormUtils do
        do: default
 
   defp static_default(_input), do: :no_static_default
-
-  # AshPhoenix doesn't derive an actor from the scope for nested-form
-  # sub-changesets, so pass it explicitly for managed relationships.
-  defp actor(socket) do
-    case Ash.Scope.ToOpts.get_actor(socket.assigns.scope) do
-      {:ok, actor} -> actor
-      _ -> nil
-    end
-  end
 
   # A single sub-form the record holds nothing for is added empty, so its
   # inputs are drawn.

@@ -77,6 +77,7 @@ config :example, test_routes: true
 # `AshQuick.LiveView.RouteGate`, since a test drives each one as whatever actor
 # it needs. Both are what the check reports about a page the router serves.
 test_pages = [
+  "/test/actor_rows",
   "/test/atomic_brands",
   "/test/brand_filter",
   "/test/brand_record_filter",
