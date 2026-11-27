@@ -155,8 +155,9 @@ defmodule Example.Test.ShapedOrders do
   only in the test build. `Example.Test.ShapedOrdersLive.Quick`'s
   `adjust_form/2` says how:
 
-    * `:discount_reason` shows only for a discount, which requires it, and
-      an update to another kind clears it;
+    * `:discount_reason` shows only for a discount, drawn required there,
+      as the resource's validation requires it, and an update to another
+      kind clears it;
     * `:gift_note` shows only for a gift;
     * `:code` is set once: an update shows it read-only;
     * `:lines`, sub-forms over an embedded array, show for a bundle and,
@@ -206,6 +207,10 @@ defmodule Example.Test.ShapedOrders do
       argument :rush, :boolean
       change manage_relationship(:tag_ids, :tags, type: :append_and_remove)
       change set_attribute(:rushed, arg(:rush))
+
+      # The rule the hook's `require/3` draws, as `AshQuick.FormState`
+      # says: the hook only shapes the page.
+      validate present(:discount_reason), where: [attribute_equals(:kind, :discount)]
     end
 
     update :update do
@@ -234,6 +239,7 @@ defmodule Example.Test.ShapedOrders do
       change set_attribute(:discount_reason, nil),
         where: [attribute_does_not_equal(:kind, :discount)]
 
+      validate present(:discount_reason), where: [attribute_equals(:kind, :discount)]
       validate absent(:code), where: [attribute_equals(:kind, :sample)]
       validate absent(:gift_note), where: [attribute_equals(:kind, :sample)]
     end

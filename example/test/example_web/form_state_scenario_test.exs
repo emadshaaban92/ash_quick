@@ -1,8 +1,9 @@
 defmodule ExampleWeb.FormStateScenarioTest do
   @moduledoc """
   A QuickView's `adjust_form/2` shapes its form from what is typed into it,
-  through `AshQuick.FormState`, and the server takes only what the shape it
-  builds from each post shows.
+  through `AshQuick.FormState`. The shape is what the page draws: the server
+  does not hold a post to it, and the rules a save must keep are the
+  resource's.
 
   `Example.Test.ShapedOrdersLive.Quick` shows a discount's reason, and
   requires it, only for a discount, a gift's note only for a gift, and an
@@ -42,24 +43,6 @@ defmodule ExampleWeb.FormStateScenarioTest do
       assert render(view) =~ ShapedOrdersLive.gift_help()
     end
 
-    test "is dropped from a hand-made post that names it", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/test/shaped_orders/create")
-      code = unique("O")
-
-      # Nothing on the page posts a reason for a standard order.
-      push_change(view, %{"code" => code, "kind" => "standard", "discount_reason" => "Forged"})
-      refute has_input?(view, "discount_reason")
-
-      push_submit(view, %{
-        "code" => code,
-        "kind" => "standard",
-        "discount_reason" => "Forged",
-        "gift_note" => "Forged too"
-      })
-
-      assert %{kind: :standard, discount_reason: nil, gift_note: nil} = order(code)
-    end
-
     test "is taken with the value that shows it, in the same post", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/test/shaped_orders/create")
       code = unique("O")
@@ -77,7 +60,9 @@ defmodule ExampleWeb.FormStateScenarioTest do
 
       assert has_input?(view, "gift_note")
 
-      push_submit(view, %{"kind" => "standard", "gift_note" => "Overwritten"})
+      change(view, %{"kind" => "standard", "gift_note" => "Changed, then hidden"}, "kind")
+      refute has_input?(view, "gift_note")
+      view |> form(@form) |> render_submit()
 
       assert %{kind: :standard, gift_note: "Happy birthday"} = order(record.code)
     end
@@ -94,8 +79,10 @@ defmodule ExampleWeb.FormStateScenarioTest do
     end
   end
 
+  # `require/3` draws the input required. The save is refused by the
+  # resource's own validation, which the hook only mirrors.
   describe "a required field" do
-    test "refuses a blank save with an error under it", %{conn: conn} do
+    test "is drawn required, and the resource refuses it blank", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/test/shaped_orders/create")
       code = unique("O")
 
@@ -104,8 +91,8 @@ defmodule ExampleWeb.FormStateScenarioTest do
 
       html = view |> form(@form, %{"form" => %{"discount_reason" => ""}}) |> render_submit()
 
-      assert errors(view, "discount_reason") == ["is required"]
-      assert html =~ "is required"
+      assert errors(view, "discount_reason") == ["must be present"]
+      assert html =~ "must be present"
       assert order(code) == nil
 
       view |> form(@form, %{"form" => %{"discount_reason" => "Loyal"}}) |> render_submit()
@@ -113,17 +100,17 @@ defmodule ExampleWeb.FormStateScenarioTest do
       assert %{discount_reason: "Loyal"} = order(code)
     end
 
-    test "keeps its error through a later change, as a field Ash requires does", %{conn: conn} do
+    test "keeps the resource's error through a later change", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/test/shaped_orders/create")
 
       change(view, %{"code" => unique("O"), "kind" => "discount"}, "kind")
       view |> form(@form, %{"form" => %{"discount_reason" => ""}}) |> render_submit()
-      assert errors(view, "discount_reason") == ["is required"]
+      assert errors(view, "discount_reason") == ["must be present"]
 
       change(view, %{"code" => ""}, "code")
 
       assert errors(view, "code") == ["is required"]
-      assert errors(view, "discount_reason") == ["is required"]
+      assert errors(view, "discount_reason") == ["must be present"]
 
       change(view, %{"discount_reason" => "Loyal"}, "discount_reason")
       assert errors(view, "discount_reason") == []
@@ -193,10 +180,10 @@ defmodule ExampleWeb.FormStateScenarioTest do
              |> element("[data-disabled-field='code']", record.code)
              |> has_element?()
 
-      push_submit(view, %{"code" => "Changed", "kind" => "gift", "gift_note" => "Hi"})
+      change(view, %{"kind" => "gift"}, "kind")
+      view |> form(@form, %{"form" => %{"gift_note" => "Hi"}}) |> render_submit()
 
       assert %{kind: :gift, gift_note: "Hi"} = order(record.code)
-      assert order("Changed") == nil
     end
   end
 
@@ -240,17 +227,13 @@ defmodule ExampleWeb.FormStateScenarioTest do
       assert line_names(record.code) == ["Kept"]
     end
 
-    test "disabled on an update keeps the record's rows, posted or not", %{conn: conn} do
+    test "disabled on an update keeps the record's rows", %{conn: conn} do
       record = create(kind: :gift, lines: [%{name: "Kept"}])
       {:ok, view, _html} = live(conn, "/test/shaped_orders/#{record.id}/update")
 
       refute has_input?(view, "lines")
       assert view |> element("[data-disabled-field='lines']", "Kept") |> has_element?()
 
-      push_submit(view, %{"kind" => "gift", "lines" => %{"0" => %{"name" => "Forged"}}})
-      assert line_names(record.code) == ["Kept"]
-
-      {:ok, view, _html} = live(conn, "/test/shaped_orders/#{record.id}/update")
       view |> form(@form) |> render_submit()
       assert line_names(record.code) == ["Kept"]
     end
@@ -299,27 +282,19 @@ defmodule ExampleWeb.FormStateScenarioTest do
       assert tag_ids(code) == [tag.id]
     end
 
-    test "hidden, is not drawn and its post is dropped", ctx do
+    test "hidden on an update, keeps what the record holds", ctx do
       %{conn: conn, customer: customer, tag: tag} = ctx
-      {:ok, view, _html} = live(conn, "/test/shaped_orders/create")
-      code = unique("O")
+      record = create(kind: :standard, customer_id: customer.id, tag_ids: [tag.id])
+      {:ok, view, _html} = live(conn, "/test/shaped_orders/#{record.id}/update")
 
-      change(view, %{"code" => code, "kind" => "discount"}, "kind")
+      change(view, %{"kind" => "discount", "discount_reason" => "Loyal"}, "kind")
       refute has_input?(view, "customer_id")
       refute has_picker?(view, "tag_ids")
-      refute has_input?(view, "rush")
+      view |> form(@form) |> render_submit()
 
-      push_submit(view, %{
-        "code" => code,
-        "kind" => "discount",
-        "discount_reason" => "Loyal",
-        "customer_id" => customer.id,
-        "tag_ids" => [tag.id],
-        "rush" => "true"
-      })
-
-      assert %{customer_id: nil, rushed: nil} = order(code)
-      assert tag_ids(code) == []
+      assert %{kind: :discount, customer_id: customer_id} = order(record.code)
+      assert customer_id == customer.id
+      assert tag_ids(record.code) == [tag.id]
     end
   end
 
@@ -480,7 +455,6 @@ defmodule ExampleWeb.FormStateScenarioTest do
   end
 
   # Posts made exactly as given, whatever the page draws.
-  defp push_change(view, params), do: render_change(view, "validate", %{"form" => params})
   defp push_submit(view, params), do: render_submit(view, "save", %{"form" => params})
 
   # What the page's form posts: every named input it renders.

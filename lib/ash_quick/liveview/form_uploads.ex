@@ -236,8 +236,9 @@ defmodule AshQuick.LiveView.FormUploads do
   # one that does not takes the bytes over the socket (`AshQuick.Storage`,
   # "Browser uploads").
   #
-  # A field the root form's state hides or disables gets no upload target: its
-  # params would be dropped, and the object would sit in the store unused.
+  # A field the root form's state hides or disables gets no upload target: the
+  # page draws no input to post its key, and the object would sit in the store
+  # unused.
   defp upload_transport(form, field, constraints) do
     case Storage.upload_mode() do
       :external ->

@@ -6,8 +6,8 @@ defmodule AshQuick.FormState do
 
   AshQuick builds it from the form every time the form changes and hands it to
   the QuickView's `adjust_form/2` callback, which returns it changed. The page
-  draws the form from what comes back, and the server takes what the person
-  posted through it, so a field the hook hides is neither drawn nor taken.
+  draws the form from what comes back. That is all the hook does: it shapes
+  what the person sees, and the rules a save must keep live in the resource.
 
       defmodule MyAppWeb.OrderLive.Quick do
         use AshQuick.LiveView.QuickView, resource: MyApp.Sales.Order
@@ -32,14 +32,13 @@ defmodule AshQuick.FormState do
   hook every time. Nothing a hook did on one event is remembered on the next,
   so the hook states the whole rule each time, from the values it reads with
   `value/2`. A rule must never be skipped: a field a hook leaves out of one
-  pass is shown again on that event, and its params are taken. This is what
-  keeps it right after a reconnect, when the form is built again from what
-  the page still shows.
+  pass is shown again on that event. This is what keeps it right after a
+  reconnect, when the form is built again from what the page still shows.
 
   It is built when the form opens (`stage: :build`), on each change, an
   upload, a sub-form added or removed and an attachment removed
-  (`:validate`), and when the form is saved (`:submit`). A save refused with
-  errors on its fields builds it again under `:validate`.
+  (`:validate`), and when the form is saved (`:submit`). A save that fails
+  with errors on its fields builds it again under `:validate`.
 
   ## Narrow only
 
@@ -56,31 +55,38 @@ defmodule AshQuick.FormState do
   A name that is no input of the action at all raises an `ArgumentError`
   listing the form's fields: it is a mistake in the hook.
 
-  ## What the server does with it
+  ## Rules live in the resource
 
-  At every change and at the save, the server builds the state from the
-  params that were just posted, runs the hook and drops the params of every
-  hidden or disabled field before Ash sees them. It does not trust the page
-  it drew last, so a hand-made post cannot pair a hidden field with the value
-  that hides it. On an update, a hidden or disabled field keeps the record's
-  value. At the save, a field `require/3` marks that is blank gets a field
-  error, and the action does not run. An error Ash files under a hidden or
-  disabled field has no input to show under, so it is flashed.
+  The hook is presentation only. The server does not hold a post to it: what
+  the page posts goes to AshPhoenix and the action as it is. A field the hook
+  hides or disables is not drawn, so the page posts nothing for it, and an
+  update keeps the record's value: the server sees to that where AshPhoenix
+  or Ash would read the gap as a blank (see "Sub-forms" for the one gap left
+  on embed rows). A field `require/3` marks is drawn required, which the
+  browser holds a blank one to, but the save does not refuse it: only Ash
+  does, for a field it requires. A picker or a fixed set narrowed below
+  offers less, and the save takes whatever is posted. A template or widget
+  that draws an input for a hidden or disabled field saves what that input
+  posts. An error Ash files under a hidden or disabled field has no input to
+  show under, so it is flashed.
 
-  The hook runs for QuickView forms only. Bulk forms, the API and code calling
-  the action never run it, so a rule that has to hold whatever the caller
-  belongs in the resource. Hiding a field does not clear it: on an update it
-  keeps the record's value. So a value that must not outlive the kind that
-  shows it is cleared by a change, not refused by a validation, which a form
-  that hides the field could never get past:
-
-      change set_attribute(:discount_reason, nil),
-        where: [attribute_does_not_equal(:kind, :discount)]
+  The hook runs for QuickView forms only. Bulk forms, the API, code calling
+  the action and a hand-made post never meet it, so every rule a save must
+  keep belongs in the resource, next to the hook that draws it:
 
       validate present(:discount_reason),
         where: [attribute_equals(:kind, :discount)]
 
-  Use the hook for what the person sees.
+  Hiding a field does not clear it: on an update it keeps the record's value.
+  So a value that must not outlive the kind that shows it is cleared by a
+  change, not refused by a validation, which a form that hides the field
+  could never get past:
+
+      change set_attribute(:discount_reason, nil),
+        where: [attribute_does_not_equal(:kind, :discount)]
+
+  A narrowed picker is held to its rule the same way, by a validation: see
+  "Picker filters and options" below.
 
   ## Guard on the action
 
@@ -103,8 +109,7 @@ defmodule AshQuick.FormState do
   value, read-only, the way the details page shows it. A widget
   (`form: [widgets: ...]`) is given its field's entry as `@state_field`, and
   a custom `action_*` template the whole state as `@ash_quick_form_state`, so
-  either can follow the flags; the server strips and enforces them whatever a
-  template draws.
+  either can follow the flags.
 
   ## Picker filters and options
 
@@ -160,24 +165,18 @@ defmodule AshQuick.FormState do
   removed or added never leaves a rule on the wrong row: there is no index
   to go stale.
 
-  The server holds a sub-form's fields to its state as it does the root's: a
-  hidden or disabled field's params are dropped from that row, a row's
-  required field left blank refuses the save with an error under it, and on
-  a row the record already holds, a hidden or disabled field keeps the row's
-  value. The fields of a sub-form under a hidden or disabled field are not
-  looked at: the whole field keeps the record's value, or is left out.
+  A sub-form's flags are drawn as the root's are: a hidden or disabled field
+  is not drawn on that row, and a required one is drawn required. A stored
+  embed row is saved whole, from what its row posts, so the server posts
+  the row's stored value for each field it holds back that the post leaves
+  out: an update keeps it, as it keeps a root field's. A sub-form field held
+  back on the root, or on a related record's row, is left out of the save.
 
-  Which stored row a posted row is, AshPhoenix decides: the one with the
-  same primary key when the row posts all of it, as a related record's row
-  does, and otherwise the one at the same place, as for an embed, which has
-  no key. So a rule that hides or disables a field on embed rows keeps, for
-  each row, the value of the stored row at its place. The page's own Add and
-  ✕ never move rows in a post. A template that draws AshPhoenix's `_drop_`
-  or `_sort_` inputs does, and so does a reconnect after a stored row was
-  removed: the rows after it then keep the value of the stored row above.
-  Where each row must keep its own, give the embedded resource a public
-  primary key (`uuid_primary_key :id, public?: true`): its rows then post
-  it, and each is matched to its own stored row wherever it ends up.
+  An embed with no primary key is matched to its stored rows by place. After
+  a reconnect that follows a removed stored row, the page draws the stored
+  rows again, so a held field on a row takes the value of the stored row at
+  its place. Where each row must keep its own, give the embedded resource a
+  public primary key (`uuid_primary_key :id, public?: true`).
   """
 
   alias Ash.Resource.Relationships.BelongsTo
@@ -208,8 +207,9 @@ defmodule AshQuick.FormState do
   enum, a `Decimal` for a decimal, the id for a `belongs_to`. A value that
   does not cast is the posted value as it came.
 
-  A hidden or disabled field holds the value it has without its params: the
-  record's on an update, the default on a create. An input of the action
+  The page posts nothing for a field it draws hidden or disabled, so from
+  the next event such a field holds the record's value on an update and the
+  default on a create. An input of the action
   that this actor's form leaves out answers nil.
   """
   @spec value(t(), atom()) :: term()
@@ -225,8 +225,8 @@ defmodule AshQuick.FormState do
   def field(%__MODULE__{fields: fields}, name), do: Enum.find(fields, &(&1.name == name))
 
   @doc """
-  Hides the field `name` when `condition` is true: it is not drawn, and its
-  params are dropped.
+  Hides the field `name` when `condition` is true: it is not drawn, so the
+  page posts nothing for it.
   """
   @spec hide(t(), atom(), boolean()) :: t()
   def hide(state, name, condition \\ true)
@@ -241,8 +241,9 @@ defmodule AshQuick.FormState do
   def show(state, name), do: update!(state, name, &%{&1 | hidden?: false})
 
   @doc """
-  Marks the field `name` required when `condition` is true. The input says
-  so, and the save refuses a blank value with an error under it.
+  Marks the field `name` required when `condition` is true: the input is
+  drawn required. The save does not refuse a blank value; a validation in
+  the resource does (see "Rules live in the resource" above).
 
   A field Ash already requires stays required either way.
   """
@@ -253,7 +254,7 @@ defmodule AshQuick.FormState do
 
   @doc """
   Disables the field `name` when `condition` is true: it shows its value,
-  read-only, and its params are dropped as a hidden field's are.
+  read-only, and the page posts nothing for it, as for a hidden field.
   """
   @spec disable(t(), atom(), boolean()) :: t()
   def disable(state, name, condition \\ true)
@@ -560,8 +561,8 @@ defmodule AshQuick.FormState do
 
   @doc false
   # Every sub-form state under `state`, a row before its own sub-forms, with
-  # those under a hidden or disabled field left out: that whole field keeps
-  # the record's value or is dropped, so its rows are not looked at.
+  # those under a hidden or disabled field left out: the page draws none of
+  # their inputs.
   def taken_sub_forms(%__MODULE__{} = state) do
     for %Field{kind: :nested, hidden?: false, disabled?: false, name: name} <- state.fields,
         row <- Map.get(state.forms, name, []),
@@ -656,39 +657,6 @@ defmodule AshQuick.FormState do
   end
 
   defp narrow_rows(rows, _got), do: rows
-
-  @doc false
-  # The params the server drops: every input of a hidden or disabled field,
-  # with the `_unused_` marker Phoenix posts beside it.
-  def dropped_params(%__MODULE__{fields: fields}) do
-    for %Field{hidden?: h, disabled?: d, inputs: inputs} <- fields,
-        h or d,
-        input <- inputs,
-        key = to_string(input),
-        param <- [key, "_unused_" <> key],
-        do: param
-  end
-
-  @doc false
-  # The inputs of every hidden or disabled field, as param keys.
-  def dropped_inputs(%__MODULE__{fields: fields}) do
-    for %Field{hidden?: h, disabled?: d, inputs: inputs} <- fields,
-        h or d,
-        input <- inputs,
-        do: to_string(input)
-  end
-
-  @doc false
-  # The fields `require/3` marks that are drawn, writable and blank, which
-  # Ash would not refuse on its own: a field it requires is its to refuse.
-  def blank_required(%__MODULE__{} = state) do
-    for %Field{required?: true, hidden?: false, disabled?: false} = field <- state.fields,
-        not ash_required?(field.source),
-        blank?(input_value(state.form, field)),
-        do: field
-  end
-
-  defp blank?(value), do: value in [nil, "", []]
 
   defp input_value(form, %Field{source: source, inputs: [input | _]}) do
     changeset = form.source

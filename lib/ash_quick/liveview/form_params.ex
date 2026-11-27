@@ -332,14 +332,6 @@ defmodule AshQuick.LiveView.FormParams do
     end)
   end
 
-  @doc false
-  def maybe_put_nested_params(params, form) do
-    form.form_keys
-    |> Enum.reduce(params, fn {field_name, _}, updated_params ->
-      updated_params |> Map.put_new(field_name |> to_string(), %{})
-    end)
-  end
-
   # A multi-select emptied of its last pick posts no value under its name, only
   # a `<name>_empty_selection` marker (`AshQuick.LiveView.Picker` posts one, as
   # LiveSelect does). Read as absent, the field would fall back to the value the
@@ -361,11 +353,14 @@ defmodule AshQuick.LiveView.FormParams do
 
   # A list argument left out of the post means "emptied", so it is put back
   # as `[]`: only for an argument the form handles, never one it leaves out
-  # as hidden, which would then save over a value its reader never saw.
+  # as hidden, which would then save over a value its reader never saw, and
+  # never one in `held`, the names the form's state hides or disables, which
+  # the page draws no input for either.
   @doc false
-  def maybe_put_has_many(params, form) do
+  def maybe_put_has_many(params, form, held \\ []) do
     form
     |> Utils.form_fields()
+    |> Enum.reject(&(&1.name in held))
     |> Enum.filter(fn
       %Argument{type: {:array, item_type}} = argument ->
         item_type in [Type.UUID, Type.UUIDv7] or EnumOptions.kind(argument) == :array or

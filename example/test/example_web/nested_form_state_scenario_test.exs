@@ -1,11 +1,11 @@
 defmodule ExampleWeb.NestedFormStateScenarioTest do
   @moduledoc """
   A QuickView's `adjust_form/2` shapes each sub-form from what is typed into
-  it, through `AshQuick.FormState.update_each/3`, and the server takes only
-  what each row's state shows.
+  it, through `AshQuick.FormState.update_each/3`. Each row is drawn from its
+  own state, and a field a stored row holds back keeps the row's value.
 
-  `Example.Test.ShapedBundlesLive.Quick` shows an item's serial, and
-  requires it, only for a device, its hours only for a service, its parts
+  `Example.Test.ShapedBundlesLive.Quick` shows an item's serial, drawn
+  required, only for a device, its hours only for a service, its parts
   only for a device, and its discount read-only unless the bundle is sold
   wholesale. A shipping address shows its region only for the US, and is
   hidden for a wholesale bundle.
@@ -61,45 +61,24 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
       assert has_input?(view, "items][0][serial")
     end
 
-    test "is dropped from a hand-made post that names it", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/test/shaped_bundles/create")
-      code = unique("B")
-      add_item(view)
-
-      push_submit(view, %{
-        "code" => code,
-        "items" => %{"0" => %{"kind" => "good", "serial" => "Forged", "hours" => "9"}}
-      })
-
-      assert [%{kind: :good, serial: nil, hours: nil}] = bundle(code).items
-    end
-
-    test "is taken with the value that shows it, in the same post", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/test/shaped_bundles/create")
-      code = unique("B")
-      add_item(view)
-
-      push_submit(view, %{
-        "code" => code,
-        "items" => %{"0" => %{"kind" => "service", "hours" => "4", "serial" => "Forged"}}
-      })
-
-      assert [%{kind: :service, hours: 4, serial: nil}] = bundle(code).items
-    end
-
+    # A stored embed row is saved whole: the server posts a held field's
+    # stored value for it, as the page draws no input for it.
     test "keeps the stored row's value on an update", %{conn: conn} do
       record = create(items: [%{kind: :device, serial: "SN-1"}, %{kind: :service, hours: 3}])
       {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
 
       assert has_input?(view, "items][0][serial")
 
-      push_submit(view, %{
-        "code" => record.code,
-        "items" => %{
-          "0" => %{"kind" => "good", "serial" => "Overwritten"},
-          "1" => %{"kind" => "service", "hours" => "5"}
-        }
-      })
+      change(
+        view,
+        %{
+          "items" => %{"0" => %{"kind" => "good"}, "1" => %{"kind" => "service", "hours" => "5"}}
+        },
+        "kind"
+      )
+
+      refute has_input?(view, "items][0][serial")
+      view |> form(@form) |> render_submit()
 
       assert [%{kind: :good, serial: "SN-1"}, %{kind: :service, hours: 5}] =
                bundle(record.code).items
@@ -107,60 +86,6 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
   end
 
   describe "a hand-made post keyed past the rows' numbers" do
-    # AshPhoenix numbers the rows in the order of their keys, from 0: each
-    # row's rule holds the params AshPhoenix gives that row.
-    test "holds each row to its own rule", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/test/shaped_bundles/create")
-      code = unique("B")
-      add_item(view)
-      add_item(view)
-
-      push_submit(view, %{
-        "code" => code,
-        "items" => %{
-          "0" => %{"kind" => "device", "serial" => "SN-8"},
-          "5" => %{"kind" => "good", "serial" => "Forged", "hours" => "9"}
-        }
-      })
-
-      assert [%{kind: :device, serial: "SN-8"}, %{kind: :good, serial: nil, hours: nil}] =
-               bundle(code).items
-    end
-
-    test "never puts one row's rule on another's params", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/test/shaped_bundles/create")
-      code = unique("B")
-      add_item(view)
-      add_item(view)
-
-      push_submit(view, %{
-        "code" => code,
-        "items" => %{
-          "1" => %{"kind" => "device", "serial" => "SN-9"},
-          "2" => %{"kind" => "good", "serial" => "Forged"}
-        }
-      })
-
-      assert [%{kind: :device, serial: "SN-9"}, %{kind: :good, serial: nil}] =
-               bundle(code).items
-    end
-
-    # On an update the rows post no key of their own (an embed has none), so
-    # AshPhoenix matches each to the stored row at its place, whatever key
-    # it was posted under: a field held back on a row is held to that stored
-    # row's value. A page never moves rows in a post, its ✕ and Add go
-    # through the server. A reconnect after a ✕ does, and so does a
-    # template's `_drop_` or `_sort_` input: see "Sub-forms" in
-    # `AshQuick.FormState`.
-    test "a stored row left out of an update post", %{conn: conn} do
-      record = create(items: [%{kind: :device, serial: "SN-A"}, %{kind: :good}])
-      {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
-
-      push_submit(view, %{"items" => %{"1" => %{"kind" => "good", "serial" => "Forged"}}})
-
-      assert [%{kind: :good, serial: "SN-A"}] = bundle(record.code).items
-    end
-
     # The discount is read-only on a retail bundle: held to the stored one
     # at the row's place.
     test "a stored row left out of a change, then save", %{conn: conn} do
@@ -173,88 +98,11 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
 
       assert [%{kind: :good, discount: 5}] = bundle(record.code).items
     end
-
-    test "stored rows posted under keys past their own", %{conn: conn} do
-      record = create(items: [%{kind: :good, discount: 5}, %{kind: :good, discount: 9}])
-      {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
-
-      push_submit(view, %{
-        "items" => %{
-          "1" => %{"kind" => "good", "discount" => "1"},
-          "4" => %{"kind" => "good", "discount" => "2"}
-        }
-      })
-
-      assert [%{kind: :good, discount: 5}, %{kind: :good, discount: 9}] =
-               bundle(record.code).items
-    end
-
-    # Saved as the post itself, the row keeps the rows of its own that it
-    # posts.
-    test "a stored row left out of a save keeps the rows it posts", %{conn: conn} do
-      record =
-        create(
-          items: [
-            %{kind: :good, discount: 5},
-            %{kind: :device, serial: "SN-B", discount: 9, parts: [%{name: "P1"}]}
-          ]
-        )
-
-      {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
-
-      push_submit(view, %{
-        "items" => %{
-          "1" => %{
-            "kind" => "device",
-            "serial" => "SN-B",
-            "discount" => "1",
-            "parts" => %{"0" => %{"name" => "P1x"}}
-          }
-        }
-      })
-
-      assert [%{kind: :device, serial: "SN-B", discount: 5, parts: [%{name: "P1x"}]}] =
-               bundle(record.code).items
-    end
-
-    test "stored rows saved under keys one past their own", %{conn: conn} do
-      record = create(items: Enum.map(0..3, &%{kind: :good, discount: &1}))
-      {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
-
-      push_submit(view, %{
-        "items" => Map.new(1..3, &{to_string(&1), %{"kind" => "good", "discount" => "0"}})
-      })
-
-      assert [0, 1, 2] = Enum.map(bundle(record.code).items, & &1.discount)
-    end
-
-    # Two keys for one index are two rows, in the order of their keys as
-    # text, with or without a control key.
-    for {label, controls} <- [
-          {"without a control key", %{}},
-          {"with a control key", %{"_drop_items" => ["7"]}}
-        ] do
-      test "two keys for one stored row, #{label}", %{conn: conn} do
-        record = create(items: [%{kind: :good, discount: 5}, %{kind: :good, discount: 9}])
-        {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
-
-        push_submit(
-          view,
-          Map.put(unquote(Macro.escape(controls)), "items", %{
-            "1" => %{"kind" => "good"},
-            "01" => %{"kind" => "service", "hours" => "2"}
-          })
-        )
-
-        assert [%{kind: :service, discount: 5}, %{kind: :good, discount: 9}] =
-                 bundle(record.code).items
-      end
-    end
   end
 
   describe "a template's remove and reorder inputs" do
     # AshPhoenix's own `_drop_` and `_sort_` inputs, as a custom template
-    # could draw them: they are applied, and each row keeps its own rule.
+    # could draw them, are applied.
     test "drop a row", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/test/shaped_bundles/create")
       code = unique("B")
@@ -273,69 +121,43 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
       assert [%{kind: :device, serial: "SN-12"}] = bundle(code).items
     end
 
-    test "reorder the rows", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/test/shaped_bundles/create")
-      code = unique("B")
-      add_item(view)
-      add_item(view)
-
-      push_submit(view, %{
-        "code" => code,
-        "_sort_items" => ["1", "0"],
-        "items" => %{
-          "0" => %{"kind" => "device", "serial" => "SN-13"},
-          "1" => %{"kind" => "good", "serial" => "Forged"}
-        }
-      })
-
-      assert [%{kind: :good, serial: nil}, %{kind: :device, serial: "SN-13"}] =
-               bundle(code).items
-    end
-
-    # On an update a row these inputs move is matched to the stored row at
-    # the place it ends up, and a held field posts that row's value.
+    # On an update the page posts only what it draws: the discount is
+    # read-only on a retail bundle, so each stored row posts none, and the
+    # row these inputs move keeps its own stored discount.
     test "drop a stored row", %{conn: conn} do
-      record = create(items: [%{kind: :device, serial: "SN-A"}, %{kind: :good}])
+      record = create(items: [%{kind: :good, discount: 5}, %{kind: :good, discount: 9}])
       {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
 
       push_submit(view, %{
         "_drop_items" => ["0"],
-        "items" => %{
-          "0" => %{"kind" => "device", "serial" => "SN-A"},
-          "1" => %{"kind" => "good", "serial" => "Forged"}
-        }
+        "items" => %{"0" => %{"kind" => "good"}, "1" => %{"kind" => "good"}}
       })
 
-      assert [%{kind: :good, serial: "SN-A"}] = bundle(record.code).items
+      assert [%{kind: :good, discount: 9}] = bundle(record.code).items
     end
 
     test "reorder stored rows", %{conn: conn} do
-      record = create(items: [%{kind: :device, serial: "SN-B"}, %{kind: :good}])
+      record = create(items: [%{kind: :good, discount: 5}, %{kind: :good, discount: 9}])
       {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
 
       push_submit(view, %{
         "_sort_items" => ["1", "0"],
-        "items" => %{
-          "0" => %{"kind" => "device", "serial" => "SN-B"},
-          "1" => %{"kind" => "good", "serial" => "Forged"}
-        }
+        "items" => %{"0" => %{"kind" => "good"}, "1" => %{"kind" => "good"}}
       })
 
-      assert [%{kind: :good, serial: "SN-B"}, %{kind: :device, serial: "SN-B"}] =
-               bundle(record.code).items
+      assert [%{discount: 9}, %{discount: 5}] = bundle(record.code).items
     end
 
     test "add a row above stored rows", %{conn: conn} do
-      # The discount is read-only on a retail bundle: held to the stored one.
       record = create(items: [%{kind: :good, discount: 5}])
       {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
 
       push_submit(view, %{
         "_add_items" => "start",
-        "items" => %{"0" => %{"kind" => "good", "discount" => "5"}}
+        "items" => %{"0" => %{"kind" => "good"}}
       })
 
-      assert [%{kind: :good, discount: 5}, %{kind: :good, discount: nil}] =
+      assert [%{kind: :good, discount: nil}, %{kind: :good, discount: 5}] =
                bundle(record.code).items
     end
 
@@ -448,20 +270,20 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
       assert [%{serial: "SN-7", parts: []}] = bundle(record.code).items
     end
 
-    test "is refused a blank required field with an error under it", %{conn: conn} do
+    test "draws a required field it shows required", %{conn: conn} do
       record = create(items: [%{kind: :good}])
       {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
 
       change(view, %{"items" => %{"0" => %{"kind" => "device"}}}, "kind")
-      view |> form(@form) |> render_submit()
 
-      assert errors(view, "items_0_serial") == ["is required"]
-      assert [%{kind: :good}] = bundle(record.code).items
+      assert view
+             |> element("#{@form} input[name='form[items][0][serial]'][required]")
+             |> has_element?()
     end
   end
 
   describe "a row's required field" do
-    test "refuses the save while blank, with an error under it", %{conn: conn} do
+    test "is drawn required on the rows that show it", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/test/shaped_bundles/create")
       code = unique("B")
       add_item(view)
@@ -470,11 +292,6 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
       assert view
              |> element("#{@form} input[name='form[items][0][serial]'][required]")
              |> has_element?()
-
-      view |> form(@form) |> render_submit()
-
-      assert bundle(code) == nil
-      assert errors(view, "items_0_serial") == ["is required"]
 
       change(view, %{"items" => %{"0" => %{"kind" => "device", "serial" => "SN-2"}}}, "serial")
       view |> form(@form) |> render_submit()
@@ -508,42 +325,13 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
       refute view |> element("#{@form} [data-disabled-field=discount]") |> has_element?()
     end
 
-    test "is held to the parent's value in the same post", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/test/shaped_bundles/create")
-      retail = unique("B")
-      wholesale = unique("B")
-      add_item(view)
-
-      push_submit(view, %{
-        "code" => retail,
-        "channel" => "retail",
-        "items" => %{"0" => %{"kind" => "good", "discount" => "50"}}
-      })
-
-      assert [%{discount: nil}] = bundle(retail).items
-
-      {:ok, view, _html} = live(conn, "/test/shaped_bundles/create")
-      add_item(view)
-
-      push_submit(view, %{
-        "code" => wholesale,
-        "channel" => "wholesale",
-        "items" => %{"0" => %{"kind" => "good", "discount" => "50"}}
-      })
-
-      assert [%{discount: 50}] = bundle(wholesale).items
-    end
-
     test "keeps a stored row's discount on an update", %{conn: conn} do
       record = create(items: [%{kind: :good, discount: 10}])
       {:ok, view, _html} = live(conn, "/test/shaped_bundles/#{record.id}/update")
 
       assert view |> element("#{@form} [data-disabled-field=discount]", "10") |> has_element?()
 
-      push_submit(view, %{
-        "code" => record.code,
-        "items" => %{"0" => %{"kind" => "good", "discount" => "90"}}
-      })
+      view |> form(@form) |> render_submit()
 
       assert [%{discount: 10}] = bundle(record.code).items
     end
@@ -583,19 +371,6 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
       assert [%{serial: "SN-3", parts: [%{name: "Fan"}]}] = bundle(code).items
     end
 
-    test "are dropped from a row that hides them", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/test/shaped_bundles/create")
-      code = unique("B")
-      add_item(view)
-
-      push_submit(view, %{
-        "code" => code,
-        "items" => %{"0" => %{"kind" => "good", "parts" => %{"0" => %{"name" => "Forged"}}}}
-      })
-
-      assert [%{kind: :good, parts: []}] = bundle(code).items
-    end
-
     # AshPhoenix reads a sub-form key it counts as touched and the params
     # lack as emptied: a row's held parts must post the stored ones.
     test "keep a stored row's parts on an update, hidden and shown again", %{conn: conn} do
@@ -623,7 +398,7 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
   end
 
   describe "a single sub-form" do
-    test "shows its field for the value that shows it, and drops it otherwise", %{conn: conn} do
+    test "shows its field only for the value that shows it", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/test/shaped_bundles/create")
       us = unique("B")
       elsewhere = unique("B")
@@ -636,11 +411,9 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
       assert %{country: "US", region: "CA"} = bundle(us).shipping
 
       {:ok, view, _html} = live(conn, "/test/shaped_bundles/create")
-
-      push_submit(view, %{
-        "code" => elsewhere,
-        "shipping" => %{"country" => "EG", "region" => "Forged"}
-      })
+      change(view, %{"code" => elsewhere, "shipping" => %{"country" => "EG"}}, "country")
+      refute has_input?(view, "shipping][region")
+      view |> form(@form) |> render_submit()
 
       assert %{country: "EG", region: nil} = bundle(elsewhere).shipping
     end
@@ -924,13 +697,5 @@ defmodule ExampleWeb.NestedFormStateScenarioTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query("#flash-error")
     |> LazyHTML.text()
-  end
-
-  defp errors(view, id) do
-    view
-    |> render()
-    |> LazyHTML.from_fragment()
-    |> LazyHTML.query("#{@form} [id$='#{id}-errors'] p")
-    |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
   end
 end

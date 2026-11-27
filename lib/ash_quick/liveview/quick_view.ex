@@ -386,9 +386,8 @@ defmodule AshQuick.LiveView.QuickView do
   `@params`, `@scope`, and `@options`. It also has `AshQuick.Components`
   imported (for `<.icon>`, `<.button>`, etc.) and `Phoenix.LiveView.JS` aliased.
   A form's template also has `@ash_quick_form_state`, the form's
-  `AshQuick.FormState`, whose `visible_fields/1` it can draw from. The server
-  drops what that state hides and enforces what it requires whatever the
-  template draws.
+  `AshQuick.FormState`, whose `visible_fields/1` it can draw from. The state
+  shapes what is drawn only: the save takes what the template posts.
 
   A timestamp a template takes is drawn with
   `AshQuick.Components.zoned_datetime_input/1`, which shows it in the reader's
@@ -480,9 +479,8 @@ defmodule AshQuick.LiveView.QuickView do
 
   The state is built again from the form on every event and goes through the
   callback every time, so the callback states the whole rule each time and
-  never skips one. A field it hides is not drawn and its params are dropped
-  on the server; a field it disables shows its value read-only and is
-  dropped the same way; a field it requires refuses a blank save. It can only
+  never skips one. A field it hides is not drawn; a field it disables shows
+  its value read-only; a field it requires is drawn required. It can only
   narrow what Ash allows. Each sub-form has a state of its own, which
   `AshQuick.FormState.update_each/3` reaches for every row at once. A
   picker's records can be narrowed with `AshQuick.FormState.filter/3`, and a

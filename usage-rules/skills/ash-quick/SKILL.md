@@ -574,24 +574,24 @@ defp adjust_form(state, _options), do: state
 - Narrow only: it starts from the fields the form would draw (field policies
   and `read_only_fields` applied) and can't add one, unhide one Ash left out,
   or make an Ash-required field optional.
-- The server drops hidden and disabled fields' params, worked out from each
-  post itself, and refuses a blank `require/3`d field at save. On an update a
-  hidden field keeps the record's value. An Ash error on a hidden or disabled
-  field is flashed, since it has no input.
+- Presentation only: a hidden or disabled field is not drawn as an input, so
+  the page posts nothing for it and an update keeps the record's value (on a
+  stored embed row, which saves whole, the server posts the row's stored
+  value for it; an embed with no primary key is matched by place, so after a
+  reconnect that follows a removed stored row a held field takes the value
+  of the stored row at its place, and `uuid_primary_key :id, public?: true`
+  gives each row its own); `require/3` draws the input required. The server
+  does not hold a post to the state: a blank `require/3`d field, a pick a
+  narrowed picker leaves out, or what a template or widget draws for a held
+  field, saves unless the resource refuses it. An Ash error on a hidden or
+  disabled field is flashed, since it has no input.
 - Sub-forms (embeds, managed relationships) each get a state of their own,
   held by field in `state.forms`. State a rule once for every row with
   `FormState.update_each(state, [:lines], fn line -> ... end)`
   (`[:lines, :parts]` goes a level deeper); a row reads its parent's values
   with `FormState.value(line.parent, :channel)`. Rows are rebuilt each
-  event, so adding or removing one never leaves a rule on the wrong row. The
-  server holds each row to its state as it does the root; on a stored row a
-  hidden or disabled field keeps the row's value. Bulk forms are drawn as
-  before. A posted row is matched to a stored one by AshPhoenix: by primary
-  key when the row posts it, else by place. An embed has no key unless it
-  is given one, so after a reconnect that follows a removed row (or a
-  template's `_drop_`/`_sort_` input) a held field keeps the value of the
-  stored row at that place. Give the embedded resource
-  `uuid_primary_key :id, public?: true` where each row must keep its own.
+  event, so adding or removing one never leaves a rule on the wrong row.
+  Bulk forms are drawn as before.
 - Pickers: `FormState.filter(state, :city, expr(country_id == ^country))`
   adds an Ash filter on top of the relationship's own;
   `FormState.options(state, :status, [:draft])` narrows an enum or `one_of`
@@ -600,9 +600,10 @@ defp adjust_form(state, _options), do: state
   the save takes: a pick the new filter leaves out is kept, under its label,
   and saved. A rule about which values may be saved is a validation in the
   resource.
-- UI only: bulk actions, the API and code never run it. Put real invariants
-  in the resource (`where:`). Hiding doesn't clear a value, so a value that
-  must not outlive what shows it is cleared by a change
+- UI only: bulk actions, the API, code and hand-made posts never meet it.
+  Put every rule a save must keep in the resource (`validate ..., where:`).
+  Hiding doesn't clear a value, so a value that must not outlive what shows
+  it is cleared by a change
   (`change set_attribute(:reason, nil), where: [...]`); a `validate absent`
   would refuse every save of a record that has one.
 - A custom `action_*` template gets `@ash_quick_form_state`; a widget gets
