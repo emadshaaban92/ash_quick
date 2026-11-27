@@ -16,9 +16,8 @@ defmodule AshQuick.FormState.Field do
     * `:hidden?` and `:disabled?` — see `AshQuick.FormState.hide/3` and
       `AshQuick.FormState.disable/3`.
     * `:attrs` — extra HTML attributes for its input (see `AshQuick.FormState.put_attrs/3`).
-    * `:filters` and `:lookup_args` — what narrows the records a
-      `:belongs_to` or `:many_to_many` picker offers (see
-      `AshQuick.FormState.filter/3` and `AshQuick.FormState.lookup_args/3`).
+    * `:filters` — what narrows the records a `:belongs_to` or
+      `:many_to_many` picker offers (see `AshQuick.FormState.filter/3`).
     * `:options` — the values a `:choice` field offers, or nil for all its
       type lists (see `AshQuick.FormState.options/3`).
     * `:source` — the Ash attribute, argument or relationship it is.
@@ -37,7 +36,6 @@ defmodule AshQuick.FormState.Field do
           disabled?: boolean(),
           attrs: keyword(),
           filters: [term()],
-          lookup_args: map(),
           options: [term()] | nil,
           source: struct()
         }
@@ -55,7 +53,6 @@ defmodule AshQuick.FormState.Field do
     hidden?: false,
     disabled?: false,
     attrs: [],
-    filters: [],
-    lookup_args: %{}
+    filters: []
   ]
 end

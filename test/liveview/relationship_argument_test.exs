@@ -68,25 +68,13 @@ defmodule AshQuick.LiveView.RelationshipArgumentTest do
     end
 
     test "adds what matches nothing when the change creates it" do
-      assert created(:named_create, :names) == %{
-               action: :create,
-               match: :exact,
-               read_action: :read
-             }
+      assert created(:named_create, :names) == %{action: :create, match: :exact}
 
-      assert created(:named_create_with, :names) == %{
-               action: :tagged,
-               match: :exact,
-               read_action: :read
-             }
+      assert created(:named_create_with, :names) == %{action: :tagged, match: :exact}
     end
 
     test "matches in any case on a ci_string key" do
-      assert created(:named_code, :names) == %{
-               action: :create,
-               match: :any_case,
-               read_action: :read
-             }
+      assert created(:named_code, :names) == %{action: :create, match: :any_case}
     end
 
     test "adds nothing when the change creates nothing" do

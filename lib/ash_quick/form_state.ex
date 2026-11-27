@@ -94,7 +94,7 @@ defmodule AshQuick.FormState do
   The hook runs on every change, and at the save. A read in it runs on every
   keystroke that posts, so keep reads out of it, or cheap: there is no way to
   skip one on an event, since every event states every rule again. A picker
-  narrowed by `lookup_args/3` or `filter/3` reads only when the person opens
+  narrowed by `filter/3` reads only when the person opens
   it, or when what narrows it changes.
 
   ## Drawing
@@ -110,8 +110,7 @@ defmodule AshQuick.FormState do
 
   A picker of records (a `belongs_to`, or a list argument over a
   many-to-many) can be narrowed with `filter/3`, an Ash filter on top of the
-  relationship's own `filter`s, and `lookup_args/3`, arguments passed to the
-  destination's lookup action. A field picked from a fixed set (an
+  relationship's own `filter`s. A field picked from a fixed set (an
   `Ash.Type.Enum`, or an atom with `one_of`) is narrowed with `options/3`:
 
       import Ash.Expr
@@ -119,34 +118,25 @@ defmodule AshQuick.FormState do
       country = FormState.value(state, :country)
 
       state
-      |> FormState.lookup_args(:city, %{country_id: country})
-      |> FormState.filter(:stop_ids, expr(country_id == ^country))
+      |> FormState.filter(:city, expr(country_id == ^country))
       |> FormState.options(:status, [:draft, :submitted])
 
-  `lookup_args/3` keeps the rule in the destination resource, behind its
-  policies, and is what a lookup action taking the argument wants. A picker
-  searches again only when its filter or arguments change: as the rest of
-  the form changes, it is not read again.
+  A picker searches again only when its filter changes: as the rest of the
+  form changes, it is not read again.
 
-  When a change narrows a picker past what it holds, the pick is kept, under
-  its own label: it is not cleared behind the person's back. The save then
-  refuses it with an error under the field. A hook that wants it cleared
-  clears it itself. At the save, the records a field holds are read back
-  through the query its picker searches, the lookup action with the field's
-  arguments, the relationship's filters and the field's, one read per field,
-  and a key the read does not find is refused, as is an inactive record. A
-  value outside `options/3` is refused the same way.
+  Both decide what the input offers, not what the save takes. When a change
+  narrows a picker past what it holds, the pick is kept, under its own
+  label: it is not cleared behind the person's back, and the save takes it.
+  A hook that wants it cleared clears it itself. A rule about which values
+  may be saved belongs in the resource, as a validation:
 
-  This also holds a pick to the relationship's own `filter`s when the hook
-  narrows nothing. A field drawn by a widget or a type's form input
-  (`AshQuick.FormInput`) offers what its input offers, so the save reads it back
-  only when the hook narrows it. A key an update's record already holds is not
-  read back then: the save leaves it as it is. When the hook narrows the field,
-  that key is read back too, since the rule that narrows it may have changed,
-  and so is an enum value the record holds outside `options/3`. A record the
-  reader may not read, which the picker shows as unavailable, is not found by
-  that read either, so the save is refused until another is picked. To keep what
-  the record holds whatever it is, `disable/3` the field.
+      validate one_of(:status, [:draft, :submitted]),
+        where: [attribute_equals(:kind, :quote)]
+
+  For a picker, that is a validation that reads the picked record. Ash does
+  not hold a written key to the relationship's own `filter`, nor to the
+  lookup action, an inactive record or what the actor may read: the picker
+  follows those, the save does not.
 
   ## Sub-forms
 
@@ -303,10 +293,8 @@ defmodule AshQuick.FormState do
       country = FormState.value(state, :country)
       FormState.filter(state, :city, expr(country_id == ^country))
 
-  At the save, the records the field holds are read back through the same
-  query, and one it leaves out gets an error under the field: see "Picker
-  filters and options" in the moduledoc. A field drawn by a widget gets the
-  error too, which the widget shows itself.
+  It decides what the picker offers, not what the save takes: see "Picker
+  filters and options" in the moduledoc.
 
   The picker searches again whenever the filter differs from the one it
   searched with, compared by value: a filter pinning a value that changes
@@ -323,34 +311,6 @@ defmodule AshQuick.FormState do
   end
 
   @doc """
-  Passes `args`, a map of arguments, to the lookup action the picker of the
-  field `name` reads its records through, as `filter/3` narrows them. Each
-  call merges into what earlier calls passed. The search the person types
-  is the lookup action's own argument, and wins over one named here.
-
-      FormState.lookup_args(state, :city, %{country_id: FormState.value(state, :country)})
-
-  This keeps the rule in the destination resource, and its policies: the
-  lookup action decides what the argument means. At the save, the records
-  the field holds are read back with the same arguments.
-
-  An argument the lookup action does not take, or a field that picks no
-  records, raises an `ArgumentError`.
-  """
-  @spec lookup_args(t(), atom(), map()) :: t()
-  def lookup_args(state, name, args) when is_map(args) do
-    case fetch(state, name) do
-      %Field{} = field ->
-        relationship = picker!(state, name, "lookup_args/3")
-        check_lookup_args!(relationship, args, state, field)
-        update!(state, name, &%{&1 | lookup_args: Map.merge(&1.lookup_args, args)})
-
-      nil ->
-        state
-    end
-  end
-
-  @doc """
   Narrows the values the field `name` offers, one picked from a fixed set (an
   `Ash.Type.Enum`, or an atom with `one_of`, alone or in a list), to
   `values`, drawn in the order the type lists them. A second call narrows
@@ -358,7 +318,7 @@ defmodule AshQuick.FormState do
 
       FormState.options(state, :status, [:draft, :submitted])
 
-  At the save, a value outside them gets an error under the field.
+  It decides what the input offers, not what the save takes.
 
   A value the type does not list, or a field picked from no fixed set,
   raises an `ArgumentError`.
@@ -519,31 +479,14 @@ defmodule AshQuick.FormState do
                   "#{fun} narrows the records a picker offers, and #{inspect(name)} of " <>
                     "#{inspect(state.resource)}.#{state.action.name} picks no records"
 
-        # The save reads the field's records back through the lookup action,
-        # which a field a widget draws need not have: asked here, a missing
-        # one fails in the hook, naming the fix.
+        # The picker reads through the lookup action, which a field a widget
+        # draws need not have: asked here, a missing one fails in the hook,
+        # naming the fix.
         Utils.lookup_action!(relationship)
         relationship
 
       nil ->
         nil
-    end
-  end
-
-  defp check_lookup_args!(relationship, args, state, field) do
-    lookup = Utils.lookup_action!(relationship)
-    action = Ash.Resource.Info.action(relationship.destination, lookup)
-    taken = Enum.map(action.arguments, & &1.name)
-
-    case Enum.reject(Map.keys(args), &(&1 in taken)) do
-      [] ->
-        :ok
-
-      unknown ->
-        raise ArgumentError,
-              "the lookup action #{inspect(relationship.destination)}.#{lookup} behind " <>
-                "#{inspect(field.name)} of #{inspect(state.resource)}.#{state.action.name} " <>
-                "takes no #{inspect(unknown)}; its arguments are #{inspect(taken)}"
     end
   end
 
@@ -570,11 +513,6 @@ defmodule AshQuick.FormState do
   end
 
   def relationship(_state, _field), do: nil
-
-  @doc false
-  # Whether the hook narrows what `field` offers.
-  def narrowed?(%Field{filters: filters, lookup_args: args, options: options}),
-    do: filters != [] or args != %{} or options != nil
 
   # --- Built by AshQuick ---------------------------------------------------
 
@@ -680,11 +618,6 @@ defmodule AshQuick.FormState do
         help: if(is_binary(got.help) or is_nil(got.help), do: got.help, else: field.help),
         attrs: if(Keyword.keyword?(got.attrs), do: got.attrs, else: field.attrs),
         filters: if(is_list(got.filters), do: field.filters ++ got.filters, else: field.filters),
-        lookup_args:
-          if(is_map(got.lookup_args),
-            do: Map.merge(got.lookup_args, field.lookup_args),
-            else: field.lookup_args
-          ),
         options: narrow_options(field, got.options)
     }
   end

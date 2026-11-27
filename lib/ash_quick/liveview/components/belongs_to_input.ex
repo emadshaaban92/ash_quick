@@ -25,7 +25,7 @@ defmodule AshQuick.LiveView.Components.BelongsToInput do
         narrowing: narrowing,
         field: form[relationship.source_attribute],
         search: &FormRecords.search(relationship, key, &1, scope, current, narrowing),
-        resolve: &FormRecords.resolve(relationship, key, &1, scope, current, narrowing)
+        resolve: &FormRecords.resolve(relationship, key, &1, scope, current)
       )
 
     ~H"""

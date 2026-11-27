@@ -1,6 +1,6 @@
 defmodule AshQuick.FormStatePickersTest do
   @moduledoc """
-  `AshQuick.FormState.filter/3`, `lookup_args/3` and `options/3` over a form
+  `AshQuick.FormState.filter/3` and `options/3` over a form
   of `Example.Test.PickedPlaces`, without a page: what they put on a field,
   what they refuse, and what AshQuick takes back from a hook.
   """
@@ -19,7 +19,7 @@ defmodule AshQuick.FormStatePickersTest do
   end
 
   test "a field starts narrowed by nothing" do
-    assert %{filters: [], lookup_args: %{}, options: nil} = FormState.field(state(), :city)
+    assert %{filters: [], options: nil} = FormState.field(state(), :city)
     assert %{options: nil} = FormState.field(state(), :status)
   end
 
@@ -34,13 +34,9 @@ defmodule AshQuick.FormStatePickersTest do
     assert [_one, _two] = FormState.field(state, :city).filters
   end
 
-  test "filter/3 and lookup_args/3 refuse a field that picks no records" do
+  test "filter/3 refuses a field that picks no records" do
     assert_raise ArgumentError, ~r/:code .* picks no records/, fn ->
       FormState.filter(state(), :code, expr(true))
-    end
-
-    assert_raise ArgumentError, ~r/:status .* picks no records/, fn ->
-      FormState.lookup_args(state(), :status, %{})
     end
   end
 
@@ -48,23 +44,6 @@ defmodule AshQuick.FormStatePickersTest do
     assert_raise ArgumentError, ~r/cannot search/, fn ->
       FormState.filter(state(), :owner, expr(true))
     end
-  end
-
-  test "lookup_args/3 merges, and refuses an argument the lookup action does not take" do
-    id = Ash.UUID.generate()
-
-    state =
-      state()
-      |> FormState.lookup_args(:city, %{country_id: nil})
-      |> FormState.lookup_args(:city, %{country_id: id})
-
-    assert FormState.field(state, :city).lookup_args == %{country_id: id}
-
-    assert_raise ArgumentError,
-                 ~r/takes no \[:region\]; its arguments are \[:search, :country_id\]/,
-                 fn ->
-                   FormState.lookup_args(state(), :city, %{region: "north"})
-                 end
   end
 
   test "options/3 narrows in the type's order, and a second call narrows further" do

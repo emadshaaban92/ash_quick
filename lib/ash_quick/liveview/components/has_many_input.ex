@@ -46,7 +46,7 @@ defmodule AshQuick.LiveView.Components.HasManyInput do
         narrowing: narrowing,
         field: form[assigns.argument_name],
         search: &FormRecords.search(relationship, key, &1, scope, current, narrowing),
-        resolve: &FormRecords.resolve(relationship, key, &1, scope, current, narrowing)
+        resolve: &FormRecords.resolve(relationship, key, &1, scope, current)
       )
 
     ~H"""
