@@ -37,7 +37,6 @@ defmodule AshQuick.LiveView.BulkForm do
       as: "form",
       forms: Utils.nested_forms(resource, action.name, hidden),
       scope: scope,
-      actor: actor(scope),
       prepare_source: &hold/1
     )
     |> check_inputs(action)
@@ -160,11 +159,4 @@ defmodule AshQuick.LiveView.BulkForm do
   # A value that failed to cast already says so; "is required" beside it would
   # describe the cast rather than what was typed.
   defp errored?(changeset, name), do: Enum.any?(changeset.errors, &(Map.get(&1, :field) == name))
-
-  defp actor(scope) do
-    case Ash.Scope.ToOpts.get_actor(scope) do
-      {:ok, actor} -> actor
-      _ -> nil
-    end
-  end
 end

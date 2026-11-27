@@ -131,6 +131,7 @@ defmodule ExampleWeb.Router do
               AshQuick.LiveView.Mount,
               {ExampleWeb.UserAuth, :assign_scope}
             ] do
+        quick_view "/actor_rows", Example.Test.ActorRowsLive.Quick
         quick_view "/atomic_brands", Example.Test.AtomicBrandLive.Quick
         quick_view "/brand_filter", Example.Test.BrandFilterLive.Quick
         quick_view "/brand_record_filter", Example.Test.BrandRecordFilterLive.Quick
@@ -157,7 +158,6 @@ defmodule ExampleWeb.Router do
         quick_view "/form_inputs", Example.Test.FormInputsLive.Quick
         quick_view "/form_stages", Example.Test.FormStagesLive.Quick
         quick_view "/hidden_address", Example.Test.HiddenAddressLive.Quick
-        quick_view "/actor_rows", Example.Test.ActorRowsLive.Quick
         quick_view "/hidden_fields", Example.Test.HiddenFieldsLive.Quick
         quick_view "/labelled_loans", Example.Test.LabelledLoansLive.Quick
         quick_view "/last_writes", Example.Test.LastWritesLive.Quick
